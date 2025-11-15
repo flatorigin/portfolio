@@ -1,11 +1,12 @@
 .env
 .env.*
-backend/venv/
-*.pyc
-frontend/node_modules/
+node_modules/
 dist/
 build/
 .next/
+venv/
+__pycache__/
+*.pyc
 media/
 staticfiles/
 .DS_Store

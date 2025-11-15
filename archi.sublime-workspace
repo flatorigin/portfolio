@@ -1,0 +1,520 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "frontend/src/api.js",
+			"settings":
+			{
+				"buffer_size": 552,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			},
+			"undo_stack":
+			[
+				[
+					3,
+					1,
+					"paste_and_indent",
+					null,
+					"AgAAABsAAAAAAAAAXgAAAAAAAAAAAAAAXgAAAAAAAABeAAAAAAAAAEMAAABjb25zdCBhcGkgPSBheGlvcy5jcmVhdGUoeyBiYXNlVVJMOiAiaHR0cDovL2xvY2FsaG9zdDo4MDAwL2FwaSIgfSk7",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAABeAAAAAAAAABsAAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					6,
+					1,
+					"paste_and_indent",
+					null,
+					"AgAAAAAAAAAAAAAAKAIAAAAAAAAAAAAAKAIAAAAAAAAoAgAAAAAAACIBAABpbXBvcnQgYXhpb3MgZnJvbSAiYXhpb3MiOwpjb25zdCBhcGkgPSBheGlvcy5jcmVhdGUoeyBiYXNlVVJMOiAiaHR0cDovL2xvY2FsaG9zdDo4MDAwL2FwaSIgfSk7CmFwaS5pbnRlcmNlcHRvcnMucmVxdWVzdC51c2UoKGNvbmZpZykgPT4gewogIGNvbnN0IHRva2VuID0gbG9jYWxTdG9yYWdlLmdldEl0ZW0oImFjY2VzcyIpOwogIGlmICh0b2tlbikgY29uZmlnLmhlYWRlcnMuQXV0aG9yaXphdGlvbiA9IGBCZWFyZXIgJHt0b2tlbn1gOwogIHJldHVybiBjb25maWc7Cn0pOwpleHBvcnQgZGVmYXVsdCBhcGk7Cg",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAiAQAAAAAAAAAAAAAAAAAAAAAAAAAA8L8"
+				]
+			]
+		},
+		{
+			"file": "frontend/src/pages/Register.jsx",
+			"settings":
+			{
+				"buffer_size": 1795,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			},
+			"undo_stack":
+			[
+				[
+					2,
+					1,
+					"left_delete",
+					null,
+					"AQAAAAAAAAAAAAAAAAAAAAAAAAD6AwAAaW1wb3J0IHsgdXNlU3RhdGUgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7IHJlZ2lzdGVyIH0gZnJvbSAiLi4vYXV0aCI7CmltcG9ydCB7IHVzZU5hdmlnYXRlIH0gZnJvbSAicmVhY3Qtcm91dGVyLWRvbSI7CgpleHBvcnQgZGVmYXVsdCBmdW5jdGlvbiBSZWdpc3RlcigpewogIGNvbnN0IFtmb3JtLHNldEZvcm1dID0gdXNlU3RhdGUoe3VzZXJuYW1lOiIiLCBlbWFpbDoiIiwgcGFzc3dvcmQ6IiJ9KTsKICBjb25zdCBuYXYgPSB1c2VOYXZpZ2F0ZSgpOwoKICBhc3luYyBmdW5jdGlvbiBzdWJtaXQoZSl7CiAgICBlLnByZXZlbnREZWZhdWx0KCk7CiAgICBhd2FpdCByZWdpc3Rlcihmb3JtKTsKICAgIG5hdigiL3Byb2ZpbGUvZWRpdCIpOwogIH0KCiAgcmV0dXJuICgKICAgIDxmb3JtIG9uU3VibWl0PXtzdWJtaXR9IHN0eWxlPXt7bWF4V2lkdGg6MzYwfX0+CiAgICAgIDxoMj5DcmVhdGUgYWNjb3VudDwvaDI+CiAgICAgIDxpbnB1dCBwbGFjZWhvbGRlcj0iVXNlcm5hbWUiIHZhbHVlPXtmb3JtLnVzZXJuYW1lfSBvbkNoYW5nZT17ZT0+c2V0Rm9ybSh7Li4uZm9ybSx1c2VybmFtZTplLnRhcmdldC52YWx1ZX0pfSAvPgogICAgICA8aW5wdXQgcGxhY2Vob2xkZXI9IkVtYWlsIiB2YWx1ZT17Zm9ybS5lbWFpbH0gb25DaGFuZ2U9e2U9PnNldEZvcm0oey4uLmZvcm0sZW1haWw6ZS50YXJnZXQudmFsdWV9KX0gLz4KICAgICAgPGlucHV0IHBsYWNlaG9sZGVyPSJQYXNzd29yZCIgdHlwZT0icGFzc3dvcmQiIHZhbHVlPXtmb3JtLnBhc3N3b3JkfSBvbkNoYW5nZT17ZT0+c2V0Rm9ybSh7Li4uZm9ybSxwYXNzd29yZDplLnRhcmdldC52YWx1ZX0pfSAvPgogICAgICA8YnV0dG9uPkNyZWF0ZTwvYnV0dG9uPgogICAgICA8c3R5bGU+e2AKICAgICAgICBpbnB1dCwgdGV4dGFyZWEsIGJ1dHRvbiB7IHdpZHRoOiAxMDAlOyBwYWRkaW5nOiAxMHB4OyBtYXJnaW46IDhweCAwOyB9CiAgICAgICAgYnV0dG9uIHsgY3Vyc29yOiBwb2ludGVyOyB9CiAgICAgIGB9PC9zdHlsZT4KICAgIDwvZm9ybT4KICApOwp9Cg",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAAAAAAAAAAAPoDAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					3,
+					1,
+					"paste_and_indent",
+					null,
+					"AQAAAAAAAAAAAAAAewgAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					5,
+					1,
+					"paste_and_indent",
+					null,
+					"AgAAAAAAAAAAAAAAAwcAAAAAAAAAAAAAAwcAAAAAAAADBwAAAAAAAHsIAABpbXBvcnQgeyB1c2VTdGF0ZSB9IGZyb20gInJlYWN0IjsKaW1wb3J0IHsgcmVnaXN0ZXIgfSBmcm9tICIuLi9hdXRoIjsKaW1wb3J0IHsgdXNlTmF2aWdhdGUgfSBmcm9tICJyZWFjdC1yb3V0ZXItZG9tIjsKCmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIFJlZ2lzdGVyKCl7CiAgY29uc3QgW2Zvcm0sc2V0Rm9ybV0gPSB1c2VTdGF0ZSh7dXNlcm5hbWU6IiIsIGVtYWlsOiIiLCBwYXNzd29yZDoiIn0pOwogIGNvbnN0IFtlcnJvciwgc2V0RXJyb3JdID0gdXNlU3RhdGUobnVsbCk7CiAgY29uc3QgW2xvYWRpbmcsIHNldExvYWRpbmddID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IG5hdiA9IHVzZU5hdmlnYXRlKCk7CgogIGFzeW5jIGZ1bmN0aW9uIHN1Ym1pdChlKXsKICAgIGUucHJldmVudERlZmF1bHQoKTsKICAgIHNldEVycm9yKG51bGwpOwogICAgc2V0TG9hZGluZyh0cnVlKTsKICAgIHRyeSB7CiAgICAgIGlmICghZm9ybS51c2VybmFtZSB8fCAhZm9ybS5wYXNzd29yZCkgewogICAgICAgIHNldEVycm9yKCJVc2VybmFtZSBhbmQgcGFzc3dvcmQgYXJlIHJlcXVpcmVkLiIpOwogICAgICAgIHJldHVybjsKICAgICAgfQogICAgICBpZiAoIWZvcm0uZW1haWwpIHsKICAgICAgICBzZXRFcnJvcigiUGxlYXNlIGVudGVyIGFuIGVtYWlsIGFkZHJlc3MuIik7CiAgICAgICAgcmV0dXJuOwogICAgICB9CiAgICAgIGF3YWl0IHJlZ2lzdGVyKGZvcm0pOyAgICAgICAgICAgLy8gY2FsbHMgL2F1dGgvdXNlcnMvIHRoZW4gL2F1dGgvand0L2NyZWF0ZQogICAgICBuYXYoIi9wcm9maWxlL2VkaXQiKTsKICAgIH0gY2F0Y2ggKGVycikgewogICAgICBjb25zdCBkYXRhID0gZXJyPy5yZXNwb25zZT8uZGF0YTsKICAgICAgaWYgKGRhdGEgJiYgdHlwZW9mIGRhdGEgPT09ICJvYmplY3QiKSB7CiAgICAgICAgLy8gRm9ybWF0IERqb3NlciBlcnJvciBkaWN0IC0+ICJmaWVsZDogbWVzc2FnZSIKICAgICAgICBjb25zdCBtc2dzID0gT2JqZWN0LmVudHJpZXMoZGF0YSkubWFwKChbayx2XSkgPT4gYCR7a306ICR7QXJyYXkuaXNBcnJheSh2KT8gdi5qb2luKCIsICIpOiBTdHJpbmcodil9YCk7CiAgICAgICAgc2V0RXJyb3IobXNncy5qb2luKCIgfCAiKSk7CiAgICAgIH0gZWxzZSB7CiAgICAgICAgc2V0RXJyb3IoZXJyLm1lc3NhZ2UgfHwgIlJlZ2lzdHJhdGlvbiBmYWlsZWQiKTsKICAgICAgfQogICAgICBjb25zb2xlLmVycm9yKCJSZWdpc3RlciBlcnJvcjoiLCBlcnIpOwogICAgfSBmaW5hbGx5IHsKICAgICAgc2V0TG9hZGluZyhmYWxzZSk7CiAgICB9CiAgfQoKICByZXR1cm4gKAogICAgPGZvcm0gb25TdWJtaXQ9e3N1Ym1pdH0gc3R5bGU9e3ttYXhXaWR0aDozNjB9fT4KICAgICAgPGgyPkNyZWF0ZSBhY2NvdW50PC9oMj4KICAgICAge2Vycm9yICYmIDxkaXYgc3R5bGU9e3tiYWNrZ3JvdW5kOiIjZmVlIiwgYm9yZGVyOiIxcHggc29saWQgI2Y5OSIsIHBhZGRpbmc6OCwgYm9yZGVyUmFkaXVzOjYsIG1hcmdpbkJvdHRvbTo4fX0+e2Vycm9yfTwvZGl2Pn0KICAgICAgPGlucHV0IHBsYWNlaG9sZGVyPSJVc2VybmFtZSIgdmFsdWU9e2Zvcm0udXNlcm5hbWV9IG9uQ2hhbmdlPXtlPT5zZXRGb3JtKHsuLi5mb3JtLHVzZXJuYW1lOmUudGFyZ2V0LnZhbHVlfSl9IC8+CiAgICAgIDxpbnB1dCBwbGFjZWhvbGRlcj0iRW1haWwiIHZhbHVlPXtmb3JtLmVtYWlsfSBvbkNoYW5nZT17ZT0+c2V0Rm9ybSh7Li4uZm9ybSxlbWFpbDplLnRhcmdldC52YWx1ZX0pfSAvPgogICAgICA8aW5wdXQgcGxhY2Vob2xkZXI9IlBhc3N3b3JkIiB0eXBlPSJwYXNzd29yZCIgdmFsdWU9e2Zvcm0ucGFzc3dvcmR9IG9uQ2hhbmdlPXtlPT5zZXRGb3JtKHsuLi5mb3JtLHBhc3N3b3JkOmUudGFyZ2V0LnZhbHVlfSl9IC8+CiAgICAgIDxidXR0b24gZGlzYWJsZWQ9e2xvYWRpbmd9Pntsb2FkaW5nID8gIkNyZWF0aW5nLi4uIiA6ICJDcmVhdGUifTwvYnV0dG9uPgogICAgICA8c3R5bGU+e2AKICAgICAgICBpbnB1dCwgdGV4dGFyZWEsIGJ1dHRvbiB7IHdpZHRoOiAxMDAlOyBwYWRkaW5nOiAxMHB4OyBtYXJnaW46IDhweCAwOyB9CiAgICAgICAgYnV0dG9uIHsgY3Vyc29yOiBwb2ludGVyOyB9CiAgICAgICAgYnV0dG9uW2Rpc2FibGVkXXsgb3BhY2l0eTouNjsgY3Vyc29yOm5vdC1hbGxvd2VkOyB9CiAgICAgIGB9PC9zdHlsZT4KICAgIDwvZm9ybT4KICApOwp9Cg",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAAAAAAAAAAAHsIAAAAAAAAAAAAAAAA8L8"
+				]
+			]
+		},
+		{
+			"file": "backend/backend/settings.py",
+			"settings":
+			{
+				"buffer_size": 2284,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			},
+			"undo_stack":
+			[
+				[
+					3,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Add Line.sublime-macro"
+					},
+					"AQAAAMsBAAAAAAAA0AEAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADLAQAAAAAAAMsBAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					4,
+					1,
+					"paste_and_indent",
+					null,
+					"AQAAANABAAAAAAAAQgIAAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADQAQAAAAAAANABAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					7,
+					2,
+					"right_delete",
+					null,
+					"AgAAAMwBAAAAAAAAzAEAAAAAAAAkAAAAICAgIElOU1RBTExFRF9BUFBTID0gWwogICAgICAgICMgLi4uzAEAAAAAAADMAQAAAAAAAAEAAAAK",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADwAQAAAAAAAMwBAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					8,
+					1,
+					"unindent",
+					null,
+					"AQAAAMwBAAAAAAAAzAEAAAAAAAAEAAAAICAgIA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADMAQAAAAAAAMwBAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					10,
+					1,
+					"unindent",
+					null,
+					"AQAAAP8BAAAAAAAA/wEAAAAAAAAEAAAAICAgIA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAD/AQAAAAAAAP8BAAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					12,
+					4,
+					"right_delete",
+					null,
+					"BAAAABACAAAAAAAAEAIAAAAAAAAEAAAAICAgIBACAAAAAAAAEAIAAAAAAAABAAAAXRACAAAAAAAAEAIAAAAAAAABAAAAChACAAAAAAAAEAIAAAAAAAAEAAAAICAgIA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAQAgAAAAAAABACAAAAAAAAAAAAAAAAAAA"
+				],
+				[
+					13,
+					9,
+					"right_delete",
+					null,
+					"CQAAABACAAAAAAAAEAIAAAAAAAABAAAAIhACAAAAAAAAEAIAAAAAAAABAAAAcBACAAAAAAAAEAIAAAAAAAABAAAAbxACAAAAAAAAEAIAAAAAAAABAAAAchACAAAAAAAAEAIAAAAAAAABAAAAdBACAAAAAAAAEAIAAAAAAAABAAAAZhACAAAAAAAAEAIAAAAAAAABAAAAbxACAAAAAAAAEAIAAAAAAAABAAAAbBACAAAAAAAAEAIAAAAAAAABAAAAaQ",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAQAgAAAAAAABACAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					14,
+					3,
+					"right_delete",
+					null,
+					"AwAAABACAAAAAAAAEAIAAAAAAAABAAAAbxACAAAAAAAAEAIAAAAAAAABAAAAIhACAAAAAAAAEAIAAAAAAAABAAAALA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAQAgAAAAAAABACAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					15,
+					2,
+					"left_delete",
+					null,
+					"AgAAAA8CAAAAAAAADwIAAAAAAAABAAAACg4CAAAAAAAADgIAAAAAAAABAAAALA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAQAgAAAAAAABACAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					18,
+					1,
+					"run_macro_file",
+					{
+						"file": "res://Packages/Default/Delete to Hard BOL.sublime-macro"
+					},
+					"AQAAALwBAAAAAAAAvAEAAAAAAAAPAAAAICAgICJhY2NvdW50cyIs",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAADLAQAAAAAAAMsBAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					19,
+					1,
+					"left_delete",
+					null,
+					"AQAAALsBAAAAAAAAuwEAAAAAAAABAAAACg",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAC8AQAAAAAAALwBAAAAAAAAAAAAAAAA8L8"
+				]
+			]
+		},
+		{
+			"file": "frontend/src/pages/EditProfile.jsx",
+			"settings":
+			{
+				"buffer_size": 3846,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			},
+			"undo_stack":
+			[
+				[
+					6,
+					1,
+					"left_delete",
+					null,
+					"AQAAAAAAAAAAAAAAAAAAAAAAAABECAAAaW1wb3J0IHsgdXNlRWZmZWN0LCB1c2VTdGF0ZSB9IGZyb20gInJlYWN0IjsKaW1wb3J0IGFwaSBmcm9tICIuLi9hcGkiOwoKZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gRWRpdFByb2ZpbGUoKXsKICBjb25zdCBbZm9ybSxzZXRGb3JtXT11c2VTdGF0ZSh7ZGlzcGxheV9uYW1lOiIiLGNvbXBhbnk6IiIsYmlvOiIiLGxvY2F0aW9uOiIiLHdlYnNpdGU6IiIsY29udGFjdF9lbWFpbDoiIixjb250YWN0X3Bob25lOiIiLHNob3dfY29udGFjdF9mb3JtOnRydWV9KTsKICBjb25zdCBbYXZhdGFyLHNldEF2YXRhcl09dXNlU3RhdGUobnVsbCk7CgogIHVzZUVmZmVjdCgoKT0+eyBhcGkuZ2V0KCIvbWUvcHJvZmlsZS8iKS50aGVuKCh7ZGF0YX0pPT5zZXRGb3JtKGY9Pih7Li4uZiwuLi5kYXRhfSkpKTsgfSxbXSk7CiAgY29uc3Qgc3VibWl0ID0gYXN5bmMgKGUpPT4gewogICAgZS5wcmV2ZW50RGVmYXVsdCgpOwogICAgY29uc3QgZmQgPSBuZXcgRm9ybURhdGEoKTsKICAgIE9iamVjdC5lbnRyaWVzKGZvcm0pLmZvckVhY2goKFtrLHZdKT0+ZmQuYXBwZW5kKGssIHYgPz8gIiIpKTsKICAgIGlmIChhdmF0YXIpIGZkLmFwcGVuZCgiYXZhdGFyIiwgYXZhdGFyKTsKICAgIGF3YWl0IGFwaS5wYXRjaCgiL21lL3Byb2ZpbGUvIiwgZmQsIHtoZWFkZXJzOnsnQ29udGVudC1UeXBlJzonbXVsdGlwYXJ0L2Zvcm0tZGF0YSd9fSk7CiAgICBhbGVydCgiUHJvZmlsZSBzYXZlZCIpOwogIH07CgogIHJldHVybiAoCiAgICA8Zm9ybSBvblN1Ym1pdD17c3VibWl0fSBzdHlsZT17e21heFdpZHRoOjYwMH19PgogICAgICA8aDI+RWRpdCBQcm9maWxlPC9oMj4KICAgICAgPGlucHV0IHBsYWNlaG9sZGVyPSJEaXNwbGF5IG5hbWUiIHZhbHVlPXtmb3JtLmRpc3BsYXlfbmFtZXx8IiJ9IG9uQ2hhbmdlPXtlPT5zZXRGb3JtKHsuLi5mb3JtLGRpc3BsYXlfbmFtZTplLnRhcmdldC52YWx1ZX0pfS8+CiAgICAgIDxpbnB1dCBwbGFjZWhvbGRlcj0iQ29tcGFueSIgdmFsdWU9e2Zvcm0uY29tcGFueXx8IiJ9IG9uQ2hhbmdlPXtlPT5zZXRGb3JtKHsuLi5mb3JtLGNvbXBhbnk6ZS50YXJnZXQudmFsdWV9KX0vPgogICAgICA8dGV4dGFyZWEgcGxhY2Vob2xkZXI9IkJpbyIgdmFsdWU9e2Zvcm0uYmlvfHwiIn0gb25DaGFuZ2U9e2U9PnNldEZvcm0oey4uLmZvcm0sYmlvOmUudGFyZ2V0LnZhbHVlfSl9Lz4KICAgICAgPGlucHV0IHR5cGU9ImZpbGUiIG9uQ2hhbmdlPXtlPT5zZXRBdmF0YXIoZS50YXJnZXQuZmlsZXNbMF0pfS8+CiAgICAgIDxpbnB1dCBwbGFjZWhvbGRlcj0iV2Vic2l0ZSIgdmFsdWU9e2Zvcm0ud2Vic2l0ZXx8IiJ9IG9uQ2hhbmdlPXtlPT5zZXRGb3JtKHsuLi5mb3JtLHdlYnNpdGU6ZS50YXJnZXQudmFsdWV9KX0vPgogICAgICA8aW5wdXQgcGxhY2Vob2xkZXI9IkNvbnRhY3QgZW1haWwiIHZhbHVlPXtmb3JtLmNvbnRhY3RfZW1haWx8fCIifSBvbkNoYW5nZT17ZT0+c2V0Rm9ybSh7Li4uZm9ybSxjb250YWN0X2VtYWlsOmUudGFyZ2V0LnZhbHVlfSl9Lz4KICAgICAgPGlucHV0IHBsYWNlaG9sZGVyPSJDb250YWN0IHBob25lIiB2YWx1ZT17Zm9ybS5jb250YWN0X3Bob25lfHwiIn0gb25DaGFuZ2U9e2U9PnNldEZvcm0oey4uLmZvcm0sY29udGFjdF9waG9uZTplLnRhcmdldC52YWx1ZX0pfS8+CiAgICAgIDxsYWJlbCBzdHlsZT17e2Rpc3BsYXk6ImJsb2NrIiwgbWFyZ2luOiI4cHggMCJ9fT4KICAgICAgICA8aW5wdXQgdHlwZT0iY2hlY2tib3giIGNoZWNrZWQ9eyEhZm9ybS5zaG93X2NvbnRhY3RfZm9ybX0KICAgICAgICAgICAgICAgb25DaGFuZ2U9e2U9PnNldEZvcm0oey4uLmZvcm0sc2hvd19jb250YWN0X2Zvcm06ZS50YXJnZXQuY2hlY2tlZH0pfS8+CiAgICAgICAgU2hvdyBjb250YWN0IGZvcm0KICAgICAgPC9sYWJlbD4KICAgICAgPGJ1dHRvbj5TYXZlPC9idXR0b24+CiAgICAgIDxzdHlsZT57YAogICAgICAgIGlucHV0LCB0ZXh0YXJlYSwgYnV0dG9uIHsgd2lkdGg6IDEwMCU7IHBhZGRpbmc6IDEwcHg7IG1hcmdpbjogOHB4IDA7IH0KICAgICAgICBidXR0b24geyBjdXJzb3I6IHBvaW50ZXI7IH0KICAgICAgICB0ZXh0YXJlYSB7IG1pbi1oZWlnaHQ6IDEyMHB4OyB9CiAgICAgIGB9PC9zdHlsZT4KICAgIDwvZm9ybT4KICApOwp9Cg",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAAAAAAAAAAAEQIAAAAAAAAAAAAAAAA8L8"
+				],
+				[
+					7,
+					1,
+					"paste_and_indent",
+					null,
+					"AQAAAAAAAAAAAAAABg8AAAAAAAAAAAAA",
+					"AgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/AAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8L8"
+				]
+			]
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/Users/babakpouradam/apps/portfolio_starter",
+		"/Users/babakpouradam/apps/portfolio_starter/backend",
+		"/Users/babakpouradam/apps/portfolio_starter/backend/backend",
+		"/Users/babakpouradam/apps/portfolio_starter/frontend",
+		"/Users/babakpouradam/apps/portfolio_starter/frontend/src",
+		"/Users/babakpouradam/apps/portfolio_starter/frontend/src/pages"
+	],
+	"file_history":
+	[
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/grain background.html",
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/keys by functions fills up the screen copy.html",
+		"/Applications/Adobe After Effects 2025/Scripts/ScriptUI Panels/QuickEaseExtreme.jsx",
+		"/Users/babakpouradam/Desktop/blender files/scripts/reordering layer.jsx",
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/key.html",
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/keys by functions fills up the screen.html",
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/keys by functions.html",
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/multi-line block typing adding automatically.html",
+		"/Applications/Adobe After Effects 2025/Scripts/ScriptUI Panels/Re_Order.jsx",
+		"/Applications/Adobe After Effects 2025/Scripts/ScriptUI Panels/Reorder_StartPoints_2025.jsx",
+		"/Applications/Adobe After Effects 2025/Scripts/ScriptUI Panels/rd_ScriptLauncher.jsx",
+		"/Applications/Adobe After Effects 2025/Scripts/ScriptUI Panels/Sort Layers by In Point.jsx",
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/key typing-03 wpm.html",
+		"/Users/babakpouradam/Desktop/artin/keyboard typing/key typing-01.html",
+		"/Applications/Adobe After Effects 2025/Scripts/CopyMarkersToNestedComps.jsx",
+		"/Users/babakpouradam/Desktop/artin/book typing/The Window Knocker",
+		"/Applications/Adobe After Effects 2025/Scripts/ScriptUI Panels/duplicateComp.jsx"
+	],
+	"find":
+	{
+		"height": 44.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"scrollbar_highlights": true,
+		"show_context": true,
+		"use_buffer2": true,
+		"use_gitignore": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "frontend/src/api.js",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 552,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								552,
+								552
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JavaScript.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "frontend/src/pages/Register.jsx",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1795,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1795,
+								1795
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JSX.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "backend/backend/settings.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2284,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								443,
+								443
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"stack_multiselect": false,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "frontend/src/pages/EditProfile.jsx",
+					"selected": true,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 3846,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								3846,
+								3846
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JSX.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 896.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"stack_multiselect": false,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 32.0
+	},
+	"input":
+	{
+		"height": 0.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.find_results":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"pinned_build_system": "",
+	"project": "archi.sublime-project",
+	"replace":
+	{
+		"height": 60.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"editpro",
+				"frontend/src/pages/EditProfile.jsx"
+			]
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 322.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
