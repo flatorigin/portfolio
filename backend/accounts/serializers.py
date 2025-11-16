@@ -16,7 +16,7 @@ class MeSerializer(serializers.ModelSerializer):
                 instance.avatar.delete(save=False)
             instance.avatar = None
         # Set on new file
-        elif "avatar" in validated_data and validated_data["avatar"] is not None:
+        elif "avatar" in validated_data:
             instance.avatar = validated_data["avatar"]
         instance.save()
         return instance

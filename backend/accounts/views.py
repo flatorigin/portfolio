@@ -14,16 +14,30 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def get_profile(self, user):
-        # Ensure a Profile exists
-        return Profile.objects.get_or_create(user=user)[0]
+    def _profile(self, user):
+            prof, _ = Profile.objects.get_or_create(user=user)
+            return prof
 
     def get(self, request):
-        prof = self.get_profile(request.user)
-        return Response(MeSerializer(prof).data)
+            return Response(MeSerializer(self._profile(request.user)).data)
 
     def patch(self, request):
-        prof = self.get_profile(request.user)
-        ser = MeSerializer(prof, data=request.data, partial=True)
-        ser.is_valid(raise_exception=True)
-        return Response(ser.save())
+            prof = self._profile(request.user)
+            ser = MeSerializer(prof, data=request.data, partial=True)
+            ser.is_valid(raise_exception=True)
+            return Response(MeSerializer(ser.save()).data)
+
+            
+    # def get_profile(self, user):
+    #     # Ensure a Profile exists
+    #     return Profile.objects.get_or_create(user=user)[0]
+
+    # def get(self, request):
+    #     prof = self.get_profile(request.user)
+    #     return Response(MeSerializer(prof).data)
+
+    # def patch(self, request):
+    #     prof = self.get_profile(request.user)
+    #     ser = MeSerializer(prof, data=request.data, partial=True)
+    #     ser.is_valid(raise_exception=True)
+    #     return Response(ser.save())
