@@ -1,19 +1,9 @@
 import axios from "axios";
-const api = axios.create({ baseURL: "http://localhost:8000/api" });
+const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000/api", });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+api.interceptors.request.use((cfg) => {
+  const t = localStorage.getItem("access");
+  if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  return cfg;
 });
-
-// Log responses that fail so you can see them in DevTools console
-api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    console.error("[API error]", err?.response?.status, err?.response?.data || err.message);
-    return Promise.reject(err);
-  }
-);
-
 export default api;

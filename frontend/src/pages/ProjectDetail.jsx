@@ -1,171 +1,264 @@
-// import { useEffect, useState } from "react";
-// import api from "../api";
-// import { useParams } from "react-router-dom";
-
-// export default function ProjectDetail(){
-//   const { id } = useParams();
-//   const [p,setP] = useState(null);
-
-//   useEffect(()=>{
-//     api.get(`/projects/${id}/`).then(({data})=>setP(data));
-//   },[id]);
-
-//   if(!p) return null;
-//   return (
-//     <div>
-//       <h2>{p.title}</h2>
-//       {p.cover_image && <img src={p.cover_image} alt="" style={{width:"100%", maxHeight:420, objectFit:"cover", borderRadius:12}}/>}
-//       <p>{p.summary}</p>
-//       {!!p.images?.length && (
-//         <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:12}}>
-//           {p.images.map(img=> (
-//             <figure key={img.id} style={{margin:0}}>
-//               <img src={img.image} alt={img.alt_text} style={{width:"100%", borderRadius:8}}/>
-//               {img.caption && <figcaption style={{fontSize:12, opacity:.7}}>{img.caption}</figcaption>}
-//             </figure>
-//           ))}
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-
-// file: src/pages/ProfileEdit.jsx
-// Replace ENDPOINT + FIELD with your known-good values from curl.
-import { useEffect, useMemo, useState } from "react";
+// =========================================
+// file: frontend/src/pages/ProjectDetail.jsx
+// =========================================
+import { useEffect, useState, useCallback } from "react";
+import { useParams, Link } from "react-router-dom";
 import api from "../api";
+import {
+  getLocalImages,
+  addLocalImages,
+  filesToDataURLs,
+  removeLocalImage,
+  dataURLToBlob,
+  willExceed,
+  MAX_LOCAL_BYTES,
+  setLocalImages,
+} from "../lib/localGallery";
 
-const ENDPOINT = "/users/me/";     // ← your profile URL
-const METHOD   = "PATCH";          // PATCH is typical; use your allowed one
-const FIELD    = "avatar";         // ← exact file field name on server
-
-function errMsg(e, fb="Failed") {
-  const r = e?.response; if (!r) return e?.message || fb;
-  if (typeof r.data === "string") return r.data;
-  if (r.data?.detail) return String(r.data.detail);
-  try {
-    return Object.entries(r.data).map(([k,v])=>`${k}: ${Array.isArray(v)?v.join(", "):String(v)}`).join(" | ") || fb;
-  } catch { return fb; }
+function toUrl(raw) {
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
+  const originish = base.replace(/\/api\/?$/,"");
+  return raw.startsWith("/") ? `${originish}${raw}` : `${originish}/${raw}`;
 }
 
-export default function ProfileEdit() {
-  const [profile, setProfile] = useState(null);
-  const [file, setFile] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const [error, setError] = useState("");
-  const [note, setNote] = useState("");
+export default function ProjectDetail() {
+  const { id } = useParams();
+  const [project, setProject] = useState(null);
+  const [serverImages, setServerImages] = useState([]); // [{url, caption?}]
+  const [localImages, setLocalImagesState] = useState([]);   // [{url, caption}]
+  const [merged, setMerged] = useState([]);                  // local + server
+  const [open, setOpen] = useState(false);
+  const [idx, setIdx] = useState(0);
 
-  // 0) Log axios details to console to see what’s sent/received
+  // add-local form
+  const [picked, setPicked] = useState([]); // [{name, url, caption}]
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
   useEffect(() => {
-    const reqId = api.interceptors.request.use((cfg) => {
-      console.info("[logo] request", { url: cfg.url, method: cfg.method, headers: cfg.headers });
-      return cfg;
-    });
-    const resId = api.interceptors.response.use(
-      (res) => { console.info("[logo] response", { url: res.config?.url, status: res.status, data: res.data }); return res; },
-      (e)   => { console.error("[logo] error", { url: e?.config?.url, status: e?.response?.status, data: e?.response?.data }); return Promise.reject(e); }
-    );
-    return () => { api.interceptors.request.eject(reqId); api.interceptors.response.eject(resId); };
-  }, []);
-
-  // 1) load profile
-  async function load() {
-    try {
-      const { data } = await api.get(ENDPOINT);
-      setProfile(data || null);
-      // Normalize the URL prop you actually get from backend:
-      const url = data?.avatar || data?.logo || data?.image || data?.avatar_url || data?.logo_url || "";
-      if (url) localStorage.setItem("profile_logo", url); else localStorage.removeItem("profile_logo");
-    } catch (e) {
-      setError(errMsg(e, "Failed to load profile"));
-    }
-  }
-  useEffect(() => { load(); }, []);
-
-  const preview = useMemo(() => (file ? URL.createObjectURL(file) : ""), [file]);
-  const banner  = preview || profile?.avatar || profile?.logo || profile?.image || localStorage.getItem("profile_logo") || "";
-
-  function onPick(f) {
-    setError(""); setNote("");
-    if (!f) return setFile(null);
-    const okType = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/.test(f.type);
-    const okSize = f.size <= 5*1024*1024;
-    if (!okType) return setError("Use PNG/JPG/GIF/WEBP/SVG.");
-    if (!okSize) return setError("Max 5MB.");
-    setFile(f);
-  }
-
-  // 2) upload
-  async function saveLogo(e) {
-    e.preventDefault();
-    setError(""); setNote("");
-    if (!file) return setError("Pick a file first.");
-    setSaving(true);
-    try {
-      const fd = new FormData();
-      fd.append(FIELD, file, file.name);           // ← exact server field name
-      await api.request({ url: ENDPOINT, method: METHOD, data: fd }); // DO NOT set Content-Type
-      await load();
-      setFile(null);
-      setNote("Logo saved.");
-    } catch (e2) {
-      setError(errMsg(e2, "Failed to save logo"));
-    } finally { setSaving(false); }
-  }
-
-  // 3) remove
-  async function removeLogo() {
-    setError(""); setNote(""); setRemoving(true);
-    try {
-      // a) JSON null clear (most DRF/FastAPI setups)
+    let alive = true;
+    (async () => {
       try {
-        await api.patch(ENDPOINT, { [FIELD]: null }, { headers: { "Content-Type": "application/json" } });
-      } catch (eA) {
-        // b) Multipart empty
-        try {
-          const fd = new FormData(); fd.append(FIELD, "");
-          await api.patch(ENDPOINT, fd);
-        } catch (eB) {
-          // c) DELETE subroute fallback
-          const base = ENDPOINT.endsWith("/") ? ENDPOINT : ENDPOINT + "/";
-          const routes = [`${base}logo/`, `${base}${FIELD}/`];
-          let ok = false;
-          for (const r of routes) { try { await api.delete(r); ok = true; break; } catch {} }
-          if (!ok) throw eB;
+        const [{ data: meta }, { data: imgs }] = await Promise.all([
+          api.get(`/projects/${id}/`),
+          api.get(`/projects/${id}/images/`),
+        ]);
+        if (!alive) return;
+        setProject(meta || null);
+        const urls = (imgs || [])
+          .map((x) => ({
+            url: toUrl(x.url || x.image || x.src || x.file),
+            caption: x.caption || "",
+          }))
+          .filter((x) => !!x.url);
+        setServerImages(urls);
+        setLocalImagesState(getLocalImages(id));
+      } catch {
+        if (alive) {
+          setProject(null);
+          setServerImages([]);
+          setLocalImagesState(getLocalImages(id));
         }
       }
-      await load();
-      setNote("Logo removed.");
+    })();
+    return () => { alive = false; };
+  }, [id]);
+
+  useEffect(() => {
+    setMerged([...(localImages || []), ...(serverImages || [])]);
+  }, [serverImages, localImages]);
+
+  const next = useCallback(() => setIdx((i) => (merged.length ? (i + 1) % merged.length : 0)), [merged.length]);
+  const prev = useCallback(() => setIdx((i) => (merged.length ? (i - 1 + merged.length) % merged.length : 0)), [merged.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+      else if (e.key === "ArrowRight") next();
+      else if (e.key === "ArrowLeft") prev();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, next, prev]);
+
+  async function onPick(e) {
+    setMsg("");
+    const files = e.target.files || [];
+    const asData = await filesToDataURLs(files);
+    const urls = asData.map((x) => x.url);
+
+    if (willExceed(id, urls)) {
+      setMsg(`Adding these exceeds ${(MAX_LOCAL_BYTES/1024/1024).toFixed(0)}MB local limit. Remove some or pick fewer.`);
+      return;
+    }
+    setPicked(asData.map((x) => ({ ...x, caption: "" })));
+  }
+
+  function updatePickedCaption(i, v) {
+    setPicked((prev) => prev.map((it, idx) => (idx === i ? { ...it, caption: v } : it)));
+  }
+
+  async function saveToLocal() {
+    if (!picked.length) return;
+    setBusy(true); setMsg("");
+    try {
+      const res = addLocalImages(id, picked.map((x) => ({ url: x.url, caption: x.caption || "" })));
+      if (!res.ok) {
+        setMsg(res.message || "Could not save locally.");
+        return;
+      }
+      setLocalImagesState(getLocalImages(id));
+      setPicked([]);
+      setMsg("Saved locally.");
+      setTimeout(() => setMsg(""), 1500);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onRemoveLocal(url) {
+    removeLocalImage(id, url);
+    setLocalImagesState(getLocalImages(id));
+  }
+
+  async function publishToServer() {
+    // Only local images are published; server ones already exist
+    if (!localImages.length) {
+      setMsg("No local images to publish.");
+      return;
+    }
+    setBusy(true); setMsg("");
+    try {
+      const fd = new FormData();
+      localImages.forEach((it) => {
+        // Convert dataURL to Blob; give a simple filename
+        const blob = dataURLToBlob(it.url);
+        const ext = (blob.type.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "");
+        const fname = `local-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        fd.append("images", blob, fname);
+      });
+      localImages.forEach((it) => fd.append("captions", it.caption || ""));
+
+      const { data } = await api.post(`/projects/${id}/images/`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // Clear local and refresh from server response
+      setLocalImages(id, []); // storage clear
+      setLocalImagesState([]); // state clear
+      const urls = (data || []).map((x) => ({
+        url: toUrl(x.url || x.image || x.src || x.file),
+        caption: x.caption || "",
+      }));
+      setServerImages(urls);
+      setMsg("Published to server.");
+      setTimeout(() => setMsg(""), 1500);
     } catch (e) {
-      setError(errMsg(e, "Failed to remove logo"));
-    } finally { setRemoving(false); }
+      setMsg(
+        e?.response?.data
+          ? `Publish failed: ${JSON.stringify(e.response.data)}`
+          : `Publish failed: ${String(e)}`
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="mb-2 text-sm font-medium text-slate-600">Profile Logo</div>
-        {banner ? (
-          <div className="flex items-center gap-6">
-            <img src={banner} alt="Logo" className="h-20 w-20 rounded-xl object-cover" />
-            <div className="text-sm text-slate-600"><code>{METHOD} {ENDPOINT}</code> · field <code>{FIELD}</code></div>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No logo yet — upload one.</div>
-        )}
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">{project?.title || `Project #${id}`}</h2>
+          {project?.summary && <div className="text-slate-600 text-sm">{project.summary}</div>}
+        </div>
+        <Link to="/" className="text-sm text-slate-600 hover:text-slate-900">← Back</Link>
       </div>
 
-      <h2 className="mb-3 text-2xl font-bold">Edit Profile</h2>
-      <form onSubmit={saveLogo} className="max-w-xl space-y-4">
-        <input type="file" accept="image/*" onChange={(e)=>onPick(e.target.files?.[0]||null)} className="block w-full rounded-xl border px-3 py-2" />
-        <div className="flex flex-wrap gap-3">
-          <button disabled={saving} className="rounded-xl bg-gray-400 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Save Logo"}</button>
-          <button type="button" onClick={removeLogo} disabled={removing} className="rounded-xl bg-rose-600 px-4 py-2 text-white hover:bg-rose-700 disabled:opacity-60">{removing ? "Removing…" : "Remove Logo"}</button>
+      {/* LOCAL ADD: saved in browser only */}
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-2 font-semibold text-slate-700">Add Local Images (browser only)</div>
+        <input type="file" multiple accept="image/*" onChange={onPick} className="mb-3 block w-full rounded-xl border p-2" />
+        {picked.length > 0 && (
+          <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+            {picked.map((it, i) => (
+              <div key={i} className="rounded-xl border border-slate-200 p-3 bg-white">
+                <img src={it.url} alt="" className="mb-2 h-36 w-full rounded-md object-cover" />
+                <input
+                  className="w-full rounded-lg border border-slate-300 px-2 py-1"
+                  placeholder="Caption…"
+                  value={it.caption}
+                  onChange={(e) => updatePickedCaption(i, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={saveToLocal}
+            disabled={busy || picked.length === 0}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+          >
+            Save to Browser
+          </button>
+          <button
+            onClick={publishToServer}
+            disabled={busy || localImages.length === 0}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
+            title="Uploads your local images to the server"
+          >
+            Publish to Server
+          </button>
         </div>
-        {note && <div className="text-sm text-emerald-700">{note}</div>}
-        {error && <div className="text-sm text-rose-600">{error}</div>}
-      </form>
+        <div className="mt-2 text-xs text-slate-500">
+          Local storage limit: {(MAX_LOCAL_BYTES/1024/1024).toFixed(0)}MB. Publishing sends images to the backend and clears the local copies.
+        </div>
+        {msg && <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700">{msg}</div>}
+      </div>
+
+      {/* MERGED GALLERY */}
+      {merged.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 p-6 text-center text-slate-600">No media found.</div>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+          {merged.map((img, i) => {
+            const isLocal = !!localImages.find((x) => x.url === img.url);
+            return (
+              <figure key={img.url + i} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <button type="button" onClick={() => { setIdx(i); setOpen(true); }} className="block w-full">
+                  <img src={img.url} alt="" className="block h-[160px] w-full object-cover transition-transform group-hover:scale-[1.02]" />
+                </button>
+                {img.caption && <figcaption className="px-3 py-2 text-sm text-slate-700">{img.caption}</figcaption>}
+                {isLocal && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveLocal(img.url)}
+                    className="absolute right-2 top-2 rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-700 hover:bg-white"
+                    title="Remove local image"
+                  >
+                    Remove
+                  </button>
+                )}
+              </figure>
+            );
+          })}
+        </div>
+      )}
+
+      {open && merged[idx] && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setOpen(false)}>
+          <div className="relative flex max-h-[85vh] max-w-[90vw] items-center justify-center" onClick={(e)=>e.stopPropagation()}>
+            <button type="button" onClick={prev} aria-label="Prev" className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full rounded-full border border-white/40 px-3 py-1 text-white/90">‹</button>
+            <img src={merged[idx].url} alt="" className="h-[360px] max-h-[80vh] w-auto max-w-[90vw] rounded-xl bg-black/40 shadow-2xl" style={{objectFit:"contain"}}/>
+            {merged[idx].caption && <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-black/70 px-3 py-1 text-sm text-white">{merged[idx].caption}</div>}
+            <button type="button" onClick={next} aria-label="Next" className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full rounded-full border border-white/40 px-3 py-1 text-white/90">›</button>
+            <button type="button" onClick={()=>setOpen(false)} aria-label="Close" className="absolute -right-4 -top-4 rounded-full border border-white/40 px-2 py-1 text-white/90">✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
