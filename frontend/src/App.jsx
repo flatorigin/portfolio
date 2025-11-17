@@ -1,95 +1,73 @@
-// import { useState } from "react";
-// import { Outlet, Link, useNavigate } from "react-router-dom";
-// import { logout } from "./auth";
-// import { Input, Textarea, Button, Card } from "./ui";
-
-// export default function App() {
-//   const navigate = useNavigate();
-//   const authed = !!localStorage.getItem("access");
-
-//   const onLogout = () => {
-//     logout();
-//     navigate("/login");
-//   };
-
-//   return (
-//     <div className="max-w-5xl mx-auto px-4 py-6">
-//       <nav className="flex items-center gap-4 mb-6">
-//         <Link to="/" className="text-slate-600 hover:text-slate-900">Explore</Link>
-//         <Link to="/profile/edit" className="text-slate-600 hover:text-slate-900">Edit Profile</Link>
-//         <Link to="/dashboard" className="text-slate-600 hover:text-slate-900">Dashboard</Link>
-
-//         <div className="ml-auto flex items-center gap-3">
-//           {!authed && (
-//             <>
-//               <Link to="/login" className="text-slate-600 hover:text-blue-500">Login</Link>
-//               <Link to="/register" className="text-slate-600 hover:text-slate-900">Register</Link>
-//             </>
-//           )}
-//           {authed && (
-//             <button
-//               onClick={onLogout}
-//               className="inline-flex items-center px-4 py-2 rounded-xl bg-gray-400 text-white hover:bg-blue-700"
-//             >
-//               Logout
-//             </button>
-//           )}
-//         </div>
-//       </nav>
-
-//       <Outlet />
-//     </div>
-//   );
-// }
-
-// OPTIONAL: If you want the App shell to also read and show a small logo badge on profile pages,
-// add this snippet to your App layout. It only affects /profile/* routes.
-// file: src/App.jsx  (add the imports and the snippet where appropriate)
+// =======================================
+// file: frontend/src/App.jsx
+// Layout + nav polish; <Outlet /> retained
+// =======================================
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+import { Container, Button, GhostButton } from "./ui";
 import { logout } from "./auth";
 
 export default function App() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
   const authed = !!localStorage.getItem("access");
-  const onLogout = () => { logout(); navigate("/login"); };
 
-  const showSmallLogo = location.pathname.startsWith("/profile");
-  const smallLogo = (typeof window !== "undefined" && localStorage.getItem("profile_logo")) || "";
+  const NavLink = ({ to, children }) => {
+    const active = pathname === to;
+    return (
+      <Link
+        to={to}
+        className={
+          "rounded-xl px-3 py-1.5 text-sm " +
+          (active ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100")
+        }
+      >
+        {children}
+      </Link>
+    );
+  };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
-      <nav className="mb-4 flex items-center gap-4">
-        <Link to="/" className="text-slate-600 hover:text-slate-900">Explore</Link>
-        <Link to="/profile/edit" className="text-slate-600 hover:text-slate-900">Edit Profile</Link>
-        <Link to="/dashboard" className="text-slate-600 hover:text-slate-900">Dashboard</Link>
-        <div className="ml-auto flex items-center gap-3">
-          {!authed ? (
-            <>
-              <Link to="/login" className="text-slate-600 hover:text-blue-500">Login</Link>
-              <Link to="/register" className="text-slate-600 hover:text-slate-900">Register</Link>
-            </>
-          ) : (
-            <button
-              onClick={onLogout}
-              className="inline-flex items-center rounded-xl bg-gray-400 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              Logout
-            </button>
-          )}
-        </div>
-      </nav>
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <Container className="py-3">
+          <nav className="flex items-center gap-2">
+            <Link to="/" className="mr-4 text-base font-bold tracking-tight text-slate-900">Portfolio</Link>
+            <NavLink to="/">Explore</NavLink>
+            <NavLink to="/profile/edit">Edit Profile</NavLink>
+            <NavLink to="/dashboard">Dashboard</NavLink>
+            <div className="ml-auto flex items-center gap-2">
+              {!authed ? (
+                <>
+                  <GhostButton as="a">
+                    <Link to="/login">Login</Link>
+                  </GhostButton>
+                  <Button as="a" className="px-3 py-1.5">
+                    <Link to="/register">Register</Link>
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={() => {
+                    logout();
+                    navigate("/login");
+                  }}
+                  className="px-3 py-1.5"
+                >
+                  Logout
+                </Button>
+              )}
+            </div>
+          </nav>
+        </Container>
+      </header>
 
-      {/* Small logo chip only on profile pages (under the top nav, above page content) */}
-      {showSmallLogo && smallLogo && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-          <img src={smallLogo} alt="Your logo" className="h-10 w-10 rounded-lg object-cover" />
-          <div className="text-sm text-slate-600">Your profile logo</div>
-        </div>
-      )}
-
-      <Outlet />
+      <main>
+        <Container className="py-6">
+          <Outlet />
+        </Container>
+      </main>
     </div>
   );
 }
-<Outlet />
+
+
