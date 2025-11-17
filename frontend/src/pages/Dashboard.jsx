@@ -1,137 +1,117 @@
-// file: src/pages/ProjectGallery.jsx
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { Link, useParams } from "react-router-dom";
+// frontend/src/pages/Dashboard.jsx
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
+import ImageUploader from "../components/ImageUploader";
 
-// Helper: make relative media paths absolute based on api.baseURL
-function toUrl(raw) {
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
-  // If base is like http://host/api/, strip trailing /api to get host for media
-  const originish = base.replace(/\/api\/?$/,"");
-  if (raw.startsWith("/")) return `${originish}${raw}`;
-  return `${originish}/${raw}`;
-}
+export default function Dashboard(){
+  const [projects,setProjects]=useState([]);
+  const [form,setForm]=useState({title:"",summary:"",category:"",is_public:true});
+  const [cover,setCover]=useState(null);
+  const [selectedId, setSelectedId] = useState("");
+  const [imgs, setImgs] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const me = localStorage.getItem("username") || "";
 
-export default function ProjectGallery() {
-  const { id } = useParams();
-  const [project, setProject] = useState(null);
-  const [images, setImages] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [idx, setIdx] = useState(0);
+  async function refreshProjects(){
+    const {data} = await api.get("/projects/");
+    setProjects(Array.isArray(data) ? data : []);
+  }
+  useEffect(()=>{ refreshProjects(); },[]);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [{ data: meta }, { data: imgs }] = await Promise.all([
-          api.get(`/projects/${id}/`),
-          api.get(`/projects/${id}/images/`),
-        ]);
-        if (!alive) return;
-        setProject(meta || null);
-        const urls = (imgs || [])
-          .map((it) => (typeof it === "string" ? it : it?.url || it?.src || it?.image || it?.file || ""))
-          .filter(Boolean)
-          .map(toUrl);
-        setImages(urls);
-      } catch {
-        setProject(null);
-        setImages([]);
-      }
-    })();
-    return () => { alive = false; };
-  }, [id]);
+  const owned = useMemo(
+    () => (projects||[]).filter(p => (typeof p.is_owner === "boolean" ? p.is_owner : p.owner_username === me)),
+    [projects, me]
+  );
 
-  const next = useCallback(() => setIdx((i) => (images.length ? (i + 1) % images.length : 0)), [images.length]);
-  const prev = useCallback(() => setIdx((i) => (images.length ? (i - 1 + images.length) % images.length : 0)), [images.length]);
+  useEffect(()=>{
+    if (!selectedId) { setImgs([]); return; }
+    api.get(`/projects/${selectedId}/images/`).then(({data}) => {
+      const arr = (data||[]).map(x => ({
+        url: x.url || x.image || x.src || x.file,
+        caption: x.caption || "",
+      })).filter(x=>!!x.url);
+      setImgs(arr);
+    }).catch(()=> setImgs([]));
+  }, [selectedId]);
 
-  // keyboard nav in modal
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-      else if (e.key === "ArrowRight") next();
-      else if (e.key === "ArrowLeft") prev();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, next, prev]);
+  async function createProject(e){
+    e.preventDefault();
+    setBusy(true);
+    try{
+      const fd = new FormData();
+      Object.entries(form).forEach(([k,v])=>fd.append(k,v));
+      if (cover) fd.append("cover_image", cover);
+      const {data} = await api.post("/projects/", fd, {headers:{'Content-Type':'multipart/form-data'}});
+      await refreshProjects();
+      setForm({title:"",summary:"",category:"",is_public:true});
+      setCover(null);
+      setSelectedId(String(data?.id || ""));
+    } finally { setBusy(false); }
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-bold">{project?.title || "Project"}</h2>
-        <Link to="/" className="text-sm text-slate-600 hover:text-slate-900">← Back to Explore</Link>
-      </div>
+      <h2 className="mb-4 text-2xl font-bold">Dashboard</h2>
 
-      {project?.summary && <p className="mb-4 text-slate-700">{project.summary}</p>}
-      <div className="mb-6 text-sm text-slate-600">{project?.owner_username && <>by {project.owner_username}</>}</div>
+      {/* Create Project */}
+      <form onSubmit={createProject} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="text-sm font-semibold text-slate-700">Create Project</div>
+        <input className="w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Title" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/>
+        <textarea className="w-full rounded-xl border border-slate-300 px-3 py-2 min-h-32" placeholder="Summary" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})}/>
+        <input className="w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Category" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}/>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_public} onChange={e=>setForm({...form,is_public:e.target.checked})}/> Public</label>
+        <div className="text-sm">Cover</div>
+        <input type="file" onChange={e=>setCover(e.target.files?.[0]||null)}/>
+        <button disabled={busy} className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60">Create</button>
+      </form>
 
-      {images.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 p-6 text-center text-slate-600">
-          No media found for this project.
+      {/* Manage Images */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="text-sm font-semibold text-slate-700">Manage Images</div>
+          <select
+            className="rounded-xl border border-slate-300 px-3 py-2"
+            value={selectedId}
+            onChange={(e)=> setSelectedId(e.target.value)}
+          >
+            <option value="">Select a project…</option>
+            {owned.map(p => <option key={p.id} value={String(p.id)}>{p.title}</option>)}
+          </select>
         </div>
-      ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-          {images.map((src, i) => (
-            <button
-              key={src + i}
-              type="button"
-              onClick={() => { setIdx(i); setOpen(true); }}
-              className="group overflow-hidden rounded-xl border border-slate-200 bg-white"
-              aria-label={`Open image ${i + 1}`}
-            >
-              <img
-                src={src}
-                alt={`image ${i + 1}`}
-                className="block h-[160px] w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
-              />
-            </button>
-          ))}
-        </div>
-      )}
 
-      {open && images[idx] && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div className="relative flex max-h-[85vh] max-w-[90vw] items-center justify-center" onClick={(e)=>e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={prev}
-              aria-label="Previous"
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full rounded-full border border-white/40 px-3 py-1 text-white/90 hover:text-white"
-            >‹</button>
-
-            <img
-              src={images[idx]}
-              alt={`large ${idx + 1}`}
-              className="h-[320px] max-h-[80vh] w-auto max-w-[90vw] rounded-xl bg-black/50 shadow-2xl"
-              style={{ objectFit: "contain" }}
-            />
-
-            <button
-              type="button"
-              onClick={next}
-              aria-label="Next"
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full rounded-full border border-white/40 px-3 py-1 text-white/90 hover:text-white"
-            >›</button>
-
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close"
-              className="absolute -right-4 -top-4 rounded-full border border-white/40 px-2 py-1 text-white/90 hover:text-white"
-            >✕</button>
+        {!selectedId ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            Choose one of your projects to upload images.
           </div>
-        </div>
-      )}
+        ) : (
+          <>
+            <div className="mb-4">
+              <div className="mb-2 text-sm text-slate-600">Existing Images</div>
+              {imgs.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No images yet.</div>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+                  {imgs.map((it, i)=>(
+                    <figure key={it.url + i} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <img src={it.url} alt="" className="mb-2 h-36 w-full rounded-md object-cover"/>
+                      {it.caption && <figcaption className="text-sm text-slate-700">{it.caption}</figcaption>}
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <ImageUploader
+              projectId={selectedId}
+              onUploaded={async ()=>{
+                const {data} = await api.get(`/projects/${selectedId}/images/`);
+                const arr = (data||[]).map(x => ({ url: x.url || x.image || x.src || x.file, caption: x.caption || ""})).filter(x=>!!x.url);
+                setImgs(arr);
+              }}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
-
