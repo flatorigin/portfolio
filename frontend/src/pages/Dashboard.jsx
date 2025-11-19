@@ -1,50 +1,47 @@
-// ============================================================================
-// file: frontend/src/pages/Dashboard.jsx
-// ============================================================================
-import { useEffect, useMemo, useState, useCallback } from "react";
+// frontend/src/pages/Dashboard.jsx
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../api";
 import ImageUploader from "../components/ImageUploader";
 import { SectionTitle, Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
 
-// normalize media
-function toUrl(raw){
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
-  const origin = base.replace(/\/api\/?$/,"");
-  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
-}
+// header with live logo/name
+function DashboardHeader(){
+  const toUrl = (raw)=>{
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
+    const origin = base.replace(/\/api\/?$/,"");
+    return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+  };
 
-export default function Dashboard(){
-  // ---- Profile header (live) ----
-  const [meLite, setMeLite] = useState({
+  const [me, setMe] = useState({
     display_name: localStorage.getItem("profile_display_name") || "",
     logo: localStorage.getItem("profile_logo") || "",
   });
-  const [profileSaving, setProfileSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(()=>{
     (async ()=>{
-      try {
+      try{
         const { data } = await api.get("/users/me/");
         const next = {
           display_name: data?.display_name || data?.name || "",
           logo: data?.logo || data?.logo_url || "",
         };
-        setMeLite(next);
+        setMe(next);
         localStorage.setItem("profile_display_name", next.display_name || "");
         localStorage.setItem("profile_logo", next.logo || "");
-      } catch { /* non-blocking */ }
+      }catch{}
     })();
   },[]);
 
   useEffect(()=>{
-    const onUpdating = ()=> setProfileSaving(true);
-    const onUpdated  = (e)=> {
+    const onUpdating = ()=> setSaving(true);
+    const onUpdated  = (e)=>{
+      setSaving(false);
       const d = e?.detail || {};
-      setProfileSaving(false);
-      if (d.display_name || d.logo) {
-        setMeLite(prev=>({
+      if (d.display_name || d.logo){
+        setMe(prev => ({
           display_name: d.display_name ?? prev.display_name,
           logo: d.logo ?? prev.logo,
         }));
@@ -58,29 +55,66 @@ export default function Dashboard(){
     };
   },[]);
 
-  const logoUrl = toUrl(meLite.logo);
+  const logoUrl = toUrl(me.logo);
+  const initial = (me.display_name || "").slice(0,1).toUpperCase() || "•";
 
-  // ---- Projects & editor ----
+  return (
+    <header className="flex items-center gap-3">
+      <div className="relative h-10 w-10">
+        {logoUrl ? (
+          <img
+            src={logoUrl}
+            alt="Logo"
+            className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+          />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
+            {initial}
+          </div>
+        )}
+        {saving && (
+          <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+          </div>
+        )}
+      </div>
+      <div className="min-w-0">
+        <SectionTitle>Dashboard</SectionTitle>
+        {me.display_name && (
+          <div className="truncate text-xs text-slate-600">{me.display_name}</div>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function toUrl(raw){
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
+  const origin = base.replace(/\/api\/?$/,"");
+  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+}
+
+
+export default function Dashboard(){
   const [projects,setProjects]=useState([]);
   const [busy, setBusy] = useState(false);
 
-  // Create form
   const [form,setForm]=useState({
     title:"", summary:"", category:"", is_public:true,
     location:"", budget:"", sqf:"", highlights:"",
   });
   const [cover,setCover]=useState(null);
 
-  // Editor
   const [editingId, setEditingId] = useState("");
   const [editForm,setEditForm]=useState({
     title:"", summary:"", category:"", is_public:true,
     location:"", budget:"", sqf:"", highlights:"",
   });
   const [editCover,setEditCover]=useState(null);
-  const [editImgs, setEditImgs] = useState([]); // [{id,url,caption,_localCaption,_saving}]
+  const [editImgs, setEditImgs] = useState([]);
 
-  // current user (ownership)
   const [meUser, setMeUser] = useState({ username: localStorage.getItem("username") || "" });
   useEffect(()=>{
     (async ()=>{
@@ -91,7 +125,7 @@ export default function Dashboard(){
         try {
           const { data } = await api.get("/users/me/");
           if (data?.username) setMeUser({ username: data.username });
-        } catch {/* fallback */}
+        } catch {}
       }
     })();
   },[]);
@@ -154,7 +188,7 @@ export default function Dashboard(){
       Object.entries(form).forEach(([k,v])=> fd.append(k, v ?? ""));
       if (cover) fd.append("cover_image", cover);
       const {data} = await api.post("/projects/", fd, {headers:{'Content-Type':'multipart/form-data'}});
-      setProjects(prev => [data, ...prev]); // optimistic
+      setProjects(prev => [data, ...prev]);
       refreshProjects();
       setForm({ title:"", summary:"", category:"", is_public:true, location:"", budget:"", sqf:"", highlights:"" });
       setCover(null);
@@ -208,35 +242,10 @@ export default function Dashboard(){
 
   return (
     <div className="space-y-8">
-      {/* Header with company identity + spinner */}
-      <header className="flex items-center gap-3">
-        <div className="relative h-10 w-10">
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="Logo"
-              className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
-            />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
-              {meLite.display_name ? meLite.display_name.slice(0,1).toUpperCase() : "•"}
-            </div>
-          )}
-          {profileSaving && (
-            <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0">
-          <SectionTitle>Dashboard</SectionTitle>
-          {meLite.display_name && (
-            <div className="truncate text-xs text-slate-600">{meLite.display_name}</div>
-          )}
-        </div>
-      </header>
+      {/* Use the new header */}
+      <DashboardHeader/>
 
-      {/* 1) CREATE PROJECT — Project Info (Draft) */}
+      {/* Create Project */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-800">Create Project</div>
@@ -293,7 +302,7 @@ export default function Dashboard(){
         </form>
       </Card>
 
-      {/* 2) YOUR PROJECTS */}
+      {/* Your Projects */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-800">Your Projects</div>
@@ -338,7 +347,7 @@ export default function Dashboard(){
         )}
       </Card>
 
-      {/* 3) EDITOR */}
+      {/* Editor */}
       {editingId && (
         <Card className="p-5">
           <div className="mb-3 flex items-center justify-between">

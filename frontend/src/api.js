@@ -1,9 +1,17 @@
 import axios from "axios";
-const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000/api", });
 
-api.interceptors.request.use((cfg) => {
-  const t = localStorage.getItem("access");
-  if (t) cfg.headers.Authorization = `Bearer ${t}`;
-  return cfg;
+// Read base from env; fallback to localhost. MUST end with /api
+const RAW = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000/api";
+const BASE = RAW.replace(/\/+$/,"") + "/"; // normalize single trailing /
+const instance = axios.create({
+  baseURL: BASE, // e.g. http://127.0.0.1:8000/api/
 });
-export default api;
+
+// why: make sure Authorization is attached for every request
+instance.interceptors.request.use((config) => {
+  const token = localStorage.getItem("access");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+export default instance;
