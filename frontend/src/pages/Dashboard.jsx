@@ -15,12 +15,71 @@ function toUrl(raw){
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
+/** Fixed 8:5 company ID card (50px inset). */
+function CompanyIdCard({ logoSrc, name, location }) {
+  const initials = (name || "")
+    .trim()
+    .split(/\s+/)
+    .map(s => s[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "•";
+
+  return (
+    <div
+      className="
+        fixed z-40 hidden md:block
+        top-[50px] right-[50px]
+        w-[320px] aspect-[8/5]
+        rounded-2xl border border-slate-200 bg-white shadow-xl
+      "
+      aria-label="Company ID Card"
+    >
+      <div className="flex h-full">
+        <div className="flex w-2/5 items-center justify-center bg-slate-50">
+          {logoSrc ? (
+            <img
+              src={logoSrc}
+              alt="Company logo"
+              className="max-h-[70%] max-w-[70%] object-contain"
+              onError={(e)=>{ e.currentTarget.style.display = "none"; }} // why: hide broken logo
+            />
+          ) : (
+            <div className="grid h-[70%] w-[70%] place-items-center rounded-xl bg-slate-200 text-2xl font-semibold text-slate-700">
+              {initials}
+            </div>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col p-4">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Company</div>
+          <div className="truncate text-lg font-semibold text-slate-900" title={name || ""}>
+            {name || "—"}
+          </div>
+          <div className="mt-auto truncate text-sm text-slate-600" title={location || ""}>
+            {location || "Location not set"}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard(){
   // ---- Profile header (live) ----
   const [meLite, setMeLite] = useState({
     display_name: localStorage.getItem("profile_display_name") || "",
     logo: localStorage.getItem("profile_logo") || "",
+    location: localStorage.getItem("profile_location") || "", // <- added
   });
+  // // Debug expose: lets you inspect in the console
+  // useEffect(() => {
+  //   // why: make state visible in DevTools
+  //   window.__onDashboardMounted = true;
+  //   window.meLite = meLite;
+  //   window.profileLocation = meLite?.location ?? "";
+  //   console.debug("[Dashboard] meLite:", meLite);           // verify it runs
+  //   console.debug("[Dashboard] profileLocation:", window.profileLocation);
+  // }, [meLite]);
   const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(()=>{
@@ -30,10 +89,13 @@ export default function Dashboard(){
         const next = {
           display_name: data?.display_name || data?.name || "",
           logo: data?.logo || data?.logo_url || "",
+          // Prefer a single `location` field. If your API uses different keys, map here.
+          location: data?.location || data?.city || data?.profile?.location || "",
         };
         setMeLite(next);
         localStorage.setItem("profile_display_name", next.display_name || "");
         localStorage.setItem("profile_logo", next.logo || "");
+        localStorage.setItem("profile_location", next.location || "");
       } catch { /* non-blocking */ }
     })();
   },[]);
@@ -43,11 +105,15 @@ export default function Dashboard(){
     const onUpdated  = (e)=> {
       const d = e?.detail || {};
       setProfileSaving(false);
-      if (d.display_name || d.logo) {
+      if (d.display_name || d.logo || d.location) {
         setMeLite(prev=>({
           display_name: d.display_name ?? prev.display_name,
           logo: d.logo ?? prev.logo,
+          location: d.location ?? prev.location, // <- live update
         }));
+        if (typeof d.display_name !== "undefined") localStorage.setItem("profile_display_name", d.display_name || "");
+        if (typeof d.logo !== "undefined") localStorage.setItem("profile_logo", d.logo || "");
+        if (typeof d.location !== "undefined") localStorage.setItem("profile_location", d.location || "");
       }
     };
     window.addEventListener("profile:updating", onUpdating);
@@ -59,7 +125,7 @@ export default function Dashboard(){
   },[]);
 
   const logoUrl = toUrl(meLite.logo);
-
+  
   // ---- Projects & editor ----
   const [projects,setProjects]=useState([]);
   const [busy, setBusy] = useState(false);
@@ -181,7 +247,6 @@ export default function Dashboard(){
       setCreateOk(true);
       if (data?.id) await loadEditor(data.id); // jump into editor
     } catch (err){
-      // surface DRF errors (400/403) or network issues
       const msg = err?.response?.data
         ? (typeof err.response.data === "string"
             ? err.response.data
@@ -193,7 +258,6 @@ export default function Dashboard(){
       setBusy(false);
     }
   }
-
 
   async function saveProjectInfo(e){
     e?.preventDefault?.();
@@ -236,6 +300,9 @@ export default function Dashboard(){
       setBusy(false);
     }
   }
+
+  // --- location for ID card (from edit-profile) ---
+  const profileLocation = meLite.location || "";
 
   return (
     <div className="space-y-8">
@@ -494,6 +561,13 @@ export default function Dashboard(){
           </div>
         </Card>
       )}
+
+      {/* Fixed ID card — 8:5 ratio, 50px from top/right; uses edit-profile location */}
+      <CompanyIdCard
+        logoSrc={logoUrl}
+        name={meLite.display_name}
+        location={profileLocation}
+      />
     </div>
   );
 }
