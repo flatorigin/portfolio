@@ -96,6 +96,9 @@ export default function Dashboard(){
     })();
   },[]);
 
+  const [createErr, setCreateErr] = useState("");
+  const [createOk, setCreateOk] = useState(false);
+
   const refreshProjects = useCallback(async ()=>{
     const {data} = await api.get("/projects/");
     setProjects(Array.isArray(data) ? data : []);
@@ -148,21 +151,49 @@ export default function Dashboard(){
 
   async function createProject(e){
     e.preventDefault();
+    setCreateErr(""); setCreateOk(false);
     setBusy(true);
     try{
+      const token = localStorage.getItem("access");
+      if (!token) {
+        setCreateErr("You must be logged in to create a project.");
+        return;
+      }
+
       const fd = new FormData();
+      // minimal required field
+      if (!form.title.trim()) {
+        setCreateErr("Title is required.");
+        return;
+      }
       Object.entries(form).forEach(([k,v])=> fd.append(k, v ?? ""));
       if (cover) fd.append("cover_image", cover);
-      const {data} = await api.post("/projects/", fd, {headers:{'Content-Type':'multipart/form-data'}});
-      setProjects(prev => [data, ...prev]); // optimistic
-      refreshProjects();
+
+      const {data} = await api.post("/projects/", fd, {
+        headers:{ "Content-Type":"multipart/form-data" }
+      });
+
+      // optimistic add + refresh to normalize flags
+      setProjects(prev => [data, ...prev]);
+      await refreshProjects();
       setForm({ title:"", summary:"", category:"", is_public:true, location:"", budget:"", sqf:"", highlights:"" });
       setCover(null);
-      if (data?.id) await loadEditor(data.id);
+      setCreateOk(true);
+      if (data?.id) await loadEditor(data.id); // jump into editor
+    } catch (err){
+      // surface DRF errors (400/403) or network issues
+      const msg = err?.response?.data
+        ? (typeof err.response.data === "string"
+            ? err.response.data
+            : JSON.stringify(err.response.data))
+        : (err?.message || String(err));
+      setCreateErr(msg);
+      console.error("[createProject] failed:", err);
     } finally {
       setBusy(false);
     }
   }
+
 
   async function saveProjectInfo(e){
     e?.preventDefault?.();
@@ -289,6 +320,8 @@ export default function Dashboard(){
             </label>
           </div>
           <div className="md:col-span-2">
+            {createErr && <div className="md:col-span-2 text-sm text-red-700">{createErr}</div>}
+            {createOk && !createErr && <div className="md:col-span-2 text-sm text-green-700">Project created.</div>}
             <Button disabled={busy}>Create Project</Button>
           </div>
         </form>

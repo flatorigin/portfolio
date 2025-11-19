@@ -1,18 +1,14 @@
-// =======================================
-// file: frontend/src/pages/ProjectDetail.jsx
-// Header/meta tightening; keeps your gallery logic
-// =======================================
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
-import { Badge } from "../ui";
+import { Badge, Card } from "../ui";
 
 function toUrl(raw) {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
-  const originish = base.replace(/\/api\/?$/,"");
-  return raw.startsWith("/") ? `${originish}${raw}` : `${originish}/${raw}`;
+  const origin = base.replace(/\/api\/?$/,"");
+  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
 export default function ProjectDetail() {
@@ -39,25 +35,11 @@ export default function ProjectDetail() {
   }, [id]);
 
   useEffect(() => {
-    fetchAll().catch(() => {
-      setProject(null);
-      setImages([]);
-    });
+    fetchAll().catch(() => { setProject(null); setImages([]); });
   }, [fetchAll]);
 
   const next = useCallback(() => setIdx((i) => (images.length ? (i + 1) % images.length : 0)), [images.length]);
   const prev = useCallback(() => setIdx((i) => (images.length ? (i - 1 + images.length) % images.length : 0)), [images.length]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-      else if (e.key === "ArrowRight") next();
-      else if (e.key === "ArrowLeft") prev();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, next, prev]);
 
   return (
     <div>
@@ -78,6 +60,18 @@ export default function ProjectDetail() {
       </div>
 
       {project?.summary && <p className="mb-4 text-slate-700">{project.summary}</p>}
+
+      {/* meta grid */}
+      {(project?.location || project?.budget || project?.sqf || project?.highlights) && (
+        <Card className="mb-5 p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4 text-sm text-slate-700">
+            {project?.location ? <div><span className="opacity-60">Location:</span> {project.location}</div> : null}
+            {project?.budget ? <div><span className="opacity-60">Budget:</span> {project.budget}</div> : null}
+            {project?.sqf ? <div><span className="opacity-60">Sq Ft:</span> {project.sqf}</div> : null}
+            {project?.highlights ? <div className="md:col-span-4"><span className="opacity-60">Highlights:</span> {project.highlights}</div> : null}
+          </div>
+        </Card>
+      )}
 
       {images.length === 0 ? (
         <div className="rounded-xl border border-slate-200 p-6 text-center text-slate-600">No media found.</div>
