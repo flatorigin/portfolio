@@ -1,27 +1,87 @@
-// frontend/src/pages/Dashboard.jsx
+// ============================================================================
+// file: frontend/src/pages/Dashboard.jsx
+// ============================================================================
 import { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../api";
 import ImageUploader from "../components/ImageUploader";
 import { SectionTitle, Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
 
+// normalize media
+function toUrl(raw){
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
+  const origin = base.replace(/\/api\/?$/,"");
+  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+}
+
 export default function Dashboard(){
+  // ---- Profile header (live) ----
+  const [meLite, setMeLite] = useState({
+    display_name: localStorage.getItem("profile_display_name") || "",
+    logo: localStorage.getItem("profile_logo") || "",
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  useEffect(()=>{
+    (async ()=>{
+      try {
+        const { data } = await api.get("/users/me/");
+        const next = {
+          display_name: data?.display_name || data?.name || "",
+          logo: data?.logo || data?.logo_url || "",
+        };
+        setMeLite(next);
+        localStorage.setItem("profile_display_name", next.display_name || "");
+        localStorage.setItem("profile_logo", next.logo || "");
+      } catch { /* non-blocking */ }
+    })();
+  },[]);
+
+  useEffect(()=>{
+    const onUpdating = ()=> setProfileSaving(true);
+    const onUpdated  = (e)=> {
+      const d = e?.detail || {};
+      setProfileSaving(false);
+      if (d.display_name || d.logo) {
+        setMeLite(prev=>({
+          display_name: d.display_name ?? prev.display_name,
+          logo: d.logo ?? prev.logo,
+        }));
+      }
+    };
+    window.addEventListener("profile:updating", onUpdating);
+    window.addEventListener("profile:updated", onUpdated);
+    return ()=>{
+      window.removeEventListener("profile:updating", onUpdating);
+      window.removeEventListener("profile:updated", onUpdated);
+    };
+  },[]);
+
+  const logoUrl = toUrl(meLite.logo);
+
+  // ---- Projects & editor ----
   const [projects,setProjects]=useState([]);
   const [busy, setBusy] = useState(false);
 
-  // create (top)
-  const [form,setForm]=useState({title:"",summary:"",category:"",is_public:true});
+  // Create form
+  const [form,setForm]=useState({
+    title:"", summary:"", category:"", is_public:true,
+    location:"", budget:"", sqf:"", highlights:"",
+  });
   const [cover,setCover]=useState(null);
 
-  // editor (bottom)
+  // Editor
   const [editingId, setEditingId] = useState("");
-  const [editForm,setEditForm]=useState({title:"",summary:"",category:"",is_public:true});
+  const [editForm,setEditForm]=useState({
+    title:"", summary:"", category:"", is_public:true,
+    location:"", budget:"", sqf:"", highlights:"",
+  });
   const [editCover,setEditCover]=useState(null);
   const [editImgs, setEditImgs] = useState([]); // [{id,url,caption,_localCaption,_saving}]
 
-  // current user
+  // current user (ownership)
   const [meUser, setMeUser] = useState({ username: localStorage.getItem("username") || "" });
-
-  // --- me ---
   useEffect(()=>{
     (async ()=>{
       try {
@@ -31,21 +91,17 @@ export default function Dashboard(){
         try {
           const { data } = await api.get("/users/me/");
           if (data?.username) setMeUser({ username: data.username });
-        } catch {
-          /* keep localStorage fallback */
-        }
+        } catch {/* fallback */}
       }
     })();
   },[]);
 
-  // --- projects ---
   const refreshProjects = useCallback(async ()=>{
     const {data} = await api.get("/projects/");
     setProjects(Array.isArray(data) ? data : []);
   },[]);
   useEffect(()=>{ refreshProjects(); },[refreshProjects]);
 
-  // --- owned filter (robust) ---
   const owned = useMemo(()=>{
     const ls = (localStorage.getItem("username") || "").toLowerCase();
     const me = (meUser.username || "").toLowerCase();
@@ -56,10 +112,8 @@ export default function Dashboard(){
     });
   }, [projects, meUser.username]);
 
-  // show owned; fallback to all so nothing “disappears”
   const list = owned.length ? owned : projects;
 
-  // --- images helper ---
   const refreshImages = useCallback(async (pid)=>{
     const {data} = await api.get(`/projects/${pid}/images/`);
     const arr = (data||[])
@@ -74,7 +128,6 @@ export default function Dashboard(){
     setEditImgs(arr);
   },[]);
 
-  // --- load editor ---
   const loadEditor = useCallback(async (id)=>{
     const pid = String(id);
     setEditingId(pid);
@@ -84,31 +137,33 @@ export default function Dashboard(){
       summary: meta?.summary || "",
       category: meta?.category || "",
       is_public: !!meta?.is_public,
+      location: meta?.location || "",
+      budget: meta?.budget ?? "",
+      sqf: meta?.sqf ?? "",
+      highlights: meta?.highlights || "",
     });
     setEditCover(null);
     await refreshImages(pid);
   },[refreshImages]);
 
-  // --- create project (top) ---
   async function createProject(e){
     e.preventDefault();
     setBusy(true);
     try{
       const fd = new FormData();
-      Object.entries(form).forEach(([k,v])=>fd.append(k,v));
+      Object.entries(form).forEach(([k,v])=> fd.append(k, v ?? ""));
       if (cover) fd.append("cover_image", cover);
       const {data} = await api.post("/projects/", fd, {headers:{'Content-Type':'multipart/form-data'}});
-      setProjects(prev => [data, ...prev]);              // optimistic
-      refreshProjects();                                  // normalize/is_owner flags
-      setForm({title:"",summary:"",category:"",is_public:true});
+      setProjects(prev => [data, ...prev]); // optimistic
+      refreshProjects();
+      setForm({ title:"", summary:"", category:"", is_public:true, location:"", budget:"", sqf:"", highlights:"" });
       setCover(null);
-      if (data?.id) await loadEditor(data.id);           // jump to editor
+      if (data?.id) await loadEditor(data.id);
     } finally {
       setBusy(false);
     }
   }
 
-  // --- save project info ---
   async function saveProjectInfo(e){
     e?.preventDefault?.();
     if (!editingId) return;
@@ -116,7 +171,7 @@ export default function Dashboard(){
     try{
       if (editCover) {
         const fd = new FormData();
-        Object.entries(editForm).forEach(([k,v])=>fd.append(k, v));
+        Object.entries(editForm).forEach(([k,v])=> fd.append(k, v ?? ""));
         fd.append("cover_image", editCover);
         await api.patch(`/projects/${editingId}/`, fd, { headers:{ "Content-Type":"multipart/form-data" }});
       } else {
@@ -126,7 +181,6 @@ export default function Dashboard(){
     } finally { setBusy(false); }
   }
 
-  // --- inline caption save ---
   async function saveImageCaption(img){
     if (!editingId || !img?.id) return;
     if (img._localCaption === img.caption) return;
@@ -140,7 +194,6 @@ export default function Dashboard(){
     }
   }
 
-  // --- delete image ---
   async function deleteImage(img){
     if (!editingId || !img?.id) return;
     if (!window.confirm("Delete this image? This cannot be undone.")) return;
@@ -155,39 +208,80 @@ export default function Dashboard(){
 
   return (
     <div className="space-y-8">
-      <header>
-        <SectionTitle>Dashboard</SectionTitle>
-        <p className="text-sm text-slate-600">Create a new project, then edit any of your projects below.</p>
-        <div className="mt-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-2 text-xs text-slate-600">
-          user: <b>{meUser.username || "(unknown)"}</b> • total: <b>{projects.length}</b> • owned: <b>{owned.length}</b> • shown: <b>{list.length}</b>
+      {/* Header with company identity + spinner */}
+      <header className="flex items-center gap-3">
+        <div className="relative h-10 w-10">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Logo"
+              className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
+              {meLite.display_name ? meLite.display_name.slice(0,1).toUpperCase() : "•"}
+            </div>
+          )}
+          {profileSaving && (
+            <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
+          <SectionTitle>Dashboard</SectionTitle>
+          {meLite.display_name && (
+            <div className="truncate text-xs text-slate-600">{meLite.display_name}</div>
+          )}
         </div>
       </header>
 
-      {/* 1) CREATE PROJECT */}
+      {/* 1) CREATE PROJECT — Project Info (Draft) */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-800">Create Project</div>
           <Badge>{owned.length} owned</Badge>
         </div>
+
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Project Info (Draft)
+        </div>
+
         <form onSubmit={createProject} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="md:col-span-1">
-            <label className="mb-1 block text-sm text-slate-600">Title</label>
-            <Input placeholder="Title" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Project Name</label>
+            <Input placeholder="e.g. Lake House Revamp" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/>
           </div>
-          <div className="md:col-span-1">
+          <div>
             <label className="mb-1 block text-sm text-slate-600">Category</label>
-            <Input placeholder="Category" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}/>
+            <Input placeholder="e.g. Residential" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}/>
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm text-slate-600">Summary</label>
             <Textarea placeholder="One or two sentences…" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})}/>
           </div>
-          <div className="md:col-span-1">
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
+            <Input placeholder="City, State (optional)" value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Budget</label>
+            <Input placeholder="e.g. 250000" inputMode="numeric" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
+            <Input placeholder="e.g. 1800" inputMode="numeric" value={form.sqf} onChange={e=>setForm({...form,sqf:e.target.value})}/>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
+            <Input placeholder="comma-separated: modern, lake-view" value={form.highlights} onChange={e=>setForm({...form,highlights:e.target.value})}/>
+          </div>
+          <div>
             <label className="mb-1 block text-sm text-slate-600">Cover (optional)</label>
             <input type="file" onChange={e=>setCover(e.target.files?.[0]||null)} />
             {cover && <div className="mt-1 text-xs text-slate-500 truncate">{cover.name}</div>}
           </div>
-          <div className="flex items-center gap-2 md:col-span-1">
+          <div className="flex items-center gap-2">
             <label className="text-sm text-slate-600">
               <input type="checkbox" className="mr-2 align-middle" checked={form.is_public} onChange={e=>setForm({...form,is_public:e.target.checked})}/>
               Public
@@ -224,7 +318,15 @@ export default function Dashboard(){
                     <div className="truncate font-semibold">{p.title}</div>
                     {p.category ? <Badge>{p.category}</Badge> : null}
                   </div>
-                  <div className="line-clamp-2 text-sm text-slate-700">{p.summary || <span className="opacity-60">No summary</span>}</div>
+                  <div className="line-clamp-2 text-sm text-slate-700">
+                    {p.summary || <span className="opacity-60">No summary</span>}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    {p.location ? <div><span className="opacity-60">Location:</span> {p.location}</div> : null}
+                    {p.budget ? <div><span className="opacity-60">Budget:</span> {p.budget}</div> : null}
+                    {p.sqf ? <div><span className="opacity-60">Sq Ft:</span> {p.sqf}</div> : null}
+                    {p.highlights ? <div className="col-span-2 truncate"><span className="opacity-60">Highlights:</span> {p.highlights}</div> : null}
+                  </div>
                   <div className="mt-3 flex items-center gap-2">
                     <GhostButton onClick={()=>window.open(`/projects/${p.id}`, "_self")}>Open</GhostButton>
                     <Button onClick={()=>loadEditor(p.id)}>Edit</Button>
@@ -247,12 +349,16 @@ export default function Dashboard(){
             </div>
           </div>
 
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Project Info (Draft)
+          </div>
+
           <form onSubmit={saveProjectInfo} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="md:col-span-1">
-              <label className="mb-1 block text-sm text-slate-600">Title</label>
-              <Input value={editForm.title} onChange={e=>setEditForm({...editForm, title:e.target.value})} placeholder="Title"/>
+            <div>
+              <label className="mb-1 block text-sm text-slate-600">Project Name</label>
+              <Input value={editForm.title} onChange={e=>setEditForm({...editForm, title:e.target.value})} placeholder="Project name"/>
             </div>
-            <div className="md:col-span-1">
+            <div>
               <label className="mb-1 block text-sm text-slate-600">Category</label>
               <Input value={editForm.category} onChange={e=>setEditForm({...editForm, category:e.target.value})} placeholder="Category"/>
             </div>
@@ -260,12 +366,30 @@ export default function Dashboard(){
               <label className="mb-1 block text-sm text-slate-600">Summary</label>
               <Textarea value={editForm.summary} onChange={e=>setEditForm({...editForm, summary:e.target.value})} placeholder="Short description..."/>
             </div>
-            <div className="md:col-span-1">
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
+              <Input value={editForm.location} onChange={e=>setEditForm({...editForm, location:e.target.value})} placeholder="City, State"/>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate-600">Budget</label>
+              <Input value={editForm.budget} onChange={e=>setEditForm({...editForm, budget:e.target.value})} inputMode="numeric" placeholder="e.g. 250000"/>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
+              <Input value={editForm.sqf} onChange={e=>setEditForm({...editForm, sqf:e.target.value})} inputMode="numeric" placeholder="e.g. 1800"/>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
+              <Input value={editForm.highlights} onChange={e=>setEditForm({...editForm, highlights:e.target.value})} placeholder="comma-separated tags"/>
+            </div>
+
+            <div>
               <label className="mb-1 block text-sm text-slate-600">Cover (replace)</label>
               <input type="file" onChange={e=>setEditCover(e.target.files?.[0]||null)} />
               {editCover && <div className="mt-1 truncate text-xs text-slate-500">{editCover.name}</div>}
             </div>
-            <div className="flex items-center gap-2 md:col-span-1">
+            <div className="flex items-center gap-2">
               <label className="text-sm text-slate-600">
                 <input
                   type="checkbox"
@@ -276,11 +400,13 @@ export default function Dashboard(){
                 Public
               </label>
             </div>
+
             <div className="md:col-span-2">
               <Button disabled={busy}>Save Changes</Button>
             </div>
           </form>
 
+          {/* Images */}
           <div className="mt-6">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-sm text-slate-600">Images</div>
@@ -320,9 +446,10 @@ export default function Dashboard(){
             )}
           </div>
 
+          {/* Uploader */}
           <div className="mt-6">
             <div className="mb-2 text-sm font-semibold text-slate-800">Add Images</div>
-            <div className="text-xs text-slate-600 mb-2">Drag & drop or click; add captions; upload.</div>
+            <div className="mb-2 text-xs text-slate-600">Drag & drop or click; add captions; upload.</div>
             <ImageUploader
               projectId={editingId}
               onUploaded={async ()=>{

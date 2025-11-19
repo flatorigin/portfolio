@@ -1,197 +1,235 @@
-// frontend/src/pages/ProfileEdit.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../api";
+import { Card, SectionTitle, Input, Textarea, Button } from "../ui";
 
-// why: normalize /media/... to full URL
+// normalize relative media paths
 function toUrl(raw) {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
-  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
-  const origin = base.replace(/\/api\/?$/, "");
-  return raw.startsWith("/") ? origin + raw : origin + "/" + raw;
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
+  const origin = base.replace(/\/api\/?$/,"");
+  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
-export default function ProfileEdit() {
-  // Logo state
-  const [me, setMe] = useState(null);
-  const [file, setFile] = useState(null);
+export default function EditProfile() {
+  const [endpoint, setEndpoint] = useState("/users/me/"); // primary
+  const fallbackEndpoint = "/auth/users/me/";             // djoser alt
+
+  const [form, setForm] = useState({
+    display_name: "",
+    service_location: "",
+    coverage_radius_miles: "",
+    bio: "",
+    logo: "", // url/path from API
+  });
+  const [logoFile, setLogoFile] = useState(null);
+
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [ok, setOk] = useState(false);
+  const [toast, setToast] = useState({ show: false, kind: "success", msg: "" });
 
-  // Project draft (local only)
-  const [projectDraft, setProjectDraft] = useState({
-    name: "",
-    location: "",
-    budget: "",
-    sqf: "",
-    highlights: "",
-  });
-  const [draftSaved, setDraftSaved] = useState("");
+  const logoUrl = useMemo(() => toUrl(form.logo), [form.logo]);
 
-  // Load profile + local draft
-  useEffect(() => {
-    let alive = true;
-    api.get("/users/me/").then(({ data }) => alive && setMe(data)).catch(() => {});
+  const loadMe = useCallback(async () => {
+    setErr(""); setOk(false);
     try {
-      const raw = localStorage.getItem("draftProject");
-      if (raw) {
-        const d = JSON.parse(raw);
-        setProjectDraft({
-          name: d.name || "",
-          location: d.location || "",
-          budget: d.budget ?? "",
-          sqf: d.sqf ?? "",
-          highlights: d.highlights || "",
+      const { data } = await api.get(endpoint);
+      setForm({
+        display_name: data?.display_name || data?.name || "",
+        service_location: data?.service_location || "",
+        coverage_radius_miles: data?.coverage_radius_miles ?? "",
+        bio: data?.bio || "",
+        logo: data?.logo || data?.logo_url || "",
+      });
+      setLogoFile(null);
+      return;
+    } catch {
+      try {
+        const { data } = await api.get(fallbackEndpoint);
+        setEndpoint(fallbackEndpoint);
+        setForm({
+          display_name: data?.display_name || data?.name || "",
+          service_location: data?.service_location || "",
+          coverage_radius_miles: data?.coverage_radius_miles ?? "",
+          bio: data?.bio || "",
+          logo: data?.logo || data?.logo_url || "",
         });
+        setLogoFile(null);
+      } catch (e2) {
+        setErr(e2?.response?.data ? JSON.stringify(e2.response.data) : String(e2));
       }
-    } catch {}
-    return () => { alive = false; };
-  }, []);
+    }
+  }, [endpoint]);
 
-  async function saveLogo() {
-    if (!file) return;
-    setBusy(true); setErr("");
-    try {
+  useEffect(() => { loadMe(); }, [loadMe]);
+
+  function coerceNumber(v) {
+    if (v === "" || v === null || typeof v === "undefined") return "";
+    const n = Number(String(v).replace(/[^\d.]+/g, ""));
+    return Number.isFinite(n) ? n : "";
+  }
+
+  async function patchProfile(url, body, useMultipart) {
+    if (useMultipart) {
       const fd = new FormData();
-      fd.append("avatar", file);
-      const { data } = await api.patch("/users/me/", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setMe(data); setFile(null);
-    } catch (e) {
-      setErr(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
-    } finally { setBusy(false); }
+      Object.entries(body).forEach(([k, v]) => fd.append(k, v ?? ""));
+      return api.patch(url, fd, { headers: { "Content-Type": "multipart/form-data" } });
+    }
+    return api.patch(url, body);
   }
 
-  async function removeLogo() {
-    setBusy(true); setErr("");
-    try {
-      const { data } = await api.patch("/users/me/", { avatar: null });
-      setMe(data);
-    } catch (e) {
-      setErr(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
-    } finally { setBusy(false); }
+  function broadcast(name, detail) {
+    window.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
-  function saveDraft() {
-    const clean = {
-      name: projectDraft.name.trim(),
-      location: projectDraft.location.trim(),
-      budget: projectDraft.budget === "" ? "" : Number(projectDraft.budget),
-      sqf: projectDraft.sqf === "" ? "" : Number(projectDraft.sqf),
-      highlights: projectDraft.highlights.trim(),
-      _savedAt: new Date().toISOString(),
+  function showToast(kind, msg, ms = 2200) {
+    setToast({ show: true, kind, msg });
+    setTimeout(() => setToast({ show: false, kind, msg: "" }), ms);
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true); setErr(""); setOk(false);
+
+    // inform Dashboard (spinner)
+    broadcast("profile:updating", { at: Date.now() });
+
+    const payload = {
+      display_name: form.display_name || "",
+      service_location: form.service_location || "",
+      coverage_radius_miles: coerceNumber(form.coverage_radius_miles),
+      bio: form.bio || "",
     };
-    if (Number.isNaN(clean.budget)) return setDraftSaved("Budget must be a number");
-    if (Number.isNaN(clean.sqf)) return setDraftSaved("Sq Ft must be a number");
-    localStorage.setItem("draftProject", JSON.stringify(clean));
-    setDraftSaved("Draft saved locally.");
-    setTimeout(() => setDraftSaved(""), 1600);
+    const useMultipart = !!logoFile;
+    if (logoFile) payload.logo = logoFile;
+
+    try {
+      await patchProfile(endpoint, payload, useMultipart);
+      setOk(true);
+      await loadMe();
+
+      // update cache + notify
+      localStorage.setItem("profile_display_name", form.display_name || "");
+      if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
+      broadcast("profile:updated", { display_name: form.display_name, logo: form.logo });
+
+      showToast("success", "Profile saved.");
+    } catch (e1) {
+      const status = e1?.response?.status;
+      if ((status === 404 || status === 405) && endpoint !== fallbackEndpoint) {
+        try {
+          await patchProfile(fallbackEndpoint, payload, useMultipart);
+          setEndpoint(fallbackEndpoint);
+          setOk(true);
+          await loadMe();
+          localStorage.setItem("profile_display_name", form.display_name || "");
+          if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
+          broadcast("profile:updated", { display_name: form.display_name, logo: form.logo });
+          showToast("success", "Profile saved.");
+        } catch (e2) {
+          const msg = e2?.response?.data ? JSON.stringify(e2.response.data) : String(e2);
+          setErr(msg);
+          showToast("error", "Save failed.");
+        }
+      } else {
+        const msg = e1?.response?.data ? JSON.stringify(e1.response.data) : String(e1);
+        setErr(msg);
+        showToast("error", "Save failed.");
+      }
+    } finally {
+      setBusy(false);
+      // always end spinner
+      broadcast("profile:updated", { at: Date.now() });
+    }
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6">
-      <h2 className="mb-4 text-2xl font-bold">Edit Profile</h2>
+    <div className="space-y-6">
+      <SectionTitle>Edit Profile</SectionTitle>
 
-      {/* Logo block */}
-      <div className="mb-6">
-        <div className="mb-2 text-sm text-slate-600">Current Logo</div>
-        <div className="mb-3 flex items-center gap-3">
-          {me?.avatar ? (
-            <>
-              <img src={toUrl(me.avatar)} alt="logo" className="h-20 w-20 rounded-xl object-cover border" />
-              <button
-                onClick={removeLogo}
-                disabled={busy}
-                className="rounded-xl bg-red-600 px-3 py-2 text-white disabled:opacity-60"
-              >
-                Remove
-              </button>
-            </>
-          ) : (
-            <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed text-xs text-slate-500">No logo</div>
-          )}
-        </div>
+      <Card className="relative p-5">
+        <form onSubmit={save} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Identity */}
+          <div className="md:col-span-2">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Identity</div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Name (Company/Person)</label>
+                <Input
+                  value={form.display_name}
+                  onChange={(e)=>setForm({...form, display_name:e.target.value})}
+                  placeholder="e.g. Skivelight Studio"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Logo</label>
+                <input type="file" accept="image/*" onChange={(e)=>setLogoFile(e.target.files?.[0]||null)} />
+                {logoFile && <div className="mt-1 text-xs text-slate-500 truncate">{logoFile.name}</div>}
+                {logoUrl && !logoFile && (
+                  <div className="mt-2">
+                    <img src={logoUrl} alt="Logo" className="h-16 w-16 rounded-full object-cover ring-1 ring-slate-200" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-          className="mb-3 block w-full rounded-xl border p-2"
-        />
-        <button
-          onClick={saveLogo}
-          disabled={busy || !file}
-          className="rounded-xl bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
-        >
-          Save Logo
-        </button>
-      </div>
+          {/* Service */}
+          <div className="md:col-span-2">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Service</div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm text-slate-600">Location of Service</label>
+                <Input
+                  value={form.service_location}
+                  onChange={(e)=>setForm({...form, service_location:e.target.value})}
+                  placeholder="City, State"
+                />
+              </div>
+              <div className="md:col-span-1">
+                <label className="mb-1 block text-sm text-slate-600">Coverage Radius (miles)</label>
+                <Input
+                  inputMode="numeric"
+                  value={form.coverage_radius_miles}
+                  onChange={(e)=>setForm({...form, coverage_radius_miles:e.target.value})}
+                  placeholder="e.g. 50"
+                />
+              </div>
+            </div>
+          </div>
 
-      {/* Project Info (local draft only) */}
-      <div className="mb-2 text-sm font-semibold text-slate-700">Project Info (Draft)</div>
-      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Project Name</label>
-          <input
-            className="w-full rounded-xl border border-slate-300 px-3 py-2"
-            value={projectDraft.name}
-            onChange={(e) => setProjectDraft({ ...projectDraft, name: e.target.value })}
-            placeholder="e.g., Sunrise Residence"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
-          <input
-            className="w-full rounded-xl border border-slate-300 px-3 py-2"
-            value={projectDraft.location}
-            onChange={(e) => setProjectDraft({ ...projectDraft, location: e.target.value })}
-            placeholder="e.g., Malibu, CA"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Budget</label>
-            <input
-              inputMode="decimal"
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
-              value={projectDraft.budget}
-              onChange={(e) => setProjectDraft({ ...projectDraft, budget: e.target.value })}
-              placeholder="e.g., 2500000"
+          {/* About */}
+          <div className="md:col-span-2">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">About</div>
+            <label className="mb-1 block text-sm text-slate-600">Short Bio (optional)</label>
+            <Textarea
+              value={form.bio}
+              onChange={(e)=>setForm({...form, bio:e.target.value})}
+              placeholder="One or two sentences about the company…"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
-            <input
-              inputMode="numeric"
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
-              value={projectDraft.sqf}
-              onChange={(e) => setProjectDraft({ ...projectDraft, sqf: e.target.value })}
-              placeholder="e.g., 4800"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
-          <textarea
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 min-h-24"
-            value={projectDraft.highlights}
-            onChange={(e) => setProjectDraft({ ...projectDraft, highlights: e.target.value })}
-            placeholder="e.g., ocean view, passive house, LEED Gold"
-          />
-        </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={saveDraft}
-            className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-90"
+          {/* Status */}
+          {err && <div className="md:col-span-2 text-sm text-red-700">{err}</div>}
+          {ok && !err && <div className="md:col-span-2 text-sm text-green-700">Saved.</div>}
+
+          <div className="md:col-span-2">
+            <Button disabled={busy}>{busy ? "Saving…" : "Save Profile"}</Button>
+          </div>
+        </form>
+
+        {/* Tiny Toast */}
+        {toast.show && (
+          <div
+            className={`pointer-events-none fixed inset-x-0 bottom-4 mx-auto w-max rounded-full px-4 py-2 text-sm shadow ${toast.kind==="success" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}
+            role="status"
+            aria-live="polite"
           >
-            Save Project Notes (Local)
-          </button>
-          {draftSaved && <span className="text-sm text-green-700">{draftSaved}</span>}
-        </div>
-      </div>
-
-      {err && <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>}
+            {toast.msg}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
