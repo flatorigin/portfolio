@@ -1,23 +1,25 @@
-# accounts/serializers.py
+# backend/accounts/serializers.py
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import Profile
 
+User = get_user_model()
+
 class MeSerializer(serializers.ModelSerializer):
-    avatar = serializers.ImageField(required=False, allow_null=True)
+    # expose username for convenience
+    username = serializers.CharField(source="user.username", read_only=True)
 
     class Meta:
         model = Profile
-        fields = ("id", "avatar")
+        fields = (
+            "username",
+            "display_name",
+            "service_location",
+            "coverage_radius_miles",
+            "bio",
+            "logo",     # file field
+        )
 
     def update(self, instance, validated_data):
-        # Clear on null
-        if "avatar" in validated_data and validated_data["avatar"] is None:
-            if instance.avatar:
-                instance.avatar.delete(save=False)
-            instance.avatar = None
-        # Set on new file
-        elif "avatar" in validated_data:
-            instance.avatar = validated_data["avatar"]
-        instance.save()
-        return instance
-
+        # keep simple: partial updates accepted
+        return super().update(instance, validated_data)

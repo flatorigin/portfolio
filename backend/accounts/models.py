@@ -1,15 +1,35 @@
-# accounts/models.py
+# backend/accounts/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-def avatar_upload_path(instance, filename):
+# Backward-compat for old migrations that import this symbol
+def logo_upload_path(instance, filename):
     return f"avatars/user_{instance.user_id}/{filename}"
 
+def avatar_upload_path(instance, filename):
+    # alias kept so existing migrations referencing this still work
+    return logo_upload_path(instance, filename) 
+    
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
-    avatar = models.ImageField(upload_to=avatar_upload_path, blank=True, null=True)
+
+    # Identity / company
+    display_name = models.CharField(max_length=255, blank=True, default="")
+
+    # Service
+    service_location = models.CharField(max_length=255, blank=True, default="")
+    coverage_radius_miles = models.PositiveIntegerField(blank=True, null=True)
+
+    # About
+    bio = models.TextField(blank=True, default="")
+
+    # Media
+    logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
+
+    # Back-compat with old name if needed
+    avatar = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"

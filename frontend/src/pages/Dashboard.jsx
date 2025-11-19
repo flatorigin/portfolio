@@ -213,9 +213,10 @@ export default function Dashboard(){
         <div className="relative h-10 w-10">
           {logoUrl ? (
             <img
-              src={logoUrl}
+              src={toUrl(localStorage.getItem("profile_logo"))}
               alt="Logo"
-              className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+              className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
+              onError={(e)=>{ e.currentTarget.style.display = "none"; }}  // why: hide if missing/404
             />
           ) : (
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
