@@ -17,13 +17,9 @@ function toUrl(raw){
 
 /** Fixed 8:5 company ID card (50px inset). */
 function CompanyIdCard({ logoSrc, name, location }) {
-  const initials = (name || "")
-    .trim()
-    .split(/\s+/)
-    .map(s => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "•";
+  const initials =
+    ((name || "").trim().split(/\s+/).map(s => s[0]).slice(0, 2).join("") || "•").toUpperCase();
+  const safeLocation = String(location ?? "").trim();
 
   return (
     <div
@@ -55,8 +51,8 @@ function CompanyIdCard({ logoSrc, name, location }) {
           <div className="truncate text-lg font-semibold text-slate-900" title={name || ""}>
             {name || "—"}
           </div>
-          <div className="mt-auto truncate text-sm text-slate-600" title={location || ""}>
-            {location || "Location not set"}
+          <div className="mt-auto truncate text-sm text-slate-600" title={safeLocation}>
+            {safeLocation || "Location not set"}
           </div>
         </div>
       </div>
@@ -69,51 +65,67 @@ export default function Dashboard(){
   const [meLite, setMeLite] = useState({
     display_name: localStorage.getItem("profile_display_name") || "",
     logo: localStorage.getItem("profile_logo") || "",
-    location: localStorage.getItem("profile_location") || "", // <- added
+    location: localStorage.getItem("profile_location") || "",
   });
-  // // Debug expose: lets you inspect in the console
-  // useEffect(() => {
-  //   // why: make state visible in DevTools
-  //   window.__onDashboardMounted = true;
-  //   window.meLite = meLite;
-  //   window.profileLocation = meLite?.location ?? "";
-  //   console.debug("[Dashboard] meLite:", meLite);           // verify it runs
-  //   console.debug("[Dashboard] profileLocation:", window.profileLocation);
-  // }, [meLite]);
   const [profileSaving, setProfileSaving] = useState(false);
 
+  // Load profile (authoritative) + seed localStorage
   useEffect(()=>{
     (async ()=>{
       try {
         const { data } = await api.get("/users/me/");
+        const locObj =
+          (typeof data?.location === "object" ? data.location : null) ||
+          (typeof data?.profile?.location === "object" ? data.profile.location : null) ||
+          null;
+
+        const locFromPieces = [
+          data?.city ?? locObj?.city,
+          data?.state ?? data?.region ?? locObj?.state ?? locObj?.region,
+          data?.country ?? locObj?.country,
+        ].filter(Boolean).join(", ");
+
+        const locRaw =
+          (typeof data?.location === "string" && data.location) ||
+          (typeof data?.profile?.location === "string" && data.profile.location) ||
+          locFromPieces ||
+          "";
+
         const next = {
           display_name: data?.display_name || data?.name || "",
           logo: data?.logo || data?.logo_url || "",
-          // Prefer a single `location` field. If your API uses different keys, map here.
-          location: data?.location || data?.city || data?.profile?.location || "",
+          location: String(locRaw).trim(),
         };
         setMeLite(next);
         localStorage.setItem("profile_display_name", next.display_name || "");
         localStorage.setItem("profile_logo", next.logo || "");
         localStorage.setItem("profile_location", next.location || "");
-      } catch { /* non-blocking */ }
+      } catch {
+        /* non-blocking */
+      }
     })();
   },[]);
 
+  // Listen to profile updates (from elsewhere in the app)
   useEffect(()=>{
     const onUpdating = ()=> setProfileSaving(true);
     const onUpdated  = (e)=> {
       const d = e?.detail || {};
       setProfileSaving(false);
-      if (d.display_name || d.logo || d.location) {
+      if (d.display_name || d.logo || typeof d.location !== "undefined") {
+        const normLoc = (typeof d.location === "string")
+          ? d.location.trim()
+          : (d.location && typeof d.location === "object")
+            ? [d.location.city, d.location.state || d.location.region, d.location.country].filter(Boolean).join(", ").trim()
+            : undefined;
         setMeLite(prev=>({
           display_name: d.display_name ?? prev.display_name,
           logo: d.logo ?? prev.logo,
-          location: d.location ?? prev.location, // <- live update
+          location: (typeof normLoc !== "undefined") ? normLoc : prev.location,
         }));
         if (typeof d.display_name !== "undefined") localStorage.setItem("profile_display_name", d.display_name || "");
         if (typeof d.logo !== "undefined") localStorage.setItem("profile_logo", d.logo || "");
-        if (typeof d.location !== "undefined") localStorage.setItem("profile_location", d.location || "");
+        if (typeof normLoc !== "undefined") localStorage.setItem("profile_location", normLoc || "");
       }
     };
     window.addEventListener("profile:updating", onUpdating);
@@ -125,7 +137,59 @@ export default function Dashboard(){
   },[]);
 
   const logoUrl = toUrl(meLite.logo);
-  
+
+  // ---- Quick profile editor (fix saving) ----
+  const [profileForm, setProfileForm] = useState({
+    display_name: meLite.display_name || "",
+    location: meLite.location || "",
+  });
+
+  useEffect(()=>{
+    setProfileForm({
+      display_name: meLite.display_name || "",
+      location: meLite.location || "",
+    });
+  }, [meLite.display_name, meLite.location]);
+
+  async function saveProfile(e){
+    e?.preventDefault?.();
+    const payload = {};
+    // only send changed fields
+    if ((profileForm.display_name || "") !== (meLite.display_name || "")) {
+      payload.display_name = profileForm.display_name || "";
+    }
+    if ((profileForm.location || "") !== (meLite.location || "")) {
+      payload.location = profileForm.location || "";
+    }
+    if (!Object.keys(payload).length) return;
+
+    try {
+      window.dispatchEvent(new Event("profile:updating"));
+      await api.patch("/users/me/", payload);
+
+      const normLoc = String(profileForm.location || "").trim();
+      setMeLite(prev => ({
+        ...prev,
+        display_name: payload.display_name ?? prev.display_name,
+        location: (typeof payload.location !== "undefined") ? normLoc : prev.location,
+      }));
+
+      if (typeof payload.display_name !== "undefined") {
+        localStorage.setItem("profile_display_name", payload.display_name || "");
+      }
+      if (typeof payload.location !== "undefined") {
+        localStorage.setItem("profile_location", normLoc || "");
+      }
+
+      window.dispatchEvent(new CustomEvent("profile:updated", { detail: { ...payload } }));
+    } catch (err){
+      const msg = err?.response?.data
+        ? (typeof err.response.data === "string" ? err.response.data : JSON.stringify(err.response.data))
+        : (err?.message || String(err));
+      alert(`Failed to save profile: ${msg}`); // why: surface save issues
+    }
+  }
+
   // ---- Projects & editor ----
   const [projects,setProjects]=useState([]);
   const [busy, setBusy] = useState(false);
@@ -227,7 +291,6 @@ export default function Dashboard(){
       }
 
       const fd = new FormData();
-      // minimal required field
       if (!form.title.trim()) {
         setCreateErr("Title is required.");
         return;
@@ -239,13 +302,12 @@ export default function Dashboard(){
         headers:{ "Content-Type":"multipart/form-data" }
       });
 
-      // optimistic add + refresh to normalize flags
       setProjects(prev => [data, ...prev]);
       await refreshProjects();
       setForm({ title:"", summary:"", category:"", is_public:true, location:"", budget:"", sqf:"", highlights:"" });
       setCover(null);
       setCreateOk(true);
-      if (data?.id) await loadEditor(data.id); // jump into editor
+      if (data?.id) await loadEditor(data.id);
     } catch (err){
       const msg = err?.response?.data
         ? (typeof err.response.data === "string"
@@ -301,8 +363,15 @@ export default function Dashboard(){
     }
   }
 
-  // --- location for ID card (from edit-profile) ---
-  const profileLocation = meLite.location || "";
+  // --- derived location for ID card ---
+  const profileLocation = useMemo(() => {
+    const raw = meLite?.location;
+    if (typeof raw === "string") return raw.trim();
+    if (raw && typeof raw === "object") {
+      return [raw.city, raw.state || raw.region, raw.country].filter(Boolean).join(", ").trim();
+    }
+    return "";
+  }, [meLite?.location]);
 
   return (
     <div className="space-y-8">
@@ -311,7 +380,7 @@ export default function Dashboard(){
         <div className="relative h-10 w-10">
           {logoUrl ? (
             <img
-              src={toUrl(localStorage.getItem("profile_logo"))}
+              src={logoUrl}
               alt="Logo"
               className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
               onError={(e)=>{ e.currentTarget.style.display = "none"; }}  // why: hide if missing/404
@@ -334,6 +403,32 @@ export default function Dashboard(){
           )}
         </div>
       </header>
+
+      {/* Quick profile editor to persist name/location */}
+      <Card className="p-5">
+        <div className="mb-3 text-sm font-semibold text-slate-800">Profile — Company Info</div>
+        <form onSubmit={saveProfile} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Company Name</label>
+            <Input
+              value={profileForm.display_name}
+              onChange={e=>setProfileForm(f=>({ ...f, display_name: e.target.value }))}
+              placeholder="Acme Builders"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Location</label>
+            <Input
+              value={profileForm.location}
+              onChange={e=>setProfileForm(f=>({ ...f, location: e.target.value }))}
+              placeholder="City, State"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Button>Save Profile</Button>
+          </div>
+        </form>
+      </Card>
 
       {/* 1) CREATE PROJECT — Project Info (Draft) */}
       <Card className="p-5">
