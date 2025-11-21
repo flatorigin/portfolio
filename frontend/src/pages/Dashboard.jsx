@@ -15,31 +15,89 @@ function toUrl(raw){
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
+// Flexible profile endpoints
+const ME_ENDPOINTS = ["/users/me/", "/me/", "/profiles/me/", "/profile/me/"];
+
+async function getMe() {
+  let lastErr;
+  for (const url of ME_ENDPOINTS) {
+    try {
+      const res = await api.get(url);
+      res._url = url;
+      return res;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+async function patchMe(payload) {
+  let lastErr;
+  for (const url of ME_ENDPOINTS) {
+    try {
+      const res = await api.patch(url, payload);
+      res._url = url;
+      return res;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+function normalizeLocationFrom(me) {
+  if (!me) return "";
+  if (typeof me.location === "string" && me.location.trim()) return me.location.trim();
+  const locObj =
+    (me.location && typeof me.location === "object" && me.location) ||
+    (me.profile?.location && typeof me.profile.location === "object" && me.profile.location) ||
+    null;
+  const parts = [
+    me.city ?? locObj?.city,
+    me.state ?? me.region ?? locObj?.state ?? locObj?.region,
+    me.country ?? locObj?.country,
+  ].filter(Boolean);
+  if (parts.length) return parts.join(", ");
+  if (typeof me.profile?.location === "string") return me.profile.location.trim();
+  return "";
+}
+
+async function saveLocationSmart(loc) {
+  const location = String(loc || "").trim();
+  if (!location) return "";
+  const [cityPart = "", rest = ""] = location.split(",");
+  const city = cityPart.trim();
+  const state = (rest || "").trim();
+
+  const attempts = [
+    { payload: { location }, pick: (d) => d?.location },
+    { payload: { profile: { location } }, pick: (d) => d?.profile?.location },
+    {
+      payload: { ...(city ? { city } : {}), ...(state ? { state } : {}) },
+      pick: (d) => [d?.city || d?.profile?.city, d?.state || d?.profile?.state || d?.region || d?.profile?.region, d?.country || d?.profile?.country]
+        .filter(Boolean).join(", "),
+    },
+  ];
+
+  for (const t of attempts) {
+    try {
+      await patchMe(t.payload);
+      const { data } = await getMe();
+      const got = t.pick(data);
+      if (got && String(got).trim()) return normalizeLocationFrom(data);
+    } catch { /* try next */ }
+  }
+  throw new Error("Location save failed (no accepted payloads).");
+}
+
 /** Fixed 8:5 company ID card (50px inset). */
 function CompanyIdCard({ logoSrc, name, location }) {
-  const initials =
-    ((name || "").trim().split(/\s+/).map(s => s[0]).slice(0, 2).join("") || "•").toUpperCase();
+  const initials = ((name || "").trim().split(/\s+/).map(s => s[0]).slice(0, 2).join("") || "•").toUpperCase();
   const safeLocation = String(location ?? "").trim();
-
   return (
-    <div
-      className="
-        fixed z-40 hidden md:block
-        top-[50px] right-[50px]
-        w-[320px] aspect-[8/5]
-        rounded-2xl border border-slate-200 bg-white shadow-xl
-      "
-      aria-label="Company ID Card"
-    >
+    <div className="fixed z-40 hidden md:block top-[50px] right-[50px] w-[320px] aspect-[8/5] rounded-2xl border border-slate-200 bg-white shadow-xl">
       <div className="flex h-full">
         <div className="flex w-2/5 items-center justify-center bg-slate-50">
           {logoSrc ? (
-            <img
-              src={logoSrc}
-              alt="Company logo"
-              className="max-h-[70%] max-w-[70%] object-contain"
-              onError={(e)=>{ e.currentTarget.style.display = "none"; }} // why: hide broken logo
-            />
+            <img src={logoSrc} alt="Company logo" className="max-h-[70%] max-w-[70%] object-contain"
+                 onError={(e)=>{ e.currentTarget.style.display = "none"; }} />
           ) : (
             <div className="grid h-[70%] w-[70%] place-items-center rounded-xl bg-slate-200 text-2xl font-semibold text-slate-700">
               {initials}
@@ -48,12 +106,8 @@ function CompanyIdCard({ logoSrc, name, location }) {
         </div>
         <div className="flex min-w-0 flex-1 flex-col p-4">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Company</div>
-          <div className="truncate text-lg font-semibold text-slate-900" title={name || ""}>
-            {name || "—"}
-          </div>
-          <div className="mt-auto truncate text-sm text-slate-600" title={safeLocation}>
-            {safeLocation || "Location not set"}
-          </div>
+          <div className="truncate text-lg font-semibold text-slate-900" title={name || ""}>{name || "—"}</div>
+          <div className="mt-auto truncate text-sm text-slate-600" title={safeLocation}>{safeLocation || "Location not set"}</div>
         </div>
       </div>
     </div>
@@ -69,53 +123,36 @@ export default function Dashboard(){
   });
   const [profileSaving, setProfileSaving] = useState(false);
 
-  // Load profile (authoritative) + seed localStorage
+  // guard: only fetch after login
   useEffect(()=>{
+    const token = localStorage.getItem("access");
+    if (!token) return;
     (async ()=>{
       try {
-        const { data } = await api.get("/users/me/");
-        const locObj =
-          (typeof data?.location === "object" ? data.location : null) ||
-          (typeof data?.profile?.location === "object" ? data.profile.location : null) ||
-          null;
-
-        const locFromPieces = [
-          data?.city ?? locObj?.city,
-          data?.state ?? data?.region ?? locObj?.state ?? locObj?.region,
-          data?.country ?? locObj?.country,
-        ].filter(Boolean).join(", ");
-
-        const locRaw =
-          (typeof data?.location === "string" && data.location) ||
-          (typeof data?.profile?.location === "string" && data.profile.location) ||
-          locFromPieces ||
-          "";
-
+        const { data } = await getMe();
         const next = {
           display_name: data?.display_name || data?.name || "",
           logo: data?.logo || data?.logo_url || "",
-          location: String(locRaw).trim(),
+          location: normalizeLocationFrom(data),
         };
         setMeLite(next);
         localStorage.setItem("profile_display_name", next.display_name || "");
         localStorage.setItem("profile_logo", next.logo || "");
         localStorage.setItem("profile_location", next.location || "");
-      } catch {
-        /* non-blocking */
-      }
+      } catch { /* non-blocking */ }
     })();
   },[]);
 
-  // Listen to profile updates (from elsewhere in the app)
   useEffect(()=>{
     const onUpdating = ()=> setProfileSaving(true);
     const onUpdated  = (e)=> {
       const d = e?.detail || {};
       setProfileSaving(false);
       if (d.display_name || d.logo || typeof d.location !== "undefined") {
-        const normLoc = (typeof d.location === "string")
-          ? d.location.trim()
-          : (d.location && typeof d.location === "object")
+        const normLoc =
+          typeof d.location === "string"
+            ? d.location.trim()
+            : d.location && typeof d.location === "object"
             ? [d.location.city, d.location.state || d.location.region, d.location.country].filter(Boolean).join(", ").trim()
             : undefined;
         setMeLite(prev=>({
@@ -137,58 +174,6 @@ export default function Dashboard(){
   },[]);
 
   const logoUrl = toUrl(meLite.logo);
-
-  // ---- Quick profile editor (fix saving) ----
-  const [profileForm, setProfileForm] = useState({
-    display_name: meLite.display_name || "",
-    location: meLite.location || "",
-  });
-
-  useEffect(()=>{
-    setProfileForm({
-      display_name: meLite.display_name || "",
-      location: meLite.location || "",
-    });
-  }, [meLite.display_name, meLite.location]);
-
-  async function saveProfile(e){
-    e?.preventDefault?.();
-    const payload = {};
-    // only send changed fields
-    if ((profileForm.display_name || "") !== (meLite.display_name || "")) {
-      payload.display_name = profileForm.display_name || "";
-    }
-    if ((profileForm.location || "") !== (meLite.location || "")) {
-      payload.location = profileForm.location || "";
-    }
-    if (!Object.keys(payload).length) return;
-
-    try {
-      window.dispatchEvent(new Event("profile:updating"));
-      await api.patch("/users/me/", payload);
-
-      const normLoc = String(profileForm.location || "").trim();
-      setMeLite(prev => ({
-        ...prev,
-        display_name: payload.display_name ?? prev.display_name,
-        location: (typeof payload.location !== "undefined") ? normLoc : prev.location,
-      }));
-
-      if (typeof payload.display_name !== "undefined") {
-        localStorage.setItem("profile_display_name", payload.display_name || "");
-      }
-      if (typeof payload.location !== "undefined") {
-        localStorage.setItem("profile_location", normLoc || "");
-      }
-
-      window.dispatchEvent(new CustomEvent("profile:updated", { detail: { ...payload } }));
-    } catch (err){
-      const msg = err?.response?.data
-        ? (typeof err.response.data === "string" ? err.response.data : JSON.stringify(err.response.data))
-        : (err?.message || String(err));
-      alert(`Failed to save profile: ${msg}`); // why: surface save issues
-    }
-  }
 
   // ---- Projects & editor ----
   const [projects,setProjects]=useState([]);
@@ -219,7 +204,7 @@ export default function Dashboard(){
         if (data?.username) setMeUser({ username: data.username });
       } catch {
         try {
-          const { data } = await api.get("/users/me/");
+          const { data } = await getMe();
           if (data?.username) setMeUser({ username: data.username });
         } catch {/* fallback */}
       }
@@ -363,19 +348,60 @@ export default function Dashboard(){
     }
   }
 
-  // --- derived location for ID card ---
+  // derived location for ID card
   const profileLocation = useMemo(() => {
     const raw = meLite?.location;
-    if (typeof raw === "string") return raw.trim();
-    if (raw && typeof raw === "object") {
-      return [raw.city, raw.state || raw.region, raw.country].filter(Boolean).join(", ").trim();
-    }
-    return "";
+    return typeof raw === "string" ? raw.trim() : (raw ? String(raw).trim() : "");
   }, [meLite?.location]);
+
+  // quick profile editor (top box)
+  const [profileForm, setProfileForm] = useState({
+    display_name: meLite.display_name || "",
+    location: meLite.location || "",
+  });
+  useEffect(()=>{
+    setProfileForm({
+      display_name: meLite.display_name || "",
+      location: meLite.location || "",
+    });
+  }, [meLite.display_name, meLite.location]);
+
+  async function saveProfile(e){
+    e?.preventDefault?.();
+    try{
+      window.dispatchEvent(new Event("profile:updating"));
+
+      if ((profileForm.display_name || "") !== (meLite.display_name || "")) {
+        await patchMe({ display_name: profileForm.display_name || "" });
+      }
+
+      let normalized = meLite.location || "";
+      if ((profileForm.location || "") !== (meLite.location || "")) {
+        normalized = await saveLocationSmart(profileForm.location);
+      }
+
+      const next = {
+        display_name: profileForm.display_name || meLite.display_name,
+        logo: meLite.logo,
+        location: String(normalized || "").trim(),
+      };
+      setMeLite(next);
+      localStorage.setItem("profile_display_name", next.display_name || "");
+      localStorage.setItem("profile_location", next.location || "");
+      window.dispatchEvent(new CustomEvent("profile:updated", { detail: {
+        display_name: next.display_name, location: next.location
+      }}));
+    } catch (err){
+      const body = err?.response?.data ? JSON.stringify(err.response.data) : (err?.message || String(err));
+      alert(`Failed to save profile: ${body}`);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-8">
-      {/* Header with company identity + spinner */}
+      {/* Header */}
       <header className="flex items-center gap-3">
         <div className="relative h-10 w-10">
           {logoUrl ? (
@@ -383,7 +409,7 @@ export default function Dashboard(){
               src={logoUrl}
               alt="Logo"
               className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
-              onError={(e)=>{ e.currentTarget.style.display = "none"; }}  // why: hide if missing/404
+              onError={(e)=>{ e.currentTarget.style.display = "none"; }}
             />
           ) : (
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
@@ -398,13 +424,11 @@ export default function Dashboard(){
         </div>
         <div className="min-w-0">
           <SectionTitle>Dashboard</SectionTitle>
-          {meLite.display_name && (
-            <div className="truncate text-xs text-slate-600">{meLite.display_name}</div>
-          )}
+          {meLite.display_name && <div className="truncate text-xs text-slate-600">{meLite.display_name}</div>}
         </div>
       </header>
 
-      {/* Quick profile editor to persist name/location */}
+      {/* Profile — Company Info (quick editor) */}
       <Card className="p-5">
         <div className="mb-3 text-sm font-semibold text-slate-800">Profile — Company Info</div>
         <form onSubmit={saveProfile} className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -413,6 +437,7 @@ export default function Dashboard(){
             <Input
               value={profileForm.display_name}
               onChange={e=>setProfileForm(f=>({ ...f, display_name: e.target.value }))}
+              onBlur={saveProfile}
               placeholder="Acme Builders"
             />
           </div>
@@ -421,6 +446,7 @@ export default function Dashboard(){
             <Input
               value={profileForm.location}
               onChange={e=>setProfileForm(f=>({ ...f, location: e.target.value }))}
+              onBlur={saveProfile}
               placeholder="City, State"
             />
           </div>
@@ -657,12 +683,8 @@ export default function Dashboard(){
         </Card>
       )}
 
-      {/* Fixed ID card — 8:5 ratio, 50px from top/right; uses edit-profile location */}
-      <CompanyIdCard
-        logoSrc={logoUrl}
-        name={meLite.display_name}
-        location={profileLocation}
-      />
+      {/* Fixed ID card */}
+      <CompanyIdCard logoSrc={logoUrl} name={meLite.display_name} location={profileLocation} />
     </div>
   );
 }

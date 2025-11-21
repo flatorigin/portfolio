@@ -1,220 +1,155 @@
-// frontend/src/pages/EditProfile.jsx
-import { useEffect, useMemo, useState, useCallback } from "react";
+// ============================================================================
+// file: frontend/src/pages/EditProfile.jsx
+// ============================================================================
+import { useEffect, useState } from "react";
 import api from "../api";
-import { Card, SectionTitle, Input, Textarea, Button } from "../ui";
+import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 
-// normalize relative media paths
-function toUrl(raw) {
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
-  const origin = base.replace(/\/api\/?$/,"");
-  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+// Flexible profile endpoints (works with /users/me/, /me/, /profiles/me/, /profile/me/)
+const ME_ENDPOINTS = ["/users/me/", "/me/", "/profiles/me/", "/profile/me/"];
+
+async function getMe() {
+  let lastErr;
+  for (const url of ME_ENDPOINTS) {
+    try {
+      const res = await api.get(url);
+      res._url = url;
+      return res;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+async function patchMe(payload) {
+  let lastErr;
+  for (const url of ME_ENDPOINTS) {
+    try {
+      const res = await api.patch(url, payload);
+      res._url = url;
+      return res;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+function normalizeLocationFrom(me) {
+  if (!me) return "";
+  if (typeof me.location === "string" && me.location.trim()) return me.location.trim();
+  const locObj =
+    (me.location && typeof me.location === "object" && me.location) ||
+    (me.profile?.location && typeof me.profile.location === "object" && me.profile.location) ||
+    null;
+  const parts = [
+    me.city ?? locObj?.city,
+    me.state ?? me.region ?? locObj?.state ?? locObj?.region,
+    me.country ?? locObj?.country,
+  ].filter(Boolean);
+  if (parts.length) return parts.join(", ");
+  if (typeof me.profile?.location === "string") return me.profile.location.trim();
+  return "";
+}
+
+async function saveLocationSmart(loc) {
+  const location = String(loc || "").trim();
+  if (!location) return "";
+  const [cityPart = "", rest = ""] = location.split(",");
+  const city = cityPart.trim();
+  const state = (rest || "").trim();
+
+  const attempts = [
+    { payload: { location }, pick: (d) => d?.location },
+    { payload: { profile: { location } }, pick: (d) => d?.profile?.location },
+    {
+      payload: { ...(city ? { city } : {}), ...(state ? { state } : {}) },
+      pick: (d) => [d?.city || d?.profile?.city, d?.state || d?.profile?.state || d?.region || d?.profile?.region, d?.country || d?.profile?.country]
+        .filter(Boolean).join(", "),
+    },
+  ];
+
+  for (const t of attempts) {
+    try {
+      await patchMe(t.payload);
+      const { data } = await getMe();
+      const got = t.pick(data);
+      if (got && String(got).trim()) {
+        return normalizeLocationFrom(data); // why: keep both pages consistent
+      }
+    } catch { /* try next */ }
+  }
+  throw new Error("Location save failed (no accepted payloads).");
 }
 
 export default function EditProfile() {
-  const [endpoint, setEndpoint] = useState("/users/me/");   // primary
-  const fallbackEndpoint = "/auth/users/me/";               // djoser alt
-
-  const [form, setForm] = useState({
-    display_name: "",
-    service_location: "",
-    coverage_radius_miles: "",
-    bio: "",
-    logo: "",               // URL/path string from API
-  });
-  const [logoFile, setLogoFile] = useState(null);
-
+  const [form, setForm] = useState({ display_name: "", bio: "", location: "" });
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const [ok, setOk] = useState(false);
+  const [msg, setMsg] = useState("");
 
-  const logoUrl = useMemo(() => (logoFile ? URL.createObjectURL(logoFile) : toUrl(form.logo)), [logoFile, form.logo]);
-
-  const loadMe = useCallback(async () => {
-    setErr(""); setOk(false);
-    const tryGet = async (url) => (await api.get(url)).data;
-
-    try {
-      const data = await tryGet(endpoint);
-      setForm({
-        display_name: data?.display_name || data?.name || "",
-        service_location: data?.service_location || "",
-        coverage_radius_miles: data?.coverage_radius_miles ?? "",
-        bio: data?.bio || "",
-        logo: data?.logo || data?.logo_url || "",
-      });
-      setLogoFile(null);
-      return;
-    } catch {
+  useEffect(() => {
+    const token = localStorage.getItem("access");
+    if (!token) return; // why: avoid pre-login calls
+    (async () => {
       try {
-        const data = await tryGet(fallbackEndpoint);
-        setEndpoint(fallbackEndpoint);
+        const { data } = await getMe();
         setForm({
           display_name: data?.display_name || data?.name || "",
-          service_location: data?.service_location || "",
-          coverage_radius_miles: data?.coverage_radius_miles ?? "",
-          bio: data?.bio || "",
-          logo: data?.logo || data?.logo_url || "",
+          bio: data?.bio || data?.profile?.bio || "",
+          location: normalizeLocationFrom(data),
         });
-        setLogoFile(null);
-      } catch (e2) {
-        setErr(e2?.response?.data ? JSON.stringify(e2.response.data) : String(e2));
+      } catch {
+        setMsg("Failed to load profile.");
       }
-    }
-  }, [endpoint]);
+    })();
+  }, []);
 
-  useEffect(() => { loadMe(); }, [loadMe]);
-
-  function coerceNumber(v) {
-    if (v === "" || v === null || typeof v === "undefined") return "";
-    const n = Number(String(v).replace(/[^\d.]+/g, ""));
-    return Number.isFinite(n) ? n : "";
-  }
-
-  function broadcast(name, detail) {
-    // why: allow Dashboard header to react (spinner, refresh)
-    window.dispatchEvent(new CustomEvent(name, { detail }));
-  }
-
-  async function save(e) {
-    e.preventDefault();
-    setBusy(true); setErr(""); setOk(false);
-    broadcast("profile:updating", { at: Date.now() });
-
-    const payload = {
-      display_name: form.display_name || "",
-      service_location: form.service_location || "",
-      coverage_radius_miles: coerceNumber(form.coverage_radius_miles),
-      bio: form.bio || "",
-    };
-    const useMultipart = !!logoFile;
-    if (logoFile) payload.logo = logoFile;
-
-    const patch = async (url) => {
-      if (useMultipart) {
-        const fd = new FormData();
-        Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ""));
-        return api.patch(url, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      }
-      return api.patch(url, payload);
-    };
-
+  async function onSave(e) {
+    e?.preventDefault?.();
+    setBusy(true);
+    setMsg("");
     try {
-      await patch(endpoint);
-      setOk(true);
-      await loadMe();
+      await patchMe({
+        display_name: form.display_name || "",
+        bio: form.bio || "",
+      });
+
+      const normalized = await saveLocationSmart(form.location);
+
       localStorage.setItem("profile_display_name", form.display_name || "");
-      if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
-      broadcast("profile:updated", { display_name: form.display_name, logo: form.logo });
-    } catch (e1) {
-      const status = e1?.response?.status;
-      if ((status === 404 || status === 405) && endpoint !== fallbackEndpoint) {
-        try {
-          await patch(fallbackEndpoint);
-          setEndpoint(fallbackEndpoint);
-          setOk(true);
-          await loadMe();
-          localStorage.setItem("profile_display_name", form.display_name || "");
-          if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
-          broadcast("profile:updated", { display_name: form.display_name, logo: form.logo });
-        } catch (e2) {
-          setErr(e2?.response?.data ? JSON.stringify(e2.response.data) : String(e2));
-        }
-      } else {
-        setErr(e1?.response?.data ? JSON.stringify(e1.response.data) : String(e1));
-      }
+      localStorage.setItem("profile_location", normalized || "");
+      window.dispatchEvent(new CustomEvent("profile:updated", {
+        detail: { display_name: form.display_name || "", location: normalized || "" },
+      }));
+      setMsg("Profile saved.");
+    } catch (e) {
+      const body = e?.response?.data ? JSON.stringify(e.response.data) : e?.message || String(e);
+      setMsg(`Save failed: ${body}`);
     } finally {
       setBusy(false);
-      broadcast("profile:updated", { at: Date.now() });
     }
   }
-
-  const authed = !!localStorage.getItem("access");
 
   return (
     <div className="space-y-6">
       <SectionTitle>Edit Profile</SectionTitle>
-
-      {!authed && (
-        <Card className="p-5 text-slate-600">
-          Please log in to edit your profile.
-        </Card>
-      )}
-
-      {authed && (
-        <Card className="relative p-5">
-          <form onSubmit={save} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* Identity */}
-            <div className="md:col-span-2">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Identity</div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm text-slate-600">Name (Company/Person)</label>
-                  <Input
-                    value={form.display_name}
-                    onChange={(e)=>setForm({...form, display_name:e.target.value})}
-                    placeholder="e.g. Skivelight Studio"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm text-slate-600">Logo</label>
-                  <input type="file" accept="image/*" onChange={(e)=>setLogoFile(e.target.files?.[0]||null)} />
-                  {logoFile && <div className="mt-1 text-xs text-slate-500 truncate">{logoFile.name}</div>}
-                  {logoUrl && !logoFile && (
-                    <div className="mt-2">
-                      <img src={logoUrl} alt="Logo" className="h-16 w-16 rounded-full object-cover ring-1 ring-slate-200" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Service */}
-            <div className="md:col-span-2">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Service</div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm text-slate-600">Location of Service</label>
-                  <Input
-                    value={form.service_location}
-                    onChange={(e)=>setForm({...form, service_location:e.target.value})}
-                    placeholder="City, State"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="mb-1 block text-sm text-slate-600">Coverage Radius (miles)</label>
-                  <Input
-                    inputMode="numeric"
-                    value={form.coverage_radius_miles}
-                    onChange={(e)=>setForm({...form, coverage_radius_miles:e.target.value})}
-                    placeholder="e.g. 50"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* About */}
-            <div className="md:col-span-2">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">About</div>
-              <label className="mb-1 block text-sm text-slate-600">Short Bio (optional)</label>
-              <Textarea
-                value={form.bio}
-                onChange={(e)=>setForm({...form, bio:e.target.value})}
-                placeholder="One or two sentences about the company…"
-              />
-            </div>
-
-            {/* Status */}
-            {err && <div className="md:col-span-2 text-sm text-red-700">{err}</div>}
-            {ok && !err && <div className="md:col-span-2 text-sm text-green-700">Saved.</div>}
-
-            <div className="md:col-span-2">
-              <Button disabled={busy}>{busy ? "Saving…" : "Save Profile"}</Button>
-            </div>
-          </form>
-        </Card>
-      )}
+      <Card className="p-5">
+        <form onSubmit={onSave} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm text-slate-600">Company Name</label>
+            <Input value={form.display_name} onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm text-slate-600">Location</label>
+            <Input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="City, State" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm text-slate-600">Bio</label>
+            <Textarea value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} />
+          </div>
+          <div className="md:col-span-2">
+            {msg && <div className="text-sm text-slate-600">{msg}</div>}
+            <Button disabled={busy}>Save</Button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }
