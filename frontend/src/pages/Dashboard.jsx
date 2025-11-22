@@ -2,6 +2,7 @@
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api";
 import ImageUploader from "../components/ImageUploader";
 import { SectionTitle, Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
@@ -16,10 +17,14 @@ function toUrl(raw){
 }
 
 export default function Dashboard(){
+  const navigate = useNavigate();
   // ---- Profile header (live) ----
   const [meLite, setMeLite] = useState({
     display_name: localStorage.getItem("profile_display_name") || "",
     logo: localStorage.getItem("profile_logo") || "",
+    service_location: "",
+    coverage_radius_miles: "",
+    bio: "",
   });
   const [profileSaving, setProfileSaving] = useState(false);
 
@@ -30,6 +35,9 @@ export default function Dashboard(){
         const next = {
           display_name: data?.display_name || data?.name || "",
           logo: data?.logo || data?.logo_url || "",
+          service_location: data?.service_location || "",
+          coverage_radius_miles: data?.coverage_radius_miles ?? "",
+          bio: data?.bio || "",
         };
         setMeLite(next);
         localStorage.setItem("profile_display_name", next.display_name || "");
@@ -45,8 +53,12 @@ export default function Dashboard(){
       setProfileSaving(false);
       if (d.display_name || d.logo) {
         setMeLite(prev=>({
-          display_name: d.display_name ?? prev.display_name,
-          logo: d.logo ?? prev.logo,
+        ...prev,
+        ...(d.display_name !== undefined ? { display_name: d.display_name } : {}),
+        ...(d.logo !== undefined ? { logo: d.logo } : {}),
+        ...(d.service_location !== undefined ? { service_location: d.service_location } : {}),
+        ...(d.coverage_radius_miles !== undefined ? { coverage_radius_miles: d.coverage_radius_miles } : {}),
+        ...(d.bio !== undefined ? { bio: d.bio } : {}),
         }));
       }
     };
@@ -267,6 +279,50 @@ export default function Dashboard(){
           )}
         </div>
       </header>
+
+      {/* Profile summary card */}
+            <Card className="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Profile
+                  </div>
+                  <div className="text-sm font-semibold text-slate-800">
+                    {meLite.display_name || "Add your name in Edit Profile"}
+                  </div>
+
+                  {(meLite.service_location || meLite.coverage_radius_miles) && (
+                    <div className="mt-1 text-xs text-slate-600">
+                      {meLite.service_location || "Location not set"}
+                      {meLite.coverage_radius_miles !== "" && (
+                        <> · {meLite.coverage_radius_miles} mile radius</>
+                      )}
+                    </div>
+                  )}
+
+                  {meLite.bio && (
+                    <p className="mt-2 text-xs text-slate-600">
+                      {meLite.bio}
+                    </p>
+                  )}
+
+                  {!meLite.service_location && !meLite.bio && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Add your service area and a short bio so clients know who you are.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col items-end gap-2">
+                  <Button
+                    type="button"
+                    onClick={()=>navigate("/profile/edit")}
+                  >
+                    Edit Profile
+                  </Button>
+                </div>
+              </div>
+            </Card>
 
       {/* 1) CREATE PROJECT — Project Info (Draft) */}
       <Card className="p-5">

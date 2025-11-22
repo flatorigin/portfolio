@@ -106,7 +106,13 @@ export default function EditProfile() {
       await loadMe();
       localStorage.setItem("profile_display_name", form.display_name || "");
       if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
-      broadcast("profile:updated", { display_name: form.display_name, logo: form.logo });
+      broadcast("profile:updated", {
+        display_name: form.display_name,
+        logo: form.logo,
+        service_location: form.service_location,
+        coverage_radius_miles: coerceNumber(form.coverage_radius_miles),
+        bio: form.bio,
+      });
     } catch (e1) {
       const status = e1?.response?.status;
       if ((status === 404 || status === 405) && endpoint !== fallbackEndpoint) {
@@ -117,7 +123,13 @@ export default function EditProfile() {
           await loadMe();
           localStorage.setItem("profile_display_name", form.display_name || "");
           if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
-          broadcast("profile:updated", { display_name: form.display_name, logo: form.logo });
+          broadcast("profile:updated", {
+            display_name: form.display_name,
+            logo: form.logo,
+            service_location: form.service_location,
+            coverage_radius_miles: coerceNumber(form.coverage_radius_miles),
+            bio: form.bio,
+          });
         } catch (e2) {
           setErr(e2?.response?.data ? JSON.stringify(e2.response.data) : String(e2));
         }

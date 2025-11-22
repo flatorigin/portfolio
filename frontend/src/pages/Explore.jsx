@@ -2,15 +2,26 @@
 // file: frontend/src/pages/Explore.jsx
 // Card UX: hover, meta/badge, empty & loading states
 // =======================================
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { SectionTitle, Badge, Card, GhostButton } from "../ui";
+import { SectionTitle, Badge, Card, Button, Input, GhostButton } from "../ui";
 
 export default function Explore() {
   const [projects, setProjects] = useState([]);
   const [thumbs, setThumbs] = useState({});
   const [loading, setLoading] = useState(true);
+
+  // 🔍 filter state
+  const [filters, setFilters] = useState({
+    name: "",
+    location: "",
+    minSqf: "",
+    maxSqf: "",
+    minBudget: "",
+    maxBudget: "",
+  });
+
   const navigate = useNavigate();
 
   const authed = !!localStorage.getItem("access");
@@ -21,6 +32,7 @@ export default function Explore() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+
     api
       .get("/projects/")
       .then(async ({ data }) => {
@@ -33,7 +45,11 @@ export default function Explore() {
             try {
               const { data: imgs } = await api.get(`/projects/${p.id}/images/`);
               const urls = (imgs || [])
-                .map((it) => (typeof it === "string" ? it : it?.url || it?.src || it?.image || null))
+                .map((it) =>
+                  typeof it === "string"
+                    ? it
+                    : it?.url || it?.src || it?.image || null
+                )
                 .filter(Boolean)
                 .slice(0, 3);
               return [p.id, urls];
@@ -42,13 +58,62 @@ export default function Explore() {
             }
           })
         );
+
         if (alive) setThumbs(Object.fromEntries(entries));
       })
       .finally(() => alive && setLoading(false));
+
     return () => {
       alive = false;
     };
   }, []);
+
+  // 🔍 filter logic
+  const filteredProjects = useMemo(() => {
+    return projects.filter((p) => {
+      const name = (p.title || "").toLowerCase();
+      const loc = (p.location || "").toLowerCase();
+      const sqf = Number(p.sqf ?? 0) || 0;
+      const budget = Number(p.budget ?? 0) || 0;
+
+      if (
+        filters.name.trim() &&
+        !name.includes(filters.name.toLowerCase().trim())
+      ) {
+        return false;
+      }
+
+      if (
+        filters.location.trim() &&
+        !loc.includes(filters.location.toLowerCase().trim())
+      ) {
+        return false;
+      }
+
+      if (filters.minSqf !== "" && sqf < Number(filters.minSqf)) {
+        return false;
+      }
+
+      if (filters.maxSqf !== "" && sqf > Number(filters.maxSqf)) {
+        return false;
+      }
+
+      if (filters.minBudget !== "" && budget < Number(filters.minBudget)) {
+        return false;
+      }
+
+      if (filters.maxBudget !== "" && budget > Number(filters.maxBudget)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [projects, filters]);
+
+  const updateFilter = (key) => (e) => {
+    const value = e.target.value;
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
 
   if (loading) {
     return (
@@ -78,7 +143,9 @@ export default function Explore() {
           <p className="text-slate-600">No projects yet.</p>
           {authed && (
             <div className="mt-3">
-              <GhostButton onClick={() => navigate("/dashboard")}>Create your first project →</GhostButton>
+              <GhostButton onClick={() => navigate("/dashboard")}>
+                Create your first project →
+              </GhostButton>
             </div>
           )}
         </Card>
@@ -90,8 +157,101 @@ export default function Explore() {
     <div>
       <SectionTitle>Explore</SectionTitle>
 
+      {/* 🔍 Filter bar */}
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[160px]">
+            <div className="mb-1 text-xs font-medium text-slate-500">
+              Project name
+            </div>
+            <Input
+              value={filters.name}
+              onChange={updateFilter("name")}
+              placeholder="e.g. Kitchen remodel"
+            />
+          </div>
+
+          <div className="flex-1 min-w-[160px]">
+            <div className="mb-1 text-xs font-medium text-slate-500">
+              Location
+            </div>
+            <Input
+              value={filters.location}
+              onChange={updateFilter("location")}
+              placeholder="City, area, etc."
+            />
+          </div>
+
+          <div className="flex-1 min-w-[160px]">
+            <div className="mb-1 text-xs font-medium text-slate-500">
+              Sqf (min / max)
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.minSqf}
+                onChange={updateFilter("minSqf")}
+                placeholder="Min"
+              />
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.maxSqf}
+                onChange={updateFilter("maxSqf")}
+                placeholder="Max"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-[160px]">
+            <div className="mb-1 text-xs font-medium text-slate-500">
+              Budget (min / max)
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.minBudget}
+                onChange={updateFilter("minBudget")}
+                placeholder="Min"
+              />
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.maxBudget}
+                onChange={updateFilter("maxBudget")}
+                placeholder="Max"
+              />
+            </div>
+          </div>
+
+          <div className="self-center">
+            <Button
+              type="button"
+              onClick={() =>
+                setFilters({
+                  name: "",
+                  location: "",
+                  minSqf: "",
+                  maxSqf: "",
+                  minBudget: "",
+                  maxBudget: "",
+                })
+              }
+            >
+              Clear filters
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-2 text-xs text-slate-500">
+          Showing {filteredProjects.length} of {projects.length} projects
+        </div>
+      </Card>
+
       <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-        {projects.map((p) => {
+        {filteredProjects.map((p) => {
           const t = thumbs[p.id] || [];
           const card = (
             <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
@@ -126,16 +286,27 @@ export default function Explore() {
 
               <div className="p-4">
                 <div className="mb-1 flex items-center gap-2">
-                  <div className="truncate text-base font-semibold">{p.title}</div>
+                  <div className="truncate text-base font-semibold">
+                    {p.title}
+                  </div>
                   {p.category ? <Badge>{p.category}</Badge> : null}
                 </div>
                 <div className="line-clamp-2 text-sm text-slate-700">
-                  {p.summary || <span className="opacity-60">No summary</span>}
+                  {p.summary || (
+                    <span className="opacity-60">No summary</span>
+                  )}
                 </div>
-                <div className="mt-2 text-xs text-slate-500">by {p.owner_username}</div>
+                <div className="mt-2 text-xs text-slate-500">
+                  by {p.owner_username}
+                </div>
                 {authed && isOwner(p) && (
                   <div className="mt-3">
-                    <GhostButton onClick={(e) => { e.preventDefault(); navigate(`/dashboard?edit=${p.id}`); }}>
+                    <GhostButton
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/dashboard?edit=${p.id}`);
+                      }}
+                    >
                       Edit in Dashboard
                     </GhostButton>
                   </div>
@@ -158,4 +329,3 @@ export default function Explore() {
     </div>
   );
 }
-
