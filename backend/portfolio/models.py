@@ -1,6 +1,13 @@
 # backend/portfolio/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
+from io import BytesIO
+import os
+
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from PIL import Image
+from .utils import convert_field_file_to_webp
 
 User = get_user_model()
 
@@ -12,6 +19,7 @@ def project_image_upload_path(instance, filename):
     return f"projects/{instance.project.owner_id}/{instance.project_id}/images/{filename}"
 
 class Project(models.Model):
+    cover_image = models.ImageField(upload_to="project_covers/", blank=True, null=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="projects")
 
     title = models.CharField(max_length=200)
@@ -32,17 +40,70 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self) -> str:
-        return f"Project<{self.id}:{self.title}>"
+    def save(self, *args, **kwargs):
+        if self.cover_image and hasattr(self.cover_image, "file"):
+            convert_field_file_to_webp(self.cover_image, quality=80)
+        super().save(*args, **kwargs)
 
 class ProjectImage(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to=project_image_upload_path)
-    caption = models.CharField(max_length=240, blank=True, default="")
-    alt_text = models.CharField(max_length=200, blank=True, default="")
+    project = models.ForeignKey(
+        Project,
+        related_name="images",
+        on_delete=models.CASCADE,
+    )
+    image = models.ImageField(upload_to="project_images/")
+    caption = models.CharField(max_length=255, blank=True)
+    alt_text = models.CharField(max_length=255, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
-    order = models.PositiveIntegerField(blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self) -> str:
-        return f"ProjectImage<{self.id} p{self.project_id}>"
+    def _convert_image_to_webp(self):
+        """
+        Convert self.image file to WebP and replace the field's file.
+        Only runs if current file is NOT already .webp.
+        """
+        if not self.image:
+            return
+
+        # Current file name + extension
+        current_name = self.image.name
+        root, ext = os.path.splitext(current_name.lower())
+
+        # Already webp? nothing to do
+        if ext == ".webp":
+            return
+
+        # Open the image via Pillow
+        img = Image.open(self.image)
+
+        # Ensure a safe mode for WEBP
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGB")
+
+        # Save to in-memory buffer as WEBP
+        buffer = BytesIO()
+        # Tune quality as you like (60–85 is common)
+        img.save(buffer, format="WEBP", quality=80)
+        buffer.seek(0)
+
+        new_name = f"{root}.webp"
+        old_name = current_name
+
+        # Replace file on the field (but don't commit to DB yet)
+        self.image.save(new_name, ContentFile(buffer.read()), save=False)
+
+        # Remove old file from storage if different
+        if old_name and old_name != self.image.name and default_storage.exists(old_name):
+            try:
+                default_storage.delete(old_name)
+            except Exception:
+                # Silent fail – you can log this if you want
+                pass
+
+    def save(self, *args, **kwargs):
+        # If there is a new file, convert it before actual save
+        if self.image and hasattr(self.image, "file"):
+            self._convert_image_to_webp()
+
+        super().save(*args, **kwargs)
