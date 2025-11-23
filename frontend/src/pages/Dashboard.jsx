@@ -253,7 +253,7 @@ export default function Dashboard(){
     <div className="space-y-8">
       {/* Header with company identity + spinner */}
       <header className="flex items-center gap-3">
-        <div className="relative h-10 w-10">
+        <div className="relative h-10 w-10 mt-13">
           {logoUrl ? (
             <img
               src={toUrl(localStorage.getItem("profile_logo"))}
@@ -313,7 +313,7 @@ export default function Dashboard(){
                   )}
                 </div>
 
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-col items-end gap-2 w-full">
                   <Button
                     type="button"
                     onClick={()=>navigate("/profile/edit")}

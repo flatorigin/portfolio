@@ -226,7 +226,7 @@ export default function Explore() {
             </div>
           </div>
 
-          <div className="self-center">
+          <div className="self-center mt-5">
             <Button
               type="button"
               onClick={() =>
