@@ -26,10 +26,17 @@ export default function ProjectDetail() {
   const [commentError, setCommentError] = useState("");
 
   const authed = !!localStorage.getItem("access");
+  const localUsername = localStorage.getItem("username") || "";
+
+  // is the *current logged-in user* the project owner?
+  const isOwnerUser =
+    authed &&
+    project &&
+    (project.owner_username || "").toLowerCase() === localUsername.toLowerCase();
 
   const fetchAll = useCallback(async () => {
     try {
-      // 1) always fetch project + images together
+      // project + images
       const [{ data: meta }, { data: imgs }] = await Promise.all([
         api.get(`/projects/${id}/`),
         api.get(`/projects/${id}/images/`),
@@ -45,7 +52,7 @@ export default function ProjectDetail() {
           .filter((x) => !!x.url)
       );
 
-      // 2) try comments separately so failure doesn't kill project/media
+      // comments (separate, non-fatal)
       try {
         const { data: cmts } = await api.get(`/projects/${id}/comments/`);
         setComments(Array.isArray(cmts) ? cmts : []);
@@ -99,6 +106,7 @@ export default function ProjectDetail() {
       setComments((prev) => [data, ...prev]);
       setCommentText("");
     } catch (err) {
+      console.error("comment post error:", err?.response || err);
       const msg =
         err?.response?.data?.detail ||
         err?.response?.data?.text ||
@@ -109,6 +117,21 @@ export default function ProjectDetail() {
     } finally {
       setCommentBusy(false);
     }
+  }
+
+  // owner reply helper – focuses textarea and optionally pre-fills handle
+  function replyAsOwnerTo(comment) {
+    if (!isOwnerUser) return;
+    const handle = comment.author_username
+      ? `@${comment.author_username} `
+      : "";
+    setCommentText((prev) => {
+      // if it already starts with this handle, don't duplicate it
+      if (prev.trim().startsWith(handle.trim())) return prev;
+      return handle + prev;
+    });
+    const el = document.getElementById("project-comment-textarea");
+    if (el) el.focus();
   }
 
   return (
@@ -143,7 +166,7 @@ export default function ProjectDetail() {
         <p className="mb-4 text-slate-700">{project.summary}</p>
       )}
 
-      {/* meta grid – your original content */}
+      {/* meta grid */}
       {(project?.location ||
         project?.budget ||
         project?.sqf ||
@@ -177,7 +200,7 @@ export default function ProjectDetail() {
         </Card>
       )}
 
-      {/* images grid – your original content */}
+      {/* images */}
       {images.length === 0 ? (
         <div className="rounded-xl border border-slate-200 p-6 text-center text-slate-600">
           No media found.
@@ -213,7 +236,7 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* lightbox – your original content */}
+      {/* Lightbox */}
       {open && images[idx] && (
         <div
           role="dialog"
@@ -266,24 +289,30 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* comments */}
+      {/* Comments */}
       <div className="mt-8 space-y-4">
         <h2 className="text-lg font-semibold text-slate-900">
           Comments
         </h2>
 
+        {/* Comment form */}
         {authed ? (
           <Card className="p-4">
             <form onSubmit={submitComment} className="space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Add a comment
+                  {isOwnerUser ? "Reply or comment as owner" : "Add a comment"}
                 </label>
                 <Textarea
+                  id="project-comment-textarea"
                   rows={3}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Share your thoughts about this project…"
+                  placeholder={
+                    isOwnerUser
+                      ? "Write a reply or general comment as the project owner…"
+                      : "Share your thoughts about this project…"
+                  }
                 />
               </div>
               {commentError && (
@@ -301,29 +330,56 @@ export default function ProjectDetail() {
           </Card>
         )}
 
+        {/* Comment list */}
         {comments.length === 0 ? (
           <p className="text-sm text-slate-600">
             No comments yet. Be the first to comment.
           </p>
         ) : (
           <div className="space-y-3">
-            {comments.map((c) => (
-              <Card key={c.id} className="p-3">
-                <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">
-                    {c.author_username || "Anonymous"}
-                  </span>
-                  <span>
-                    {c.created_at
-                      ? new Date(c.created_at).toLocaleString()
-                      : ""}
-                  </span>
-                </div>
-                <p className="whitespace-pre-line text-sm text-slate-800">
-                  {c.text}
-                </p>
-              </Card>
-            ))}
+            {comments.map((c) => {
+              const isOwnerAuthor =
+                project &&
+                c.author_username &&
+                c.author_username.toLowerCase() ===
+                  (project.owner_username || "").toLowerCase();
+
+              return (
+                <Card key={c.id} className="p-3">
+                  <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-700">
+                        {c.author_username || "Anonymous"}
+                      </span>
+                      {isOwnerAuthor && (
+                        <span className="rounded-full bg-slate-900 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-white">
+                          Owner
+                        </span>
+                      )}
+                    </div>
+                    <span>
+                      {c.created_at
+                        ? new Date(c.created_at).toLocaleString()
+                        : ""}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-line text-sm text-slate-800">
+                    {c.text}
+                  </p>
+
+                  {/* Owner-only reply button */}
+                  {isOwnerUser && !isOwnerAuthor && (
+                    <button
+                      type="button"
+                      onClick={() => replyAsOwnerTo(c)}
+                      className="mt-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+                    >
+                      ↩ Reply as owner
+                    </button>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
