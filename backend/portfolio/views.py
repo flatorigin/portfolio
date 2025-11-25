@@ -1,13 +1,34 @@
 # backend/portfolio/views.py
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, generics
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import Project, ProjectImage
-from .serializers import ProjectSerializer, ProjectImageSerializer
+from .models import Project, ProjectImage, ProjectComment
+from .serializers import ProjectSerializer, ProjectImageSerializer, ProjectCommentSerializer
 from .permissions import IsOwnerOrReadOnly
+from django.shortcuts import get_object_or_404
 
+class ProjectCommentListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/projects/<pk>/comments/   -> list comments for project
+    POST /api/projects/<pk>/comments/   -> add comment (auth required)
+    """
+    serializer_class = ProjectCommentSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        project_id = self.kwargs["pk"]
+        return ProjectComment.objects.filter(
+            project_id=project_id
+        ).select_related("author")
+
+    def perform_create(self, serializer):
+        project = get_object_or_404(Project, pk=self.kwargs["pk"])
+        serializer.save(
+            author=self.request.user,
+            project=project,
+        )
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.select_related("owner").all()

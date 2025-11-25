@@ -1,27 +1,85 @@
+// frontend/src/pages/Login.jsx
 import { useState } from "react";
-import { login } from "../auth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import api from "../api";
+import { Card, Input, Button } from "../ui";
 
-export default function Login(){
-  const [form,setForm] = useState({username:"", password:""});
-  const nav = useNavigate();
+export default function Login() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  async function submit(e){
+  const onSubmit = async (e) => {
     e.preventDefault();
-    await login(form);
-    nav("/dashboard");
-  }
+    setError("");
+    try {
+      const { data } = await api.post("/auth/jwt/create/", {
+        username,
+        password,
+      });
+      localStorage.setItem("access", data.access);
+      localStorage.setItem("refresh", data.refresh);
+      navigate("/dashboard");
+    } catch (err) {
+      setError("Invalid username or password");
+    }
+  };
 
   return (
-    <form onSubmit={submit} style={{maxWidth:360}}>
-      <h2 >Login</h2>
-      <input placeholder="Username" value={form.username} onChange={e=>setForm({...form,username:e.target.value})} />
-      <input placeholder="Password" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} />
-      <button>Login</button>
-      <style>{`
-        input, textarea, button { width: 100%; padding: 10px; margin: 8px 0; }
-        button { cursor: pointer; }
-      `}</style>
-    </form>
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <Card className="w-full max-w-md p-6">
+        <h1 className="mb-4 text-xl font-semibold">Log in</h1>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Username
+            </label>
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+            />
+          </div>
+
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block text-sm font-medium text-slate-700">
+                Password
+              </label>
+
+              <Link
+                to="/forgot-password"
+                className="text-xs font-medium text-slate-500 hover:text-slate-800"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && <p className="text-xs text-red-600">{error}</p>}
+
+          <Button type="submit" className="w-full">
+            Log in
+          </Button>
+        </form>
+
+        {/* Optionally add a second link down here too */}
+        <div className="mt-3 text-center text-xs text-slate-500">
+          <Link
+            to="/forgot-password"
+            className="text-xs font-medium text-slate-600 hover:text-slate-900"
+          >
+            Forgot password?
+          </Link>
+        </div>
+      </Card>
+    </div>
   );
 }

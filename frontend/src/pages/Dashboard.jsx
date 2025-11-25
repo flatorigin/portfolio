@@ -1,7 +1,7 @@
 // ============================================================================
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import ImageUploader from "../components/ImageUploader";
@@ -51,14 +51,14 @@ export default function Dashboard(){
     const onUpdated  = (e)=> {
       const d = e?.detail || {};
       setProfileSaving(false);
-      if (d.display_name || d.logo) {
+      if (d.display_name || d.logo || d.service_location || d.coverage_radius_miles || d.bio) {
         setMeLite(prev=>({
-        ...prev,
-        ...(d.display_name !== undefined ? { display_name: d.display_name } : {}),
-        ...(d.logo !== undefined ? { logo: d.logo } : {}),
-        ...(d.service_location !== undefined ? { service_location: d.service_location } : {}),
-        ...(d.coverage_radius_miles !== undefined ? { coverage_radius_miles: d.coverage_radius_miles } : {}),
-        ...(d.bio !== undefined ? { bio: d.bio } : {}),
+          ...prev,
+          ...(d.display_name !== undefined ? { display_name: d.display_name } : {}),
+          ...(d.logo !== undefined ? { logo: d.logo } : {}),
+          ...(d.service_location !== undefined ? { service_location: d.service_location } : {}),
+          ...(d.coverage_radius_miles !== undefined ? { coverage_radius_miles: d.coverage_radius_miles } : {}),
+          ...(d.bio !== undefined ? { bio: d.bio } : {}),
         }));
       }
     };
@@ -83,6 +83,9 @@ export default function Dashboard(){
   });
   const [cover,setCover]=useState(null);
 
+  // NEW: toggle for create project card
+  const [showCreate, setShowCreate] = useState(false);
+
   // Editor
   const [editingId, setEditingId] = useState("");
   const [editForm,setEditForm]=useState({
@@ -91,6 +94,9 @@ export default function Dashboard(){
   });
   const [editCover,setEditCover]=useState(null);
   const [editImgs, setEditImgs] = useState([]); // [{id,url,caption,_localCaption,_saving}]
+
+  // 🔽 ref for scrolling to editor
+  const editorRef = useRef(null);
 
   // current user (ownership)
   const [meUser, setMeUser] = useState({ username: localStorage.getItem("username") || "" });
@@ -161,6 +167,18 @@ export default function Dashboard(){
     await refreshImages(pid);
   },[refreshImages]);
 
+  // 🔽 when editingId changes, scroll down a bit to show the editor block
+  useEffect(() => {
+    if (editingId && editorRef.current) {
+      const rect = editorRef.current.getBoundingClientRect();
+      const offset = window.pageYOffset + rect.top - 80; // 80px padding from top
+      window.scrollTo({
+        top: offset,
+        behavior: "smooth",
+      });
+    }
+  }, [editingId]);
+
   async function createProject(e){
     e.preventDefault();
     setCreateErr(""); setCreateOk(false);
@@ -206,7 +224,6 @@ export default function Dashboard(){
     }
   }
 
-
   async function saveProjectInfo(e){
     e?.preventDefault?.();
     if (!editingId) return;
@@ -251,136 +268,188 @@ export default function Dashboard(){
 
   return (
     <div className="space-y-8">
-      {/* Header with company identity + spinner */}
-      <header className="flex items-center gap-3">
-        <div className="relative h-10 w-10 mt-13">
-          {logoUrl ? (
-            <img
-              src={toUrl(localStorage.getItem("profile_logo"))}
-              alt="Logo"
-              className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
-              onError={(e)=>{ e.currentTarget.style.display = "none"; }}  // why: hide if missing/404
-            />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
-              {meLite.display_name ? meLite.display_name.slice(0,1).toUpperCase() : "•"}
-            </div>
-          )}
-          {profileSaving && (
-            <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0">
-          <SectionTitle>Dashboard</SectionTitle>
-          {meLite.display_name && (
-            <div className="truncate text-xs text-slate-600">{meLite.display_name}</div>
-          )}
-        </div>
+      {/* Simple header: Dashboard only */}
+      <header className="mb-1">
+        <SectionTitle>Dashboard</SectionTitle>
       </header>
 
-      {/* Profile summary card */}
-            <Card className="p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Profile
-                  </div>
-                  <div className="text-sm font-semibold text-slate-800">
-                    {meLite.display_name || "Add your name in Edit Profile"}
-                  </div>
-
-                  {(meLite.service_location || meLite.coverage_radius_miles) && (
-                    <div className="mt-1 text-xs text-slate-600">
-                      {meLite.service_location || "Location not set"}
-                      {meLite.coverage_radius_miles !== "" && (
-                        <> · {meLite.coverage_radius_miles} mile radius</>
-                      )}
-                    </div>
-                  )}
-
-                  {meLite.bio && (
-                    <p className="mt-2 text-xs text-slate-600">
-                      {meLite.bio}
-                    </p>
-                  )}
-
-                  {!meLite.service_location && !meLite.bio && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Add your service area and a short bio so clients know who you are.
-                    </p>
-                  )}
+      {/* Profile summary card with logo inside */}
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            {/* Logo/avatar inside the card */}
+            <div className="relative h-10 w-10 flex-shrink-0">
+              {logoUrl ? (
+                <img
+                  src={toUrl(localStorage.getItem("profile_logo"))}
+                  alt="Logo"
+                  className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
+                  onError={(e)=>{ e.currentTarget.style.display = "none"; }}
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
+                  {meLite.display_name ? meLite.display_name.slice(0,1).toUpperCase() : "•"}
                 </div>
-
-                <div className="flex flex-col items-end gap-2 w-full">
-                  <Button
-                    type="button"
-                    onClick={()=>navigate("/profile/edit")}
-                  >
-                    Edit Profile
-                  </Button>
+              )}
+              {profileSaving && (
+                <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
                 </div>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Profile
               </div>
-            </Card>
+              <div className="text-sm font-semibold text-slate-800">
+                {meLite.display_name || "Add your name in Edit Profile"}
+              </div>
 
-      {/* 1) CREATE PROJECT — Project Info (Draft) */}
+              {(meLite.service_location || meLite.coverage_radius_miles) && (
+                <div className="mt-1 text-xs text-slate-600">
+                  {meLite.service_location || "Location not set"}
+                  {meLite.coverage_radius_miles !== "" && (
+                    <> · {meLite.coverage_radius_miles} mile radius</>
+                  )}
+                </div>
+              )}
+
+              {meLite.bio && (
+                <p className="mt-2 text-xs text-slate-600">
+                  {meLite.bio}
+                </p>
+              )}
+
+              {!meLite.service_location && !meLite.bio && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Add your service area and a short bio so clients know who you are.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-2 w-full max-w-[140px]">
+            <Button
+              type="button"
+              onClick={()=>navigate("/profile/edit")}
+            >
+              Edit Profile
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 1) CREATE PROJECT — collapsible */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-800">Create Project</div>
-          <Badge>{owned.length} owned</Badge>
-        </div>
-
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Project Info (Draft)
-        </div>
-
-        <form onSubmit={createProject} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Project Name</label>
-            <Input placeholder="e.g. Lake House Revamp" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Category</label>
-            <Input placeholder="e.g. Residential" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}/>
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm text-slate-600">Summary</label>
-            <Textarea placeholder="One or two sentences…" value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})}/>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
-            <Input placeholder="City, State (optional)" value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Budget</label>
-            <Input placeholder="e.g. 250000" inputMode="numeric" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
-            <Input placeholder="e.g. 1800" inputMode="numeric" value={form.sqf} onChange={e=>setForm({...form,sqf:e.target.value})}/>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
-            <Input placeholder="comma-separated: modern, lake-view" value={form.highlights} onChange={e=>setForm({...form,highlights:e.target.value})}/>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-600">Cover (optional)</label>
-            <input type="file" onChange={e=>setCover(e.target.files?.[0]||null)} />
-            {cover && <div className="mt-1 text-xs text-slate-500 truncate">{cover.name}</div>}
-          </div>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-slate-600">
-              <input type="checkbox" className="mr-2 align-middle" checked={form.is_public} onChange={e=>setForm({...form,is_public:e.target.checked})}/>
-              Public
-            </label>
+            <Badge>{owned.length} owned</Badge>
           </div>
-          <div className="md:col-span-2">
-            {createErr && <div className="md:col-span-2 text-sm text-red-700">{createErr}</div>}
-            {createOk && !createErr && <div className="md:col-span-2 text-sm text-green-700">Project created.</div>}
-            <Button disabled={busy}>Create Project</Button>
-          </div>
-        </form>
+        </div>
+
+        <Button
+          type="button"
+          className="mb-3"
+          onClick={() => setShowCreate((v) => !v)}
+        >
+          {showCreate ? "Hide project form" : "Create new project"}
+        </Button>
+
+        {showCreate && (
+          <>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Project Info (Draft)
+            </div>
+
+            <form onSubmit={createProject} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Project Name</label>
+                <Input
+                  placeholder="e.g. Lake House Revamp"
+                  value={form.title}
+                  onChange={e=>setForm({...form,title:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Category</label>
+                <Input
+                  placeholder="e.g. Residential"
+                  value={form.category}
+                  onChange={e=>setForm({...form,category:e.target.value})}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm text-slate-600">Summary</label>
+                <Textarea
+                  placeholder="One or two sentences…"
+                  value={form.summary}
+                  onChange={e=>setForm({...form,summary:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
+                <Input
+                  placeholder="City, State (optional)"
+                  value={form.location}
+                  onChange={e=>setForm({...form,location:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Budget</label>
+                <Input
+                  placeholder="e.g. 250000"
+                  inputMode="numeric"
+                  value={form.budget}
+                  onChange={e=>setForm({...form,budget:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
+                <Input
+                  placeholder="e.g. 1800"
+                  inputMode="numeric"
+                  value={form.sqf}
+                  onChange={e=>setForm({...form,sqf:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
+                <Input
+                  placeholder="comma-separated: modern, lake-view"
+                  value={form.highlights}
+                  onChange={e=>setForm({...form,highlights:e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Cover (optional)</label>
+                <input type="file" onChange={e=>setCover(e.target.files?.[0]||null)} />
+                {cover && <div className="mt-1 text-xs text-slate-500 truncate">{cover.name}</div>}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="mr-2 align-middle"
+                    checked={form.is_public}
+                    onChange={e=>setForm({...form,is_public:e.target.checked})}
+                  />
+                  Public
+                </label>
+              </div>
+              <div className="md:col-span-2">
+                {createErr && <div className="md:col-span-2 text-sm text-red-700">{createErr}</div>}
+                {createOk && !createErr && (
+                  <div className="md:col-span-2 text-sm text-green-700">
+                    Project created.
+                  </div>
+                )}
+                <Button disabled={busy}>Create Project</Button>
+              </div>
+            </form>
+          </>
+        )}
       </Card>
 
       {/* 2) YOUR PROJECTS */}
@@ -415,7 +484,11 @@ export default function Dashboard(){
                     {p.location ? <div><span className="opacity-60">Location:</span> {p.location}</div> : null}
                     {p.budget ? <div><span className="opacity-60">Budget:</span> {p.budget}</div> : null}
                     {p.sqf ? <div><span className="opacity-60">Sq Ft:</span> {p.sqf}</div> : null}
-                    {p.highlights ? <div className="col-span-2 truncate"><span className="opacity-60">Highlights:</span> {p.highlights}</div> : null}
+                    {p.highlights ? (
+                      <div className="col-span-2 truncate">
+                        <span className="opacity-60">Highlights:</span> {p.highlights}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <GhostButton onClick={()=>window.open(`/projects/${p.id}`, "_self")}>Open</GhostButton>
@@ -430,7 +503,7 @@ export default function Dashboard(){
 
       {/* 3) EDITOR */}
       {editingId && (
-        <Card className="p-5">
+        <Card className="p-5" ref={editorRef}>
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-semibold text-slate-800">Editing Project #{editingId}</div>
             <div className="flex items-center gap-2">
@@ -446,32 +519,62 @@ export default function Dashboard(){
           <form onSubmit={saveProjectInfo} className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm text-slate-600">Project Name</label>
-              <Input value={editForm.title} onChange={e=>setEditForm({...editForm, title:e.target.value})} placeholder="Project name"/>
+              <Input
+                value={editForm.title}
+                onChange={e=>setEditForm({...editForm, title:e.target.value})}
+                placeholder="Project name"
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm text-slate-600">Category</label>
-              <Input value={editForm.category} onChange={e=>setEditForm({...editForm, category:e.target.value})} placeholder="Category"/>
+              <Input
+                value={editForm.category}
+                onChange={e=>setEditForm({...editForm, category:e.target.value})}
+                placeholder="Category"
+              />
             </div>
             <div className="md:col-span-2">
               <label className="mb-1 block text-sm text-slate-600">Summary</label>
-              <Textarea value={editForm.summary} onChange={e=>setEditForm({...editForm, summary:e.target.value})} placeholder="Short description..."/>
+              <Textarea
+                value={editForm.summary}
+                onChange={e=>setEditForm({...editForm, summary:e.target.value})}
+                placeholder="Short description..."
+              />
             </div>
 
             <div>
               <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
-              <Input value={editForm.location} onChange={e=>setEditForm({...editForm, location:e.target.value})} placeholder="City, State"/>
+              <Input
+                value={editForm.location}
+                onChange={e=>setEditForm({...editForm, location:e.target.value})}
+                placeholder="City, State"
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm text-slate-600">Budget</label>
-              <Input value={editForm.budget} onChange={e=>setEditForm({...editForm, budget:e.target.value})} inputMode="numeric" placeholder="e.g. 250000"/>
+              <Input
+                value={editForm.budget}
+                onChange={e=>setEditForm({...editForm, budget:e.target.value})}
+                inputMode="numeric"
+                placeholder="e.g. 250000"
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
-              <Input value={editForm.sqf} onChange={e=>setEditForm({...editForm, sqf:e.target.value})} inputMode="numeric" placeholder="e.g. 1800"/>
+              <Input
+                value={editForm.sqf}
+                onChange={e=>setEditForm({...editForm, sqf:e.target.value})}
+                inputMode="numeric"
+                placeholder="e.g. 1800"
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
-              <Input value={editForm.highlights} onChange={e=>setEditForm({...editForm, highlights:e.target.value})} placeholder="comma-separated tags"/>
+              <Input
+                value={editForm.highlights}
+                onChange={e=>setEditForm({...editForm, highlights:e.target.value})}
+                placeholder="comma-separated tags"
+              />
             </div>
 
             <div>
@@ -503,7 +606,9 @@ export default function Dashboard(){
               <Badge>{editImgs.length} total</Badge>
             </div>
             {editImgs.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No images yet.</div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No images yet.
+              </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
                 {editImgs.map((it)=>(

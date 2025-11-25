@@ -10,6 +10,8 @@ import Dashboard from "./pages/Dashboard.jsx";
 import EditProfile from "./pages/EditProfile.jsx";
 import ProjectDetail from "./pages/ProjectDetail.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";    
+import ResetPassword from "./pages/ResetPassword.jsx";      
 
 function RequireAuth({ children }) {
   return localStorage.getItem("access") ? children : <Navigate to="/login" />;
@@ -18,14 +20,39 @@ function RequireAuth({ children }) {
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
     <Routes>
-      <Route element={<App />}> 
-        <Route index element={<Explore/>} />
-        <Route path="login" element={<Login/>} />
-        <Route path="register" element={<Register/>} />
-        <Route path="u/:username" element={<PublicProfile/>} />
-        <Route path="projects/:id" element={<ProjectDetail/>} />
-        <Route path="dashboard" element={<RequireAuth><Dashboard/></RequireAuth>} />
-        <Route path="profile/edit" element={<RequireAuth><EditProfile/></RequireAuth>} />
+      <Route element={<App />}>
+        {/* index = "/" → Explore */}
+        <Route index element={<Explore />} />
+
+        {/* auth & public routes */}
+        <Route path="login" element={<Login />} />
+        <Route path="register" element={<Register />} />
+        <Route path="forgot-password" element={<ForgotPassword />} />   
+        <Route path="reset-password" element={<ResetPassword />} />     
+
+        {/* public profile + project detail */}
+        <Route path="u/:username" element={<PublicProfile />} />
+        <Route path="projects/:id" element={<ProjectDetail />} />
+
+        {/* protected routes */}
+        <Route
+          path="dashboard"
+          element={
+            <RequireAuth>
+              <Dashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="profile/edit"
+          element={
+            <RequireAuth>
+              <EditProfile />
+            </RequireAuth>
+          }
+        />
+
+        {/* fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Route>
     </Routes>

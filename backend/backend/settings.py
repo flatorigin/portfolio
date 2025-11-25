@@ -57,6 +57,20 @@ DATABASES = {
     }
 }
 
+# Where the React app lives (for the reset form route)
+FRONTEND_URL = "http://localhost:5173"
+# Dev email backend (prints emails to console)
+# EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# If you want real email later:
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = "babak@flatorigin.com"
+EMAIL_HOST_PASSWORD = "bimkvhlarcssnqhs"  # app password
+DEFAULT_FROM_EMAIL = "babak@flatorigin.com"
+
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = "en-us"

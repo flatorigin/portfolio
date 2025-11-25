@@ -3,7 +3,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from io import BytesIO
 import os
-
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from PIL import Image
@@ -31,7 +31,7 @@ class Project(models.Model):
     is_public = models.BooleanField(default=True)
     tech_stack = models.JSONField(blank=True, null=True)
 
-    # ✅ New optional fields expected by the frontend
+    # New optional fields expected by the frontend
     location = models.CharField(max_length=140, blank=True, default="")
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     sqf = models.IntegerField(blank=True, null=True)
@@ -44,6 +44,26 @@ class Project(models.Model):
         if self.cover_image and hasattr(self.cover_image, "file"):
             convert_field_file_to_webp(self.cover_image, quality=80)
         super().save(*args, **kwargs)
+
+class ProjectComment(models.Model):
+    project = models.ForeignKey(
+        "portfolio.Project",
+        related_name="comments",
+        on_delete=models.CASCADE,
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="project_comments",
+        on_delete=models.CASCADE,
+    )
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.project} ({self.created_at:%Y-%m-%d})"
 
 class ProjectImage(models.Model):
     project = models.ForeignKey(
