@@ -4,3 +4,10 @@ class IsOwnerOrReadOnly(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         return getattr(obj, "owner", None) == request.user
+
+class IsCommentAuthorOrReadOnly(BasePermission):
+    """Read for everyone, write for the comment author. """
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+        return obj.author == request.user
