@@ -6,6 +6,9 @@ from .views import (
     ProjectViewSet,
     ProjectCommentListCreateView,
     ProjectCommentDetailView,
+    ProjectThreadCreateView,
+    ThreadMessageListCreateView,
+    InboxThreadListView,
 )
 
 router = DefaultRouter()
@@ -32,4 +35,20 @@ urlpatterns = [
         ProjectCommentDetailView.as_view(),
         name="project-comment-detail",
     ),
+
+    # Private threads
+    path(
+        "projects/<int:pk>/threads/",
+        ProjectThreadCreateView.as_view(),
+        name="project-thread",
+    ),
+    path(
+        "projects/<int:pk>/threads/<int:thread_id>/messages/",
+        ThreadMessageListCreateView.as_view(),
+        name="project-thread-messages",
+    ),
+
+    # Global inbox list
+    path("inbox/threads/", InboxThreadListView.as_view(), name="inbox-threads"),
+
 ]

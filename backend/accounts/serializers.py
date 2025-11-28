@@ -23,3 +23,26 @@ class MeSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         # keep simple: partial updates accepted
         return super().update(instance, validated_data)
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "username",
+            "display_name",
+            "service_location",
+            "logo",
+            "avatar_url",
+        ]
+        read_only_fields = fields
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        if obj.logo and hasattr(obj.logo, "url"):
+            return request.build_absolute_uri(obj.logo.url) if request else obj.logo.url
+        return None

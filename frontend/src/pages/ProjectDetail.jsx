@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
+import PrivateMessagingPanel from "../components/PrivateMessagingPanel";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -29,7 +30,8 @@ export default function ProjectDetail() {
 
   // current user (from API)
   const [meUser, setMeUser] = useState(null);
-  // which root comment the owner is replying to
+
+  // which comment the owner is replying to
   const [replyingTo, setReplyingTo] = useState(null);
 
   // edit state for comments
@@ -101,10 +103,12 @@ export default function ProjectDetail() {
     () => setIdx((i) => (images.length ? (i + 1) % images.length : 0)),
     [images.length]
   );
+
   const prev = useCallback(
-    () => setIdx((i) =>
-      images.length ? (i - 1 + images.length) % images.length : 0
-    ),
+    () =>
+      setIdx((i) =>
+        images.length ? (i - 1 + images.length) % images.length : 0
+      ),
     [images.length]
   );
 
@@ -383,264 +387,294 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* comments */}
-      <div className="mt-8 space-y-4">
-        <h2 className="text-lg font-semibold text-slate-900">Comments</h2>
+      {/* comments + private messaging split */}
+      <div className="mt-8 grid gap-4 md:grid-cols-2 md:items-start">
+        <div className="min-h-[100px] space-y-4">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Public comments
+          </h2>
 
-        {/* form */}
-        {authed ? (
-          <Card className="space-y-3 p-4">
-            {replyingTo && (
-              <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <div>
-                  <div className="mb-0.5 font-semibold">
-                    Replying to {replyingTo.author_username || "user"}
+          {/* form */}
+          {authed ? (
+            <Card className="space-y-3 p-4">
+              {replyingTo && (
+                <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <div>
+                    <div className="mb-0.5 font-semibold">
+                      Replying to {replyingTo.author_username || "user"}
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="ml-3 text-[11px] font-medium text-slate-500 hover:text-slate-700"
+                  >
+                    ✕ Cancel
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setReplyingTo(null)}
-                  className="ml-3 text-[11px] font-medium text-slate-500 hover:text-slate-700"
-                >
-                  ✕ Cancel
-                </button>
-              </div>
-            )}
-
-            <form onSubmit={submitComment} className="space-y-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  {isOwnerUser ? "Reply or comment as owner" : "Add a comment"}
-                </label>
-                <Textarea
-                  id="project-comment-textarea"
-                  rows={3}
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder={
-                    isOwnerUser
-                      ? "Write a reply or general comment as the project owner…"
-                      : "Share your thoughts about this project…"
-                  }
-                />
-              </div>
-              {commentError && (
-                <p className="text-xs text-red-600">{commentError}</p>
               )}
-              <Button type="submit" disabled={commentBusy}>
-                {commentBusy ? "Posting…" : "Post comment"}
-              </Button>
-            </form>
-          </Card>
-        ) : (
-          <Card className="p-4 text-sm text-slate-600">
-            <span className="font-medium">Login</span> to add a comment.
-          </Card>
-        )}
 
-        {/* list */}
-        {roots.length === 0 ? (
-          <p className="text-sm text-slate-600">
-            No comments yet. Be the first to comment.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {roots.map((c) => {
-              const replies = repliesByParent[c.id] || [];
+              <form onSubmit={submitComment} className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    {isOwnerUser ? "Reply or comment as owner" : "Add a comment"}
+                  </label>
+                  <Textarea
+                    id="project-comment-textarea"
+                    rows={3}
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder={
+                      isOwnerUser
+                        ? "Write a reply or general comment as the project owner…"
+                        : "Share your thoughts about this project…"
+                    }
+                    className="min-h-[100px]"
+                  />
+                </div>
+                {commentError && (
+                  <p className="text-xs text-red-600">{commentError}</p>
+                )}
+                <Button type="submit" disabled={commentBusy}>
+                  {commentBusy ? "Posting…" : "Post comment"}
+                </Button>
+              </form>
+            </Card>
+          ) : (
+            <Card className="min-h-[100px] p-4 text-sm text-slate-600">
+              <span className="font-medium">Login</span> to add a comment.
+            </Card>
+          )}
 
-              const isOwnerAuthor =
-                project &&
-                c.author_username &&
-                c.author_username.toLowerCase() ===
-                  (project.owner_username || "").toLowerCase();
+          {/* list */}
+          {roots.length === 0 ? (
+            <p className="text-sm text-slate-600">
+              No comments yet. Be the first to comment.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {roots.map((c) => {
+                const replies = repliesByParent[c.id] || [];
 
-              const isMine = myUsername &&
-                c.author_username &&
-                c.author_username.toLowerCase() === myUsername.toLowerCase();
+                const isOwnerAuthor =
+                  project &&
+                  c.author_username &&
+                  c.author_username.toLowerCase() ===
+                    (project.owner_username || "").toLowerCase();
 
-              const isEditing = editingCommentId === c.id;
+                const isMine =
+                  myUsername &&
+                  c.author_username &&
+                  c.author_username.toLowerCase() ===
+                    myUsername.toLowerCase();
 
-              return (
-                <Card key={c.id} className="p-3">
-                  {/* root header */}
-                  <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-700">
-                        {c.author_username || "Anonymous"}
-                      </span>
-                      {isOwnerAuthor && (
-                        <span className="rounded-full bg-slate-900 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-white">
-                          Owner
+                const isEditing = editingCommentId === c.id;
+
+                return (
+                  <Card key={c.id} className="p-3">
+                    {/* root header */}
+                    <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-700">
+                          {c.author_username || "Anonymous"}
                         </span>
-                      )}
-                    </div>
-                    <span>
-                      {c.created_at
-                        ? new Date(c.created_at).toLocaleString()
-                        : ""}
-                    </span>
-                  </div>
-
-                  {/* root body / edit mode */}
-                  {isEditing ? (
-                    <div className="space-y-2">
-                      <Textarea
-                        rows={2}
-                        value={editingText}
-                        onChange={(e) => setEditingText(e.target.value)}
-                      />
-                      <div className="flex items-center gap-2 text-xs">
-                        <Button
-                          type="button"
-                          disabled={editBusy}
-                          onClick={() => saveEditComment(c)}
-                        >
-                          {editBusy ? "Saving…" : "Save"}
-                        </Button>
-                        <button
-                          type="button"
-                          className="text-slate-500 hover:text-slate-700"
-                          onClick={cancelEditComment}
-                        >
-                          Cancel
-                        </button>
+                        {isOwnerAuthor && (
+                          <span className="rounded-full bg-slate-900 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-white">
+                            Owner
+                          </span>
+                        )}
                       </div>
+                      <span>
+                        {c.created_at
+                          ? new Date(c.created_at).toLocaleString()
+                          : ""}
+                      </span>
                     </div>
-                  ) : (
-                    <p className="whitespace-pre-line text-sm text-slate-800">
-                      {c.text}
-                    </p>
-                  )}
 
-                  {/* actions */}
-                  <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                    {isOwnerUser && !isOwnerAuthor && (
-                      <button
-                        type="button"
-                        onClick={() => replyAsOwnerTo(c)}
-                        className="font-medium hover:text-slate-700"
-                      >
-                        ↩ Reply as owner
-                      </button>
+                    {/* root body / edit mode */}
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          rows={2}
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                        />
+                        <div className="flex items-center gap-2 text-xs">
+                          <Button
+                            type="button"
+                            disabled={editBusy}
+                            onClick={() => saveEditComment(c)}
+                          >
+                            {editBusy ? "Saving…" : "Save"}
+                          </Button>
+                          <button
+                            type="button"
+                            className="text-slate-500 hover:text-slate-700"
+                            onClick={cancelEditComment}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-line text-sm text-slate-800">
+                        {c.text}
+                      </p>
                     )}
 
-                    {isMine && !isEditing && (
-                      <>
+                    {/* actions */}
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                      {isOwnerUser && !isOwnerAuthor && (
                         <button
                           type="button"
-                          onClick={() => startEditComment(c)}
+                          onClick={() => replyAsOwnerTo(c)}
                           className="font-medium hover:text-slate-700"
                         >
-                          Edit
+                          Reply as owner
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteComment(c)}
-                          className="font-medium text-red-500 hover:text-red-700"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </div>
+                      )}
 
-                  {/* replies */}
-                  {replies.length > 0 && (
-                    <div className="mt-3 space-y-2 border-l border-slate-200 pl-3">
-                      {replies.map((r) => {
-                        const replyIsOwner =
-                          project &&
-                          r.author_username &&
-                          r.author_username.toLowerCase() ===
-                            (project.owner_username || "").toLowerCase();
+                      {isMine && !isEditing && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEditComment(c)}
+                            className="font-medium hover:text-slate-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteComment(c)}
+                            className="font-medium text-red-500 hover:text-red-700"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
 
-                        const replyIsMine = myUsername &&
-                          r.author_username &&
-                          r.author_username.toLowerCase() ===
-                            myUsername.toLowerCase();
+                    {/* replies */}
+                    {replies.length > 0 && (
+                      <div className="mt-3 space-y-2 border-l border-slate-200 pl-3">
+                        {replies.map((r) => {
+                          const replyIsOwner =
+                            project &&
+                            r.author_username &&
+                            r.author_username.toLowerCase() ===
+                              (project.owner_username || "").toLowerCase();
 
-                        const replyEditing = editingCommentId === r.id;
+                          const replyIsMine =
+                            myUsername &&
+                            r.author_username &&
+                            r.author_username.toLowerCase() ===
+                              myUsername.toLowerCase();
 
-                        return (
-                          <div key={r.id} className="text-sm">
-                            <div className="mb-0.5 flex items-center justify-between text-[11px] text-slate-500">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-700">
-                                  {r.author_username || "Anonymous"}
-                                </span>
-                                {replyIsOwner && (
-                                  <span className="rounded-full bg-slate-900 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-white">
-                                    Owner reply
+                          const replyEditing = editingCommentId === r.id;
+
+                          return (
+                            <div key={r.id} className="text-sm">
+                              <div className="mb-0.5 flex items-center justify-between text-[11px] text-slate-500">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-slate-700">
+                                    {r.author_username || "Anonymous"}
                                   </span>
-                                )}
+                                  {replyIsOwner && (
+                                    <span className="rounded-full bg-slate-900 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-white">
+                                      Owner reply
+                                    </span>
+                                  )}
+                                </div>
+                                <span>
+                                  {r.created_at
+                                    ? new Date(r.created_at).toLocaleString()
+                                    : ""}
+                                </span>
                               </div>
-                              <span>
-                                {r.created_at
-                                  ? new Date(r.created_at).toLocaleString()
-                                  : ""}
-                              </span>
-                            </div>
 
-                            {replyEditing ? (
-                              <div className="space-y-2">
-                                <Textarea
-                                  rows={2}
-                                  value={editingText}
-                                  onChange={(e) =>
-                                    setEditingText(e.target.value)
-                                  }
-                                />
-                                <div className="flex items-center gap-2 text-xs">
-                                  <Button
-                                    type="button"
-                                    disabled={editBusy}
-                                    onClick={() => saveEditComment(r)}
-                                  >
-                                    {editBusy ? "Saving…" : "Save"}
-                                  </Button>
+                              {replyEditing ? (
+                                <div className="space-y-2">
+                                  <Textarea
+                                    rows={2}
+                                    value={editingText}
+                                    onChange={(e) =>
+                                      setEditingText(e.target.value)
+                                    }
+                                  />
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <Button
+                                      type="button"
+                                      disabled={editBusy}
+                                      onClick={() => saveEditComment(r)}
+                                    >
+                                      {editBusy ? "Saving…" : "Save"}
+                                    </Button>
+                                    <button
+                                      type="button"
+                                      className="text-slate-500 hover:text-slate-700"
+                                      onClick={cancelEditComment}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="whitespace-pre-line text-sm text-slate-800">
+                                  {r.text}
+                                </p>
+                              )}
+
+                              <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                                {isOwnerUser && !replyIsOwner && (
                                   <button
                                     type="button"
-                                    className="text-slate-500 hover:text-slate-700"
-                                    onClick={cancelEditComment}
+                                    onClick={() => replyAsOwnerTo(r)}
+                                    className="font-medium hover:text-slate-700"
                                   >
-                                    Cancel
+                                    Reply as owner
                                   </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <p className="whitespace-pre-line text-slate-800">
-                                {r.text}
-                              </p>
-                            )}
+                                )}
 
-                            {replyIsMine && !replyEditing && (
-                              <div className="mt-1 flex gap-3 text-[11px] text-slate-500">
-                                <button
-                                  type="button"
-                                  onClick={() => startEditComment(r)}
-                                  className="font-medium hover:text-slate-700"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteComment(r)}
-                                  className="font-medium text-red-500 hover:text-red-700"
-                                >
-                                  Delete
-                                </button>
+                                {replyIsMine && !replyEditing && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditComment(r)}
+                                      className="font-medium hover:text-slate-700"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteComment(r)}
+                                      className="font-medium text-red-500 hover:text-red-700"
+                                    >
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="min-h-[100px]">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Private inquiries
+          </h2>
+          <PrivateMessagingPanel
+            projectId={id}
+            projectOwner={project?.owner_username}
+          />
+        </div>
       </div>
     </div>
   );

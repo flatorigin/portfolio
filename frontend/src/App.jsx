@@ -5,6 +5,7 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { Container, Button, GhostButton } from "./ui";
 import { logout } from "./auth";
+import GlobalInbox from "./components/GlobalInbox";
 
 export default function App() {
   const navigate = useNavigate();
@@ -18,7 +19,9 @@ export default function App() {
         to={to}
         className={
           "rounded-xl px-3 py-1.5 text-sm " +
-          (active ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100")
+          (active
+            ? "bg-slate-900 text-white"
+            : "text-slate-700 hover:bg-slate-100")
         }
       >
         {children}
@@ -31,11 +34,20 @@ export default function App() {
       <header className="border-b border-slate-200 bg-white">
         <Container className="py-3">
           <nav className="flex items-center gap-2">
-            <Link to="/" className="mr-4 text-base font-bold tracking-tight text-slate-900">Portfolio</Link>
+            <Link
+              to="/"
+              className="mr-4 text-base font-bold tracking-tight text-slate-900"
+            >
+              Portfolio
+            </Link>
+
             <NavLink to="/">Explore</NavLink>
             <NavLink to="/profile/edit">Edit Profile</NavLink>
             <NavLink to="/dashboard">Dashboard</NavLink>
+
             <div className="ml-auto flex items-center gap-2">
+              {authed && <GlobalInbox />}
+
               {!authed ? (
                 <>
                   <GhostButton as="a">
@@ -61,13 +73,11 @@ export default function App() {
         </Container>
       </header>
 
-      <main>
-        <Container className="py-6">
+      <main className="py-6">
+        <Container>
           <Outlet />
         </Container>
       </main>
     </div>
   );
 }
-
-

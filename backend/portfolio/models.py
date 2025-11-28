@@ -1,22 +1,37 @@
 # backend/portfolio/models.py
-from django.db import models
-from django.contrib.auth import get_user_model
 from io import BytesIO
 import os
+
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import models
 from PIL import Image
+
 from .utils import convert_field_file_to_webp
 
 User = get_user_model()
 
+
+def direct_message_upload_path(instance, filename):
+    """
+    Used by older migrations for PrivateMessage attachments.
+    Keep it simple & stable so existing migrations & files still work.
+    """
+    # If you later want something fancier, you can tweak this,
+    # but keep the name and signature.
+    return os.path.join("direct_messages", filename)
+    
+
 def project_cover_upload_path(instance, filename):
     return f"projects/{instance.owner_id}/{instance.id or 'new'}/cover/{filename}"
+
 
 def project_image_upload_path(instance, filename):
     # instance is ProjectImage
     return f"projects/{instance.project.owner_id}/{instance.project_id}/images/{filename}"
+
 
 class Project(models.Model):
     cover_image = models.ImageField(upload_to="project_covers/", blank=True, null=True)
@@ -45,6 +60,7 @@ class Project(models.Model):
             convert_field_file_to_webp(self.cover_image, quality=80)
         super().save(*args, **kwargs)
 
+
 class ProjectComment(models.Model):
     project = models.ForeignKey(
         "portfolio.Project",
@@ -64,6 +80,7 @@ class ProjectComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author} on {self.project} ({self.created_at:%Y-%m-%d})"
+
 
 class ProjectImage(models.Model):
     project = models.ForeignKey(
@@ -89,6 +106,7 @@ class ProjectImage(models.Model):
         # Current file name + extension
         current_name = self.image.name
         root, ext = os.path.splitext(current_name.lower())
+
 
         # Already webp? nothing to do
         if ext == ".webp":
@@ -127,3 +145,59 @@ class ProjectImage(models.Model):
             self._convert_image_to_webp()
 
         super().save(*args, **kwargs)
+
+
+class MessageThread(models.Model):
+    project = models.ForeignKey(
+        Project, related_name="message_threads", on_delete=models.CASCADE
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="owned_threads",
+        on_delete=models.CASCADE,
+    )
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="client_threads",
+        on_delete=models.CASCADE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "client"],
+                name="unique_project_client_thread",
+            )
+        ]
+
+    def __str__(self):
+        return f"Thread project={self.project_id} client={self.client_id}"
+
+
+def message_attachment_upload_path(instance, filename):
+    thread = instance.thread
+    return f"messages/{thread.owner_id}/{thread.project_id}/{thread.client_id}/{filename}"
+
+
+class PrivateMessage(models.Model):
+    thread = models.ForeignKey(
+        MessageThread, related_name="messages", on_delete=models.CASCADE
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="sent_messages", on_delete=models.CASCADE
+    )
+    text = models.TextField(blank=True)
+    attachment = models.FileField(
+        upload_to=message_attachment_upload_path, blank=True, null=True
+    )
+    attachment_name = models.CharField(max_length=255, blank=True, default="")
+    attachment_type = models.CharField(max_length=50, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Message<{self.id}> in thread {self.thread_id}"
