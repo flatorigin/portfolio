@@ -9,7 +9,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("accounts", "0003_profile_bio_profile_coverage_radius_miles_and_more"),
         ("portfolio", "0004_projectcomment"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
