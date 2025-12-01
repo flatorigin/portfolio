@@ -1,3 +1,6 @@
+// =======================================
+// file: frontend/src/components/PrivateMessagingPanel.jsx
+// =======================================
 import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Button, Card, Textarea } from "../ui";
@@ -16,7 +19,10 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
   const [attachment, setAttachment] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const canSend = authed && thread;
+  // ✅ allow send as long as user is authed and has text or attachment;
+  // thread will be created lazily in handleSend.
+  const canSend =
+    authed && (messageText.trim().length > 0 || !!attachment);
 
   const validateAttachment = useCallback((file) => {
     if (!file) return true;
@@ -63,21 +69,24 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
     }
   }, [authed, projectId]);
 
-  const fetchMessages = useCallback(async (activeThread) => {
-    const current = activeThread || thread;
-    if (!current) return;
-    setLoading(true);
-    try {
-      const { data } = await api.get(
-        `/projects/${projectId}/threads/${current.id}/messages/`
-      );
-      setMessages(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setMessages([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, thread]);
+  const fetchMessages = useCallback(
+    async (activeThread) => {
+      const current = activeThread || thread;
+      if (!current) return;
+      setLoading(true);
+      try {
+        const { data } = await api.get(
+          `/projects/${projectId}/threads/${current.id}/messages/`
+        );
+        setMessages(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setMessages([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [projectId, thread]
+  );
 
   useEffect(() => {
     fetchThread();
@@ -137,28 +146,35 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
 
   const counterpart = useMemo(() => {
     if (!thread) return projectOwner ? { name: projectOwner } : null;
-    const participant = thread.owner_username === projectOwner
-      ? thread.client_profile || { display_name: thread.client_username }
-      : thread.owner_profile || { display_name: thread.owner_username };
+    const participant =
+      thread.owner_username === projectOwner
+        ? thread.client_profile || { display_name: thread.client_username }
+        : thread.owner_profile || { display_name: thread.owner_username };
     return participant;
   }, [projectOwner, thread]);
 
   return (
-    <Card className="p-4 min-h-[100px]">
+    <Card className="min-h-[100px] p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-slate-900">Private messages</div>
+          <div className="text-sm font-semibold text-slate-900">
+            Private messages
+          </div>
           <p className="text-xs text-slate-500">
             Only visible to you and the project owner.
           </p>
         </div>
         {counterpart?.display_name && (
-          <div className="text-xs text-slate-500">Chatting with {counterpart.display_name}</div>
+          <div className="text-xs text-slate-500">
+            Chatting with {counterpart.display_name}
+          </div>
         )}
       </div>
 
       {!authed ? (
-        <p className="text-sm text-slate-600">Login to start a private conversation.</p>
+        <p className="text-sm text-slate-600">
+          Login to start a private conversation.
+        </p>
       ) : (
         <div className="space-y-3">
           <div className="max-h-64 space-y-3 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -170,12 +186,23 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
               </p>
             ) : (
               messages.map((m) => (
-                <div key={m.id} className="space-y-1 rounded-lg bg-white p-2 text-xs text-slate-700 shadow-sm">
+                <div
+                  key={m.id}
+                  className="space-y-1 rounded-lg bg-white p-2 text-xs text-slate-700 shadow-sm"
+                >
                   <div className="flex items-center justify-between text-[11px] text-slate-500">
-                    <span className="font-semibold text-slate-800">{m.sender_username}</span>
-                    <span>{new Date(m.created_at).toLocaleString()}</span>
+                    <span className="font-semibold text-slate-800">
+                      {m.sender_username}
+                    </span>
+                    <span>
+                      {m.created_at
+                        ? new Date(m.created_at).toLocaleString()
+                        : ""}
+                    </span>
                   </div>
-                  {m.text ? <p className="whitespace-pre-line text-sm">{m.text}</p> : null}
+                  {m.text ? (
+                    <p className="whitespace-pre-line text-sm">{m.text}</p>
+                  ) : null}
                   {m.attachment_url && (
                     <a
                       className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
@@ -195,7 +222,10 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
             <Textarea
               rows={2}
               value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
+              onChange={(e) => {
+                setError("");
+                setMessageText(e.target.value);
+              }}
               placeholder="Ask for a private project detail…"
               className="min-h-[100px]"
             />
@@ -215,14 +245,26 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
                 />
                 Attach file
               </label>
-              {attachment && <span className="text-slate-700">{attachment.name}</span>}
+              {attachment && (
+                <span className="text-slate-700">{attachment.name}</span>
+              )}
               {uploadProgress > 0 && uploadProgress < 100 && (
-                <span className="text-slate-500">Uploading {uploadProgress}%</span>
+                <span className="text-slate-500">
+                  Uploading {uploadProgress}%
+                </span>
               )}
               {error && <span className="text-red-600">{error}</span>}
             </div>
-            <Button type="submit" disabled={!canSend || sending} className="w-full justify-center">
-              {sending ? "Sending…" : thread ? "Send private message" : "Start private chat"}
+            <Button
+              type="submit"
+              disabled={!canSend || sending}
+              className="w-full justify-center"
+            >
+              {sending
+                ? "Sending…"
+                : thread
+                ? "Send private message"
+                : "Start private chat"}
             </Button>
           </form>
         </div>
