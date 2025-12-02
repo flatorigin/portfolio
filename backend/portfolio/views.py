@@ -296,17 +296,20 @@ class InboxThreadListView(generics.ListAPIView):
 
 class ThreadActionView(generics.GenericAPIView):
     """
-    POST /api/inbox/threads/<id>/accept/
-    POST /api/inbox/threads/<id>/block/
-    POST /api/inbox/threads/<id>/ignore/
+    POST /api/inbox/threads/<thread_id>/accept/
+    POST /api/inbox/threads/<thread_id>/block/
+    POST /api/inbox/threads/<thread_id>/ignore/
     """
 
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = MessageThreadSerializer  # for responses
+    serializer_class = MessageThreadSerializer
 
     def get_thread(self):
         thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
-        if not thread.user_is_participant(self.request.user):
+        user = self.request.user
+
+        # Make sure the current user is one of the participants
+        if user not in (thread.owner, thread.client):
             raise permissions.PermissionDenied("Not your thread.")
         return thread
 
@@ -315,17 +318,36 @@ class ThreadActionView(generics.GenericAPIView):
         thread = self.get_thread()
         user = request.user
 
+        # --- ACCEPT: mark this user as having accepted the conversation ---
         if action == "accept":
-            thread.mark_accepted(user)
+            # These fields must exist on your MessageThread model
+            # (BooleanFields with default=False)
+            if hasattr(thread, "owner_has_accepted") and hasattr(thread, "client_has_accepted"):
+                if user == thread.owner:
+                    thread.owner_has_accepted = True
+                elif user == thread.client:
+                    thread.client_has_accepted = True
+                thread.save(update_fields=["owner_has_accepted", "client_has_accepted"])
+            # if you haven't added those fields yet, this will just be a no-op
+
+        # --- BLOCK: block the other profile in this thread ---
         elif action == "block":
-            thread.block_other(user)
+            if hasattr(thread, "owner_blocked_client") and hasattr(thread, "client_blocked_owner"):
+                if user == thread.owner:
+                    thread.owner_blocked_client = True
+                elif user == thread.client:
+                    thread.client_blocked_owner = True
+                thread.save(update_fields=["owner_blocked_client", "client_blocked_owner"])
+
+        # --- IGNORE: treat as dismissing request (optional archive flags) ---
         elif action == "ignore":
-            # archive for this user, keep unaccepted
-            if user.id == thread.owner_id:
-                thread.owner_archived = True
-            elif user.id == thread.client_id:
-                thread.client_archived = True
-            thread.save(update_fields=["owner_archived", "client_archived"])
+            if hasattr(thread, "owner_archived") and hasattr(thread, "client_archived"):
+                if user == thread.owner:
+                    thread.owner_archived = True
+                elif user == thread.client:
+                    thread.client_archived = True
+                thread.save(update_fields=["owner_archived", "client_archived"])
+
         else:
             return Response(
                 {"detail": "Unknown action."},

@@ -150,10 +150,8 @@ export default function GlobalInbox() {
               {threads.map((t) => {
                 const currentUsername = localStorage.getItem("username");
 
-                // Prefer the backend-provided `counterpart` if you added it to the serializer
                 let counterpart = t.counterpart || null;
 
-                // Fallback for old shape (before counterpart field existed)
                 if (!counterpart) {
                   const defaultOwner =
                     t.owner_profile || { display_name: t.owner_username, username: t.owner_username };
@@ -169,11 +167,6 @@ export default function GlobalInbox() {
                 const displayName =
                   counterpart.display_name || counterpart.username || "User";
 
-                // Adjust this to whatever your PublicProfile route is (likely `/profile/:username`)
-                const profileHref = counterpart.username
-                  ? `/profile/${counterpart.username}`
-                  : null;
-
                 const latest = t.latest_message || null;
                 const latestPreview =
                   latest?.text ||
@@ -185,55 +178,33 @@ export default function GlobalInbox() {
                     key={t.id}
                     className="rounded-xl border border-slate-100 p-2 hover:border-slate-200 hover:bg-slate-50"
                   >
-                    {/* Clicking the main row opens the conversation thread */}
+                    {/* Clicking row opens conversation */}
                     <button
                       type="button"
-                      className="flex w-full items-center gap-3 text-left"
+                      className="flex w-full flex-col items-start text-left"
                       onClick={() => {
                         setOpen(false);
-                        // Go to the DM page, not project
                         navigate(`/messages/${t.id}`);
                       }}
                     >
-                      <Avatar profile={counterpart} />
-                      <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="truncate text-sm font-semibold text-slate-800">
-                            {displayName}
-                          </div>
-                          {t.is_request && (
-                            <span className="rounded-full bg-amber-100 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                              Request
-                            </span>
-                          )}
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <div className="truncate text-sm font-semibold text-slate-800">
+                          {displayName}
                         </div>
+                        {t.is_request && (
+                          <span className="rounded-full bg-amber-100 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                            Request
+                          </span>
+                        )}
+                      </div>
 
-                        {/* who spoke last + preview */}
-                        <div className="truncate text-[11px] text-slate-500">
-                          {latest?.sender_username &&
-                          latest.sender_username !== currentUsername
-                            ? `${latest.sender_username}: ${latestPreview}`
-                            : latestPreview}
-                        </div>
+                      <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                        {latest?.sender_username &&
+                        latest.sender_username !== currentUsername
+                          ? `${latest.sender_username}: ${latestPreview}`
+                          : latestPreview}
                       </div>
                     </button>
-
-                    {/* Small link to the other user's profile */}
-                    {profileHref && (
-                      <div className="mt-1 text-right text-[10px]">
-                        <Link
-                          to={profileHref}
-                          className="text-blue-600 hover:underline"
-                          onClick={(e) => {
-                            // Don't trigger the "open thread" button above
-                            e.stopPropagation();
-                            setOpen(false);
-                          }}
-                        >
-                          View profile
-                        </Link>
-                      </div>
-                    )}
                   </div>
                 );
               })}
