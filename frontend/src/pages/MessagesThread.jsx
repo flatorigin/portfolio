@@ -1,200 +1,422 @@
-import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+// =======================================
+// file: frontend/src/pages/MessagesThread.jsx
+// Inbox page: left = people list, right = conversation
+// =======================================
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Card, Button, Textarea } from "../ui";
 
 export default function MessagesThread() {
-  const { threadId } = useParams();
-  const navigate = useNavigate();
-  const [thread, setThread] = useState(null);
+  // optional route: /messages/:threadId
+  const { threadId: threadIdParam } = useParams();
+
+  const [threads, setThreads] = useState([]);
+  const [activeThreadId, setActiveThreadId] = useState(null);
+
   const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-  const [text, setText] = useState("");
 
-  const authed = !!localStorage.getItem("access");
+  const [loadingThreads, setLoadingThreads] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
-  const fetchThread = useCallback(async () => {
-    try {
-      const { data } = await api.get(`/inbox/threads/`);
-      const t = (data || []).find((x) => x.id === Number(threadId));
-      setThread(t || null);
-    } catch {
-      setThread(null);
-    }
-  }, [threadId]);
+  const [readThreadIds, setReadThreadIds] = useState(new Set());
 
-  const fetchMessages = useCallback(async () => {
-    if (!threadId) return;
-    try {
-      const { data } = await api.get(
-        `/projects/0/threads/${threadId}/messages/`
-      );
-      setMessages(Array.isArray(data) ? data : []);
-    } catch {
-      setMessages([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [threadId]);
+  // Logged-in user (so logic works for both Mokko & Artin)
+  const [meUsername, setMeUsername] = useState("");
+
+  // ---------- Fetch current user (me) once ----------
 
   useEffect(() => {
-    if (!authed) return;
-    fetchThread();
-    fetchMessages();
-    const id = setInterval(fetchMessages, 5000);
+    (async () => {
+      try {
+        const { data } = await api.get("/auth/users/me/");
+        setMeUsername(data.username || "");
+      } catch (err1) {
+        try {
+          const { data } = await api.get("/users/me/");
+          setMeUsername(data.username || data.user?.username || "");
+        } catch (err2) {
+          console.warn("[MessagesThread] failed to fetch me", err1, err2);
+          const localUsername = localStorage.getItem("username") || "";
+          setMeUsername(localUsername);
+        }
+      }
+    })();
+  }, []);
+
+  const meLower = (meUsername || "").toLowerCase();
+
+  // ---------- Helpers ----------
+
+  // The currently selected conversation
+  const activeThread = useMemo(
+    () =>
+      threads.find((t) => String(t.id) === String(activeThreadId)) || null,
+    [threads, activeThreadId]
+  );
+
+  // Mark thread as read (local session only)
+  const markThreadRead = (id) => {
+    setReadThreadIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
+
+  // "Counterpart" = the other person in this thread (for left list + header)
+  const counterpartFor = (thread) => {
+    if (!thread) return null;
+
+    const ownerProfile = thread.owner_profile || {};
+    const clientProfile = thread.client_profile || {};
+
+    const ownerUsernameRaw =
+      thread.owner_username || ownerProfile.username || "";
+    const clientUsernameRaw =
+      thread.client_username || clientProfile.username || "";
+
+    const ownerLower = ownerUsernameRaw.toLowerCase();
+    const clientLower = clientUsernameRaw.toLowerCase();
+
+    const ownerDisplay =
+      ownerProfile.display_name || ownerUsernameRaw || "User";
+    const clientDisplay =
+      clientProfile.display_name || clientUsernameRaw || "User";
+
+    // If I'm the owner, counterpart is the client
+    if (meLower && ownerLower === meLower) {
+      return {
+        username: clientUsernameRaw,
+        display_name: clientDisplay,
+      };
+    }
+
+    // If I'm the client, counterpart is the owner
+    if (meLower && clientLower === meLower) {
+      return {
+        username: ownerUsernameRaw,
+        display_name: ownerDisplay,
+      };
+    }
+
+    // Fallback: treat client as counterpart (typical owner inbox case)
+    return {
+      username: clientUsernameRaw,
+      display_name: clientDisplay,
+    };
+  };
+
+  const counterpart = useMemo(
+    () => counterpartFor(activeThread),
+    [activeThread, meLower]
+  );
+
+  // ---------- Fetch threads (left column list) ----------
+
+  const fetchThreads = useCallback(async () => {
+    setLoadingThreads(true);
+    try {
+      const { data } = await api.get("/inbox/threads/");
+      const arr = Array.isArray(data) ? data : [];
+      setThreads(arr);
+
+      // choose which thread to show:
+      setActiveThreadId((prev) => {
+        if (prev) return prev;
+        if (threadIdParam) return Number(threadIdParam);
+        return arr[0]?.id ?? null;
+      });
+    } catch (err) {
+      console.error("[MessagesThread] failed to load threads", err);
+      setThreads([]);
+    } finally {
+      setLoadingThreads(false);
+    }
+  }, [threadIdParam]);
+
+  useEffect(() => {
+    fetchThreads();
+  }, [fetchThreads]);
+
+  // ---------- Fetch messages (right column body) ----------
+
+  const fetchMessages = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!activeThread) {
+        setMessages([]);
+        return;
+      }
+
+      const projectId = activeThread.project;
+      if (!projectId) {
+        setMessages([]);
+        return;
+      }
+
+      if (!silent) {
+        setLoadingMessages(true);
+      }
+
+      try {
+        const { data } = await api.get(
+          `/projects/${projectId}/threads/${activeThread.id}/messages/`
+        );
+        const arr = Array.isArray(data) ? data : [];
+
+        // Only update state if there's actually a change
+        setMessages((prev) => {
+          if (
+            prev.length === arr.length &&
+            prev[prev.length - 1]?.id === arr[arr.length - 1]?.id
+          ) {
+            return prev; // no change → no re-render
+          }
+          return arr;
+        });
+      } catch (err) {
+        console.error("[MessagesThread] failed to load messages", err);
+        if (!silent) {
+          setMessages([]);
+        }
+      } finally {
+        if (!silent) {
+          setLoadingMessages(false);
+        }
+      }
+    },
+    [activeThread]
+  );
+
+  useEffect(() => {
+    if (!activeThread) {
+      setMessages([]);
+      return;
+    }
+
+    // Initial load with spinner
+    fetchMessages({ silent: false });
+
+    // Background polling every 8s, silently
+    const id = setInterval(() => {
+      fetchMessages({ silent: true });
+    }, 8000);
+
     return () => clearInterval(id);
-  }, [authed, fetchThread, fetchMessages]);
+  }, [activeThread, fetchMessages]);
 
-  if (!authed) {
-    return (
-      <div className="p-4 text-sm text-slate-700">
-        Please log in to view your messages.
-      </div>
-    );
-  }
+  // ---------- Send new message into active conversation ----------
 
-  const counterpart = thread?.counterpart || null;
-
-  async function handleSend(e) {
+  const handleSend = async (e) => {
     e.preventDefault();
-    setError("");
-    if (!text.trim()) return;
+    if (!activeThread || !messageText.trim()) return;
+
+    const projectId = activeThread.project;
+    if (!projectId) return;
 
     setSending(true);
     try {
       await api.post(
-        `/projects/0/threads/${threadId}/messages/`,
-        { text: text.trim() },
-        { headers: { "Content-Type": "application/json" } }
+        `/projects/${projectId}/threads/${activeThread.id}/messages/`,
+        { text: messageText.trim() }
       );
-      setText("");
+      setMessageText("");
       await fetchMessages();
-    } catch {
-      setError("Failed to send message.");
+    } catch (err) {
+      console.error("[MessagesThread] send error", err);
+      alert("Failed to send message.");
     } finally {
       setSending(false);
     }
-  }
+  };
 
-  async function handleBlock() {
-    if (!window.confirm("Block this profile? You will no longer receive messages from them.")) {
-      return;
-    }
-    try {
-      await api.post(`/inbox/threads/${threadId}/block/`);
-      alert("Profile blocked. This chat will be archived.");
-      navigate("/"); // or redirect to /settings/blocked
-    } catch {
-      alert("Failed to block this profile.");
-    }
-  }
-
-  async function handleAccept() {
-    try {
-      await api.post(`/inbox/threads/${threadId}/accept/`);
-      await fetchThread();
-    } catch {
-      alert("Failed to accept request.");
-    }
-  }
-
-  async function handleIgnore() {
-    try {
-      await api.post(`/inbox/threads/${threadId}/ignore/`);
-      navigate("/");
-    } catch {
-      alert("Failed to ignore request.");
-    }
-  }
+  // ---------- Render ----------
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <header className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-slate-500">
-            <Link to="/" className="hover:underline">
-              Home
-            </Link>{" "}
-            / Messages
+    // 🔹 Two columns, always side by side
+    <div className="flex items-start gap-4">
+      {/* LEFT COLUMN: fixed width */}
+      <div className="w-64 shrink-0">
+        <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
+          <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Conversations
           </div>
-          <h1 className="text-xl font-semibold text-slate-900">
-            {counterpart?.display_name || counterpart?.username || "Conversation"}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {thread?.is_request && (
-            <>
-              <Button size="sm" onClick={handleAccept}>
-                Accept
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleIgnore}>
-                Ignore
-              </Button>
-            </>
-          )}
-          <Button size="sm" variant="outline" onClick={handleBlock}>
-            Block this profile
-          </Button>
-        </div>
-      </header>
 
-      <Card className="min-h-[260px] max-h-[60vh] overflow-y-auto p-3">
-        {loading ? (
-          <p className="text-xs text-slate-500">Loading messages…</p>
-        ) : messages.length === 0 ? (
-          <p className="text-xs text-slate-500">No messages yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className="space-y-1 rounded-lg bg-slate-50 p-2 text-xs text-slate-700"
-              >
-                <div className="flex items-center justify-between text-[11px] text-slate-500">
-                  <span className="font-semibold text-slate-800">
-                    {m.sender_username}
-                  </span>
-                  <span>
-                    {m.created_at
-                      ? new Date(m.created_at).toLocaleString()
-                      : ""}
-                  </span>
-                </div>
-                {m.text && (
-                  <p className="whitespace-pre-line text-sm">{m.text}</p>
-                )}
-                {m.attachment_url && (
-                  <a
-                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-                    href={m.attachment_url}
-                    target="_blank"
-                    rel="noreferrer"
+          <div className="h-full overflow-y-auto">
+            {loadingThreads ? (
+              <div className="p-3 text-xs text-slate-500">Loading…</div>
+            ) : threads.length === 0 ? (
+              <div className="p-3 text-xs text-slate-500">
+                No private conversations yet.
+              </div>
+            ) : (
+              threads.map((t) => {
+                const cp = counterpartFor(t);
+                const name = cp?.display_name || cp?.username || "User";
+
+                const latest = t.latest_message || null;
+
+                // Date stamp (last message date)
+                const dateLabel = latest?.created_at
+                  ? new Date(latest.created_at).toLocaleDateString()
+                  : "";
+
+                // Is the latest message from me?
+                const latestFromMe =
+                  latest?.sender_username &&
+                  latest.sender_username.toLowerCase() === meLower;
+
+                const hasBeenRead = readThreadIds.has(t.id);
+                const isUnread = !hasBeenRead && !latestFromMe && !!latest;
+
+                const isActive = String(t.id) === String(activeThreadId);
+
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveThreadId(t.id);
+                      markThreadRead(t.id);
+                    }}
+                    className={[
+                      "block w-full border-b border-slate-100 px-3 py-2 text-left text-sm",
+                      isActive ? "bg-slate-100" : "hover:bg-slate-50",
+                    ].join(" ")}
                   >
-                    📎 {m.attachment_name || "Attachment"}
-                  </a>
+                    {/* Name: bold if unread, same size */}
+                    <div
+                      className={
+                        "truncate text-xs " +
+                        (isUnread
+                          ? "font-semibold text-slate-900"
+                          : "font-normal text-slate-800")
+                      }
+                    >
+                      {name}
+                    </div>
+
+                    {/* Date stamp under the name */}
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {dateLabel || "—"}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* RIGHT COLUMN: flex-1 main conversation area */}
+      <div className="flex-1">
+        <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
+          {!activeThread ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+              Select a conversation from the left.
+            </div>
+          ) : (
+            <>
+              {/* Header */}
+              <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
+                <div className="text-sm font-semibold text-slate-900">
+                  {counterpart ? (
+                    <Link
+                      to={
+                        counterpart.username
+                          ? `/profiles/${counterpart.username}`
+                          : "#"
+                      }
+                      className="text-slate-900 hover:underline"
+                    >
+                      {counterpart.display_name || counterpart.username || "Conversation"}
+                    </Link>
+                  ) : (
+                    "Conversation"
+                  )}
+                </div>
+              </div>
+
+              {/* MESSAGE BODY: other person left, me right */}
+              <div className="mb-3 flex-1 overflow-y-auto rounded-xl bg-slate-50 p-3">
+                {loadingMessages ? (
+                  <p className="text-xs text-slate-500">Loading messages…</p>
+                ) : messages.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    No messages yet. Say hi!
+                  </p>
+                ) : (
+                  messages.map((m) => {
+                    if (!activeThread) return null;
+
+                    const fromMe =
+                      m.sender_username &&
+                      m.sender_username.toLowerCase() === meLower;
+
+                    const alignClass = fromMe
+                      ? "justify-end"
+                      : "justify-start";
+
+                    const bubbleClass = fromMe
+                      ? "rounded-br-sm bg-slate-900 text-white"
+                      : "rounded-bl-sm bg-white text-slate-900";
+
+                    const timeLabel = m.created_at
+                      ? new Date(m.created_at).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
+                      : "";
+
+                    return (
+                      <div key={m.id} className={`mb-2 flex ${alignClass}`}>
+                        <div
+                          className={`max-w-[70%] rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}
+                        >
+                          {m.text && (
+                            <p className="whitespace-pre-wrap">{m.text}</p>
+                          )}
+                          <div
+                            className={
+                              "mt-1 text-[10px] " +
+                              (fromMe
+                                ? "text-slate-300 text-right"
+                                : "text-slate-500")
+                            }
+                          >
+                            {timeLabel}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </Card>
 
-      <Card className="p-3">
-        <form onSubmit={handleSend} className="space-y-2">
-          <Textarea
-            rows={3}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Write a message…"
-          />
-          {error && <p className="text-xs text-red-600">{error}</p>}
-          <Button type="submit" disabled={sending || !text.trim()}>
-            {sending ? "Sending…" : "Send"}
-          </Button>
-        </form>
-      </Card>
+              {/* INPUT */}
+              <form onSubmit={handleSend} className="space-y-2">
+                <Textarea
+                  rows={2}
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  placeholder="Type a message…"
+                  className="min-h-[70px]"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="submit"
+                    disabled={!messageText.trim() || sending}
+                  >
+                    {sending ? "Sending…" : "Send"}
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

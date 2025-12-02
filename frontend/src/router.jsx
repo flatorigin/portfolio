@@ -10,6 +10,8 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import PublicProfile from "./pages/PublicProfile";
+import MessagesThread from "./pages/MessagesThread";
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +22,8 @@ export const router = createBrowserRouter([
       { path: "profile/edit", element: <ProfileEdit /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "projects/:id", element: <ProjectDetail /> },
+      { path: "messages/:threadId?", element: <MessagesThread /> },
+      { path: "profiles/:username", element: <PublicProfile /> },
       { path: "login", element: <Login /> },
       { path: "register", element: <Register /> },
       { path: "forgot-password", element: <ForgotPassword /> },
