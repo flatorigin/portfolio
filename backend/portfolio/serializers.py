@@ -1,4 +1,3 @@
-# backend/portfolio/serializers.py
 from rest_framework import serializers
 from .models import ProjectComment, Project, ProjectImage, MessageThread, PrivateMessage
 from accounts.serializers import ProfileSerializer
@@ -21,6 +20,7 @@ class ProjectImageSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("project", "created_at")
+
 
 class ProjectCommentSerializer(serializers.ModelSerializer):
     author_username = serializers.ReadOnlyField(source="author.username")
@@ -51,6 +51,7 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
             and request.user.is_authenticated
             and request.user == obj.author
         )
+
 
 class ProjectSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="owner.username", read_only=True)
@@ -121,6 +122,7 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, attrs):
+        # Important: we use initial_data here to access the raw file
         attachment = self.initial_data.get("attachment")
         text = attrs.get("text", "").strip()
 
@@ -149,16 +151,57 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
 
 
 class MessageThreadSerializer(serializers.ModelSerializer):
+    """
+    Direct-message thread serializer.
+
+    - Still exposes `project` & `project_title` as optional metadata
+      (origin of the contact), but the UX is user-centric.
+    - Adds:
+        - `latest_message`   → preview for inbox
+        - `unread_count`     → per-user unread count (stubbed as 0 for now)
+        - `is_request`       → True if current user has not accepted yet
+        - `counterpart`      → condensed other-user info for UI
+    """
+
     project_title = serializers.ReadOnlyField(source="project.title")
     owner_username = serializers.ReadOnlyField(source="owner.username")
     client_username = serializers.ReadOnlyField(source="client.username")
-    latest_message = serializers.SerializerMethodField()
+
     owner_profile = ProfileSerializer(source="owner.profile", read_only=True)
     client_profile = ProfileSerializer(source="client.profile", read_only=True)
+
+    latest_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    is_request = serializers.SerializerMethodField()
+    counterpart = serializers.SerializerMethodField()
 
     class Meta:
         model = MessageThread
         fields = [
+            "id",
+            # optional origin project metadata (can be ignored by frontend)
+            "project",
+            "project_title",
+
+            # participants
+            "owner",
+            "owner_username",
+            "owner_profile",
+            "client",
+            "client_username",
+            "client_profile",
+
+            # meta
+            "created_at",
+            "updated_at",
+
+            # inbox helpers
+            "latest_message",
+            "unread_count",
+            "is_request",
+            "counterpart",
+        ]
+        read_only_fields = [
             "id",
             "project",
             "project_title",
@@ -171,23 +214,102 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "latest_message",
-        ]
-        read_only_fields = [
-            "id",
-            "project",
-            "owner",
-            "owner_username",
-            "owner_profile",
-            "client",
-            "client_username",
-            "client_profile",
-            "created_at",
-            "updated_at",
-            "latest_message",
+            "unread_count",
+            "is_request",
+            "counterpart",
         ]
 
+    # ---- helpers ----
+
     def get_latest_message(self, obj):
-        msg = obj.messages.order_by("-created_at").first()
+        # Use the property if defined, otherwise fallback to query
+        msg = getattr(obj, "latest_message", None)
+        if msg is None:
+            msg = obj.messages.order_by("-created_at").first()
         if not msg:
             return None
         return PrivateMessageSerializer(msg, context=self.context).data
+
+    def get_unread_count(self, obj):
+        """
+        Stub for now: always 0.
+        If you later add per-user read tracking on messages, compute it here.
+
+        Example (if you add a method on the model):
+            user = self.context["request"].user
+            return obj.unread_count_for(user)
+        """
+        return 0
+
+    def get_is_request(self, obj):
+        """
+        True if, for the current user, this thread is still a "message request"
+        (i.e. they haven't accepted it yet).
+        Requires the model to have `owner_has_accepted` and `client_has_accepted`.
+        """
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False  # inbox is auth-only, but be safe
+
+        user = request.user
+        uid = user.id
+
+        # If model doesn't yet have these flags, default to False
+        owner_accepted = getattr(obj, "owner_has_accepted", True)
+        client_accepted = getattr(obj, "client_has_accepted", True)
+
+        if uid == obj.owner_id:
+            return not bool(owner_accepted)
+        if uid == obj.client_id:
+            return not bool(client_accepted)
+        # non-participant: treat as not a request
+        return False
+
+    def get_counterpart(self, obj):
+        """
+        Return a compact representation of the *other* user in this thread,
+        with fields tuned for the GlobalInbox UI:
+
+        {
+            "username": "...",
+            "display_name": "...",
+            "avatar_url": "..."
+        }
+        """
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if not user or not user.is_authenticated:
+            # default to owner as counterpart if anonymous (should not happen)
+            other = obj.client
+        else:
+            if user.id == obj.owner_id:
+                other = obj.client
+            elif user.id == obj.client_id:
+                other = obj.owner
+            else:
+                # not a participant; default to owner
+                other = obj.owner
+
+        prof = getattr(other, "profile", None)
+        # We rely on ProfileSerializer to expose avatar/urls, but we keep this simple
+        avatar_url = None
+        display_name = None
+
+        if prof is not None:
+            # ProfileSerializer usually exposes display_name and avatar_url;
+            # but to avoid an extra serializer call, we read from model directly.
+            display_name = getattr(prof, "display_name", "") or other.username
+            # Try both logo and avatar (depends on your ProfileSerializer)
+            if getattr(prof, "logo", None) and hasattr(prof.logo, "url"):
+                avatar_url = prof.logo.url
+            elif getattr(prof, "avatar", None) and hasattr(prof.avatar, "url"):
+                avatar_url = prof.avatar.url
+        else:
+            display_name = other.username
+
+        return {
+            "username": other.username,
+            "display_name": display_name,
+            "avatar_url": avatar_url,
+        }

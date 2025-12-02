@@ -56,6 +56,24 @@ export default function PublicProfile(){
             `}</style>
           </form>
         )}
+        <div style={{ marginTop: 12 }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { data } = await api.post(`/inbox/threads/start/`, {
+                          username,
+                        });
+                        if (data?.id) {
+                          window.location.href = `/messages/${data.id}`;
+                        }
+                      } catch (err) {
+                        alert("Unable to start private chat.");
+                      }
+                    }}
+                  >
+                    Message this profile
+                  </button>
+                </div>
       </section>
 
       <section style={{marginTop:16}}>

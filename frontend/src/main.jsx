@@ -12,6 +12,7 @@ import ProjectDetail from "./pages/ProjectDetail.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";    
 import ResetPassword from "./pages/ResetPassword.jsx";      
+import MessagesThread from "./pages/MessagesThread";
 
 function RequireAuth({ children }) {
   return localStorage.getItem("access") ? children : <Navigate to="/login" />;
@@ -54,6 +55,7 @@ createRoot(document.getElementById("root")).render(
 
         {/* fallback */}
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/messages/:threadId" element={<MessagesThread />} />
       </Route>
     </Routes>
   </BrowserRouter>

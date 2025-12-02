@@ -148,16 +148,7 @@ export default function GlobalInbox() {
           ) : (
             <div className="max-h-80 space-y-2 overflow-y-auto">
               {threads.map((t) => {
-                const currentUsername = localStorage.getItem("username");
-                const defaultOwner =
-                  t.owner_profile || { display_name: t.owner_username };
-                const defaultClient =
-                  t.client_profile || { display_name: t.client_username };
-                const counterpart =
-                  currentUsername && t.owner_username === currentUsername
-                    ? defaultClient
-                    : defaultOwner;
-
+                const counterpart = t.counterpart || {};
                 return (
                   <button
                     key={t.id}
@@ -165,20 +156,27 @@ export default function GlobalInbox() {
                     className="flex w-full items-center gap-3 rounded-xl border border-slate-100 px-2 py-2 text-left hover:border-slate-200 hover:bg-slate-50"
                     onClick={() => {
                       setOpen(false);
-                      navigate(`/projects/${t.project}`);
+                      navigate(`/messages/${t.id}`);
                     }}
                   >
                     <Avatar profile={counterpart} />
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-800">
-                        {counterpart.display_name ||
-                          counterpart.username ||
-                          "Company"}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-sm font-semibold text-slate-800">
+                          {counterpart.display_name ||
+                            counterpart.username ||
+                            "User"}
+                        </div>
+                        {t.is_request && (
+                          <span className="rounded-full bg-amber-100 px-2 py-[1px] text-[10px] font-semibold text-amber-700">
+                            Request
+                          </span>
+                        )}
                       </div>
                       <div className="truncate text-[11px] text-slate-500">
                         {t.latest_message?.text ||
                           t.latest_message?.attachment_name ||
-                          "Open conversation"}
+                          "No messages yet"}
                       </div>
                     </div>
                   </button>

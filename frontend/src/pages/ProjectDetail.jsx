@@ -665,15 +665,37 @@ export default function ProjectDetail() {
             </div>
           )}
         </div>
-
         <div className="min-h-[100px]">
           <h2 className="text-lg font-semibold text-slate-900">
             Private inquiries
           </h2>
-          <PrivateMessagingPanel
-            projectId={id}
-            projectOwner={project?.owner_username}
-          />
+
+          {authed ? (
+            <Card className="mt-2 p-4 space-y-2">
+              <p className="text-sm text-slate-600">
+                Start a private conversation with the project owner. The chat will live in your personal inbox.
+              </p>
+              <Button
+                onClick={async () => {
+                  try {
+                    const { data } = await api.post(`/projects/${id}/threads/`);
+                    if (data?.id) {
+                      // Go to DM view
+                      window.location.href = `/messages/${data.id}`;
+                    }
+                  } catch (err) {
+                    alert("Unable to start private chat.");
+                  }
+                }}
+              >
+                Message the owner
+              </Button>
+            </Card>
+          ) : (
+            <Card className="min-h-[100px] p-4 text-sm text-slate-600">
+              <span className="font-medium">Login</span> to contact the owner privately.
+            </Card>
+          )}
         </div>
       </div>
     </div>

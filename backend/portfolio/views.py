@@ -182,8 +182,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
 # ---------------------------------------------------
 class ProjectThreadCreateView(generics.GenericAPIView):
     """
-    Ensure a private thread exists between the requesting user and the project owner.
+    Ensure a direct-message thread exists between requesting user and project owner.
+    This is now just a DM entry point, not a project-specific thread.
+
     POST /api/projects/<pk>/threads/
+    GET  /api/projects/<pk>/threads/  (get DM, if it exists)
     """
 
     serializer_class = MessageThreadSerializer
@@ -191,29 +194,48 @@ class ProjectThreadCreateView(generics.GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         project = get_object_or_404(Project, pk=kwargs.get("pk"))
-        client = request.user
+        sender = request.user
+        receiver = project.owner
 
-        thread, created = MessageThread.objects.get_or_create(
-            project=project, client=client, defaults={"owner": project.owner}
+        if sender == receiver:
+            return Response(
+                {"detail": "You cannot start a private chat with yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create or fetch DM between sender & project owner
+        thread, created = MessageThread.get_or_create_dm(
+            sender,
+            receiver,
+            origin_project=project,
+            initiated_by=sender,
         )
-        serializer = self.get_serializer(thread, context={"request": request})
-        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        return Response(serializer.data, status=status_code)
+
+        ser = self.get_serializer(thread, context={"request": request})
+        return Response(
+            ser.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
     def get(self, request, *args, **kwargs):
         project = get_object_or_404(Project, pk=kwargs.get("pk"))
-        thread = MessageThread.objects.filter(
-            project=project, client=request.user
-        ).first()
+        user = request.user
+        if not user.is_authenticated:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+
+        owner, client = MessageThread.normalize_users(user, project.owner)
+        thread = MessageThread.objects.filter(owner=owner, client=client).first()
         if not thread:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        serializer = self.get_serializer(thread, context={"request": request})
-        return Response(serializer.data)
+
+        ser = self.get_serializer(thread, context={"request": request})
+        return Response(ser.data)
 
 
 class ThreadMessageListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/projects/<pk>/threads/<thread_id>/messages/
+        (pk is ignored, kept only for URL compatibility)
     POST /api/projects/<pk>/threads/<thread_id>/messages/
     """
 
@@ -222,34 +244,39 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_thread(self):
-        return get_object_or_404(
-            MessageThread, id=self.kwargs.get("thread_id"), project_id=self.kwargs.get("pk")
-        )
+        thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
+        user = self.request.user
+        if user not in (thread.owner, thread.client):
+            raise permissions.PermissionDenied("You are not in this conversation.")
+        if thread.is_blocked_for(user):
+            raise permissions.PermissionDenied("This conversation is blocked.")
+        return thread
 
     def get_queryset(self):
         thread = self.get_thread()
-        user = self.request.user
-        if user not in (thread.owner, thread.client):
-            return PrivateMessage.objects.none()
         return thread.messages.select_related("sender").all()
 
     def perform_create(self, serializer):
         thread = self.get_thread()
         user = self.request.user
-        if user not in (thread.owner, thread.client):
-            raise permissions.PermissionDenied("You cannot post to this thread.")
+
+        # If the *other* user blocked me, do not allow sending.
+        if thread.is_blocked_for(user):
+            raise permissions.PermissionDenied("This conversation is blocked.")
 
         message = serializer.save(sender=user, thread=thread)
-        # keep thread bumped for inbox
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
         return message
 
 
+
 class InboxThreadListView(generics.ListAPIView):
     """
     GET /api/inbox/threads/
-    Returns threads where the user is a participant with the latest message.
+    Returns all threads the user participates in, split into:
+    - accepted inbox threads
+    - pending message requests
     """
 
     serializer_class = MessageThreadSerializer
@@ -257,9 +284,72 @@ class InboxThreadListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return (
+        qs = (
             MessageThread.objects.filter(Q(owner=user) | Q(client=user))
-            .select_related("project", "owner", "client", "owner__profile", "client__profile")
+            .select_related("owner", "client", "owner__profile", "client__profile")
             .prefetch_related("messages")
             .order_by("-updated_at")
         )
+        # Serializer will decide if it's inbox vs request based on flags.
+        return qs
+
+
+class ThreadActionView(generics.GenericAPIView):
+    """
+    POST /api/inbox/threads/<id>/accept/
+    POST /api/inbox/threads/<id>/block/
+    POST /api/inbox/threads/<id>/ignore/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = MessageThreadSerializer  # for responses
+
+    def get_thread(self):
+        thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
+        if not thread.user_is_participant(self.request.user):
+            raise permissions.PermissionDenied("Not your thread.")
+        return thread
+
+    def post(self, request, *args, **kwargs):
+        action = self.kwargs.get("action")
+        thread = self.get_thread()
+        user = request.user
+
+        if action == "accept":
+            thread.mark_accepted(user)
+        elif action == "block":
+            thread.block_other(user)
+        elif action == "ignore":
+            # archive for this user, keep unaccepted
+            if user.id == thread.owner_id:
+                thread.owner_archived = True
+            elif user.id == thread.client_id:
+                thread.client_archived = True
+            thread.save(update_fields=["owner_archived", "client_archived"])
+        else:
+            return Response(
+                {"detail": "Unknown action."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ser = self.get_serializer(thread, context={"request": request})
+        return Response(ser.data)
+
+
+class BlockListView(generics.ListAPIView):
+    """
+    GET /api/inbox/blocked/
+    Return the list of profiles the current user has blocked.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = MessageThreadSerializer  # or a dedicated small serializer
+
+    def get_queryset(self):
+        user = self.request.user
+        return MessageThread.objects.filter(
+            Q(owner=user, owner_blocked_client=True)
+            | Q(client=user, client_blocked_owner=True)
+        ).select_related("owner", "client", "owner__profile", "client__profile")
+
+

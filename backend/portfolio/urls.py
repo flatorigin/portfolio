@@ -9,6 +9,8 @@ from .views import (
     ProjectThreadCreateView,
     ThreadMessageListCreateView,
     InboxThreadListView,
+    ThreadActionView,
+    BlockListView,
 )
 
 router = DefaultRouter()
@@ -50,5 +52,18 @@ urlpatterns = [
 
     # Global inbox list
     path("inbox/threads/", InboxThreadListView.as_view(), name="inbox-threads"),
+
+    # Global inbox list (threads)
+    path("inbox/threads/", InboxThreadListView.as_view(), name="inbox-threads"),
+
+    # Thread actions: accept / block / ignore
+    path(
+        "inbox/threads/<int:thread_id>/<str:action>/",
+        ThreadActionView.as_view(),
+        name="inbox-thread-action",
+    ),
+
+    # Block list
+    path("inbox/blocked/", BlockListView.as_view(), name="inbox-blocked"),
 
 ]
