@@ -1,3 +1,4 @@
+// NOTE: This router config is not used; the app currently uses BrowserRouter in main.jsx
 // frontend/src/pages/Register.jsx  (shows server errors + loading)
 import { useState } from "react";
 import { register } from "../auth";

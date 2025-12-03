@@ -1,96 +1,169 @@
+// =======================================
+// file: frontend/src/pages/PublicProfile.jsx
+// Public profile at /u/:username
+// =======================================
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api from "../api";
+import { Card } from "../ui";
 
-export default function PublicProfile(){
+export default function PublicProfile() {
   const { username } = useParams();
-  const [profile,setProfile]=useState(null);
-  const [projects,setProjects]=useState([]);
-  const [msg,setMsg]=useState({name:"",email:"",subject:"",message:""});
+  const [profile, setProfile] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(()=>{
-    api.get(`/profiles/${username}/`).then(({data})=>setProfile(data));
-    api.get(`/projects/?owner=${username}`).then(({data})=>{
-      setProjects(data.filter(p=>p.owner_username===username && p.is_public));
-    });
-  },[username]);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError("");
 
-  async function send(e){
-    e.preventDefault();
-    await api.post(`/contact/${username}/send/`, msg);
-    setMsg({name:"",email:"",subject:"",message:""});
-    alert("Message sent!");
+    async function load() {
+      try {
+        const [profRes, projRes] = await Promise.all([
+          api.get(`/profiles/${encodeURIComponent(username)}/`),
+          api.get(`/projects/?owner=${encodeURIComponent(username)}`),
+        ]);
+
+        if (!alive) return;
+
+        setProfile(profRes.data || null);
+
+        const arr = Array.isArray(projRes.data) ? projRes.data : [];
+        setProjects(
+          arr.filter(
+            (p) => p.owner_username === username && p.is_public
+          )
+        );
+      } catch (err) {
+        if (!alive) return;
+        console.error("[PublicProfile] load error", err?.response || err);
+        setError("Unable to load this profile.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      alive = false;
+    };
+  }, [username]);
+
+  if (loading) {
+    return <p className="text-sm text-slate-600">Loading profile…</p>;
   }
 
-  if(!profile) return null;
+  if (error || !profile) {
+    return (
+      <p className="text-sm text-red-600">
+        {error || "Profile not found."}
+      </p>
+    );
+  }
+
+  const displayName = profile.display_name || profile.username;
+  const avatarSrc = profile.avatar_url || profile.logo || "";
+  const initial = displayName?.charAt(0)?.toUpperCase() || "?";
+
   return (
-    <div>
-      <header style={{display:"flex", gap:16, alignItems:"center"}}>
-        {profile.avatar && <img src={profile.avatar} width={96} style={{borderRadius:"50%"}}/>}
-        <div>
-          <h1 style={{margin:"4px 0"}}>{profile.display_name || profile.username}</h1>
-          <div style={{opacity:.8}}>{profile.company}</div>
-          <p style={{maxWidth:640}}>{profile.bio}</p>
+    <div className="space-y-6">
+      {/* HEADER */}
+      <header className="flex items-center gap-4">
+        {avatarSrc ? (
+          <img
+            src={avatarSrc}
+            alt={displayName}
+            className="h-20 w-20 rounded-full border border-slate-200 object-cover"
+          />
+        ) : (
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-2xl font-semibold text-slate-700">
+            {initial}
+          </div>
+        )}
+
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold text-slate-900">
+            {displayName}
+          </h1>
+          {profile.service_location && (
+            <div className="text-sm text-slate-600">
+              {profile.service_location}
+            </div>
+          )}
         </div>
       </header>
 
-      <section style={{marginTop:16}}>
-        <h3>Contact</h3>
-        <div style={{border:"1px solid #eee", borderRadius:12, padding:12, maxWidth:420}}>
-          <div><strong>Email:</strong> {profile.contact_email || "—"}</div>
-          <div><strong>Phone:</strong> {profile.contact_phone || "—"}</div>
-          {profile.website && <div><a href={profile.website} target="_blank" rel="noreferrer">Website</a></div>}
-        </div>
-
-        {profile.show_contact_form && (
-          <form onSubmit={send} style={{maxWidth:520, marginTop:12}}>
-            <input placeholder="Your name" value={msg.name} onChange={e=>setMsg({...msg,name:e.target.value})}/>
-            <input placeholder="Your email" value={msg.email} onChange={e=>setMsg({...msg,email:e.target.value})}/>
-            <input placeholder="Subject" value={msg.subject} onChange={e=>setMsg({...msg,subject:e.target.value})}/>
-            <textarea placeholder="Message" value={msg.message} onChange={e=>setMsg({...msg,message:e.target.value})}/>
-            <button>Send</button>
-            <style>{`
-              input, textarea, button { width: 100%; padding: 10px; margin: 8px 0; }
-              button { cursor: pointer; }
-              textarea { min-height: 120px; }
-            `}</style>
-          </form>
-        )}
-        <div style={{ marginTop: 12 }}>
-                  <button
-                    onClick={async () => {
-                      try {
-                        const { data } = await api.post(`/inbox/threads/start/`, {
-                          username,
-                        });
-                        if (data?.id) {
-                          window.location.href = `/messages/${data.id}`;
-                        }
-                      } catch (err) {
-                        alert("Unable to start private chat.");
-                      }
-                    }}
-                  >
-                    Message this profile
-                  </button>
-                </div>
+      {/* CONTACT CARD */}
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-slate-900">
+          Contact
+        </h2>
+        <Card className="max-w-sm p-4">
+          <div className="space-y-1 text-sm text-slate-700">
+            <div>
+              <span className="font-semibold">Email:</span>{" "}
+              {profile.contact_email || "—"}
+            </div>
+            <div>
+              <span className="font-semibold">Phone:</span>{" "}
+              {profile.contact_phone || "—"}
+            </div>
+          </div>
+        </Card>
       </section>
 
-      <section style={{marginTop:16}}>
-        <h3>Projects</h3>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:16}}>
-          {projects.map(p=>(
-            <Link key={p.id} to={`/projects/${p.id}`} style={{textDecoration:"none", color:"inherit"}}>
-              <div style={{border:"1px solid #eee", borderRadius:12, overflow:"hidden"}}>
-                {p.cover_image && <img src={p.cover_image} style={{width:"100%",height:160,objectFit:"cover"}}/>}
-                <div style={{padding:12}}>
-                  <h4 style={{margin:"4px 0"}}>{p.title}</h4>
-                  <p style={{opacity:.8}}>{p.summary}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+      {/* MESSAGE LABEL (you can hook a form or CTA here later) */}
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-slate-900">
+          Message this profile
+        </h2>
+        <p className="text-xs text-slate-500">
+          Start a private conversation from any project page using the
+          “Private inquiries” box.
+        </p>
+      </section>
+
+      {/* PROJECTS GRID */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold text-slate-900">
+          Projects
+        </h2>
+
+        {projects.length === 0 ? (
+          <p className="text-sm text-slate-600">
+            No public projects yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+            {projects.map((p) => (
+              <Link
+                key={p.id}
+                to={`/projects/${p.id}`}
+                className="block text-inherit no-underline"
+              >
+                <Card className="overflow-hidden">
+                  {p.cover_image && (
+                    <img
+                      src={p.cover_image}
+                      alt={p.title || "Project cover"}
+                      className="h-40 w-full object-cover"
+                    />
+                  )}
+                  <div className="p-3">
+                    <h3 className="mb-1 text-sm font-semibold text-slate-900">
+                      {p.title}
+                    </h3>
+                    <p className="line-clamp-2 text-xs text-slate-600">
+                      {p.summary}
+                    </p>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

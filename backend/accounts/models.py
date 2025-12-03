@@ -25,6 +25,10 @@ class Profile(models.Model):
     # About
     bio = models.TextField(blank=True, default="")
 
+    # Optional contact info (NEW)
+    contact_email = models.EmailField(blank=True, default="")
+    contact_phone = models.CharField(max_length=50, blank=True, default="")
+    
     # Media
     logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
 

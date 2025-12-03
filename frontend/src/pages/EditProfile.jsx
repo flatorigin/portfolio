@@ -1,232 +1,276 @@
-// frontend/src/pages/EditProfile.jsx
-import { useEffect, useMemo, useState, useCallback } from "react";
+// =======================================
+// file: frontend/src/pages/EditProfile.jsx
+// =======================================
+import { useEffect, useState } from "react";
 import api from "../api";
-import { Card, SectionTitle, Input, Textarea, Button } from "../ui";
-
-// normalize relative media paths
-function toUrl(raw) {
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-  const base = (api?.defaults?.baseURL || "").replace(/\/+$/,"");
-  const origin = base.replace(/\/api\/?$/,"");
-  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
-}
+import { Card, Button, Input, Textarea } from "../ui";
 
 export default function EditProfile() {
-  const [endpoint, setEndpoint] = useState("/users/me/");   // primary
-  const fallbackEndpoint = "/auth/users/me/";               // djoser alt
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const [form, setForm] = useState({
-    display_name: "",
-    service_location: "",
-    coverage_radius_miles: "",
-    bio: "",
-    logo: "",               // URL/path string from API
-  });
-  const [logoFile, setLogoFile] = useState(null);
+  // form state
+  const [displayName, setDisplayName] = useState("");
+  const [serviceLocation, setServiceLocation] = useState("");
+  const [radiusMiles, setRadiusMiles] = useState("");
+  const [bio, setBio] = useState("");
 
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const [ok, setOk] = useState(false);
+  // NEW optional contact info
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
 
-  const logoUrl = useMemo(() => (logoFile ? URL.createObjectURL(logoFile) : toUrl(form.logo)), [logoFile, form.logo]);
+  // avatar / logo
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
 
-  const loadMe = useCallback(async () => {
-    setErr(""); setOk(false);
-    const tryGet = async (url) => (await api.get(url)).data;
+  // -------- Load current profile from /users/me/ --------
+  useEffect(() => {
+    let alive = true;
 
-    try {
-      const data = await tryGet(endpoint);
-      setForm({
-        display_name: data?.display_name || data?.name || "",
-        service_location: data?.service_location || "",
-        coverage_radius_miles: data?.coverage_radius_miles ?? "",
-        bio: data?.bio || "",
-        logo: data?.logo || data?.logo_url || "",
-      });
-      setLogoFile(null);
-      return;
-    } catch {
+    async function loadProfile() {
+      setLoading(true);
+      setError("");
+      setSuccess("");
+
       try {
-        const data = await tryGet(fallbackEndpoint);
-        setEndpoint(fallbackEndpoint);
-        setForm({
-          display_name: data?.display_name || data?.name || "",
-          service_location: data?.service_location || "",
-          coverage_radius_miles: data?.coverage_radius_miles ?? "",
-          bio: data?.bio || "",
-          logo: data?.logo || data?.logo_url || "",
-        });
-        setLogoFile(null);
-      } catch (e2) {
-        setErr(e2?.response?.data ? JSON.stringify(e2.response.data) : String(e2));
+        const { data } = await api.get("/users/me/");
+        if (!alive) return;
+
+        console.log("[EditProfile] /users/me:", data);
+
+        setDisplayName(data.display_name || "");
+        setServiceLocation(data.service_location || "");
+        setRadiusMiles(
+          data.coverage_radius_miles === null ||
+          data.coverage_radius_miles === undefined
+            ? ""
+            : String(data.coverage_radius_miles)
+        );
+        setBio(data.bio || "");
+
+        // NEW: contact fields
+        setContactEmail(data.contact_email || "");
+        setContactPhone(data.contact_phone || "");
+
+        const avatar =
+          data.avatar_url || data.logo || data.avatar || "";
+        setAvatarPreview(avatar);
+      } catch (err) {
+        if (!alive) return;
+        console.error("[EditProfile] load error", err?.response || err);
+        setError("Failed to load your profile.");
+      } finally {
+        if (alive) setLoading(false);
       }
     }
-  }, [endpoint]);
 
-  useEffect(() => { loadMe(); }, [loadMe]);
+    loadProfile();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  function coerceNumber(v) {
-    if (v === "" || v === null || typeof v === "undefined") return "";
-    const n = Number(String(v).replace(/[^\d.]+/g, ""));
-    return Number.isFinite(n) ? n : "";
-  }
-
-  function broadcast(name, detail) {
-    // why: allow Dashboard header to react (spinner, refresh)
-    window.dispatchEvent(new CustomEvent(name, { detail }));
-  }
-
-  async function save(e) {
+  // -------- Save changes (PATCH /users/me/) --------
+  async function handleSubmit(e) {
     e.preventDefault();
-    setBusy(true); setErr(""); setOk(false);
-    broadcast("profile:updating", { at: Date.now() });
+    setError("");
+    setSuccess("");
 
-    const payload = {
-      display_name: form.display_name || "",
-      service_location: form.service_location || "",
-      coverage_radius_miles: coerceNumber(form.coverage_radius_miles),
-      bio: form.bio || "",
-    };
-    const useMultipart = !!logoFile;
-    if (logoFile) payload.logo = logoFile;
+    const formData = new FormData();
+    formData.append("display_name", displayName.trim());
+    formData.append("service_location", serviceLocation.trim());
+    formData.append(
+      "coverage_radius_miles",
+      radiusMiles === "" ? "" : String(radiusMiles)
+    );
+    formData.append("bio", bio);
 
-    const patch = async (url) => {
-      if (useMultipart) {
-        const fd = new FormData();
-        Object.entries(payload).forEach(([k, v]) => fd.append(k, v ?? ""));
-        return api.patch(url, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      }
-      return api.patch(url, payload);
-    };
+    // NEW: optional contact info
+    formData.append("contact_email", contactEmail.trim());
+    formData.append("contact_phone", contactPhone.trim());
 
+    if (avatarFile) {
+      formData.append("logo", avatarFile); // backend uses logo/avatar
+    }
+
+    setSaving(true);
     try {
-      await patch(endpoint);
-      setOk(true);
-      await loadMe();
-      localStorage.setItem("profile_display_name", form.display_name || "");
-      if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
-      broadcast("profile:updated", {
-        display_name: form.display_name,
-        logo: form.logo,
-        service_location: form.service_location,
-        coverage_radius_miles: coerceNumber(form.coverage_radius_miles),
-        bio: form.bio,
+      const { data } = await api.patch("/users/me/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-    } catch (e1) {
-      const status = e1?.response?.status;
-      if ((status === 404 || status === 405) && endpoint !== fallbackEndpoint) {
-        try {
-          await patch(fallbackEndpoint);
-          setEndpoint(fallbackEndpoint);
-          setOk(true);
-          await loadMe();
-          localStorage.setItem("profile_display_name", form.display_name || "");
-          if (!logoFile && form.logo) localStorage.setItem("profile_logo", form.logo);
-          broadcast("profile:updated", {
-            display_name: form.display_name,
-            logo: form.logo,
-            service_location: form.service_location,
-            coverage_radius_miles: coerceNumber(form.coverage_radius_miles),
-            bio: form.bio,
-          });
-        } catch (e2) {
-          setErr(e2?.response?.data ? JSON.stringify(e2.response.data) : String(e2));
-        }
-      } else {
-        setErr(e1?.response?.data ? JSON.stringify(e1.response.data) : String(e1));
-      }
+
+      setSuccess("Profile updated.");
+
+      // sync back from response
+      setDisplayName(data.display_name || "");
+      setServiceLocation(data.service_location || "");
+      setRadiusMiles(
+        data.coverage_radius_miles === null ||
+        data.coverage_radius_miles === undefined
+          ? ""
+          : String(data.coverage_radius_miles)
+      );
+      setBio(data.bio || "");
+      setContactEmail(data.contact_email || "");
+      setContactPhone(data.contact_phone || "");
+
+      const avatar =
+        data.avatar_url || data.logo || data.avatar || avatarPreview;
+      setAvatarPreview(avatar);
+      setAvatarFile(null);
+    } catch (err) {
+      console.error("[EditProfile] save error", err?.response || err);
+      const msg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        "Failed to update profile.";
+      setError(typeof msg === "string" ? msg : "Failed to update profile.");
     } finally {
-      setBusy(false);
-      broadcast("profile:updated", { at: Date.now() });
+      setSaving(false);
     }
   }
 
-  const authed = !!localStorage.getItem("access");
-
+  // -------- UI --------
   return (
-    <div className="space-y-6">
-      <SectionTitle>Edit Profile</SectionTitle>
+    <div>
+      <h1 className="mb-4 text-2xl font-bold text-slate-900">Edit Profile</h1>
 
-      {!authed && (
-        <Card className="p-5 text-slate-600">
-          Please log in to edit your profile.
-        </Card>
-      )}
-
-      {authed && (
-        <Card className="relative p-5">
-          <form onSubmit={save} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* Identity */}
-            <div className="md:col-span-2">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Identity</div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm text-slate-600">Name (Company/Person)</label>
-                  <Input
-                    value={form.display_name}
-                    onChange={(e)=>setForm({...form, display_name:e.target.value})}
-                    placeholder="e.g. Skivelight Studio"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm text-slate-600">Logo</label>
-                  <input type="file" accept="image/*" onChange={(e)=>setLogoFile(e.target.files?.[0]||null)} />
-                  {logoFile && <div className="mt-1 text-xs text-slate-500 truncate">{logoFile.name}</div>}
-                  {logoUrl && !logoFile && (
-                    <div className="mt-2">
-                      <img src={logoUrl} alt="Logo" className="h-16 w-16 rounded-full object-cover ring-1 ring-slate-200" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Service */}
-            <div className="md:col-span-2">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Service</div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm text-slate-600">Location of Service</label>
-                  <Input
-                    value={form.service_location}
-                    onChange={(e)=>setForm({...form, service_location:e.target.value})}
-                    placeholder="City, State"
-                  />
-                </div>
-                <div className="md:col-span-1">
-                  <label className="mb-1 block text-sm text-slate-600">Coverage Radius (miles)</label>
-                  <Input
-                    inputMode="numeric"
-                    value={form.coverage_radius_miles}
-                    onChange={(e)=>setForm({...form, coverage_radius_miles:e.target.value})}
-                    placeholder="e.g. 50"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* About */}
-            <div className="md:col-span-2">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">About</div>
-              <label className="mb-1 block text-sm text-slate-600">Short Bio (optional)</label>
-              <Textarea
-                value={form.bio}
-                onChange={(e)=>setForm({...form, bio:e.target.value})}
-                placeholder="One or two sentences about the company…"
+      <Card className="max-w-xl space-y-4 p-4">
+        {loading ? (
+          <p className="text-sm text-slate-600">Loading profile…</p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Display name */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Display name
+              </label>
+              <Input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="e.g. Mokko Studio"
               />
             </div>
 
-            {/* Status */}
-            {err && <div className="md:col-span-2 text-sm text-red-700">{err}</div>}
-            {ok && !err && <div className="md:col-span-2 text-sm text-green-700">Saved.</div>}
+            {/* Service location */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Service location
+              </label>
+              <Input
+                value={serviceLocation}
+                onChange={(e) => setServiceLocation(e.target.value)}
+                placeholder="e.g. Philadelphia, PA"
+              />
+            </div>
 
-            <div className="md:col-span-2">
-              <Button disabled={busy}>{busy ? "Saving…" : "Save Profile"}</Button>
+            {/* Coverage radius */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Coverage radius (miles)
+              </label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={radiusMiles}
+                onChange={(e) => setRadiusMiles(e.target.value)}
+                placeholder="e.g. 25"
+              />
+            </div>
+
+            {/* NEW: Contact email */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Contact email <span className="text-xs text-slate-400">(optional)</span>
+              </label>
+              <Input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="e.g. hello@mokko.studio"
+              />
+            </div>
+
+            {/* NEW: Contact phone */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Contact phone <span className="text-xs text-slate-400">(optional)</span>
+              </label>
+              <Input
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                placeholder="e.g. (555) 123-4567"
+              />
+            </div>
+
+            {/* Bio */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Bio
+              </label>
+              <Textarea
+                rows={4}
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell people what kind of work you do…"
+              />
+            </div>
+
+            {/* Avatar / logo */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Avatar / Logo
+              </label>
+              <div className="flex items-center gap-3">
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Avatar"
+                    className="h-16 w-16 rounded-full border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">
+                    No image
+                  </div>
+                )}
+
+                <label className="cursor-pointer text-xs font-medium text-slate-700">
+                  <span className="inline-flex items-center rounded-lg border border-slate-200 px-3 py-1 hover:bg-slate-50">
+                    Choose file
+                  </span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setAvatarFile(file || null);
+                      setError("");
+                      setSuccess("");
+                      if (file) {
+                        const url = URL.createObjectURL(file);
+                        setAvatarPreview(url);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Alerts */}
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            {success && <p className="text-xs text-green-600">{success}</p>}
+
+            <div className="pt-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save changes"}
+              </Button>
             </div>
           </form>
-        </Card>
-      )}
+        )}
+      </Card>
     </div>
   );
 }

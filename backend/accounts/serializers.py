@@ -6,22 +6,41 @@ from .models import Profile
 User = get_user_model()
 
 class MeSerializer(serializers.ModelSerializer):
-    # expose username for convenience
+    # read-only user identity
     username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        fields = (
+        fields = [
+            "id",
             "username",
+            "email",
             "display_name",
             "service_location",
             "coverage_radius_miles",
+            "contact_email",      # NEW
+            "contact_phone",      # NEW
             "bio",
-            "logo",     # file field
-        )
+            "logo",
+            "avatar",
+            "avatar_url",
+        ]
+        read_only_fields = ["id", "username", "email", "avatar_url"]
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        if obj.logo and hasattr(obj.logo, "url"):
+            return (
+                request.build_absolute_uri(obj.logo.url)
+                if request
+                else obj.logo.url
+            )
+        return None
 
     def update(self, instance, validated_data):
-        # keep simple: partial updates accepted
         return super().update(instance, validated_data)
 
 
@@ -36,6 +55,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             "username",
             "display_name",
             "service_location",
+            "contact_email",      # NEW
+            "contact_phone",      # NEW
             "logo",
             "avatar_url",
         ]
@@ -44,5 +65,9 @@ class ProfileSerializer(serializers.ModelSerializer):
     def get_avatar_url(self, obj):
         request = self.context.get("request")
         if obj.logo and hasattr(obj.logo, "url"):
-            return request.build_absolute_uri(obj.logo.url) if request else obj.logo.url
+            return (
+                request.build_absolute_uri(obj.logo.url)
+                if request
+                else obj.logo.url
+            )
         return None

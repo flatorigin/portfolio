@@ -23,11 +23,10 @@ export default function MessagesThread() {
 
   const [readThreadIds, setReadThreadIds] = useState(new Set());
 
-  // Logged-in user (so logic works for both Mokko & Artin)
+  // Logged-in user (so the logic works for Mokko, Artin, etc.)
   const [meUsername, setMeUsername] = useState("");
 
   // ---------- Fetch current user (me) once ----------
-
   useEffect(() => {
     (async () => {
       try {
@@ -50,14 +49,14 @@ export default function MessagesThread() {
 
   // ---------- Helpers ----------
 
-  // The currently selected conversation
+  // Current selected thread
   const activeThread = useMemo(
     () =>
       threads.find((t) => String(t.id) === String(activeThreadId)) || null,
     [threads, activeThreadId]
   );
 
-  // Mark thread as read (local session only)
+  // Mark thread as read (local, session-only)
   const markThreadRead = (id) => {
     setReadThreadIds((prev) => {
       const next = new Set(prev);
@@ -66,7 +65,7 @@ export default function MessagesThread() {
     });
   };
 
-  // "Counterpart" = the other person in this thread (for left list + header)
+  // "Counterpart" = the other person in the conversation
   const counterpartFor = (thread) => {
     if (!thread) return null;
 
@@ -86,7 +85,7 @@ export default function MessagesThread() {
     const clientDisplay =
       clientProfile.display_name || clientUsernameRaw || "User";
 
-    // If I'm the owner, counterpart is the client
+    // If I'm the owner, the other person is the client
     if (meLower && ownerLower === meLower) {
       return {
         username: clientUsernameRaw,
@@ -94,7 +93,7 @@ export default function MessagesThread() {
       };
     }
 
-    // If I'm the client, counterpart is the owner
+    // If I'm the client, the other person is the owner
     if (meLower && clientLower === meLower) {
       return {
         username: ownerUsernameRaw,
@@ -102,7 +101,7 @@ export default function MessagesThread() {
       };
     }
 
-    // Fallback: treat client as counterpart (typical owner inbox case)
+    // Fallback: treat client as counterpart (typical "owner's inbox" view)
     return {
       username: clientUsernameRaw,
       display_name: clientDisplay,
@@ -114,8 +113,7 @@ export default function MessagesThread() {
     [activeThread, meLower]
   );
 
-  // ---------- Fetch threads (left column list) ----------
-
+  // ---------- Fetch threads (left list) ----------
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true);
     try {
@@ -123,7 +121,7 @@ export default function MessagesThread() {
       const arr = Array.isArray(data) ? data : [];
       setThreads(arr);
 
-      // choose which thread to show:
+      // Initial selection logic
       setActiveThreadId((prev) => {
         if (prev) return prev;
         if (threadIdParam) return Number(threadIdParam);
@@ -141,8 +139,7 @@ export default function MessagesThread() {
     fetchThreads();
   }, [fetchThreads]);
 
-  // ---------- Fetch messages (right column body) ----------
-
+  // ---------- Fetch messages (right panel) ----------
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
       if (!activeThread) {
@@ -166,13 +163,13 @@ export default function MessagesThread() {
         );
         const arr = Array.isArray(data) ? data : [];
 
-        // Only update state if there's actually a change
+        // Avoid unnecessary re-renders if nothing changed
         setMessages((prev) => {
           if (
             prev.length === arr.length &&
             prev[prev.length - 1]?.id === arr[arr.length - 1]?.id
           ) {
-            return prev; // no change → no re-render
+            return prev;
           }
           return arr;
         });
@@ -199,7 +196,7 @@ export default function MessagesThread() {
     // Initial load with spinner
     fetchMessages({ silent: false });
 
-    // Background polling every 8s, silently
+    // Background polling every 8s (silent)
     const id = setInterval(() => {
       fetchMessages({ silent: true });
     }, 8000);
@@ -207,8 +204,7 @@ export default function MessagesThread() {
     return () => clearInterval(id);
   }, [activeThread, fetchMessages]);
 
-  // ---------- Send new message into active conversation ----------
-
+  // ---------- Send new message ----------
   const handleSend = async (e) => {
     e.preventDefault();
     if (!activeThread || !messageText.trim()) return;
@@ -233,11 +229,9 @@ export default function MessagesThread() {
   };
 
   // ---------- Render ----------
-
   return (
-    // 🔹 Two columns, always side by side
     <div className="flex items-start gap-4">
-      {/* LEFT COLUMN: fixed width */}
+      {/* LEFT COLUMN: fixed width list of conversations */}
       <div className="w-64 shrink-0">
         <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -258,12 +252,11 @@ export default function MessagesThread() {
 
                 const latest = t.latest_message || null;
 
-                // Date stamp (last message date)
+                // Date stamp for last message
                 const dateLabel = latest?.created_at
                   ? new Date(latest.created_at).toLocaleDateString()
                   : "";
 
-                // Is the latest message from me?
                 const latestFromMe =
                   latest?.sender_username &&
                   latest.sender_username.toLowerCase() === meLower;
@@ -286,7 +279,6 @@ export default function MessagesThread() {
                       isActive ? "bg-slate-100" : "hover:bg-slate-50",
                     ].join(" ")}
                   >
-                    {/* Name: bold if unread, same size */}
                     <div
                       className={
                         "truncate text-xs " +
@@ -297,8 +289,6 @@ export default function MessagesThread() {
                     >
                       {name}
                     </div>
-
-                    {/* Date stamp under the name */}
                     <div className="mt-0.5 text-[11px] text-slate-500">
                       {dateLabel || "—"}
                     </div>
@@ -310,7 +300,7 @@ export default function MessagesThread() {
         </Card>
       </div>
 
-      {/* RIGHT COLUMN: flex-1 main conversation area */}
+      {/* RIGHT COLUMN: main conversation area */}
       <div className="flex-1">
         <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
           {!activeThread ? (
@@ -319,19 +309,17 @@ export default function MessagesThread() {
             </div>
           ) : (
             <>
-              {/* Header */}
+              {/* Header: name linked to counterpart's profile */}
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="text-sm font-semibold text-slate-900">
-                  {counterpart ? (
+                  {counterpart && counterpart.username ? (
                     <Link
-                      to={
-                        counterpart.username
-                          ? `/profiles/${counterpart.username}`
-                          : "#"
-                      }
+                      to={`/profiles/${counterpart.username}`}
                       className="text-slate-900 hover:underline"
                     >
-                      {counterpart.display_name || counterpart.username || "Conversation"}
+                      {counterpart.display_name ||
+                        counterpart.username ||
+                        "Conversation"}
                     </Link>
                   ) : (
                     "Conversation"
@@ -339,7 +327,7 @@ export default function MessagesThread() {
                 </div>
               </div>
 
-              {/* MESSAGE BODY: other person left, me right */}
+              {/* Messages: other person left, me right */}
               <div className="mb-3 flex-1 overflow-y-auto rounded-xl bg-slate-50 p-3">
                 {loadingMessages ? (
                   <p className="text-xs text-slate-500">Loading messages…</p>
@@ -349,8 +337,6 @@ export default function MessagesThread() {
                   </p>
                 ) : (
                   messages.map((m) => {
-                    if (!activeThread) return null;
-
                     const fromMe =
                       m.sender_username &&
                       m.sender_username.toLowerCase() === meLower;
@@ -395,7 +381,7 @@ export default function MessagesThread() {
                 )}
               </div>
 
-              {/* INPUT */}
+              {/* Input */}
               <form onSubmit={handleSend} className="space-y-2">
                 <Textarea
                   rows={2}

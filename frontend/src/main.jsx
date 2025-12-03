@@ -1,7 +1,8 @@
-import './index.css';
+import "./index.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
 import App from "./App.jsx";
 import Explore from "./pages/Explore.jsx";
 import Login from "./pages/Login.jsx";
@@ -10,32 +11,39 @@ import Dashboard from "./pages/Dashboard.jsx";
 import EditProfile from "./pages/EditProfile.jsx";
 import ProjectDetail from "./pages/ProjectDetail.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
-import ForgotPassword from "./pages/ForgotPassword.jsx";    
-import ResetPassword from "./pages/ResetPassword.jsx";      
-import MessagesThread from "./pages/MessagesThread";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
+import MessagesThread from "./pages/MessagesThread.jsx";
+import NotFound from "./pages/NotFound";
 
 function RequireAuth({ children }) {
-  return localStorage.getItem("access") ? children : <Navigate to="/login" />;
+  return localStorage.getItem("access") ? (
+    children
+  ) : (
+    <Navigate to="/login" replace />
+  );
 }
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
     <Routes>
-      <Route element={<App />}>
-        {/* index = "/" → Explore */}
+      {/* Layout route with header/nav in <App /> */}
+      <Route path="/" element={<App />}>
+        {/* "/" → Explore */}
         <Route index element={<Explore />} />
 
-        {/* auth & public routes */}
+        {/* Auth + public routes */}
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
-        <Route path="forgot-password" element={<ForgotPassword />} />   
-        <Route path="reset-password" element={<ResetPassword />} />     
+        <Route path="forgot-password" element={<ForgotPassword />} />
+        <Route path="reset-password" element={<ResetPassword />} />
 
-        {/* public profile + project detail */}
-        <Route path="u/:username" element={<PublicProfile />} />
+        {/* Public profile + project detail */}
+        {/* ✅ This matches /profiles/Artin etc */}
+        <Route path="profiles/:username" element={<PublicProfile />} />
         <Route path="projects/:id" element={<ProjectDetail />} />
 
-        {/* protected routes */}
+        {/* Protected routes */}
         <Route
           path="dashboard"
           element={
@@ -53,10 +61,22 @@ createRoot(document.getElementById("root")).render(
           }
         />
 
-        {/* fallback */}
-        <Route path="*" element={<Navigate to="/" />} />
-        <Route path="/messages/:threadId" element={<MessagesThread />} />
+        {/* Messages (inbox) – protected */}
+        <Route
+          path="messages/:threadId?"
+          element={
+            <RequireAuth>
+              <MessagesThread />
+            </RequireAuth>
+          }
+        />
+
+        {/* Catch-all inside layout */}
+        <Route path="*" element={<NotFound />} />
       </Route>
+
+      {/* Extra catch-all just in case */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </BrowserRouter>
 );
