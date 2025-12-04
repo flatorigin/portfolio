@@ -151,84 +151,62 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
 
 
 class MessageThreadSerializer(serializers.ModelSerializer):
-    """
-    Direct-message thread serializer.
-
-    - Still exposes `project` & `project_title` as optional metadata
-      (origin of the contact), but the UX is user-centric.
-    - Adds:
-        - `latest_message`   → preview for inbox
-        - `unread_count`     → per-user unread count (stubbed as 0 for now)
-        - `is_request`       → True if current user has not accepted yet
-        - `counterpart`      → condensed other-user info for UI
-    """
-
     project_title = serializers.ReadOnlyField(source="project.title")
     owner_username = serializers.ReadOnlyField(source="owner.username")
     client_username = serializers.ReadOnlyField(source="client.username")
-
+    latest_message = serializers.SerializerMethodField()
     owner_profile = ProfileSerializer(source="owner.profile", read_only=True)
     client_profile = ProfileSerializer(source="client.profile", read_only=True)
-
-    latest_message = serializers.SerializerMethodField()
-    unread_count = serializers.SerializerMethodField()
-    is_request = serializers.SerializerMethodField()
-    counterpart = serializers.SerializerMethodField()
 
     class Meta:
         model = MessageThread
         fields = [
             "id",
-            # optional origin project metadata (can be ignored by frontend)
             "project",
             "project_title",
-
-            # participants
             "owner",
             "owner_username",
             "owner_profile",
             "client",
             "client_username",
             "client_profile",
-
-            # meta
+            # 🔹 flags needed for Accept / Block buttons
+            "owner_has_accepted",
+            "client_has_accepted",
+            "owner_archived",
+            "client_archived",
+            "owner_blocked_client",
+            "client_blocked_owner",
             "created_at",
             "updated_at",
-
-            # inbox helpers
             "latest_message",
-            "unread_count",
-            "is_request",
-            "counterpart",
         ]
         read_only_fields = [
             "id",
             "project",
-            "project_title",
             "owner",
             "owner_username",
             "owner_profile",
             "client",
             "client_username",
             "client_profile",
+            "owner_has_accepted",
+            "client_has_accepted",
+            "owner_archived",
+            "client_archived",
+            "owner_blocked_client",
+            "client_blocked_owner",
             "created_at",
             "updated_at",
             "latest_message",
-            "unread_count",
-            "is_request",
-            "counterpart",
         ]
 
-    # ---- helpers ----
-
     def get_latest_message(self, obj):
-        # Use the property if defined, otherwise fallback to query
-        msg = getattr(obj, "latest_message", None)
-        if msg is None:
-            msg = obj.messages.order_by("-created_at").first()
+        msg = obj.messages.order_by("-created_at").first()
         if not msg:
             return None
         return PrivateMessageSerializer(msg, context=self.context).data
+
 
     def get_unread_count(self, obj):
         """

@@ -50,17 +50,14 @@ urlpatterns = [
         name="project-thread-messages",
     ),
 
-    # Global inbox list
-    path("inbox/threads/", InboxThreadListView.as_view(), name="inbox-threads"),
-
     # Global inbox list (threads)
     path("inbox/threads/", InboxThreadListView.as_view(), name="inbox-threads"),
 
     # Thread actions: accept / block / ignore
     path(
-        "inbox/threads/<int:thread_id>/<str:action>/",
+        "inbox/threads/<int:pk>/actions/",
         ThreadActionView.as_view(),
-        name="inbox-thread-action",
+        name="inbox-thread-actions",
     ),
 
     # Block list

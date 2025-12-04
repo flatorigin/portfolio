@@ -23,40 +23,34 @@ export default function MessagesThread() {
 
   const [readThreadIds, setReadThreadIds] = useState(new Set());
 
-  // Logged-in user (so the logic works for Mokko, Artin, etc.)
+  // Logged-in user (so logic works for both sides)
   const [meUsername, setMeUsername] = useState("");
+  const meLower = (meUsername || "").toLowerCase();
 
   // ---------- Fetch current user (me) once ----------
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/auth/users/me/");
-        setMeUsername(data.username || "");
+        const { data } = await api.get("/users/me/");
+        setMeUsername(data.username || data.user?.username || "");
       } catch (err1) {
-        try {
-          const { data } = await api.get("/users/me/");
-          setMeUsername(data.username || data.user?.username || "");
-        } catch (err2) {
-          console.warn("[MessagesThread] failed to fetch me", err1, err2);
-          const localUsername = localStorage.getItem("username") || "";
-          setMeUsername(localUsername);
-        }
+        console.warn("[MessagesThread] /users/me/ failed", err1);
+        const localUsername = localStorage.getItem("username") || "";
+        setMeUsername(localUsername);
       }
     })();
   }, []);
 
-  const meLower = (meUsername || "").toLowerCase();
-
   // ---------- Helpers ----------
 
-  // Current selected thread
+  // currently selected conversation
   const activeThread = useMemo(
     () =>
       threads.find((t) => String(t.id) === String(activeThreadId)) || null,
     [threads, activeThreadId]
   );
 
-  // Mark thread as read (local, session-only)
+  // mark thread read locally
   const markThreadRead = (id) => {
     setReadThreadIds((prev) => {
       const next = new Set(prev);
@@ -65,7 +59,7 @@ export default function MessagesThread() {
     });
   };
 
-  // "Counterpart" = the other person in the conversation
+  // "counterpart" = the other person in this thread
   const counterpartFor = (thread) => {
     if (!thread) return null;
 
@@ -85,7 +79,7 @@ export default function MessagesThread() {
     const clientDisplay =
       clientProfile.display_name || clientUsernameRaw || "User";
 
-    // If I'm the owner, the other person is the client
+    // If I'm the owner, counterpart is the client
     if (meLower && ownerLower === meLower) {
       return {
         username: clientUsernameRaw,
@@ -93,7 +87,7 @@ export default function MessagesThread() {
       };
     }
 
-    // If I'm the client, the other person is the owner
+    // If I'm the client, counterpart is the owner
     if (meLower && clientLower === meLower) {
       return {
         username: ownerUsernameRaw,
@@ -101,7 +95,7 @@ export default function MessagesThread() {
       };
     }
 
-    // Fallback: treat client as counterpart (typical "owner's inbox" view)
+    // Fallback: treat client as counterpart
     return {
       username: clientUsernameRaw,
       display_name: clientDisplay,
@@ -113,7 +107,24 @@ export default function MessagesThread() {
     [activeThread, meLower]
   );
 
-  // ---------- Fetch threads (left list) ----------
+  // For header buttons: have I accepted? did I block them?
+  let hasAccepted = true;
+  let iBlockedOther = false;
+
+  if (activeThread && meLower) {
+    const ownerLower = (activeThread.owner_username || "").toLowerCase();
+    const clientLower = (activeThread.client_username || "").toLowerCase();
+
+    if (ownerLower === meLower) {
+      hasAccepted = !!activeThread.owner_has_accepted;
+      iBlockedOther = !!activeThread.owner_blocked_client;
+    } else if (clientLower === meLower) {
+      hasAccepted = !!activeThread.client_has_accepted;
+      iBlockedOther = !!activeThread.client_blocked_owner;
+    }
+  }
+
+  // ---------- Fetch threads list ----------
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true);
     try {
@@ -121,7 +132,6 @@ export default function MessagesThread() {
       const arr = Array.isArray(data) ? data : [];
       setThreads(arr);
 
-      // Initial selection logic
       setActiveThreadId((prev) => {
         if (prev) return prev;
         if (threadIdParam) return Number(threadIdParam);
@@ -139,7 +149,7 @@ export default function MessagesThread() {
     fetchThreads();
   }, [fetchThreads]);
 
-  // ---------- Fetch messages (right panel) ----------
+  // ---------- Fetch messages ----------
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
       if (!activeThread) {
@@ -153,9 +163,7 @@ export default function MessagesThread() {
         return;
       }
 
-      if (!silent) {
-        setLoadingMessages(true);
-      }
+      if (!silent) setLoadingMessages(true);
 
       try {
         const { data } = await api.get(
@@ -163,25 +171,20 @@ export default function MessagesThread() {
         );
         const arr = Array.isArray(data) ? data : [];
 
-        // Avoid unnecessary re-renders if nothing changed
         setMessages((prev) => {
           if (
             prev.length === arr.length &&
             prev[prev.length - 1]?.id === arr[arr.length - 1]?.id
           ) {
-            return prev;
+            return prev; // no change
           }
           return arr;
         });
       } catch (err) {
         console.error("[MessagesThread] failed to load messages", err);
-        if (!silent) {
-          setMessages([]);
-        }
+        if (!silent) setMessages([]);
       } finally {
-        if (!silent) {
-          setLoadingMessages(false);
-        }
+        if (!silent) setLoadingMessages(false);
       }
     },
     [activeThread]
@@ -193,10 +196,10 @@ export default function MessagesThread() {
       return;
     }
 
-    // Initial load with spinner
+    // first load with spinner
     fetchMessages({ silent: false });
 
-    // Background polling every 8s (silent)
+    // background polling
     const id = setInterval(() => {
       fetchMessages({ silent: true });
     }, 8000);
@@ -204,7 +207,7 @@ export default function MessagesThread() {
     return () => clearInterval(id);
   }, [activeThread, fetchMessages]);
 
-  // ---------- Send new message ----------
+  // ---------- Send message ----------
   const handleSend = async (e) => {
     e.preventDefault();
     if (!activeThread || !messageText.trim()) return;
@@ -228,10 +231,52 @@ export default function MessagesThread() {
     }
   };
 
+  // ---------- Thread actions ----------
+  const handleThreadAction = async (action) => {
+    if (!activeThread) return;
+
+    if (
+      action === "delete" &&
+      !window.confirm("Delete this conversation? This cannot be undone.")
+    ) {
+      return;
+    }
+    if (
+      action === "block" &&
+      !window.confirm(
+        "Block this user on this thread? You will no longer receive messages here."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { data } = await api.post(
+        `/inbox/threads/${activeThread.id}/actions/`,
+        { action }
+      );
+
+      if (action === "delete") {
+        setThreads((prev) => prev.filter((t) => t.id !== activeThread.id));
+        setActiveThreadId(null);
+        setMessages([]);
+        return;
+      }
+
+      // accept / block / unblock → merge updated thread
+      setThreads((prev) =>
+        prev.map((t) => (t.id === data.id ? { ...t, ...data } : t))
+      );
+    } catch (err) {
+      console.error("[MessagesThread] action error", err);
+      alert(`Failed to ${action} this conversation.`);
+    }
+  };
+
   // ---------- Render ----------
   return (
     <div className="flex items-start gap-4">
-      {/* LEFT COLUMN: fixed width list of conversations */}
+      {/* LEFT COLUMN */}
       <div className="w-64 shrink-0">
         <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -249,10 +294,8 @@ export default function MessagesThread() {
               threads.map((t) => {
                 const cp = counterpartFor(t);
                 const name = cp?.display_name || cp?.username || "User";
-
                 const latest = t.latest_message || null;
 
-                // Date stamp for last message
                 const dateLabel = latest?.created_at
                   ? new Date(latest.created_at).toLocaleDateString()
                   : "";
@@ -300,7 +343,7 @@ export default function MessagesThread() {
         </Card>
       </div>
 
-      {/* RIGHT COLUMN: main conversation area */}
+      {/* RIGHT COLUMN */}
       <div className="flex-1">
         <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
           {!activeThread ? (
@@ -309,12 +352,16 @@ export default function MessagesThread() {
             </div>
           ) : (
             <>
-              {/* Header: name linked to counterpart's profile */}
+              {/* Header with name + actions */}
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="text-sm font-semibold text-slate-900">
-                  {counterpart && counterpart.username ? (
+                  {counterpart ? (
                     <Link
-                      to={`/profiles/${counterpart.username}`}
+                      to={
+                        counterpart.username
+                          ? `/profiles/${counterpart.username}`
+                          : "#"
+                      }
                       className="text-slate-900 hover:underline"
                     >
                       {counterpart.display_name ||
@@ -325,9 +372,37 @@ export default function MessagesThread() {
                     "Conversation"
                   )}
                 </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  {!hasAccepted && (
+                    <button
+                      type="button"
+                      onClick={() => handleThreadAction("accept")}
+                      className="rounded-lg bg-slate-900 px-3 py-1 font-medium text-white hover:bg-slate-800"
+                    >
+                      Accept
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleThreadAction(iBlockedOther ? "unblock" : "block")
+                    }
+                    className="rounded-lg border border-slate-300 px-3 py-1 font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    {iBlockedOther ? "Unblock" : "Block"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleThreadAction("delete")}
+                    className="rounded-lg border border-red-200 px-3 py-1 font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
 
-              {/* Messages: other person left, me right */}
+              {/* Messages */}
               <div className="mb-3 flex-1 overflow-y-auto rounded-xl bg-slate-50 p-3">
                 {loadingMessages ? (
                   <p className="text-xs text-slate-500">Loading messages…</p>
@@ -337,6 +412,8 @@ export default function MessagesThread() {
                   </p>
                 ) : (
                   messages.map((m) => {
+                    if (!activeThread) return null;
+
                     const fromMe =
                       m.sender_username &&
                       m.sender_username.toLowerCase() === meLower;

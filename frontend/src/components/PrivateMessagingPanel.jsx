@@ -12,15 +12,16 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
   const authed = !!localStorage.getItem("access");
   const [thread, setThread] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
+
+  const [loading, setLoading] = useState(false);      // only for initial load
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false); // gate spinner use
+
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [messageText, setMessageText] = useState("");
   const [attachment, setAttachment] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // ✅ allow send as long as user is authed and has text or attachment;
-  // thread will be created lazily in handleSend.
   const canSend =
     authed && (messageText.trim().length > 0 || !!attachment);
 
@@ -49,7 +50,7 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
     try {
       const { data } = await api.get(`/projects/${projectId}/threads/`);
       setThread(data);
-    } catch (err) {
+    } catch {
       setThread(null);
     }
   }, [authed, projectId]);
@@ -63,39 +64,77 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
       const { data } = await api.post(`/projects/${projectId}/threads/`);
       setThread(data);
       return data;
-    } catch (err) {
+    } catch {
       setError("Unable to start the private conversation.");
       return null;
     }
   }, [authed, projectId]);
 
+  /**
+   * Fetch messages:
+   * - First visible load: `silent=false` → shows "Loading messages…" once
+   * - Background refreshes: `silent=true` → no spinner, only updates when changed
+   */
   const fetchMessages = useCallback(
-    async (activeThread) => {
-      const current = activeThread || thread;
+    async ({ threadOverride = null, silent = false } = {}) => {
+      const current = threadOverride || thread;
       if (!current) return;
-      setLoading(true);
+
+      const shouldShowSpinner = !silent && !hasLoadedOnce;
+
+      if (shouldShowSpinner) {
+        setLoading(true);
+      }
+
       try {
         const { data } = await api.get(
           `/projects/${projectId}/threads/${current.id}/messages/`
         );
-        setMessages(Array.isArray(data) ? data : []);
-      } catch (err) {
-        setMessages([]);
+        const arr = Array.isArray(data) ? data : [];
+
+        // Only update state if we actually have a new last message
+        setMessages((prev) => {
+          if (
+            prev.length === arr.length &&
+            prev[prev.length - 1]?.id === arr[arr.length - 1]?.id
+          ) {
+            return prev;
+          }
+          return arr;
+        });
+      } catch {
+        if (shouldShowSpinner) {
+          setMessages([]);
+        }
       } finally {
-        setLoading(false);
+        if (shouldShowSpinner) {
+          setLoading(false);
+          setHasLoadedOnce(true);
+        }
       }
     },
-    [projectId, thread]
+    [projectId, thread, hasLoadedOnce]
   );
 
+  // 1) Fetch/create thread on first mount
   useEffect(() => {
     fetchThread();
   }, [fetchThread]);
 
+  // 2) Once we have a thread:
+  //    - Do ONE visible load of messages
+  //    - Then poll silently every 8s and only update if new content exists
   useEffect(() => {
     if (!thread) return undefined;
-    fetchMessages(thread);
-    const timer = setInterval(() => fetchMessages(thread), 5000);
+
+    // initial, visible load (shows spinner once)
+    fetchMessages({ threadOverride: thread, silent: false });
+
+    // silent background polling
+    const timer = setInterval(() => {
+      fetchMessages({ silent: true });
+    }, 8000);
+
     return () => clearInterval(timer);
   }, [thread, fetchMessages]);
 
@@ -122,7 +161,7 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
     setSending(true);
     setUploadProgress(0);
     try {
-      await api.post(
+      const { data: created } = await api.post(
         `/projects/${projectId}/threads/${activeThread.id}/messages/`,
         form,
         {
@@ -133,11 +172,17 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
           },
         }
       );
+
+      // Optimistically append the new message so it appears instantly
+      setMessages((prev) => [...prev, created]);
+
       setMessageText("");
       setAttachment(null);
       setUploadProgress(0);
-      await fetchMessages(activeThread);
-    } catch (err) {
+
+      // Optional extra sync in the background (no spinner)
+      fetchMessages({ threadOverride: activeThread, silent: true });
+    } catch {
       setError("Failed to send the message.");
     } finally {
       setSending(false);

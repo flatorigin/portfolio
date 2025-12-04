@@ -9,6 +9,12 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+
 from .models import (
     Project,
     ProjectImage,
@@ -294,59 +300,38 @@ class InboxThreadListView(generics.ListAPIView):
         return qs
 
 
-class ThreadActionView(generics.GenericAPIView):
+class ThreadActionView(APIView):
     """
-    POST /api/inbox/threads/<thread_id>/accept/
-    POST /api/inbox/threads/<thread_id>/block/
-    POST /api/inbox/threads/<thread_id>/ignore/
+    POST /api/inbox/threads/<pk>/actions/
+    Body: {"action": "accept" | "block" | "unblock" | "delete"}
+    Only participants (owner or client) may act.
     """
+    permission_classes = [IsAuthenticated]
 
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = MessageThreadSerializer
+    def post(self, request, pk, *args, **kwargs):
+        action = (request.data.get("action") or "").lower().strip()
+        thread = get_object_or_404(
+            MessageThread.objects.select_related("owner", "client"), pk=pk
+        )
 
-    def get_thread(self):
-        thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
-        user = self.request.user
+        if not thread.user_is_participant(request.user):
+            return Response(
+                {"detail": "Not allowed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        # Make sure the current user is one of the participants
-        if user not in (thread.owner, thread.client):
-            raise permissions.PermissionDenied("Not your thread.")
-        return thread
-
-    def post(self, request, *args, **kwargs):
-        action = self.kwargs.get("action")
-        thread = self.get_thread()
-        user = request.user
-
-        # --- ACCEPT: mark this user as having accepted the conversation ---
         if action == "accept":
-            # These fields must exist on your MessageThread model
-            # (BooleanFields with default=False)
-            if hasattr(thread, "owner_has_accepted") and hasattr(thread, "client_has_accepted"):
-                if user == thread.owner:
-                    thread.owner_has_accepted = True
-                elif user == thread.client:
-                    thread.client_has_accepted = True
-                thread.save(update_fields=["owner_has_accepted", "client_has_accepted"])
-            # if you haven't added those fields yet, this will just be a no-op
+            thread.mark_accepted(request.user)
 
-        # --- BLOCK: block the other profile in this thread ---
         elif action == "block":
-            if hasattr(thread, "owner_blocked_client") and hasattr(thread, "client_blocked_owner"):
-                if user == thread.owner:
-                    thread.owner_blocked_client = True
-                elif user == thread.client:
-                    thread.client_blocked_owner = True
-                thread.save(update_fields=["owner_blocked_client", "client_blocked_owner"])
+            thread.block_other(request.user)
 
-        # --- IGNORE: treat as dismissing request (optional archive flags) ---
-        elif action == "ignore":
-            if hasattr(thread, "owner_archived") and hasattr(thread, "client_archived"):
-                if user == thread.owner:
-                    thread.owner_archived = True
-                elif user == thread.client:
-                    thread.client_archived = True
-                thread.save(update_fields=["owner_archived", "client_archived"])
+        elif action == "unblock":
+            thread.unblock_other(request.user)
+
+        elif action == "delete":
+            thread.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
         else:
             return Response(
@@ -354,7 +339,7 @@ class ThreadActionView(generics.GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        ser = self.get_serializer(thread, context={"request": request})
+        ser = MessageThreadSerializer(thread, context={"request": request})
         return Response(ser.data)
 
 

@@ -1,13 +1,17 @@
-// frontend/src/pages/PublicProfile.jsx
-import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+// =======================================
+// file: frontend/src/pages/PublicProfile.jsx
+// Public profile + projects + contact + map
+// =======================================
+import { useParams, Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
 
+// Map helper (zip / city / address → Google Maps embed)
 function buildMapSrc(location) {
   if (!location) return null;
   const q = encodeURIComponent(location);
-  // Center map on ZIP / city; z=11 is a “regional” zoom
+  // z=11 → nice “service area” zoom
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
 }
 
@@ -23,26 +27,28 @@ export default function PublicProfile() {
 
     (async () => {
       try {
-        const [{ data: prof }, { data: proj }] = await Promise.all([
+        const [{ data: prof }, { data: projData }] = await Promise.all([
           api.get(`/profiles/${username}/`),
           api.get(`/projects/?owner=${username}`),
         ]);
 
         if (!alive) return;
 
+        const visibleProjects = Array.isArray(projData)
+          ? projData.filter(
+              (p) =>
+                p.owner_username === username &&
+                (p.is_public === undefined || p.is_public === true)
+            )
+          : [];
+
         setProfile(prof);
-        const arr = Array.isArray(proj) ? proj : [];
-        setProjects(
-          arr.filter(
-            (p) => p.owner_username === username && p.is_public
-          )
-        );
+        setProjects(visibleProjects);
       } catch (err) {
-        console.error("[PublicProfile] load error", err);
-        if (alive) {
-          setProfile(null);
-          setProjects([]);
-        }
+        console.error("[PublicProfile] failed to load", err);
+        if (!alive) return;
+        setProfile(null);
+        setProjects([]);
       } finally {
         if (alive) setLoading(false);
       }
@@ -53,149 +59,152 @@ export default function PublicProfile() {
     };
   }, [username]);
 
-  if (loading) {
-    return <p className="text-sm text-slate-500">Loading profile…</p>;
+  const mapSrc = useMemo(
+    () => buildMapSrc(profile?.service_location || ""),
+    [profile]
+  );
+
+  if (loading && !profile) {
+    return <div className="text-sm text-slate-500">Loading profile…</div>;
   }
 
   if (!profile) {
     return (
-      <p className="text-sm text-slate-600">
-        This profile could not be found.
-      </p>
+      <div className="text-sm text-slate-600">
+        Profile not found.{" "}
+        <Link to="/" className="text-blue-600 hover:underline">
+          Back to Explore
+        </Link>
+      </div>
     );
   }
 
-  const mapSrc = buildMapSrc(profile.service_location);
-  const radiusLabel =
-    profile.coverage_radius_miles != null
-      ? `${profile.coverage_radius_miles} mile${
-          profile.coverage_radius_miles === 1 ? "" : "s"
-        }`
-      : null;
+  const displayName = profile.display_name || profile.username;
+  const avatarSrc = profile.avatar_url || profile.logo || null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* HEADER */}
       <header className="flex flex-wrap items-center gap-4">
-        {profile.avatar_url && (
+        {avatarSrc ? (
           <img
-            src={profile.avatar_url}
-            alt={profile.display_name || profile.username}
+            src={avatarSrc}
+            alt={displayName}
             className="h-20 w-20 rounded-full object-cover"
           />
+        ) : (
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-xl font-semibold text-slate-700">
+            {displayName?.charAt(0)?.toUpperCase() || "?"}
+          </div>
         )}
+
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold text-slate-900">
-            {profile.display_name || profile.username}
+          <h1 className="truncate text-2xl font-bold text-slate-900">
+            {displayName}
           </h1>
+          {profile.service_location && (
+            <div className="mt-1 text-sm text-slate-600">
+              Serves: {profile.service_location}
+              {profile.coverage_radius_miles
+                ? ` · ~${profile.coverage_radius_miles} mi radius`
+                : ""}
+            </div>
+          )}
           {profile.bio && (
-            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+            <p className="mt-2 max-w-2xl text-sm text-slate-700">
               {profile.bio}
             </p>
           )}
+          <div className="mt-2 text-xs text-slate-500">
+            Profile URL:{" "}
+            <span className="font-mono text-[11px]">
+              /profiles/{profile.username}
+            </span>
+          </div>
         </div>
       </header>
 
-      {/* CONTACT + SERVICE AREA + MAP */}
-      <Card className="p-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Contact + service text */}
-          <div className="space-y-3">
+      {/* CONTACT + MAP */}
+      <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        {/* Contact card */}
+        <Card className="p-4">
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">
+            Contact
+          </h2>
+          <div className="space-y-1 text-sm text-slate-700">
             <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Contact
-              </div>
-              <p className="text-sm text-slate-700">
-                <span className="font-medium">Email:</span>{" "}
-                {profile.contact_email || "—"}
-              </p>
-              <p className="text-sm text-slate-700">
-                <span className="font-medium">Phone:</span>{" "}
-                {profile.contact_phone || "—"}
-              </p>
+              <span className="font-medium">Email:</span>{" "}
+              {profile.contact_email ? (
+                <a
+                  href={`mailto:${profile.contact_email}`}
+                  className="text-blue-600 hover:underline"
+                >
+                  {profile.contact_email}
+                </a>
+              ) : (
+                "—"
+              )}
             </div>
-
-            {(profile.service_location || radiusLabel) && (
-              <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Service area
-                </div>
-                <p className="text-sm text-slate-700">
-                  {profile.service_location ? (
-                    <>
-                      Serving{" "}
-                      {radiusLabel ? (
-                        <span>{radiusLabel} around </span>
-                      ) : (
-                        "around "
-                      )}
-                      <span className="font-medium">
-                        {profile.service_location}
-                      </span>
-                      .
-                    </>
-                  ) : (
-                    "Service area not specified."
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Tip: in Edit Profile, use a ZIP code (e.g. 19063) or city
-                  name for the service location so the map can find it.
-                </p>
-              </div>
-            )}
+            <div>
+              <span className="font-medium">Phone:</span>{" "}
+              {profile.contact_phone || "—"}
+            </div>
           </div>
+        </Card>
 
-          {/* Map */}
-          {mapSrc && (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-              <div className="h-64 w-full">
-                <iframe
-                  title="Service area map"
-                  src={mapSrc}
-                  className="h-full w-full border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              </div>
+        {/* Map card */}
+        {mapSrc && (
+          <Card className="p-4">
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">
+              Service area
+            </h2>
+            <div className="aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
+              <iframe
+                src={mapSrc}
+                title="Service area map"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="h-full w-full border-0"
+              />
             </div>
-          )}
-        </div>
-      </Card>
+          </Card>
+        )}
+      </div>
 
       {/* PROJECTS */}
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-slate-900">
-          Projects
-        </h2>
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-900">Projects</h2>
 
         {projects.length === 0 ? (
           <p className="text-sm text-slate-600">
-            No public projects yet.
+            No public projects published yet.
           </p>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
             {projects.map((p) => (
-              <div
+              <Link
                 key={p.id}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                to={`/projects/${p.id}`}
+                className="block text-inherit no-underline"
               >
-                {p.cover_image && (
-                  <img
-                    src={p.cover_image}
-                    alt={p.title || "project cover"}
-                    className="h-40 w-full object-cover"
-                  />
-                )}
-                <div className="p-3">
-                  <h3 className="mb-1 text-sm font-semibold text-slate-900">
-                    {p.title}
-                  </h3>
-                  <p className="line-clamp-2 text-xs text-slate-600">
-                    {p.summary || "No description provided."}
-                  </p>
-                </div>
-              </div>
+                <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
+                  {p.cover_image && (
+                    <img
+                      src={p.cover_image}
+                      alt={p.title || "project cover"}
+                      className="h-40 w-full object-cover"
+                    />
+                  )}
+                  <div className="p-3">
+                    <h3 className="mb-1 truncate text-sm font-semibold text-slate-900">
+                      {p.title}
+                    </h3>
+                    <p className="line-clamp-2 text-xs text-slate-600">
+                      {p.summary || "No summary provided."}
+                    </p>
+                  </div>
+                </Card>
+              </Link>
             ))}
           </div>
         )}

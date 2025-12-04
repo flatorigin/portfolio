@@ -1,221 +1,183 @@
 // =======================================
 // file: frontend/src/components/GlobalInbox.jsx
-// Dropdown inbox + unread badge on button
+// Small inbox dropdown in the header
 // =======================================
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api";
-import { Button } from "../ui";
-
-function Avatar({ profile }) {
-  if (!profile?.avatar_url) {
-    return (
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
-        {profile?.display_name?.charAt(0)?.toUpperCase() || "?"}
-      </div>
-    );
-  }
-  return (
-    <img
-      src={profile.avatar_url}
-      alt={profile.display_name || ""}
-      className="h-9 w-9 rounded-full object-cover"
-    />
-  );
-}
+import { Card } from "../ui";
 
 export default function GlobalInbox() {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const panelRef = useRef(null);
-  const authed = !!localStorage.getItem("access");
+  const [meUsername, setMeUsername] = useState("");
 
-  // ----- Click outside to close -----
+  const navigate = useNavigate();
+
+  const meLower = (meUsername || "").toLowerCase();
+
+  // ---- fetch current user once ----
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (panelRef.current && !panelRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  // ----- Shared fetch function -----
-  const fetchThreads = useCallback(async () => {
-    if (!authed) return;
-    setError("");
-    try {
-      const { data } = await api.get("/inbox/threads/");
-      setThreads(Array.isArray(data) ? data : []);
-    } catch (err) {
-      // don't spam errors, just keep it simple
-      setError("Unable to load your inbox.");
-      setThreads([]);
-    }
-  }, [authed]);
-
-  // ----- Load when dropdown opens -----
-  useEffect(() => {
-    if (!open || !authed) return;
-    setLoading(true);
     (async () => {
-      await fetchThreads();
-      setLoading(false);
+      try {
+        const { data } = await api.get("/users/me/");
+        setMeUsername(data.username || data.user?.username || "");
+      } catch (err) {
+        console.warn("[GlobalInbox] /users/me/ failed, using localStorage", err);
+        const local = localStorage.getItem("username") || "";
+        setMeUsername(local);
+      }
     })();
-  }, [open, authed, fetchThreads]);
+  }, []);
 
-  // ----- Background refresh for badge (poll + focus) -----
-  useEffect(() => {
-    if (!authed) return;
+  // ---- helper to find counterpart (other person) ----
+  const counterpartFor = (thread) => {
+    if (!thread) return null;
 
-    let cancelled = false;
+    const ownerProfile = thread.owner_profile || {};
+    const clientProfile = thread.client_profile || {};
 
-    async function refresh() {
-      if (cancelled) return;
-      await fetchThreads();
+    const ownerUsernameRaw =
+      thread.owner_username || ownerProfile.username || "";
+    const clientUsernameRaw =
+      thread.client_username || clientProfile.username || "";
+
+    const ownerLower = ownerUsernameRaw.toLowerCase();
+    const clientLower = clientUsernameRaw.toLowerCase();
+
+    const ownerDisplay =
+      ownerProfile.display_name || ownerUsernameRaw || "User";
+    const clientDisplay =
+      clientProfile.display_name || clientUsernameRaw || "User";
+
+    // If I'm the owner, counterpart is the client
+    if (meLower && ownerLower === meLower) {
+      return {
+        username: clientUsernameRaw,
+        display_name: clientDisplay,
+      };
     }
 
-    // initial
-    refresh();
+    // If I'm the client, counterpart is the owner
+    if (meLower && clientLower === meLower) {
+      return {
+        username: ownerUsernameRaw,
+        display_name: ownerDisplay,
+      };
+    }
 
-    // poll every 15s
-    const interval = setInterval(refresh, 15000);
+    // fallback: treat client as counterpart
+    return {
+      username: clientUsernameRaw,
+      display_name: clientDisplay,
+    };
+  };
 
-    // refresh when window gains focus
-    window.addEventListener("focus", refresh);
+  // ---- fetch threads when dropdown opens ----
+  useEffect(() => {
+    if (!open) return;
+
+    let alive = true;
+    setLoading(true);
+
+    api
+      .get("/inbox/threads/")
+      .then(({ data }) => {
+        if (!alive) return;
+        const arr = Array.isArray(data) ? data : [];
+        setThreads(arr);
+      })
+      .catch((err) => {
+        console.error("[GlobalInbox] failed to load threads", err);
+        if (alive) setThreads([]);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
 
     return () => {
-      cancelled = true;
-      clearInterval(interval);
-      window.removeEventListener("focus", refresh);
+      alive = false;
     };
-  }, [authed, fetchThreads]);
+  }, [open]);
 
-  // ----- Unread count for badge -----
-  const unreadCount = useMemo(() => {
-    // 🔧 Adjust this logic to match your API shape.
-    // If each thread has `unread_count`, this works out of the box:
-    return threads.reduce((sum, t) => sum + (t.unread_count || 0), 0);
-
-    // If your backend instead gives e.g. `t.has_unread`, use:
-    // return threads.reduce((sum, t) => sum + (t.has_unread ? 1 : 0), 0);
+  // sort newest first by latest message time
+  const sortedThreads = useMemo(() => {
+    return [...threads].sort((a, b) => {
+      const aTime =
+        a.latest_message?.created_at || a.updated_at || a.created_at || "";
+      const bTime =
+        b.latest_message?.created_at || b.updated_at || b.created_at || "";
+      return (bTime || "").localeCompare(aTime || "");
+    });
   }, [threads]);
 
-  if (!authed) return null;
-
   return (
-    <div className="relative" ref={panelRef}>
-      <Button
+    <div className="relative">
+      <button
         type="button"
-        className="relative px-3 py-1.5"
         onClick={() => setOpen((v) => !v)}
+        className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
       >
-        <span>Inbox</span>
-        {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white">
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
-        )}
-      </Button>
+        Inbox
+      </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-slate-900">
-              Private inbox
+        <div className="absolute right-0 mt-2 w-80">
+          <Card className="overflow-hidden border border-slate-200 p-0 shadow-lg">
+            <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Messages
             </div>
-            <button
-              type="button"
-              className="text-xs text-slate-500 hover:text-slate-700"
-              onClick={() => setOpen(false)}
-            >
-              Close
-            </button>
-          </div>
 
-          {loading ? (
-            <p className="text-xs text-slate-500">Loading…</p>
-          ) : error ? (
-            <p className="text-xs text-red-600">{error}</p>
-          ) : threads.length === 0 ? (
-            <p className="text-xs text-slate-500">
-              No private conversations yet.
-            </p>
-          ) : (
-            <div className="max-h-80 space-y-2 overflow-y-auto">
-              {threads.map((t) => {
-                const currentUsername = localStorage.getItem("username");
+            {loading ? (
+              <div className="p-3 text-xs text-slate-500">Loading…</div>
+            ) : sortedThreads.length === 0 ? (
+              <div className="p-3 text-xs text-slate-500">
+                No private conversations yet.
+              </div>
+            ) : (
+              <div className="max-h-80 overflow-y-auto">
+                {sortedThreads.map((t) => {
+                  const cp = counterpartFor(t);
+                  const name = cp?.display_name || cp?.username || "User";
 
-                let counterpart = t.counterpart || null;
+                  const latest = t.latest_message || null;
+                  const preview = latest?.text || "(attachment)";
+                  const timeLabel = latest?.created_at
+                    ? new Date(latest.created_at).toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })
+                    : "";
 
-                if (!counterpart) {
-                  const defaultOwner =
-                    t.owner_profile || { display_name: t.owner_username, username: t.owner_username };
-                  const defaultClient =
-                    t.client_profile || { display_name: t.client_username, username: t.client_username };
-
-                  const isOwnerMe =
-                    currentUsername && t.owner_username === currentUsername;
-
-                  counterpart = isOwnerMe ? defaultClient : defaultOwner;
-                }
-
-                const displayName =
-                  counterpart.display_name || counterpart.username || "User";
-
-                const latest = t.latest_message || null;
-                const latestPreview =
-                  latest?.text ||
-                  latest?.attachment_name ||
-                  "No messages yet";
-
-                return (
-                  <div
-                    key={t.id}
-                    className="rounded-xl border border-slate-100 p-2 hover:border-slate-200 hover:bg-slate-50"
-                  >
-                    {/* Clicking row opens conversation */}
+                  return (
                     <button
+                      key={t.id}
                       type="button"
-                      className="flex w-full flex-col items-start text-left"
                       onClick={() => {
                         setOpen(false);
                         navigate(`/messages/${t.id}`);
                       }}
+                      className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-50"
                     >
-                      <div className="flex w-full items-center justify-between gap-2">
-                        <div className="truncate text-sm font-semibold text-slate-800">
-                          {displayName}
+                      {/* name of the OTHER person */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-xs font-semibold text-slate-900">
+                          {name}
                         </div>
-                        {t.is_request && (
-                          <span className="rounded-full bg-amber-100 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                            Request
-                          </span>
-                        )}
+                        <div className="text-[11px] text-slate-400">
+                          {timeLabel}
+                        </div>
                       </div>
-
-                      <div className="mt-0.5 truncate text-[11px] text-slate-500">
-                        {latest?.sender_username &&
-                        latest.sender_username !== currentUsername
-                          ? `${latest.sender_username}: ${latestPreview}`
-                          : latestPreview}
+                      <div className="mt-0.5 line-clamp-2 text-[11px] text-slate-600">
+                        {preview}
                       </div>
                     </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="mt-2 text-right text-[11px] text-slate-500">
-            <Link to="/" className="underline">
-              View projects
-            </Link>
-          </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
         </div>
       )}
     </div>
