@@ -1,276 +1,343 @@
 // =======================================
-// file: frontend/src/pages/EditProfile.jsx
+// EditProfile.jsx
+// Loads / updates /api/users/me/
+// Shows contact info + simple service-area map
 // =======================================
 import { useEffect, useState } from "react";
 import api from "../api";
-import { Card, Button, Input, Textarea } from "../ui";
+import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 
 export default function EditProfile() {
+  const [form, setForm] = useState({
+    display_name: "",
+    service_location: "",
+    coverage_radius_miles: "",
+    contact_email: "",
+    contact_phone: "",
+    bio: "",
+  });
+
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [message, setMessage] = useState("");
 
-  // form state
-  const [displayName, setDisplayName] = useState("");
-  const [serviceLocation, setServiceLocation] = useState("");
-  const [radiusMiles, setRadiusMiles] = useState("");
-  const [bio, setBio] = useState("");
-
-  // NEW optional contact info
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-
-  // avatar / logo
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState("");
-
-  // -------- Load current profile from /users/me/ --------
+  // ----------------------------
+  // Load current profile: /api/users/me/
+  // ----------------------------
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setError("");
+    setMessage("");
 
-    async function loadProfile() {
-      setLoading(true);
-      setError("");
-      setSuccess("");
-
-      try {
-        const { data } = await api.get("/users/me/");
+    api
+      .get("/users/me/")
+      .then(({ data }) => {
         if (!alive) return;
 
-        console.log("[EditProfile] /users/me:", data);
+        setForm({
+          display_name: data.display_name || "",
+          service_location: data.service_location || "",
+          coverage_radius_miles:
+            data.coverage_radius_miles !== null &&
+            data.coverage_radius_miles !== undefined
+              ? String(data.coverage_radius_miles)
+              : "",
+          contact_email: data.contact_email || "",
+          contact_phone: data.contact_phone || "",
+          bio: data.bio || "",
+        });
 
-        setDisplayName(data.display_name || "");
-        setServiceLocation(data.service_location || "");
-        setRadiusMiles(
-          data.coverage_radius_miles === null ||
-          data.coverage_radius_miles === undefined
-            ? ""
-            : String(data.coverage_radius_miles)
-        );
-        setBio(data.bio || "");
-
-        // NEW: contact fields
-        setContactEmail(data.contact_email || "");
-        setContactPhone(data.contact_phone || "");
-
-        const avatar =
-          data.avatar_url || data.logo || data.avatar || "";
-        setAvatarPreview(avatar);
-      } catch (err) {
-        if (!alive) return;
+        setAvatarPreview(data.avatar_url || data.logo || null);
+      })
+      .catch((err) => {
         console.error("[EditProfile] load error", err?.response || err);
-        setError("Failed to load your profile.");
-      } finally {
+        setError("Could not load your profile.");
+      })
+      .finally(() => {
         if (alive) setLoading(false);
-      }
-    }
+      });
 
-    loadProfile();
     return () => {
       alive = false;
     };
   }, []);
 
-  // -------- Save changes (PATCH /users/me/) --------
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  // ----------------------------
+  // Form helpers
+  // ----------------------------
+  const updateField = (key) => (e) => {
+    const value = e.target.value;
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
 
-    const formData = new FormData();
-    formData.append("display_name", displayName.trim());
-    formData.append("service_location", serviceLocation.trim());
-    formData.append(
-      "coverage_radius_miles",
-      radiusMiles === "" ? "" : String(radiusMiles)
-    );
-    formData.append("bio", bio);
-
-    // NEW: optional contact info
-    formData.append("contact_email", contactEmail.trim());
-    formData.append("contact_phone", contactPhone.trim());
-
-    if (avatarFile) {
-      formData.append("logo", avatarFile); // backend uses logo/avatar
+  const handleLogoChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setLogoFile(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => setAvatarPreview(reader.result);
+      reader.readAsDataURL(file);
     }
+  };
 
+  // ----------------------------
+  // Save profile (PATCH /api/users/me/)
+  // ----------------------------
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setSaving(true);
+    setError("");
+    setMessage("");
+
     try {
-      const { data } = await api.patch("/users/me/", formData, {
+      const data = new FormData();
+      data.append("display_name", form.display_name || "");
+      data.append("service_location", form.service_location || "");
+      if (form.coverage_radius_miles !== "") {
+        data.append("coverage_radius_miles", form.coverage_radius_miles);
+      }
+      data.append("contact_email", form.contact_email || "");
+      data.append("contact_phone", form.contact_phone || "");
+      data.append("bio", form.bio || "");
+
+      if (logoFile) {
+        data.append("logo", logoFile);
+      }
+
+      const resp = await api.patch("/users/me/", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      setSuccess("Profile updated.");
+      const updated = resp.data || {};
+      setMessage("Profile updated.");
 
-      // sync back from response
-      setDisplayName(data.display_name || "");
-      setServiceLocation(data.service_location || "");
-      setRadiusMiles(
-        data.coverage_radius_miles === null ||
-        data.coverage_radius_miles === undefined
-          ? ""
-          : String(data.coverage_radius_miles)
-      );
-      setBio(data.bio || "");
-      setContactEmail(data.contact_email || "");
-      setContactPhone(data.contact_phone || "");
+      // keep form in sync with backend response
+      setForm((prev) => ({
+        ...prev,
+        display_name: updated.display_name ?? prev.display_name,
+        service_location: updated.service_location ?? prev.service_location,
+        coverage_radius_miles:
+          updated.coverage_radius_miles !== null &&
+          updated.coverage_radius_miles !== undefined
+            ? String(updated.coverage_radius_miles)
+            : prev.coverage_radius_miles,
+        contact_email: updated.contact_email ?? prev.contact_email,
+        contact_phone: updated.contact_phone ?? prev.contact_phone,
+        bio: updated.bio ?? prev.bio,
+      }));
 
-      const avatar =
-        data.avatar_url || data.logo || data.avatar || avatarPreview;
-      setAvatarPreview(avatar);
-      setAvatarFile(null);
+      if (updated.avatar_url || updated.logo) {
+        setAvatarPreview(updated.avatar_url || updated.logo);
+      }
     } catch (err) {
       console.error("[EditProfile] save error", err?.response || err);
-      const msg =
+      const detail =
         err?.response?.data?.detail ||
-        err?.response?.data?.error ||
-        "Failed to update profile.";
-      setError(typeof msg === "string" ? msg : "Failed to update profile.");
+        err?.response?.data?.non_field_errors ||
+        "Could not save your profile.";
+      setError(
+        typeof detail === "string" ? detail : JSON.stringify(detail, null, 2)
+      );
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  // -------- UI --------
+  // ----------------------------
+  // Simple service-area map
+  // ----------------------------
+  const mapSrc =
+    form.service_location.trim() !== ""
+      ? `https://www.google.com/maps?q=${encodeURIComponent(
+          form.service_location
+        )}&output=embed`
+      : null;
+
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold text-slate-900">Edit Profile</h1>
+      <SectionTitle>Edit profile</SectionTitle>
 
-      <Card className="max-w-xl space-y-4 p-4">
-        {loading ? (
-          <p className="text-sm text-slate-600">Loading profile…</p>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Display name */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Display name
-              </label>
-              <Input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Mokko Studio"
-              />
-            </div>
-
-            {/* Service location */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Service location
-              </label>
-              <Input
-                value={serviceLocation}
-                onChange={(e) => setServiceLocation(e.target.value)}
-                placeholder="e.g. Philadelphia, PA"
-              />
-            </div>
-
-            {/* Coverage radius */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Coverage radius (miles)
-              </label>
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={radiusMiles}
-                onChange={(e) => setRadiusMiles(e.target.value)}
-                placeholder="e.g. 25"
-              />
-            </div>
-
-            {/* NEW: Contact email */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Contact email <span className="text-xs text-slate-400">(optional)</span>
-              </label>
-              <Input
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                placeholder="e.g. hello@mokko.studio"
-              />
-            </div>
-
-            {/* NEW: Contact phone */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Contact phone <span className="text-xs text-slate-400">(optional)</span>
-              </label>
-              <Input
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                placeholder="e.g. (555) 123-4567"
-              />
-            </div>
-
-            {/* Bio */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Bio
-              </label>
-              <Textarea
-                rows={4}
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell people what kind of work you do…"
-              />
-            </div>
-
-            {/* Avatar / logo */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Avatar / Logo
-              </label>
-              <div className="flex items-center gap-3">
-                {avatarPreview ? (
-                  <img
-                    src={avatarPreview}
-                    alt="Avatar"
-                    className="h-16 w-16 rounded-full border border-slate-200 object-cover"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">
-                    No image
-                  </div>
-                )}
-
-                <label className="cursor-pointer text-xs font-medium text-slate-700">
-                  <span className="inline-flex items-center rounded-lg border border-slate-200 px-3 py-1 hover:bg-slate-50">
-                    Choose file
-                  </span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setAvatarFile(file || null);
-                      setError("");
-                      setSuccess("");
-                      if (file) {
-                        const url = URL.createObjectURL(file);
-                        setAvatarPreview(url);
-                      }
-                    }}
-                  />
+      {loading ? (
+        <p className="text-sm text-slate-600">Loading your profile…</p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)]">
+          {/* LEFT: form */}
+          <Card className="p-4 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Identity */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Display name
                 </label>
+                <Input
+                  value={form.display_name}
+                  onChange={updateField("display_name")}
+                  placeholder="Business / owner name"
+                />
               </div>
-            </div>
 
-            {/* Alerts */}
-            {error && <p className="text-xs text-red-600">{error}</p>}
-            {success && <p className="text-xs text-green-600">{success}</p>}
+              {/* Service area */}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Service ZIP code
+                  </label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{5}"
+                    value={form.service_location}
+                    onChange={updateField("service_location")}
+                    placeholder="e.g. 19063"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Enter your primary ZIP code. We’ll use this to show your service area on
+                    the map.
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Coverage radius (miles)
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={form.coverage_radius_miles}
+                    onChange={updateField("coverage_radius_miles")}
+                    placeholder="e.g. 10"
+                  />
+                </div>
+              </div>
 
-            <div className="pt-2">
-              <Button type="submit" disabled={saving}>
+              {/* Contact info */}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Public contact email
+                  </label>
+                  <Input
+                    type="email"
+                    value={form.contact_email}
+                    onChange={updateField("contact_email")}
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Public phone
+                  </label>
+                  <Input
+                    value={form.contact_phone}
+                    onChange={updateField("contact_phone")}
+                    placeholder="e.g. 215-555-1234"
+                  />
+                </div>
+              </div>
+
+              {/* Bio */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Bio / about
+                </label>
+                <Textarea
+                  rows={5}
+                  value={form.bio}
+                  onChange={updateField("bio")}
+                  placeholder="Tell homeowners what you do and how you work…"
+                  className="min-h-[140px]"
+                />
+              </div>
+
+              {/* Logo upload */}
+              <div className="space-y-2">
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Logo / profile image
+                </label>
+                <div className="flex items-center gap-3">
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Current logo"
+                      className="h-14 w-14 rounded-full object-cover border border-slate-200"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">
+                      No logo
+                    </div>
+                  )}
+                  <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoChange}
+                    />
+                    Choose image…
+                  </label>
+                </div>
+              </div>
+
+              {/* Messages */}
+              {error && (
+                <p className="text-xs text-red-600 whitespace-pre-wrap">
+                  {error}
+                </p>
+              )}
+              {message && (
+                <p className="text-xs text-emerald-600">{message}</p>
+              )}
+
+              <Button type="submit" disabled={saving} className="mt-2">
                 {saving ? "Saving…" : "Save changes"}
               </Button>
+            </form>
+          </Card>
+
+          {/* RIGHT: service-area map preview */}
+          <Card className="p-4 space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Service area preview
             </div>
-          </form>
-        )}
-      </Card>
+            <p className="text-xs text-slate-600">
+              This is a simple map preview of your{" "}
+              <span className="font-medium">
+                {form.service_location || "service location"}
+              </span>{" "}
+              {form.coverage_radius_miles && (
+                <>
+                  with approximately{" "}
+                  <span className="font-medium">
+                    {form.coverage_radius_miles}-mile
+                  </span>{" "}
+                  radius.
+                </>
+              )}
+            </p>
+
+            <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+              {mapSrc ? (
+                <iframe
+                  title="Service area map"
+                  src={mapSrc}
+                  className="h-64 w-full border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              ) : (
+                <div className="flex h-64 items-center justify-center text-xs text-slate-500">
+                  Enter a service location to see it on the map.
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,133 +1,171 @@
-// =======================================
-// file: frontend/src/pages/PublicProfile.jsx
-// Public profile at /u/:username
-// =======================================
-import { useParams, Link } from "react-router-dom";
+// frontend/src/pages/PublicProfile.jsx
+import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
+
+function buildMapSrc(location) {
+  if (!location) return null;
+  const q = encodeURIComponent(location);
+  // Center map on ZIP / city; z=11 is a “regional” zoom
+  return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
+}
 
 export default function PublicProfile() {
   const { username } = useParams();
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    setError("");
 
-    async function load() {
+    (async () => {
       try {
-        const [profRes, projRes] = await Promise.all([
-          api.get(`/profiles/${encodeURIComponent(username)}/`),
-          api.get(`/projects/?owner=${encodeURIComponent(username)}`),
+        const [{ data: prof }, { data: proj }] = await Promise.all([
+          api.get(`/profiles/${username}/`),
+          api.get(`/projects/?owner=${username}`),
         ]);
 
         if (!alive) return;
 
-        setProfile(profRes.data || null);
-
-        const arr = Array.isArray(projRes.data) ? projRes.data : [];
+        setProfile(prof);
+        const arr = Array.isArray(proj) ? proj : [];
         setProjects(
           arr.filter(
             (p) => p.owner_username === username && p.is_public
           )
         );
       } catch (err) {
-        if (!alive) return;
-        console.error("[PublicProfile] load error", err?.response || err);
-        setError("Unable to load this profile.");
+        console.error("[PublicProfile] load error", err);
+        if (alive) {
+          setProfile(null);
+          setProjects([]);
+        }
       } finally {
         if (alive) setLoading(false);
       }
-    }
+    })();
 
-    load();
     return () => {
       alive = false;
     };
   }, [username]);
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Loading profile…</p>;
+    return <p className="text-sm text-slate-500">Loading profile…</p>;
   }
 
-  if (error || !profile) {
+  if (!profile) {
     return (
-      <p className="text-sm text-red-600">
-        {error || "Profile not found."}
+      <p className="text-sm text-slate-600">
+        This profile could not be found.
       </p>
     );
   }
 
-  const displayName = profile.display_name || profile.username;
-  const avatarSrc = profile.avatar_url || profile.logo || "";
-  const initial = displayName?.charAt(0)?.toUpperCase() || "?";
+  const mapSrc = buildMapSrc(profile.service_location);
+  const radiusLabel =
+    profile.coverage_radius_miles != null
+      ? `${profile.coverage_radius_miles} mile${
+          profile.coverage_radius_miles === 1 ? "" : "s"
+        }`
+      : null;
 
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <header className="flex items-center gap-4">
-        {avatarSrc ? (
+      <header className="flex flex-wrap items-center gap-4">
+        {profile.avatar_url && (
           <img
-            src={avatarSrc}
-            alt={displayName}
-            className="h-20 w-20 rounded-full border border-slate-200 object-cover"
+            src={profile.avatar_url}
+            alt={profile.display_name || profile.username}
+            className="h-20 w-20 rounded-full object-cover"
           />
-        ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-2xl font-semibold text-slate-700">
-            {initial}
-          </div>
         )}
-
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-slate-900">
-            {displayName}
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-semibold text-slate-900">
+            {profile.display_name || profile.username}
           </h1>
-          {profile.service_location && (
-            <div className="text-sm text-slate-600">
-              {profile.service_location}
-            </div>
+          {profile.bio && (
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              {profile.bio}
+            </p>
           )}
         </div>
       </header>
 
-      {/* CONTACT CARD */}
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-slate-900">
-          Contact
-        </h2>
-        <Card className="max-w-sm p-4">
-          <div className="space-y-1 text-sm text-slate-700">
+      {/* CONTACT + SERVICE AREA + MAP */}
+      <Card className="p-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Contact + service text */}
+          <div className="space-y-3">
             <div>
-              <span className="font-semibold">Email:</span>{" "}
-              {profile.contact_email || "—"}
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Contact
+              </div>
+              <p className="text-sm text-slate-700">
+                <span className="font-medium">Email:</span>{" "}
+                {profile.contact_email || "—"}
+              </p>
+              <p className="text-sm text-slate-700">
+                <span className="font-medium">Phone:</span>{" "}
+                {profile.contact_phone || "—"}
+              </p>
             </div>
-            <div>
-              <span className="font-semibold">Phone:</span>{" "}
-              {profile.contact_phone || "—"}
-            </div>
+
+            {(profile.service_location || radiusLabel) && (
+              <div>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Service area
+                </div>
+                <p className="text-sm text-slate-700">
+                  {profile.service_location ? (
+                    <>
+                      Serving{" "}
+                      {radiusLabel ? (
+                        <span>{radiusLabel} around </span>
+                      ) : (
+                        "around "
+                      )}
+                      <span className="font-medium">
+                        {profile.service_location}
+                      </span>
+                      .
+                    </>
+                  ) : (
+                    "Service area not specified."
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Tip: in Edit Profile, use a ZIP code (e.g. 19063) or city
+                  name for the service location so the map can find it.
+                </p>
+              </div>
+            )}
           </div>
-        </Card>
-      </section>
 
-      {/* MESSAGE LABEL (you can hook a form or CTA here later) */}
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-slate-900">
-          Message this profile
-        </h2>
-        <p className="text-xs text-slate-500">
-          Start a private conversation from any project page using the
-          “Private inquiries” box.
-        </p>
-      </section>
+          {/* Map */}
+          {mapSrc && (
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+              <div className="h-64 w-full">
+                <iframe
+                  title="Service area map"
+                  src={mapSrc}
+                  className="h-full w-full border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
 
-      {/* PROJECTS GRID */}
+      {/* PROJECTS */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
           Projects
         </h2>
 
@@ -138,29 +176,26 @@ export default function PublicProfile() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
             {projects.map((p) => (
-              <Link
+              <div
                 key={p.id}
-                to={`/projects/${p.id}`}
-                className="block text-inherit no-underline"
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
               >
-                <Card className="overflow-hidden">
-                  {p.cover_image && (
-                    <img
-                      src={p.cover_image}
-                      alt={p.title || "Project cover"}
-                      className="h-40 w-full object-cover"
-                    />
-                  )}
-                  <div className="p-3">
-                    <h3 className="mb-1 text-sm font-semibold text-slate-900">
-                      {p.title}
-                    </h3>
-                    <p className="line-clamp-2 text-xs text-slate-600">
-                      {p.summary}
-                    </p>
-                  </div>
-                </Card>
-              </Link>
+                {p.cover_image && (
+                  <img
+                    src={p.cover_image}
+                    alt={p.title || "project cover"}
+                    className="h-40 w-full object-cover"
+                  />
+                )}
+                <div className="p-3">
+                  <h3 className="mb-1 text-sm font-semibold text-slate-900">
+                    {p.title}
+                  </h3>
+                  <p className="line-clamp-2 text-xs text-slate-600">
+                    {p.summary || "No description provided."}
+                  </p>
+                </div>
+              </div>
             ))}
           </div>
         )}
