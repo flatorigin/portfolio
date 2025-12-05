@@ -167,8 +167,41 @@ export default function EditProfile() {
       ) : (
         <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)]">
           {/* LEFT: form */}
-          <Card className="p-4 space-y-4">
+          <Card className="space-y-4 p-4">
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* 🔹 Logo / profile image at the top */}
+              <div className="flex items-center gap-3">
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Current logo"
+                    className="h-16 w-16 rounded-full border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">
+                    No logo
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm font-medium text-slate-800">
+                    Logo / profile image
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    This will be shown on your public profile and projects.
+                  </p>
+                  <label className="mt-2 inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoChange}
+                    />
+                    Choose image…
+                  </label>
+                </div>
+              </div>
+
               {/* Identity */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
@@ -196,8 +229,8 @@ export default function EditProfile() {
                     placeholder="e.g. 19063"
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Enter your primary ZIP code. We’ll use this to show your service area on
-                    the map.
+                    Enter your primary ZIP code. We’ll use this to show your
+                    service area on the map.
                   </p>
                 </div>
                 <div>
@@ -254,38 +287,9 @@ export default function EditProfile() {
                 />
               </div>
 
-              {/* Logo upload */}
-              <div className="space-y-2">
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Logo / profile image
-                </label>
-                <div className="flex items-center gap-3">
-                  {avatarPreview ? (
-                    <img
-                      src={avatarPreview}
-                      alt="Current logo"
-                      className="h-14 w-14 rounded-full object-cover border border-slate-200"
-                    />
-                  ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">
-                      No logo
-                    </div>
-                  )}
-                  <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleLogoChange}
-                    />
-                    Choose image…
-                  </label>
-                </div>
-              </div>
-
               {/* Messages */}
               {error && (
-                <p className="text-xs text-red-600 whitespace-pre-wrap">
+                <p className="whitespace-pre-wrap text-xs text-red-600">
                   {error}
                 </p>
               )}
@@ -300,7 +304,7 @@ export default function EditProfile() {
           </Card>
 
           {/* RIGHT: service-area map preview */}
-          <Card className="p-4 space-y-3">
+          <Card className="space-y-3 p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Service area preview
             </div>

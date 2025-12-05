@@ -1,11 +1,11 @@
 // =======================================
 // file: frontend/src/pages/ProjectDetail.jsx
+// Project page + lightbox-style comments modal
 // =======================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
-import { Card, Button, Textarea } from "../ui";
-import PrivateMessagingPanel from "../components/PrivateMessagingPanel";
+import { Badge, Card, Button, Textarea } from "../ui";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -18,37 +18,37 @@ function toUrl(raw) {
 function buildMapSrc(location) {
   if (!location) return null;
   const q = encodeURIComponent(location);
-  // Center map on ZIP / city; z=11 is a “regional” zoom
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
 }
 
 export default function ProjectDetail() {
   const { id } = useParams();
+
+  // project + media
   const [project, setProject] = useState(null);
   const [images, setImages] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [idx, setIdx] = useState(0);
 
-  // comments
+  // current user
+  const [meUser, setMeUser] = useState(null);
+  const authed = !!localStorage.getItem("access");
+
+  // comments state
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [commentBusy, setCommentBusy] = useState(false);
   const [commentError, setCommentError] = useState("");
-
-  // current user (from API)
-  const [meUser, setMeUser] = useState(null);
-
-  // which comment the owner is replying to
   const [replyingTo, setReplyingTo] = useState(null);
 
-  // edit state for comments
+  // editing state
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [editBusy, setEditBusy] = useState(false);
 
-  const authed = !!localStorage.getItem("access");
+  // modal state (project + comments)
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
 
-  // fetch current user once (if logged in)
+  // fetch current user
   useEffect(() => {
     if (!authed) {
       setMeUser(null);
@@ -70,12 +70,16 @@ export default function ProjectDetail() {
     })();
   }, [authed]);
 
+  // load project + images + comments
   const fetchAll = useCallback(async () => {
     try {
-      const [{ data: meta }, { data: imgs }] = await Promise.all([
-        api.get(`/projects/${id}/`),
-        api.get(`/projects/${id}/images/`),
-      ]);
+      const [{ data: meta }, { data: imgs }, { data: cmts }] = await Promise.all(
+        [
+          api.get(`/projects/${id}/`),
+          api.get(`/projects/${id}/images/`),
+          api.get(`/projects/${id}/comments/`).catch(() => ({ data: [] })),
+        ]
+      );
 
       setProject(meta || null);
       setImages(
@@ -86,16 +90,9 @@ export default function ProjectDetail() {
           }))
           .filter((x) => !!x.url)
       );
-
-      try {
-        const { data: cmts } = await api.get(`/projects/${id}/comments/`);
-        setComments(Array.isArray(cmts) ? cmts : []);
-      } catch (err) {
-        console.warn("[ProjectDetail] comments fetch failed:", err);
-        setComments([]);
-      }
+      setComments(Array.isArray(cmts) ? cmts : []);
     } catch (err) {
-      console.error("[ProjectDetail] project/images fetch failed:", err);
+      console.error("[ProjectDetail] fetch failed:", err);
       setProject(null);
       setImages([]);
       setComments([]);
@@ -106,19 +103,6 @@ export default function ProjectDetail() {
     fetchAll();
   }, [fetchAll]);
 
-  const next = useCallback(
-    () => setIdx((i) => (images.length ? (i + 1) % images.length : 0)),
-    [images.length]
-  );
-
-  const prev = useCallback(
-    () =>
-      setIdx((i) =>
-        images.length ? (i - 1 + images.length) % images.length : 0
-      ),
-    [images.length]
-  );
-
   const isOwnerUser =
     authed &&
     project &&
@@ -128,6 +112,50 @@ export default function ProjectDetail() {
 
   const myUsername = meUser?.username || null;
 
+  // image navigation helpers (used by arrows)
+  const nextImage = useCallback(() => {
+    if (!images.length) return;
+    setActiveImageIdx((idx) => (idx + 1) % images.length);
+  }, [images.length]);
+
+  const prevImage = useCallback(() => {
+    if (!images.length) return;
+    setActiveImageIdx((idx) => (idx - 1 + images.length) % images.length);
+  }, [images.length]);
+
+  // keyboard arrow navigation while modal is open
+  useEffect(() => {
+    if (!commentsOpen) return;
+    const handler = (e) => {
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        nextImage();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        prevImage();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [commentsOpen, nextImage, prevImage]);
+
+  // ---- comments helpers ----
+  const roots = useMemo(
+    () => comments.filter((c) => !c.in_reply_to),
+    [comments]
+  );
+  const repliesByParent = useMemo(
+    () =>
+      comments.reduce((acc, c) => {
+        if (c.in_reply_to) {
+          if (!acc[c.in_reply_to]) acc[c.in_reply_to] = [];
+          acc[c.in_reply_to].push(c);
+        }
+        return acc;
+      }, {}),
+    [comments]
+  );
+
   async function submitComment(e) {
     e.preventDefault();
     setCommentError("");
@@ -136,31 +164,56 @@ export default function ProjectDetail() {
       setCommentError("You need to be logged in to comment.");
       return;
     }
-    if (!commentText.trim()) {
+
+    const trimmed = commentText.trim();
+    if (!trimmed) {
       setCommentError("Comment cannot be empty.");
       return;
     }
 
     setCommentBusy(true);
-    try {
-      const payload = { text: commentText.trim() };
-      const { data } = await api.post(`/projects/${id}/comments/`, payload);
 
-      let augmented = data;
+    try {
+      // --- payload: keep it as simple as possible ---
+      const payload = { text: trimmed };
+
+      // Only send in_reply_to if you KNOW your backend supports it
       if (replyingTo && isOwnerUser) {
-        augmented = { ...data, in_reply_to: replyingTo.id };
+        payload.in_reply_to = replyingTo.id;
       }
 
-      setComments((prev) => [augmented, ...prev]);
+      console.log("[Comment] POST payload:", payload);
+
+      // --- create comment ---
+      const resp = await api.post(`/projects/${id}/comments/`, payload);
+      console.log("[Comment] POST response:", resp.status, resp.data);
+
+      // --- now re-fetch the full comments list from the server ---
+      const { data: fresh } = await api.get(`/projects/${id}/comments/`);
+      console.log("[Comment] refreshed comments:", fresh);
+
+      setComments(Array.isArray(fresh) ? fresh : []);
+
+      // reset input + reply target
       setCommentText("");
       setReplyingTo(null);
+      setCommentError("");
     } catch (err) {
-      console.error("comment post error:", err?.response || err);
+      console.error("[Comment] error:", err);
+
+      const data = err?.response?.data;
+      console.log("[Comment] error response.data:", data);
+
       const msg =
-        err?.response?.data?.detail ||
-        err?.response?.data?.text ||
+        data?.detail ||
+        data?.text ||
+        data?.non_field_errors ||
+        data?.message ||
         "Failed to post comment.";
-      setCommentError(typeof msg === "string" ? msg : JSON.stringify(msg));
+
+      setCommentError(
+        typeof msg === "string" ? msg : JSON.stringify(msg, null, 2)
+      );
     } finally {
       setCommentBusy(false);
     }
@@ -169,20 +222,13 @@ export default function ProjectDetail() {
   function replyAsOwnerTo(comment) {
     if (!isOwnerUser) return;
     setReplyingTo(comment);
-
-    const handle = comment.author_username
-      ? `@${comment.author_username} `
-      : "";
+    const handle = comment.author_username ? `@${comment.author_username} ` : "";
     setCommentText((prev) => {
       if (prev.trim().startsWith(handle.trim())) return prev;
       return handle + prev;
     });
-
-    const el = document.getElementById("project-comment-textarea");
-    if (el) el.focus();
   }
 
-  // ---- Editing comments ----
   function startEditComment(comment) {
     setEditingCommentId(comment.id);
     setEditingText(comment.text || "");
@@ -228,23 +274,127 @@ export default function ProjectDetail() {
     }
   }
 
-  // build simple client-side thread view:
-  const roots = comments.filter((c) => !c.in_reply_to);
-  const repliesByParent = comments.reduce((acc, c) => {
-    if (c.in_reply_to) {
-      if (!acc[c.in_reply_to]) acc[c.in_reply_to] = [];
-      acc[c.in_reply_to].push(c);
-    }
-    return acc;
-  }, {});
-
   const mapSrc = buildMapSrc(project?.location || "");
 
+  // ---- rendering helpers ----
+  const renderCommentBlock = (c, isReply = false) => {
+    const replies = repliesByParent[c.id] || [];
+
+    const isOwnerAuthor =
+      project &&
+      c.author_username &&
+      c.author_username.toLowerCase() ===
+        (project.owner_username || "").toLowerCase();
+
+    const isMine =
+      myUsername &&
+      c.author_username &&
+      c.author_username.toLowerCase() === myUsername.toLowerCase();
+
+    const isEditing = editingCommentId === c.id;
+
+    return (
+      <div
+        key={c.id}
+        className={
+          "rounded-lg border border-slate-200 bg-white p-3 text-sm " +
+          (isReply ? "ml-3" : "")
+        }
+      >
+        <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-slate-700">
+              {c.author_username || "Anonymous"}
+            </span>
+            {isOwnerAuthor && (
+              <span className="rounded-full bg-slate-900 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-white">
+                Owner
+              </span>
+            )}
+          </div>
+          <span>
+            {c.created_at ? new Date(c.created_at).toLocaleString() : ""}
+          </span>
+        </div>
+
+        {isEditing ? (
+          <div className="space-y-2">
+            <Textarea
+              rows={2}
+              value={editingText}
+              onChange={(e) => setEditingText(e.target.value)}
+            />
+            <div className="flex items-center gap-2 text-xs">
+              <Button
+                type="button"
+                disabled={editBusy}
+                onClick={() => saveEditComment(c)}
+              >
+                {editBusy ? "Saving…" : "Save"}
+              </Button>
+              <button
+                type="button"
+                className="text-slate-500 hover:text-slate-700"
+                onClick={cancelEditComment}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="whitespace-pre-line text-slate-800">{c.text}</p>
+        )}
+
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+          {isOwnerUser && !isOwnerAuthor && (
+            <button
+              type="button"
+              onClick={() => replyAsOwnerTo(c)}
+              className="font-medium hover:text-slate-700"
+            >
+              Reply as owner
+            </button>
+          )}
+          {isMine && !isEditing && (
+            <>
+              <button
+                type="button"
+                onClick={() => startEditComment(c)}
+                className="font-medium hover:text-slate-700"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteComment(c)}
+                className="font-medium text-red-500 hover:text-red-700"
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+
+        {replies.length > 0 && (
+          <div className="mt-2 space-y-2 border-l border-slate-200 pl-3">
+            {replies.map((r) => renderCommentBlock(r, true))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const currentImage =
+    images.length && activeImageIdx >= 0
+      ? images[Math.min(activeImageIdx, images.length - 1)]
+      : null;
+
+  // ─────────────────────────────
+  // RENDER
+  // ─────────────────────────────
   return (
     <div>
-      {/* ─────────────────────────────
-          Breadcrumb (outside card)
-      ───────────────────────────── */}
+      {/* Breadcrumb */}
       <div className="mb-4 flex items-center justify-between">
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -263,11 +413,9 @@ export default function ProjectDetail() {
         </Link>
       </div>
 
-      {/* ─────────────────────────────
-          Main project card
-      ───────────────────────────── */}
-      <Card className="mb-8 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
-        {/* Card header: title, owner, meta pills */}
+      {/* Main project card only */}
+      <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
+        {/* header */}
         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 text-white sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -287,39 +435,18 @@ export default function ProjectDetail() {
                 )}
               </div>
             </div>
-
-            {/* quick stats pill */}
-            {(project?.sqf || project?.budget) && (
-              <div className="flex flex-col items-end gap-1 text-right text-[11px] text-slate-100/90">
-                {project?.sqf && (
-                  <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5">
-                    Sq Ft:{" "}
-                    <span className="ml-1 font-semibold">{project.sqf}</span>
-                  </span>
-                )}
-                {project?.budget && (
-                  <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5">
-                    Budget:{" "}
-                    <span className="ml-1 font-semibold">
-                      {project.budget}
-                    </span>
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Card body: summary, meta grid, media, map */}
+        {/* body */}
         <div className="space-y-6 p-4 sm:p-6">
-          {/* Summary */}
           {project?.summary && (
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">
               {project.summary}
             </p>
           )}
 
-          {/* Meta grid */}
+          {/* Meta / Project details */}
           {(project?.location ||
             project?.budget ||
             project?.sqf ||
@@ -328,46 +455,56 @@ export default function ProjectDetail() {
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Project details
               </div>
-              <div className="grid grid-cols-1 gap-3 text-sm text-slate-700 md:grid-cols-4">
-                {project?.location ? (
-                  <div>
-                    <div className="text-xs font-medium text-slate-500">
+              {/* Row that wraps to second line on smaller screens */}
+              <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm text-slate-700">
+                {project?.location && (
+                  <div className="min-w-[140px] flex-wrap">
+                    <div className="text-xs font-medium uppercase text-slate-500">
                       Location
                     </div>
-                    <div>{project.location}</div>
+                    <div className="text-lg font-semibold">
+                      {project.location}
+                    </div>
                   </div>
-                ) : null}
-                {project?.budget ? (
-                  <div>
-                    <div className="text-xs font-medium text-slate-500">
+                )}
+
+                {project?.budget && (
+                  <div className="min-w-[140px] flex-wrap">
+                    <div className="text-xs font-medium uppercase text-slate-500">
                       Budget
                     </div>
-                    <div>{project.budget}</div>
+                    <div className="text-lg font-semibold">
+                      {project.budget}
+                    </div>
                   </div>
-                ) : null}
-                {project?.sqf ? (
-                  <div>
-                    <div className="text-xs font-medium text-slate-500">
+                )}
+
+                {project?.sqf && (
+                  <div className="min-w-[140px] flex-wrap ">
+                    <div className="text-xs font-semibold uppercase text-slate-500">
                       Sq Ft
                     </div>
-                    <div>{project.sqf}</div>
+                    <div className="text-lg font-semibold">
+                      {project.sqf}
+                    </div>
                   </div>
-                ) : null}
-                {project?.highlights ? (
-                  <div className="md:col-span-4">
-                    <div className="text-xs font-medium text-slate-500">
+                )}
+
+                {project?.highlights && (
+                  <div className="min-w-[140px] flex-wrap">
+                    <div className="text-xs font-semibold uppercase text-slate-500">
                       Highlights
                     </div>
-                    <div className="mt-0.5 whitespace-pre-line text-sm text-slate-700">
+                    <div className="mt-0.5 whitespace-pre-line text-lg font-semibold">
                       {project.highlights}
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
           )}
 
-          {/* Media gallery */}
+          {/* media grid */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -387,36 +524,32 @@ export default function ProjectDetail() {
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
                 {images.map((img, i) => (
-                  <figure
+                  <button
+                    type="button"
                     key={img.url + i}
-                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white"
+                    onClick={() => {
+                      setActiveImageIdx(i);
+                      setCommentsOpen(true);
+                    }}
+                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white text-left"
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIdx(i);
-                        setOpen(true);
-                      }}
-                      className="block w-full"
-                    >
-                      <img
-                        src={img.url}
-                        alt={img.caption || ""}
-                        className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
-                      />
-                    </button>
+                    <img
+                      src={img.url}
+                      alt={img.caption || ""}
+                      className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
+                    />
                     {img.caption && (
-                      <figcaption className="px-3 py-2 text-xs text-slate-700">
+                      <div className="px-3 py-2 text-xs text-slate-700">
                         {img.caption}
-                      </figcaption>
+                      </div>
                     )}
-                  </figure>
+                  </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Map (if location present) */}
+          {/* map */}
           {mapSrc && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -444,352 +577,188 @@ export default function ProjectDetail() {
         </div>
       </Card>
 
-      {/* Lightbox */}
-      {open && images[idx] && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
-          onClick={() => setOpen(false)}
+      {/* comment trigger under project */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setCommentsOpen(true)}
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50"
         >
-          <div
-            className="relative flex max-h-[85vh] max-w-[90vw] items-center justify-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={prev}
-              aria-label="Prev"
-              className="absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 rounded-full border border-white/40 px-3 py-1 text-white/90"
-            >
-              ‹
-            </button>
+          <span aria-hidden>💬</span>
+          <span>{comments.length || 0} comments</span>
+        </button>
+      </div>
 
-            <img
-              src={images[idx].url}
-              alt={images[idx].caption || ""}
-              className="h-auto max-h-[80vh] w-auto max-w-[90vw] rounded-xl bg-black/40 object-contain shadow-2xl"
-            />
+      {/* ─────────────────────────────
+          FULLSCREEN MODAL: images + comments
+      ───────────────────────────── */}
+      {commentsOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-2 sm:p-4">
+          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl md:h-[90vh] md:flex-row">
+            {/* Left: image area */}
+            <div className="relative flex-1 bg-black md:min-w-[60%]">
+              {currentImage ? (
+                <>
+                  {/* Image + numeric pagination live inside here */}
+                  <div className="flex h-full flex-col">
+                    <div className="flex-1 bg-black">
+                      <img
+                        src={currentImage.url}
+                        alt={currentImage.caption || ""}
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
 
-            {images[idx].caption && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-black/70 px-3 py-1 text-sm text-white">
-                {images[idx].caption}
+                    {/* numeric pagination row + small arrows */}
+                    {images.length > 1 && (
+                      <div className="flex items-center justify-center gap-1 bg-black/80 px-3 py-2 text-[11px] text-slate-100">
+                        <button
+                          type="button"
+                          onClick={prevImage}
+                          className="mr-1 rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20"
+                        >
+                          ‹
+                        </button>
+                        {images.map((img, i) => (
+                          <button
+                            key={img.url + i}
+                            type="button"
+                            onClick={() => setActiveImageIdx(i)}
+                            className={
+                              "mx-[2px] rounded-full px-2 py-0.5 " +
+                              (i === activeImageIdx
+                                ? "bg-white text-black"
+                                : "bg-white/10 text-slate-100 hover:bg-white/20")
+                            }
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={nextImage}
+                          className="ml-1 rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* big overlay arrows – now aligned to the whole left pane, 
+                      not the image height */}
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={prevImage}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-lg leading-none text-white hover:bg-black/80"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        onClick={nextImage}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-lg leading-none text-white hover:bg-black/80"
+                      >
+                        ›
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-slate-200">
+                  No media
+                </div>
+              )}
+            </div>
+
+            {/* Right: comments column */}
+            <div className="flex w-full max-w-sm flex-col border-t border-slate-200 bg-slate-50 md:h-full md:border-l md:border-t-0">
+              {/* header */}
+              <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-slate-900">
+                    {project?.title || `Project #${id}`}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {comments.length || 0} comment
+                    {comments.length === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCommentsOpen(false)}
+                  className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+                >
+                  ✕
+                </button>
               </div>
-            )}
 
-            <button
-              type="button"
-              onClick={next}
-              aria-label="Next"
-              className="absolute right-0 top-1/2 translate-x-full -translate-y-1/2 rounded-full border border-white/40 px-3 py-1 text-white/90"
-            >
-              ›
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close"
-              className="absolute -right-4 -top-4 rounded-full border border-white/40 px-2 py-1 text-white/90"
-            >
-              ✕
-            </button>
+              {/* comments list */}
+              <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-3 text-sm">
+                {roots.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    No comments yet. Be the first to comment.
+                  </p>
+                ) : (
+                  roots.map((c) => renderCommentBlock(c))
+                )}
+              </div>
+
+              {/* form */}
+              <div className="border-t border-slate-200 bg-white px-3 py-3">
+                {authed ? (
+                  <form onSubmit={submitComment} className="space-y-2">
+                    {replyingTo && (
+                      <div className="flex items-start justify_between rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
+                        <div>
+                          Replying to{" "}
+                          <span className="font-semibold">
+                            {replyingTo.author_username || "user"}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setReplyingTo(null)}
+                          className="ml-2 text-xs text-slate-500 hover:text-slate-700"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                    <Textarea
+                      rows={2}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="Add a public comment…"
+                      className="min-h-[60px]"
+                    />
+                    {commentError && (
+                      <p className="text-[11px] text-red-600">
+                        {commentError}
+                      </p>
+                    )}
+                    <div className="flex justify-end">
+                      <Button
+                        type="submit"
+                        disabled={commentBusy || !commentText.trim()}
+                      >
+                        {commentBusy ? "Posting…" : "Post"}
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="text-xs text-slate-600">
+                    <span className="font-medium">Login</span> to add a
+                    comment.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
-
-      {/* 5) COMMENTS + PRIVATE MESSAGES BELOW MAP */}
-      <div className="mt-8 grid gap-4 md:grid-cols-2 md:items-start">
-        {/* PUBLIC COMMENTS COLUMN */}
-        <div className="min-h-[100px] space-y-4">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Public comments
-          </h2>
-
-          {/* form */}
-          {authed ? (
-            <Card className="space-y-3 p-4">
-              {replyingTo && (
-                <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  <div>
-                    <div className="mb-0.5 font-semibold">
-                      Replying to {replyingTo.author_username || "user"}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setReplyingTo(null)}
-                    className="ml-3 text-[11px] font-medium text-slate-500 hover:text-slate-700"
-                  >
-                    ✕ Cancel
-                  </button>
-                </div>
-              )}
-
-              <form onSubmit={submitComment} className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    {isOwnerUser
-                      ? "Reply or comment as owner"
-                      : "Add a comment"}
-                  </label>
-                  <Textarea
-                    id="project-comment-textarea"
-                    rows={3}
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder={
-                      isOwnerUser
-                        ? "Write a reply or general comment as the project owner…"
-                        : "Share your thoughts about this project…"
-                    }
-                    className="min-h-[100px]"
-                  />
-                </div>
-                {commentError && (
-                  <p className="text-xs text-red-600">{commentError}</p>
-                )}
-                <Button type="submit" disabled={commentBusy}>
-                  {commentBusy ? "Posting…" : "Post comment"}
-                </Button>
-              </form>
-            </Card>
-          ) : (
-            <Card className="min-h-[100px] p-4 text-sm text-slate-600">
-              <span className="font-medium">Login</span> to add a comment.
-            </Card>
-          )}
-
-          {/* list */}
-          {roots.length === 0 ? (
-            <p className="text-sm text-slate-600">
-              No comments yet. Be the first to comment.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {roots.map((c) => {
-                const replies = repliesByParent[c.id] || [];
-
-                const isOwnerAuthor =
-                  project &&
-                  c.author_username &&
-                  c.author_username.toLowerCase() ===
-                    (project.owner_username || "").toLowerCase();
-
-                const isMine =
-                  myUsername &&
-                  c.author_username &&
-                  c.author_username.toLowerCase() ===
-                    myUsername.toLowerCase();
-
-                const isEditing = editingCommentId === c.id;
-
-                return (
-                  <Card key={c.id} className="p-3">
-                    {/* root header */}
-                    <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-700">
-                          {c.author_username || "Anonymous"}
-                        </span>
-                        {isOwnerAuthor && (
-                          <span className="rounded-full bg-slate-900 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-white">
-                            Owner
-                          </span>
-                        )}
-                      </div>
-                      <span>
-                        {c.created_at
-                          ? new Date(c.created_at).toLocaleString()
-                          : ""}
-                      </span>
-                    </div>
-
-                    {/* root body / edit mode */}
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          rows={2}
-                          value={editingText}
-                          onChange={(e) => setEditingText(e.target.value)}
-                        />
-                        <div className="flex items-center gap-2 text-xs">
-                          <Button
-                            type="button"
-                            disabled={editBusy}
-                            onClick={() => saveEditComment(c)}
-                          >
-                            {editBusy ? "Saving…" : "Save"}
-                          </Button>
-                          <button
-                            type="button"
-                            className="text-slate-500 hover:text-slate-700"
-                            onClick={cancelEditComment}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="whitespace-pre-line text-sm text-slate-800">
-                        {c.text}
-                      </p>
-                    )}
-
-                    {/* actions */}
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                      {isOwnerUser && !isOwnerAuthor && (
-                        <button
-                          type="button"
-                          onClick={() => replyAsOwnerTo(c)}
-                          className="font-medium hover:text-slate-700"
-                        >
-                          Reply as owner
-                        </button>
-                      )}
-
-                      {isMine && !isEditing && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => startEditComment(c)}
-                            className="font-medium hover:text-slate-700"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteComment(c)}
-                            className="font-medium text-red-500 hover:text-red-700"
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
-
-                    {/* replies */}
-                    {replies.length > 0 && (
-                      <div className="mt-3 space-y-2 border-l border-slate-200 pl-3">
-                        {replies.map((r) => {
-                          const replyIsOwner =
-                            project &&
-                            r.author_username &&
-                            r.author_username.toLowerCase() ===
-                              (project.owner_username || "").toLowerCase();
-
-                          const replyIsMine =
-                            myUsername &&
-                            r.author_username &&
-                            r.author_username.toLowerCase() ===
-                              myUsername.toLowerCase();
-
-                          const replyEditing = editingCommentId === r.id;
-
-                          return (
-                            <div key={r.id} className="text-sm">
-                              <div className="mb-0.5 flex items-center justify-between text-[11px] text-slate-500">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-slate-700">
-                                    {r.author_username || "Anonymous"}
-                                  </span>
-                                  {replyIsOwner && (
-                                    <span className="rounded-full bg-slate-900 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-white">
-                                      Owner reply
-                                    </span>
-                                  )}
-                                </div>
-                                <span>
-                                  {r.created_at
-                                    ? new Date(r.created_at).toLocaleString()
-                                    : ""}
-                                </span>
-                              </div>
-
-                              {replyEditing ? (
-                                <div className="space-y-2">
-                                  <Textarea
-                                    rows={2}
-                                    value={editingText}
-                                    onChange={(e) =>
-                                      setEditingText(e.target.value)
-                                    }
-                                  />
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <Button
-                                      type="button"
-                                      disabled={editBusy}
-                                      onClick={() => saveEditComment(r)}
-                                    >
-                                      {editBusy ? "Saving…" : "Save"}
-                                    </Button>
-                                    <button
-                                      type="button"
-                                      className="text-slate-500 hover:text-slate-700"
-                                      onClick={cancelEditComment}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="whitespace-pre-line text-sm text-slate-800">
-                                  {r.text}
-                                </p>
-                              )}
-
-                              <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                                {isOwnerUser && !replyIsOwner && (
-                                  <button
-                                    type="button"
-                                    onClick={() => replyAsOwnerTo(r)}
-                                    className="font-medium hover:text-slate-700"
-                                  >
-                                    Reply as owner
-                                  </button>
-                                )}
-
-                                {replyIsMine && !replyEditing && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => startEditComment(r)}
-                                      className="font-medium hover:text-slate-700"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => deleteComment(r)}
-                                      className="font-medium text-red-500 hover:text-red-700"
-                                    >
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* PRIVATE MESSAGES COLUMN */}
-        <div className="min-h-[100px]">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Private inquiries
-          </h2>
-          <PrivateMessagingPanel
-            projectId={id}
-            projectOwner={project?.owner_username}
-          />
-        </div>
-      </div>
     </div>
   );
 }
