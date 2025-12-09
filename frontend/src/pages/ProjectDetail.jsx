@@ -582,6 +582,49 @@ export default function ProjectDetail() {
               </div>
             </div>
           )}
+          {/* Materials / tools used */}
+          {(project?.material_url || project?.material_label) && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Materials &amp; tools used
+              </div>
+              <div className="flex items-center gap-3">
+                {/* simple favicon-like icon from the URL host */}
+                {project?.material_url && (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
+                    <span className="text-xs text-slate-500">
+                      {new URL(project.material_url).hostname
+                        .replace(/^www\./, "")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </span>
+                  </div>
+                )}
+
+                <div className="min-w-0">
+                  {project?.material_label && (
+                    <div className="truncate text-sm font-semibold text-slate-800">
+                      {project.material_label}
+                    </div>
+                  )}
+                  {project?.material_url && (
+                    <a
+                      href={project.material_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="truncate text-xs text-blue-600 hover:underline"
+                    >
+                      {project.material_url}
+                    </a>
+                  )}
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                This link points to a product or material used in this project
+                (for example, a tool or specific finish).
+              </p>
+            </div>
+          )}
 
           {/* media grid */}
           <div className="space-y-2">

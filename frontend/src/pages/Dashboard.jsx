@@ -192,6 +192,8 @@ export default function Dashboard() {
     budget: "",
     sqf: "",
     highlights: "",
+    material_url: "",
+    material_label: "",
   });
   const [cover, setCover] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -207,6 +209,8 @@ export default function Dashboard() {
     budget: "",
     sqf: "",
     highlights: "",
+    material_url: "",
+    material_label: "",
   });
   const [editCover, setEditCover] = useState(null);
   const [editImgs, setEditImgs] = useState([]);
@@ -285,6 +289,8 @@ export default function Dashboard() {
         budget: meta?.budget ?? "",
         sqf: meta?.sqf ?? "",
         highlights: meta?.highlights || "",
+        material_url: meta?.material_url || "",
+        material_label: meta?.material_label || "",
       });
       setEditCover(null);
       await refreshImages(pid);
@@ -354,6 +360,8 @@ export default function Dashboard() {
         budget: "",
         sqf: "",
         highlights: "",
+        material_url: "",
+        material_label: "",
       });
       setCover(null);
       setCreateOk(true);
@@ -561,6 +569,8 @@ export default function Dashboard() {
                 const highlights =
                   fav.project_highlights ||
                   fav.project?.highlights;
+
+
 
                 const removing = removingFavoriteId === projectId;
 
@@ -800,6 +810,31 @@ export default function Dashboard() {
               </div>
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
+                  Material / tool link (optional)
+                </label>
+                <Input
+                  placeholder="https://www.example.com/product/123"
+                  value={form.material_url}
+                  onChange={(e) =>
+                    setForm({ ...form, material_url: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">
+                  Material label (title + price)
+                </label>
+                <Input
+                  placeholder="e.g. Bosch SDS Hammer Drill – $129"
+                  value={form.material_label}
+                  onChange={(e) =>
+                    setForm({ ...form, material_label: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">
                   Cover (optional)
                 </label>
                 <input
@@ -868,7 +903,7 @@ export default function Dashboard() {
               <Card key={p.id} className="overflow-hidden">
                 {p.cover_image ? (
                   <img
-                    src={p.cover_image}
+                    src={toUrl(p.cover_image)}
                     alt=""
                     className="block h-36 w-full object-cover"
                   />
@@ -877,6 +912,7 @@ export default function Dashboard() {
                     No cover
                   </div>
                 )}
+
                 <div className="p-4">
                   <div className="mb-1 flex items-center justify-between gap-3">
                     <div className="truncate font-semibold">
@@ -1067,6 +1103,37 @@ export default function Dashboard() {
                     })
                   }
                   placeholder="comma-separated tags"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">
+                  Material / tool link (optional)
+                </label>
+                <Input
+                  value={editForm.material_url}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      material_url: e.target.value,
+                    })
+                  }
+                  placeholder="https://www.example.com/product/123"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">
+                  Material label (title + price)
+                </label>
+                <Input
+                  value={editForm.material_label}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      material_label: e.target.value,
+                    })
+                  }
+                  placeholder="e.g. Bosch SDS Hammer Drill – $129"
                 />
               </div>
 

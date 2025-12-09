@@ -35,13 +35,13 @@ def project_image_upload_path(instance, filename):
 
 class Project(models.Model):
     cover_image = models.ImageField(upload_to="project_covers/", blank=True, null=True)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="projects")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects")
 
-    title = models.CharField(max_length=200)
+    title = models.CharField(max_length=255)
     summary = models.TextField(blank=True)
-    category = models.CharField(max_length=120, blank=True)
+    category = models.CharField(max_length=100, blank=True)
 
-    cover_image = models.ImageField(upload_to=project_cover_upload_path, blank=True, null=True)
+    cover_image = models.ImageField(upload_to="projects/covers/", blank=True, null=True)
 
     is_public = models.BooleanField(default=True)
     tech_stack = models.JSONField(blank=True, null=True)
@@ -54,6 +54,15 @@ class Project(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Optional: link to a material/tool used for this project
+    material_url = models.URLField(blank=True, null=True)
+    material_label = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Short title/description for the material/tool (e.g. 'DeWalt Drill – $129').",
+        null=True,
+    )
 
     def save(self, *args, **kwargs):
         if self.cover_image and hasattr(self.cover_image, "file"):

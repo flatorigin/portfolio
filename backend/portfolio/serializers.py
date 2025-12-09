@@ -76,6 +76,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "images",
+            "material_url",
+            "material_label",
         )
         read_only_fields = (
             "id",
