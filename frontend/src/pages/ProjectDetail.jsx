@@ -32,6 +32,10 @@ export default function ProjectDetail() {
   const [meUser, setMeUser] = useState(null);
   const authed = !!localStorage.getItem("access");
 
+  // favorite state
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+
   // comments state
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -73,13 +77,12 @@ export default function ProjectDetail() {
   // load project + images + comments
   const fetchAll = useCallback(async () => {
     try {
-      const [{ data: meta }, { data: imgs }, { data: cmts }] = await Promise.all(
-        [
+      const [{ data: meta }, { data: imgs }, { data: cmts }] =
+        await Promise.all([
           api.get(`/projects/${id}/`),
           api.get(`/projects/${id}/images/`),
           api.get(`/projects/${id}/comments/`).catch(() => ({ data: [] })),
-        ]
-      );
+        ]);
 
       setProject(meta || null);
       setImages(
@@ -111,6 +114,81 @@ export default function ProjectDetail() {
       (meUser.username || "").toLowerCase();
 
   const myUsername = meUser?.username || null;
+
+  // initial saved state using per-project favorite endpoint
+  useEffect(() => {
+    if (!authed || !project || !meUser) {
+      setIsSaved(false);
+      return;
+    }
+
+    const isOwner =
+      (project.owner_username || "").toLowerCase() ===
+      (meUser.username || "").toLowerCase();
+
+    if (isOwner) {
+      setIsSaved(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/projects/${project.id}/favorite/`);
+        const favored =
+          data?.is_favorited ??
+          data?.favorited ??
+          true;
+
+        if (!cancelled) setIsSaved(!!favored);
+      } catch (err) {
+        if (cancelled) return;
+        if (err?.response?.status === 404) {
+          setIsSaved(false);
+        } else {
+          console.warn(
+            "[ProjectDetail] failed to check favorite state",
+            err?.response || err
+          );
+          setIsSaved(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed, project, meUser]);
+
+  // save handler – Save button in the header
+  async function toggleSave() {
+    if (!authed || !project || saveBusy || isOwnerUser) return;
+
+    const projectId = project.id;
+    if (!projectId) return;
+
+    setSaveBusy(true);
+    try {
+      await api.post(`/projects/${projectId}/favorite/`);
+      setIsSaved(true);
+      window.dispatchEvent(new CustomEvent("favorites:changed"));
+    } catch (err) {
+      console.error(
+        "[ProjectDetail] save favorite failed",
+        err?.response || err
+      );
+      const data = err?.response?.data;
+      const msg =
+        data?.detail ||
+        data?.message ||
+        err?.message ||
+        "Failed to save project. Please try again.";
+      alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSaveBusy(false);
+    }
+  }
 
   // image navigation helpers (used by arrows)
   const nextImage = useCallback(() => {
@@ -174,27 +252,15 @@ export default function ProjectDetail() {
     setCommentBusy(true);
 
     try {
-      // --- payload: keep it as simple as possible ---
       const payload = { text: trimmed };
-
-      // Only send in_reply_to if you KNOW your backend supports it
       if (replyingTo && isOwnerUser) {
         payload.in_reply_to = replyingTo.id;
       }
 
-      console.log("[Comment] POST payload:", payload);
-
-      // --- create comment ---
-      const resp = await api.post(`/projects/${id}/comments/`, payload);
-      console.log("[Comment] POST response:", resp.status, resp.data);
-
-      // --- now re-fetch the full comments list from the server ---
+      await api.post(`/projects/${id}/comments/`, payload);
       const { data: fresh } = await api.get(`/projects/${id}/comments/`);
-      console.log("[Comment] refreshed comments:", fresh);
-
       setComments(Array.isArray(fresh) ? fresh : []);
 
-      // reset input + reply target
       setCommentText("");
       setReplyingTo(null);
       setCommentError("");
@@ -202,8 +268,6 @@ export default function ProjectDetail() {
       console.error("[Comment] error:", err);
 
       const data = err?.response?.data;
-      console.log("[Comment] error response.data:", data);
-
       const msg =
         data?.detail ||
         data?.text ||
@@ -418,16 +482,17 @@ export default function ProjectDetail() {
         {/* header */}
         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 text-white sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
+            {/* LEFT: title + meta */}
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold sm:text-2xl">
                 {project?.title || `Project #${id}`}
               </h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-200/90">
-                {project?.category ? (
+                {project?.category && (
                   <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
                     {project.category}
                   </span>
-                ) : null}
+                )}
                 {project?.owner_username && (
                   <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
                     by {project.owner_username}
@@ -435,6 +500,21 @@ export default function ProjectDetail() {
                 )}
               </div>
             </div>
+
+            {/* RIGHT: Save button (only for logged-in, non-owner) */}
+            {authed && project && !isOwnerUser && (
+              <div className="flex items-start">
+                <Button
+                  type="button"
+                  variant={isSaved ? "outline" : "default"}
+                  onClick={toggleSave}
+                  disabled={saveBusy || isSaved}
+                  className="text-sm"
+                >
+                  {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -455,7 +535,6 @@ export default function ProjectDetail() {
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Project details
               </div>
-              {/* Row that wraps to second line on smaller screens */}
               <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm text-slate-700">
                 {project?.location && (
                   <div className="min-w-[140px] flex-wrap">
@@ -599,7 +678,6 @@ export default function ProjectDetail() {
             <div className="relative flex-1 bg-black md:min-w-[60%]">
               {currentImage ? (
                 <>
-                  {/* Image + numeric pagination live inside here */}
                   <div className="flex h-full flex-col">
                     <div className="flex-1 bg-black">
                       <img
@@ -609,7 +687,6 @@ export default function ProjectDetail() {
                       />
                     </div>
 
-                    {/* numeric pagination row + small arrows */}
                     {images.length > 1 && (
                       <div className="flex items-center justify-center gap-1 bg-black/80 px-3 py-2 text-[11px] text-slate-100">
                         <button
@@ -645,8 +722,6 @@ export default function ProjectDetail() {
                     )}
                   </div>
 
-                  {/* big overlay arrows – now aligned to the whole left pane, 
-                      not the image height */}
                   {images.length > 1 && (
                     <>
                       <button
@@ -675,7 +750,6 @@ export default function ProjectDetail() {
 
             {/* Right: comments column */}
             <div className="flex w-full max-w-sm flex-col border-t border-slate-200 bg-slate-50 md:h-full md:border-l md:border-t-0">
-              {/* header */}
               <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-slate-900">
@@ -695,7 +769,6 @@ export default function ProjectDetail() {
                 </button>
               </div>
 
-              {/* comments list */}
               <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-3 text-sm">
                 {roots.length === 0 ? (
                   <p className="text-xs text-slate-500">
@@ -706,12 +779,11 @@ export default function ProjectDetail() {
                 )}
               </div>
 
-              {/* form */}
               <div className="border-t border-slate-200 bg-white px-3 py-3">
                 {authed ? (
                   <form onSubmit={submitComment} className="space-y-2">
                     {replyingTo && (
-                      <div className="flex items-start justify_between rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
+                      <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
                         <div>
                           Replying to{" "}
                           <span className="font-semibold">

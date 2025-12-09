@@ -59,7 +59,26 @@ class Project(models.Model):
         if self.cover_image and hasattr(self.cover_image, "file"):
             convert_field_file_to_webp(self.cover_image, quality=80)
         super().save(*args, **kwargs)
+    pass
 
+class ProjectFavorite(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="project_favorites",  # avoid clashes
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "project")
+
+    def __str__(self):
+        return f"{self.user} → {self.project}"
 
 class ProjectComment(models.Model):
     project = models.ForeignKey(

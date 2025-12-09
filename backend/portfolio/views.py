@@ -16,6 +16,7 @@ from .models import (
     ProjectComment,
     MessageThread,
     PrivateMessage,
+    ProjectFavorite,
 )
 from .serializers import (
     ProjectSerializer,
@@ -75,7 +76,7 @@ class ProjectCommentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 # ---------------------------------------------------
-# Projects + images
+# Projects + images + favorites
 # ---------------------------------------------------
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.select_related("owner").all()
@@ -171,60 +172,97 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ser.save()
         return Response(ser.data, status=status.HTTP_200_OK)
 
+    @action(
+        detail=True,
+        methods=["get", "post", "delete"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="favorite",
+    )
+    def favorite(self, request, pk=None):
+        """
+        Favorites for a single project.
+
+        GET    /api/projects/<id>/favorite/   -> {"is_favorited": bool}
+        POST   /api/projects/<id>/favorite/   -> mark as favorite
+        DELETE /api/projects/<id>/favorite/   -> remove favorite
+        """
+        project = self.get_object()
+        user = request.user
+
+        if request.method == "GET":
+            is_favorited = ProjectFavorite.objects.filter(
+                user=user, project=project
+            ).exists()
+            return Response({"is_favorited": is_favorited})
+
+        if request.method == "POST":
+            favorite, created = ProjectFavorite.objects.get_or_create(
+                user=user,
+                project=project,
+            )
+            return Response(
+                {"is_favorited": True},
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            )
+
+        # DELETE
+        ProjectFavorite.objects.filter(user=user, project=project).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 # ---------------------------------------------------
 # Private messaging
 # ---------------------------------------------------
 class ProjectThreadCreateView(generics.GenericAPIView):
-    """
-    Ensure a direct-message thread exists between requesting user and project owner.
-    This is a DM entry point tied to the project.
+  """
+  Ensure a direct-message thread exists between requesting user and project owner.
+  This is a DM entry point tied to the project.
 
-    POST /api/projects/<pk>/threads/
-    GET  /api/projects/<pk>/threads/  (get DM, if it exists)
-    """
+  POST /api/projects/<pk>/threads/
+  GET  /api/projects/<pk>/threads/  (get DM, if it exists)
+  """
 
-    serializer_class = MessageThreadSerializer
-    permission_classes = [permissions.IsAuthenticated]
+  serializer_class = MessageThreadSerializer
+  permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
-        project = get_object_or_404(Project, pk=kwargs.get("pk"))
-        sender = request.user
-        receiver = project.owner
+  def post(self, request, *args, **kwargs):
+      project = get_object_or_404(Project, pk=kwargs.get("pk"))
+      sender = request.user
+      receiver = project.owner
 
-        if sender == receiver:
-            return Response(
-                {"detail": "You cannot start a private chat with yourself."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+      if sender == receiver:
+          return Response(
+              {"detail": "You cannot start a private chat with yourself."},
+              status=status.HTTP_400_BAD_REQUEST,
+          )
 
-        # Create or fetch DM between sender & project owner
-        thread, created = MessageThread.get_or_create_dm(
-            sender,
-            receiver,
-            origin_project=project,
-            initiated_by=sender,
-        )
+      # Create or fetch DM between sender & project owner
+      thread, created = MessageThread.get_or_create_dm(
+          sender,
+          receiver,
+          origin_project=project,
+          initiated_by=sender,
+      )
 
-        ser = self.get_serializer(thread, context={"request": request})
-        return Response(
-            ser.data,
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-        )
+      ser = self.get_serializer(thread, context={"request": request})
+      return Response(
+          ser.data,
+          status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+      )
 
-    def get(self, request, *args, **kwargs):
-        project = get_object_or_404(Project, pk=kwargs.get("pk"))
-        user = request.user
-        if not user.is_authenticated:
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
+  def get(self, request, *args, **kwargs):
+      project = get_object_or_404(Project, pk=kwargs.get("pk"))
+      user = request.user
+      if not user.is_authenticated:
+          return Response(status=status.HTTP_401_UNAUTHORIZED)
 
-        owner, client = MessageThread.normalize_users(user, project.owner)
-        thread = MessageThread.objects.filter(owner=owner, client=client).first()
-        if not thread:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+      owner, client = MessageThread.normalize_users(user, project.owner)
+      thread = MessageThread.objects.filter(owner=owner, client=client).first()
+      if not thread:
+          return Response(status=status.HTTP_404_NOT_FOUND)
 
-        ser = self.get_serializer(thread, context={"request": request})
-        return Response(ser.data)
+      ser = self.get_serializer(thread, context={"request": request})
+      return Response(ser.data)
 
 
 class ThreadMessageListCreateView(generics.ListCreateAPIView):

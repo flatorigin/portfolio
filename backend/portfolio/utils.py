@@ -4,10 +4,19 @@ import os
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from PIL import Image
+from rest_framework.routers import DefaultRouter
 
 def convert_field_file_to_webp(field_file, quality=80):
     if not field_file:
         return
+
+    router = DefaultRouter()
+    router.register(r"projects", ProjectViewSet, basename="project")
+
+    urlpatterns = [
+        # ...
+        path("api/", include(router.urls)),
+    ]
 
     current_name = field_file.name
     root, ext = os.path.splitext(current_name.lower())
