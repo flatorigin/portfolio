@@ -1,6 +1,7 @@
 # backend/portfolio/models.py
 from io import BytesIO
 import os
+import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
