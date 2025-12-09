@@ -24,6 +24,7 @@ function toUrl(raw) {
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
+// robust extraction of project id from favorite payload
 function extractProjectId(fav) {
   return (
     fav?.project?.id ??
@@ -57,7 +58,10 @@ export default function Dashboard() {
           bio: data?.bio || "",
         };
         setMeLite(next);
-        localStorage.setItem("profile_display_name", next.display_name || "");
+        localStorage.setItem(
+          "profile_display_name",
+          next.display_name || ""
+        );
         localStorage.setItem("profile_logo", next.logo || "");
       } catch {
         /* non-blocking */
@@ -113,7 +117,8 @@ export default function Dashboard() {
       const { data } = await api.get("/favorites/projects/");
       const sorted = Array.isArray(data)
         ? [...data].sort(
-            (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+            (a, b) =>
+              new Date(b.created_at || 0) - new Date(a.created_at || 0)
           )
         : [];
       setSavedProjects(sorted);
@@ -127,6 +132,7 @@ export default function Dashboard() {
     refreshSaved();
   }, [refreshSaved]);
 
+  // React to saves/removes from project detail page
   useEffect(() => {
     const handler = () => refreshSaved();
     window.addEventListener("favorites:changed", handler);
@@ -156,7 +162,10 @@ export default function Dashboard() {
 
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
-      console.error("[Dashboard] failed to remove favorite", err?.response || err);
+      console.error(
+        "[Dashboard] failed to remove favorite",
+        err?.response || err
+      );
       const data = err?.response?.data;
       const msg =
         data?.detail ||
@@ -427,6 +436,7 @@ export default function Dashboard() {
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
+            {/* Logo/avatar */}
             <div className="relative h-10 w-10 flex-shrink-0">
               {logoUrl ? (
                 <img
@@ -546,8 +556,7 @@ export default function Dashboard() {
                 const budget =
                   fav.project_budget || fav.project?.budget;
 
-                const sqf =
-                  fav.project_sqf || fav.project?.sqf;
+                const sqf = fav.project_sqf || fav.project?.sqf;
 
                 const highlights =
                   fav.project_highlights ||
@@ -849,7 +858,8 @@ export default function Dashboard() {
         </div>
 
         {list.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-slate-200 bg-s
+ 50 p-4 text-sm text-slate-600">
             You don’t have any projects yet.
           </div>
         ) : (

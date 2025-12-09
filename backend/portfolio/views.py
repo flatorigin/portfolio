@@ -24,6 +24,7 @@ from .serializers import (
     ProjectCommentSerializer,
     MessageThreadSerializer,
     PrivateMessageSerializer,
+    ProjectFavoriteSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 
@@ -209,7 +210,22 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ProjectFavorite.objects.filter(user=user, project=project).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+class FavoriteProjectListView(generics.ListAPIView):
+    """
+    GET /api/favorites/projects/
+    Returns favorites for the current user, newest first.
+    """
+    serializer_class = ProjectFavoriteSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        return (
+            ProjectFavorite.objects
+            .filter(user=user)
+            .select_related("project", "project__owner")
+            .order_by("-created_at")
+        )
 # ---------------------------------------------------
 # Private messaging
 # ---------------------------------------------------

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ProjectComment, Project, ProjectImage, MessageThread, PrivateMessage
+from .models import ProjectComment, Project, ProjectImage, MessageThread, PrivateMessage, ProjectFavorite
 from accounts.serializers import ProfileSerializer
 
 
@@ -85,6 +85,23 @@ class ProjectSerializer(serializers.ModelSerializer):
             "updated_at",
             "images",
         )
+
+# ADD THIS NEW SERIALIZER NEAR YOUR OTHER MODEL SERIALIZERS
+class ProjectFavoriteSerializer(serializers.ModelSerializer):
+    """
+    Favorite entry + nested project.
+    Response example:
+    {
+      "id": 5,
+      "created_at": "...",
+      "project": { ... ProjectSerializer fields ... }
+    }
+    """
+    project = ProjectSerializer(read_only=True)
+
+    class Meta:
+        model = ProjectFavorite
+        fields = ["id", "project", "created_at"]
 
 
 class PrivateMessageSerializer(serializers.ModelSerializer):

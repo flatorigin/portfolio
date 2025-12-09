@@ -11,6 +11,7 @@ from .views import (
     InboxThreadListView,
     ThreadActionView,
     BlockListView,
+    FavoriteProjectListView,  # <- favorites list
 )
 
 router = DefaultRouter()
@@ -63,4 +64,11 @@ urlpatterns = [
     # Block list
     path("inbox/blocked/", BlockListView.as_view(), name="inbox-blocked"),
 
+    # Favorites list for current user
+    #   GET /api/favorites/projects/
+    path(
+        "favorites/projects/",
+        FavoriteProjectListView.as_view(),
+        name="favorite-projects",
+    ),
 ]
