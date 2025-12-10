@@ -1,6 +1,6 @@
 // =======================================
 // file: frontend/src/pages/ProjectDetail.jsx
-// Project page + lightbox-style comments modal
+// Project page + lightbox-style comments modal + project edit
 // =======================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
@@ -28,6 +28,12 @@ export default function ProjectDetail() {
   const [project, setProject] = useState(null);
   const [images, setImages] = useState([]);
 
+  // edit project state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState(null);
+  const [savingEdits, setSavingEdits] = useState(false);
+  const [editError, setEditError] = useState("");
+
   // current user
   const [meUser, setMeUser] = useState(null);
   const authed = !!localStorage.getItem("access");
@@ -43,7 +49,7 @@ export default function ProjectDetail() {
   const [commentError, setCommentError] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
 
-  // editing state
+  // editing state for comments
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [editBusy, setEditBusy] = useState(false);
@@ -52,7 +58,9 @@ export default function ProjectDetail() {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
-  // fetch current user
+  // ─────────────────────────────
+  // FETCH CURRENT USER
+  // ─────────────────────────────
   useEffect(() => {
     if (!authed) {
       setMeUser(null);
@@ -74,7 +82,9 @@ export default function ProjectDetail() {
     })();
   }, [authed]);
 
-  // load project + images + comments
+  // ─────────────────────────────
+  // LOAD PROJECT + IMAGES + COMMENTS
+  // ─────────────────────────────
   const fetchAll = useCallback(async () => {
     try {
       const [{ data: meta }, { data: imgs }, { data: cmts }] =
@@ -85,6 +95,7 @@ export default function ProjectDetail() {
         ]);
 
       setProject(meta || null);
+
       setImages(
         (imgs || [])
           .map((x) => ({
@@ -93,12 +104,30 @@ export default function ProjectDetail() {
           }))
           .filter((x) => !!x.url)
       );
+
       setComments(Array.isArray(cmts) ? cmts : []);
+
+      // init editData from meta
+      if (meta) {
+        setEditData({
+          title: meta.title || "",
+          summary: meta.summary || "",
+          location: meta.location || "",
+          budget: meta.budget || "",
+          sqf: meta.sqf || "",
+          highlights: meta.highlights || "",
+          material_label: meta.material_label || "",
+          material_url: meta.material_url || "",
+        });
+      } else {
+        setEditData(null);
+      }
     } catch (err) {
       console.error("[ProjectDetail] fetch failed:", err);
       setProject(null);
       setImages([]);
       setComments([]);
+      setEditData(null);
     }
   }, [id]);
 
@@ -115,7 +144,9 @@ export default function ProjectDetail() {
 
   const myUsername = meUser?.username || null;
 
-  // initial saved state using per-project favorite endpoint
+  // ─────────────────────────────
+  // INITIAL SAVED STATE
+  // ─────────────────────────────
   useEffect(() => {
     if (!authed || !project || !meUser) {
       setIsSaved(false);
@@ -190,7 +221,9 @@ export default function ProjectDetail() {
     }
   }
 
-  // image navigation helpers (used by arrows)
+  // ─────────────────────────────
+  // IMAGE NAVIGATION
+  // ─────────────────────────────
   const nextImage = useCallback(() => {
     if (!images.length) return;
     setActiveImageIdx((idx) => (idx + 1) % images.length);
@@ -201,7 +234,6 @@ export default function ProjectDetail() {
     setActiveImageIdx((idx) => (idx - 1 + images.length) % images.length);
   }, [images.length]);
 
-  // keyboard arrow navigation while modal is open
   useEffect(() => {
     if (!commentsOpen) return;
     const handler = (e) => {
@@ -217,11 +249,14 @@ export default function ProjectDetail() {
     return () => window.removeEventListener("keydown", handler);
   }, [commentsOpen, nextImage, prevImage]);
 
-  // ---- comments helpers ----
+  // ─────────────────────────────
+  // COMMENTS HELPERS
+  // ─────────────────────────────
   const roots = useMemo(
     () => comments.filter((c) => !c.in_reply_to),
     [comments]
   );
+
   const repliesByParent = useMemo(
     () =>
       comments.reduce((acc, c) => {
@@ -338,9 +373,100 @@ export default function ProjectDetail() {
     }
   }
 
+  // ─────────────────────────────
+  // PROJECT EDIT SAVE HANDLER
+  // ─────────────────────────────
+  async function handleSaveEdits(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!editData || !project) return;
+
+    setSavingEdits(true);
+    setEditError("");
+
+    // Helpers to normalize fields
+    const normalizeText = (val) => {
+      if (val === undefined || val === null) return "";
+      return String(val).trim();
+    };
+
+    const normalizeNumber = (val) => {
+      if (val === undefined || val === null) return null;
+      const s = String(val).trim();
+      if (!s) return null;
+      // Strip commas like "1,200"
+      const cleaned = s.replace(/,/g, "");
+      const n = Number(cleaned);
+      return Number.isNaN(n) ? null : n;
+    };
+
+    try {
+      const projectId = project.id;
+      if (!projectId) throw new Error("Missing project id");
+
+      const payload = {
+        title: normalizeText(editData.title),
+        summary: normalizeText(editData.summary),
+        location: normalizeText(editData.location),
+        // Assuming these are numeric-ish on the backend
+        budget: normalizeNumber(editData.budget),
+        sqf: normalizeNumber(editData.sqf),
+        highlights: normalizeText(editData.highlights),
+        material_label: normalizeText(editData.material_label),
+        material_url: normalizeText(editData.material_url),
+      };
+
+      console.log("[handleSaveEdits] sending payload:", payload);
+
+      // Try PATCH; if your view only supports PUT, swap to put()
+      const { data } = await api.patch(`/projects/${projectId}/`, payload);
+      // const { data } = await api.put(`/projects/${projectId}/`, payload);
+
+      console.log("[handleSaveEdits] response data:", data);
+
+      setProject(data);
+      setEditData({
+        title: data.title || "",
+        summary: data.summary || "",
+        location: data.location || "",
+        budget: data.budget ?? "",
+        sqf: data.sqf ?? "",
+        highlights: data.highlights || "",
+        material_label: data.material_label || "",
+        material_url: data.material_url || "",
+      });
+
+      setIsEditing(false);
+    } catch (err) {
+      console.error("[handleSaveEdits] error:", err?.response || err);
+
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+
+      let msg =
+        data?.detail ||
+        data?.message ||
+        data?.non_field_errors ||
+        err?.message ||
+        data || // full object if it's just field errors
+        "Could not save changes. Please try again.";
+
+      if (typeof msg !== "string") {
+        msg = JSON.stringify(msg, null, 2);
+      }
+
+      const full = `Save failed${status ? ` (status ${status})` : ""}: ${msg}`;
+      setEditError(full);
+      alert(full);
+    } finally {
+      setSavingEdits(false);
+    }
+  }
+
   const mapSrc = buildMapSrc(project?.location || "");
 
-  // ---- rendering helpers ----
+  // ─────────────────────────────
+  // RENDER HELPERS
+  // ─────────────────────────────
   const renderCommentBlock = (c, isReply = false) => {
     const replies = repliesByParent[c.id] || [];
 
@@ -355,7 +481,7 @@ export default function ProjectDetail() {
       c.author_username &&
       c.author_username.toLowerCase() === myUsername.toLowerCase();
 
-    const isEditing = editingCommentId === c.id;
+    const isEditingComment = editingCommentId === c.id;
 
     return (
       <div
@@ -381,7 +507,7 @@ export default function ProjectDetail() {
           </span>
         </div>
 
-        {isEditing ? (
+        {isEditingComment ? (
           <div className="space-y-2">
             <Textarea
               rows={2}
@@ -419,7 +545,7 @@ export default function ProjectDetail() {
               Reply as owner
             </button>
           )}
-          {isMine && !isEditing && (
+          {isMine && !isEditingComment && (
             <>
               <button
                 type="button"
@@ -477,7 +603,7 @@ export default function ProjectDetail() {
         </Link>
       </div>
 
-      {/* Main project card only */}
+      {/* Main project card */}
       <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
         {/* header */}
         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 text-white sm:px-6">
@@ -501,9 +627,20 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            {/* RIGHT: Save button (only for logged-in, non-owner) */}
-            {authed && project && !isOwnerUser && (
-              <div className="flex items-start">
+            {/* RIGHT: owner edit button OR Save button */}
+            <div className="flex items-start gap-2">
+              {authed && project && isOwnerUser && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing((prev) => !prev)}
+                >
+                  {isEditing ? "Close edit" : "Edit project"}
+                </Button>
+              )}
+
+              {authed && project && !isOwnerUser && (
                 <Button
                   type="button"
                   variant={isSaved ? "outline" : "default"}
@@ -513,8 +650,8 @@ export default function ProjectDetail() {
                 >
                   {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -524,6 +661,180 @@ export default function ProjectDetail() {
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">
               {project.summary}
             </p>
+          )}
+
+          {/* OWNER-ONLY PROJECT EDIT FORM */}
+          {isOwnerUser && isEditing && editData && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                Edit project
+              </div>
+
+              <form onSubmit={handleSaveEdits} className="space-y-3">
+                {/* Title */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Title
+                  </label>
+                  <input
+                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    value={editData.title}
+                    onChange={(e) =>
+                      setEditData((prev) => ({ ...prev, title: e.target.value }))
+                    }
+                  />
+                </div>
+
+                {/* Summary */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Summary
+                  </label>
+                  <Textarea
+                    rows={3}
+                    value={editData.summary}
+                    onChange={(e) =>
+                      setEditData((prev) => ({
+                        ...prev,
+                        summary: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                {/* Location / Budget / Sq Ft */}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Location
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      value={editData.location}
+                      onChange={(e) =>
+                        setEditData((prev) => ({
+                          ...prev,
+                          location: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Budget
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      value={editData.budget}
+                      onChange={(e) =>
+                        setEditData((prev) => ({
+                          ...prev,
+                          budget: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Sq Ft
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      value={editData.sqf}
+                      onChange={(e) =>
+                        setEditData((prev) => ({
+                          ...prev,
+                          sqf: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Highlights */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Highlights
+                  </label>
+                  <Textarea
+                    rows={2}
+                    value={editData.highlights}
+                    onChange={(e) =>
+                      setEditData((prev) => ({
+                        ...prev,
+                        highlights: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                {/* Materials */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Material label
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      value={editData.material_label}
+                      onChange={(e) =>
+                        setEditData((prev) => ({
+                          ...prev,
+                          material_label: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Material URL
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      value={editData.material_url}
+                      onChange={(e) =>
+                        setEditData((prev) => ({
+                          ...prev,
+                          material_url: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      if (project) {
+                        setEditData({
+                          title: project.title || "",
+                          summary: project.summary || "",
+                          location: project.location || "",
+                          budget: project.budget || "",
+                          sqf: project.sqf || "",
+                          highlights: project.highlights || "",
+                          material_label: project.material_label || "",
+                          material_url: project.material_url || "",
+                        });
+                      }
+                      setIsEditing(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={savingEdits}>
+                    {savingEdits ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              </form>
+
+              {editError && (
+                <p className="mt-2 text-xs text-red-600">{editError}</p>
+              )}
+            </div>
           )}
 
           {/* Meta / Project details */}
@@ -582,6 +893,7 @@ export default function ProjectDetail() {
               </div>
             </div>
           )}
+
           {/* Materials / tools used */}
           {(project?.material_url || project?.material_label) && (
             <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
@@ -589,7 +901,6 @@ export default function ProjectDetail() {
                 Materials &amp; tools used
               </div>
               <div className="flex items-center gap-3">
-                {/* simple favicon-like icon from the URL host */}
                 {project?.material_url && (
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
                     <span className="text-xs text-slate-500">
@@ -711,9 +1022,7 @@ export default function ProjectDetail() {
         </button>
       </div>
 
-      {/* ─────────────────────────────
-          FULLSCREEN MODAL: images + comments
-      ───────────────────────────── */}
+      {/* FULLSCREEN MODAL: images + comments */}
       {commentsOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-2 sm:p-4">
           <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl md:h-[90vh] md:flex-row">
