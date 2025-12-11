@@ -64,6 +64,8 @@ class Project(models.Model):
         help_text="Short title/description for the material/tool (e.g. 'DeWalt Drill – $129').",
         null=True,
     )
+    # NEW: extra links (label + url pairs)
+    extra_links = models.JSONField(default=list, blank=True)
 
     def save(self, *args, **kwargs):
         if self.cover_image and hasattr(self.cover_image, "file"):
