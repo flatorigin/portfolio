@@ -1072,8 +1072,6 @@ export default function ProjectDetail() {
                 </p>
               </div>
             )}
-
-
           {/* map */}
           {mapSrc && (
             <div className="space-y-2">
