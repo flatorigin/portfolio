@@ -1,6 +1,6 @@
 // =======================================
 // file: frontend/src/pages/ProjectDetail.jsx
-// Project page + lightbox-style comments modal + project edit
+// Project page + lightbox-style comments modal + project edit + extra links
 // =======================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
@@ -110,7 +110,7 @@ export default function ProjectDetail() {
 
       setComments(Array.isArray(cmts) ? cmts : []);
 
-      // init editData from meta
+      // init editData + extraLinks from meta
       if (meta) {
         setEditData({
           title: meta.title || "",
@@ -122,8 +122,18 @@ export default function ProjectDetail() {
           material_label: meta.material_label || "",
           material_url: meta.material_url || "",
         });
+
+        setExtraLinks(
+          Array.isArray(meta.extra_links)
+            ? meta.extra_links.map((row) => ({
+                label: row.label || "",
+                url: row.url || "",
+              }))
+            : []
+        );
       } else {
         setEditData(null);
+        setExtraLinks([]);
       }
     } catch (err) {
       console.error("[ProjectDetail] fetch failed:", err);
@@ -131,6 +141,7 @@ export default function ProjectDetail() {
       setImages([]);
       setComments([]);
       setEditData(null);
+      setExtraLinks([]);
     }
   }, [id]);
 
@@ -386,7 +397,6 @@ export default function ProjectDetail() {
     setSavingEdits(true);
     setEditError("");
 
-    // Helpers to normalize fields
     const normalizeText = (val) => {
       if (val === undefined || val === null) return "";
       return String(val).trim();
@@ -396,7 +406,6 @@ export default function ProjectDetail() {
       if (val === undefined || val === null) return null;
       const s = String(val).trim();
       if (!s) return null;
-      // Strip commas like "1,200"
       const cleaned = s.replace(/,/g, "");
       const n = Number(cleaned);
       return Number.isNaN(n) ? null : n;
@@ -410,13 +419,11 @@ export default function ProjectDetail() {
         title: normalizeText(editData.title),
         summary: normalizeText(editData.summary),
         location: normalizeText(editData.location),
-        // Assuming these are numeric-ish on the backend
         budget: normalizeNumber(editData.budget),
         sqf: normalizeNumber(editData.sqf),
         highlights: normalizeText(editData.highlights),
         material_label: normalizeText(editData.material_label),
         material_url: normalizeText(editData.material_url),
-        // 🔹 NEW: send extra links to backend
         extra_links: extraLinks
           .filter((row) => row.label || row.url)
           .map((row) => ({
@@ -427,11 +434,7 @@ export default function ProjectDetail() {
 
       console.log("[handleSaveEdits] sending payload:", payload);
 
-      // Try PATCH; if your view only supports PUT, swap to put()
       const { data } = await api.patch(`/projects/${projectId}/`, payload);
-      // const { data } = await api.put(`/projects/${projectId}/`, payload);
-
-      console.log("[handleSaveEdits] response data:", data);
 
       setProject(data);
       setEditData({
@@ -444,6 +447,14 @@ export default function ProjectDetail() {
         material_label: data.material_label || "",
         material_url: data.material_url || "",
       });
+      setExtraLinks(
+        Array.isArray(data.extra_links)
+          ? data.extra_links.map((row) => ({
+              label: row.label || "",
+              url: row.url || "",
+            }))
+          : []
+      );
 
       setIsEditing(false);
     } catch (err) {
@@ -457,7 +468,7 @@ export default function ProjectDetail() {
         data?.message ||
         data?.non_field_errors ||
         err?.message ||
-        data || // full object if it's just field errors
+        data ||
         "Could not save changes. Please try again.";
 
       if (typeof msg !== "string") {
@@ -478,16 +489,13 @@ export default function ProjectDetail() {
 
   function updateLinkRow(index, field, value) {
     setExtraLinks((prev) =>
-      prev.map((row, i) =>
-        i === index ? { ...row, [field]: value } : row
-      )
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
     );
   }
 
   function removeLinkRow(index) {
     setExtraLinks((prev) => prev.filter((_, i) => i !== index));
   }
-
 
   const mapSrc = buildMapSrc(project?.location || "");
 
@@ -795,10 +803,8 @@ export default function ProjectDetail() {
                   />
                 </div>
 
-                {/* Materials */}
                 {/* Materials / links */}
                 <div className="space-y-2">
-                  {/* Header with + button */}
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-medium text-slate-700">
                       Materials &amp; links
@@ -813,7 +819,7 @@ export default function ProjectDetail() {
                     </button>
                   </div>
 
-                  {/* First (main) label+url row */}
+                  {/* main label+url row */}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label className="block text-[11px] font-medium text-slate-600 mb-1">
@@ -849,7 +855,7 @@ export default function ProjectDetail() {
                     </div>
                   </div>
 
-                  {/* Extra link rows added by the + button */}
+                  {/* extra link rows */}
                   {extraLinks.length > 0 && (
                     <div className="space-y-2">
                       {extraLinks.map((row, index) => (
@@ -887,7 +893,6 @@ export default function ProjectDetail() {
                   )}
                 </div>
 
-
                 {/* Actions */}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button
@@ -905,6 +910,14 @@ export default function ProjectDetail() {
                           material_label: project.material_label || "",
                           material_url: project.material_url || "",
                         });
+                        setExtraLinks(
+                          Array.isArray(project.extra_links)
+                            ? project.extra_links.map((row) => ({
+                                label: row.label || "",
+                                url: row.url || "",
+                              }))
+                            : []
+                        );
                       }
                       setIsEditing(false);
                     }}
@@ -981,97 +994,141 @@ export default function ProjectDetail() {
           )}
 
           {/* Materials / tools used */}
-            {/* Materials / tools used */}
-            {(project?.material_url ||
-              project?.material_label ||
-              (Array.isArray(project?.extra_links) &&
-                project.extra_links.length > 0)) && (
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Materials &amp; tools used
-                </div>
+          {(project?.material_url ||
+            project?.material_label ||
+            (Array.isArray(project?.extra_links) &&
+              project.extra_links.length > 0)) && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Materials &amp; tools used
+              </div>
 
-                {/* main / primary link + label */}
-                {(project?.material_label || project?.material_url) && (
-                  <div className="flex items-center gap-3">
-                    {project?.material_url && (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
-                        <span className="text-xs text-slate-500">
-                          {new URL(project.material_url).hostname
-                            .replace(/^www\./, "")
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="min-w-0">
-                      {project?.material_label && (
-                        <div className="truncate text-sm font-semibold text-slate-800">
-                          {project.material_label}
-                        </div>
-                      )}
-                      {project?.material_url && (
-                        <a
-                          href={project.material_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="truncate text-xs text-blue-600 hover:underline"
-                        >
-                          {project.material_url}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* extra links added via +, shown UNDER the main one */}
-                {Array.isArray(project?.extra_links) &&
-                  project.extra_links.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {project.extra_links.map((row, index) => {
-                        const label = row?.label || "";
-                        const url = row?.url || "";
-
-                        if (!label && !url) return null;
-
-                        return (
-                          <div
-                            key={`${url || label || index}`}
-                            className="flex items-start gap-2"
-                          >
-                            <div className="mt-[3px] flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-slate-500 border border-slate-200">
-                              +
-                            </div>
-                            <div className="min-w-0">
-                              {label && (
-                                <div className="text-xs font-semibold text-slate-800">
-                                  {label}
-                                </div>
-                              )}
-                              {url && (
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="break-all text-[11px] text-blue-600 hover:underline"
-                                >
-                                  {url}
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+              {/* main / primary link + label */}
+              {(project?.material_label || project?.material_url) && (
+                <div className="flex items-center gap-3">
+                  {project?.material_url && (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
+                      <span className="text-xs text-slate-500">
+                        {new URL(project.material_url).hostname
+                          .replace(/^www\./, "")
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </span>
                     </div>
                   )}
 
-                <p className="mt-2 text-[11px] text-slate-500">
-                  These links point to products or materials used in this project
-                  (for example, tools, finishes, or suppliers).
-                </p>
+                  <div className="min-w-0">
+                    {project?.material_label && (
+                      <div className="truncate text-sm font-semibold text-slate-800">
+                        {project.material_label}
+                      </div>
+                    )}
+                    {project?.material_url && (
+                      <a
+                        href={project.material_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate text-xs text-blue-600 hover:underline"
+                      >
+                        {project.material_url}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* extra links added via +, shown UNDER the main one */}
+              {Array.isArray(project?.extra_links) &&
+                project.extra_links.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {project.extra_links.map((row, index) => {
+                      const label = row?.label || "";
+                      const url = row?.url || "";
+                      if (!label && !url) return null;
+
+                      return (
+                        <div
+                          key={`${url || label || index}`}
+                          className="flex items-start gap-2"
+                        >
+                          <div className="mt-[3px] flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-slate-500 border border-slate-200">
+                            +
+                          </div>
+                          <div className="min-w-0">
+                            {label && (
+                              <div className="text-xs font-semibold text-slate-800">
+                                {label}
+                              </div>
+                            )}
+                            {url && (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="break-all text-[11px] text-blue-600 hover:underline"
+                              >
+                                {url}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+              <p className="mt-2 text-[11px] text-slate-500">
+                These links point to products or materials used in this project
+                (for example, tools, finishes, or suppliers).
+              </p>
+            </div>
+          )}
+
+          {/* Project media (hero-ish grid) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Project media
+              </div>
+              {images.length > 0 && (
+                <div className="text-[11px] text-slate-500">
+                  {images.length} photo{images.length === 1 ? "" : "s"}
+                </div>
+              )}
+            </div>
+
+            {images.length === 0 ? (
+              <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
+                No media uploaded for this project.
+              </div>
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+                {images.map((img, i) => (
+                  <button
+                    type="button"
+                    key={img.url + i}
+                    onClick={() => {
+                      setActiveImageIdx(i);
+                      setCommentsOpen(true);
+                    }}
+                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white text-left"
+                  >
+                    <img
+                      src={img.url}
+                      alt={img.caption || ""}
+                      className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
+                    />
+                    {img.caption && (
+                      <div className="px-3 py-2 text-xs text-slate-700">
+                        {img.caption}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             )}
+          </div>
+
           {/* map */}
           {mapSrc && (
             <div className="space-y-2">
