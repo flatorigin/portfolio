@@ -31,7 +31,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b border-slate-300 bg-white">
         <Container className="py-3">
           <nav className="flex items-center gap-2">
             <Link
@@ -73,11 +73,16 @@ export default function App() {
         </Container>
       </header>
 
-      <main className="py-6">
-        <Container>
+      <main className={pathname.startsWith("/profiles/") ? "" : "py-6"}>
+        {pathname.startsWith("/profiles/") ? (
           <Outlet />
-        </Container>
+        ) : (
+          <Container>
+            <Outlet />
+          </Container>
+        )}
       </main>
+
     </div>
   );
 }

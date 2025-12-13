@@ -12,12 +12,16 @@ from .views import (
     ThreadActionView,
     BlockListView,
     FavoriteProjectListView,  # <- favorites list
+    PublicUserProfileView,
 )
 
 router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
 
 urlpatterns = [
+    # PublicUserProfileViews
+    path("public/<str:username>/", PublicUserProfileView.as_view(), name="public-profile"),
+
     # All /api/projects/ routes from ProjectViewSet
     path("", include(router.urls)),
 

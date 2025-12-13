@@ -9,6 +9,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth import get_user_model
 
 from .models import (
     Project,
@@ -28,12 +29,72 @@ from .serializers import (
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 
+User = get_user_model()
 
 # ---------------------------------------------------
 # Comments: list + create
 #   GET  /api/projects/<pk>/comments/
 #   POST /api/projects/<pk>/comments/
 # ---------------------------------------------------
+class PublicUserProfileView(APIView):
+    permission_classes = []  # public
+
+    def get(self, request, username):
+        user = get_object_or_404(User, username=username)
+
+        # Projects by this user
+        qs = Project.objects.filter(owner=user).order_by("-id")
+        projects = ProjectSerializer(qs, many=True, context={"request": request}).data
+
+        # Build a safe public payload (no emails, no sensitive fields)
+        full_name = ""
+        if hasattr(user, "get_full_name"):
+            full_name = user.get_full_name() or ""
+        if not full_name:
+            full_name = getattr(user, "full_name", "") or ""
+
+        company_name = getattr(user, "company_name", "") or ""
+        bio = getattr(user, "bio", "") or getattr(user, "about", "") or ""
+        location = getattr(user, "location", "") or ""
+
+        logo_url = None
+        for attr in ["company_logo", "logo", "avatar", "profile_image"]:
+            if hasattr(user, attr) and getattr(user, attr):
+                try:
+                    logo_url = request.build_absolute_uri(getattr(user, attr).url)
+                except Exception:
+                    logo_url = None
+                break
+
+        banner_url = None
+        for attr in ["banner", "cover", "cover_image", "header_image"]:
+            if hasattr(user, attr) and getattr(user, attr):
+                try:
+                    banner_url = request.build_absolute_uri(getattr(user, attr).url)
+                except Exception:
+                    banner_url = None
+                break
+
+        # Later we can fetch “selected comments” from your comments model
+        selected_comments = []
+
+        return Response(
+            {
+                "user": {
+                    "username": user.username,
+                    "full_name": full_name or user.username,
+                    "company_name": company_name,
+                    "bio": bio,
+                    "location": location,
+                    "logo_url": logo_url,
+                    "banner_url": banner_url,
+                },
+                "projects": projects,
+                "selected_comments": selected_comments,
+            },
+            status=status.HTTP_200_OK,
+        )
+
 class ProjectCommentListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/projects/<pk>/comments/   -> list comments for project

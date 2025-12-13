@@ -21,8 +21,37 @@ function buildMapSrc(location) {
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
 }
 
+function safeHostInitials(rawUrl) {
+  try {
+    const normalized = toUrl(rawUrl); // adds origin if it's a relative path
+    const host = new URL(normalized).hostname.replace(/^www\./, "");
+    return host.slice(0, 2).toUpperCase();
+  } catch {
+    return "LI"; // fallback initials
+  }
+}
+
+
 export default function ProjectDetail() {
   const { id } = useParams();
+
+  const username = meUser?.username || ""; // or however you already have it
+
+  const [publicEnabled, setPublicEnabled] = useState(() => {
+    try {
+      const raw = localStorage.getItem("public_profile_enabled");
+      return raw === null ? true : raw === "true";
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("public_profile_enabled", String(publicEnabled));
+    } catch {}
+  }, [publicEnabled]);
+
 
   // project + media
   const [project, setProject] = useState(null);
@@ -614,6 +643,59 @@ export default function ProjectDetail() {
       ? images[Math.min(activeImageIdx, images.length - 1)]
       : null;
 
+  <Card className="mb-4 border border-slate-200">
+    <div className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div className="text-sm font-semibold text-slate-900">
+          Public profile page
+        </div>
+        <div className="text-xs text-slate-600">
+          Let people view your public landing page at{" "}
+          <span className="font-medium">/profiles/{username || "yourname"}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {/* Toggle */}
+        <button
+          type="button"
+          onClick={() => setPublicEnabled((v) => !v)}
+          className={
+            "relative inline-flex h-7 w-12 items-center rounded-full border transition " +
+            (publicEnabled
+              ? "bg-slate-900 border-slate-900"
+              : "bg-slate-200 border-slate-300")
+          }
+          aria-pressed={publicEnabled}
+        >
+          <span
+            className={
+              "inline-block h-5 w-5 rounded-full bg-white transition-transform " +
+              (publicEnabled ? "translate-x-6" : "translate-x-1")
+            }
+          />
+        </button>
+
+        {/* View page */}
+        <Link
+          to={publicEnabled && username ? `/profiles/${username}` : "#"}
+          className={
+            "rounded-full px-4 py-2 text-sm font-medium " +
+            (publicEnabled && username
+              ? "bg-slate-900 text-white hover:bg-slate-800"
+              : "bg-slate-100 text-slate-400 cursor-not-allowed")
+          }
+          onClick={(e) => {
+            if (!(publicEnabled && username)) e.preventDefault();
+          }}
+        >
+          View
+        </Link>
+      </div>
+    </div>
+  </Card>
+
+
   // ─────────────────────────────
   // RENDER
   // ─────────────────────────────
@@ -1009,10 +1091,7 @@ export default function ProjectDetail() {
                   {project?.material_url && (
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
                       <span className="text-xs text-slate-500">
-                        {new URL(project.material_url).hostname
-                          .replace(/^www\./, "")
-                          .slice(0, 2)
-                          .toUpperCase()}
+                        {safeHostInitials(project.material_url)}
                       </span>
                     </div>
                   )}
