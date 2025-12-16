@@ -1,6 +1,7 @@
 # file: backend/portfolio/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from .views import PublicProfileView
 
 from .views import (
     ProjectViewSet,
@@ -21,6 +22,8 @@ urlpatterns = [
     # All /api/projects/ routes from ProjectViewSet
     path("", include(router.urls)),
 
+    path("public/<str:username>/", PublicProfileView.as_view(), name="public-profile"),
+    
     # Comments list + create for a project
     #   GET  /api/projects/<pk>/comments/
     #   POST /api/projects/<pk>/comments/

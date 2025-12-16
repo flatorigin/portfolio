@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from .models import ProjectComment, Project, ProjectImage, MessageThread, PrivateMessage, ProjectFavorite
 from accounts.serializers import ProfileSerializer
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
 class ProjectImageSerializer(serializers.ModelSerializer):
     url = serializers.ImageField(source="image", read_only=True)
@@ -169,6 +171,11 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
 
         return attrs
 
+class PublicUserSerializer(serializers.ModelSerializer):
+    # If these live on a Profile model instead, tell me and I’ll adjust.
+    class Meta:
+        model = User
+        fields = ["username", "first_name", "last_name"]  # adjust if needed
 
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")

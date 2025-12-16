@@ -1,257 +1,300 @@
-// =======================================
-// file: frontend/src/pages/PublicProfile.jsx
-// Public profile + projects + contact + map
-// =======================================
-import { useParams, Link, useLocation, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import api from "../api";
-import { Card, Container } from "../ui";
+import { Card } from "../ui";
 
-// Map helper (zip / city / address → Google Maps embed)
-function buildMapSrc(location) {
-  if (!location) return null;
-  const q = encodeURIComponent(location);
-  // z=11 → nice “service area” zoom
-  return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
+// helper to normalize absolute/relative URLs like you already do
+function toUrl(raw) {
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+  const origin = base.replace(/\/api\/?$/, "");
+  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
 export default function PublicProfile() {
   const { username } = useParams();
-  const location = useLocation();
-  const [profile, setProfile] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const authed = !!localStorage.getItem("access");
-  const [searchParams] = useSearchParams();
-  const fromProjectId =
-    location.state?.fromProjectId || searchParams.get("fromProjectId") || null;
 
+  // state
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+  const [payload, setPayload] = useState(null);
+
+  // PUBLIC ENABLED: keep hook-safe by reading once, with try/catch
+  const publicEnabled = useMemo(() => {
+    try {
+      return localStorage.getItem("public_profile_enabled") !== "false";
+    } catch {
+      return true;
+    }
+  }, []);
+
+  // derived data (no hooks below this line other than useMemo)
+  const user = payload?.user || null;
+  const projects = Array.isArray(payload?.projects) ? payload.projects : [];
+  const selectedComments = Array.isArray(payload?.selected_comments)
+    ? payload.selected_comments
+    : [];
+
+  const displayName = user?.company_name || user?.full_name || user?.username || "";
+
+  // banner style (hook-safe: always called)
+  const bannerStyle = useMemo(() => {
+    const url = toUrl(user?.banner_url);
+    if (!url) return {};
+    return {
+      backgroundImage: `url(${url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }, [user?.banner_url]);
+
+  // fetch (hook-safe: always called)
   useEffect(() => {
-    let alive = true;
-    setLoading(true);
+    let cancelled = false;
 
     (async () => {
+      setBusy(true);
+      setError("");
       try {
-        const [{ data: prof }, { data: projData }] = await Promise.all([
-          api.get(`/profiles/${username}/`),
-          api.get(`/projects/?owner=${username}`),
-        ]);
-
-        if (!alive) return;
-
-        const visibleProjects = Array.isArray(projData)
-          ? projData.filter(
-              (p) =>
-                p.owner_username === username &&
-                (p.is_public === undefined || p.is_public === true)
-            )
-          : [];
-
-        setProfile(prof);
-        setProjects(visibleProjects);
+        const { data } = await api.get(`/public/${username}/`);
+        if (!cancelled) setPayload(data);
       } catch (err) {
-        console.error("[PublicProfile] failed to load", err);
-        if (!alive) return;
-        setProfile(null);
-        setProjects([]);
+        console.error("[PublicProfile] fetch failed:", err?.response || err);
+        const msg =
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Could not load this profile.";
+        if (!cancelled) setError(typeof msg === "string" ? msg : JSON.stringify(msg));
       } finally {
-        if (alive) setLoading(false);
+        if (!cancelled) setBusy(false);
       }
     })();
 
     return () => {
-      alive = false;
+      cancelled = true;
     };
   }, [username]);
 
-  const mapSrc = useMemo(
-    () => buildMapSrc(profile?.service_location || ""),
-    [profile]
-  );
-
-  if (loading && !profile) {
-    return <div className="text-sm text-slate-500">Loading profile…</div>;
+  // ✅ ONLY AFTER ALL HOOKS: conditional rendering
+  if (busy) {
+    return <div className="p-8 text-center text-slate-600">Loading…</div>;
   }
 
-  if (!profile) {
+  if (error) {
     return (
-      <div className="text-sm text-slate-600">
-        Profile not found.{" "}
-        <Link to="/" className="text-blue-600 hover:underline">
-          Back to Explore
-        </Link>
+      <div className="p-8 max-w-4xl mx-auto">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+        <div className="mt-4">
+          <Link className="text-sm text-blue-600 hover:underline" to="/">
+            ← Back to Explore
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const displayName = profile.display_name || profile.username;
-  const avatarSrc = profile.avatar_url || profile.logo || null;
-  const heroImage = useMemo(() => {
-    const projectBanner = projects.find(
-      (p) => p.cover_image || p.cover_photo || p.cover
-    );
+  if (!user) {
+    return <div className="p-8 text-center text-slate-600">Profile not found.</div>;
+  }
 
-    if (projectBanner) {
-      return (
-        projectBanner.cover_image || projectBanner.cover_photo || projectBanner.cover
-      );
-    }
-
-    return profile?.cover_image || profile?.cover_photo || profile?.cover || null;
-  }, [projects, profile]);
+  if (!publicEnabled) {
+    return <div className="p-8 text-center text-slate-600">This profile is not public.</div>;
+  }
 
   return (
-    <div className="space-y-8">
-      {/* BANNER */}
-      <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
-        <div className="relative h-[300px] w-full overflow-hidden bg-slate-200">
+    <div className="min-h-screen bg-white">
+      {/* FULL-BLEED BANNER (break out of App <Container>) */}
+      <div className="relative left-1/2 right-1/2 -mx-[50vw] w-screen">
+        <div className="relative">
           <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={
-              heroImage
-                ? { backgroundImage: `url(${heroImage})` }
-                : {
-                    backgroundImage:
-                      "linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 40%, #94a3b8 100%)",
-                  }
-            }
+            className="h-[300px] w-full bg-slate-900"
+            style={bannerStyle}
+            aria-label="Profile banner"
           />
-          <div className="absolute inset-0 bg-slate-900/20" />
-          <div className="absolute left-1/2 top-[200px] w-full -translate-x-1/2">
-            <Container className="flex items-center">
-              <div className="rounded-full bg-white p-1 shadow-lg">
-                {avatarSrc ? (
-                  <img
-                    src={avatarSrc}
-                    alt={displayName}
-                    className="h-20 w-20 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-xl font-semibold text-slate-700">
-                    {displayName?.charAt(0)?.toUpperCase() || "?"}
+          <div className="absolute inset-0 h-[300px] bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+
+          <div className="absolute inset-x-0 bottom-0">
+            <div className="mx-auto max-w-6xl px-4 pb-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex items-end gap-4">
+                  {/* logo */}
+                  <div className="-mb-8 h-24 w-24 overflow-hidden rounded-2xl border border-white/40 bg-white shadow-lg">
+                    {user.logo_url ? (
+                      <img
+                        src={toUrl(user.logo_url)}
+                        alt="Company logo"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-500">
+                        LOGO
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  <div className="text-white">
+                    <div className="text-2xl font-semibold sm:text-3xl">{displayName}</div>
+                    <div className="mt-1 text-xs text-white/80">
+                      @{user.username}
+                      {user.location ? (
+                        <>
+                          <span className="mx-2">•</span>
+                          <span>{user.location}</span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 sm:pb-2">
+                  <Link
+                    to="/"
+                    className="rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur hover:bg-white/20"
+                  >
+                    Explore
+                  </Link>
+                  <Link
+                    to={`/messages?to=${user.username}`}
+                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
+                  >
+                    Message
+                  </Link>
+                </div>
               </div>
-            </Container>
+            </div>
           </div>
+
         </div>
       </div>
 
-      <Container className="space-y-8">
-        {/* HEADER */}
-        <header className="flex flex-wrap items-start gap-4">
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold text-slate-900">
-              {displayName}
-            </h1>
-            {profile.service_location && (
-              <div className="mt-1 text-sm text-slate-600">
-                Serves: {profile.service_location}
-                {profile.coverage_radius_miles
-                  ? ` · ~${profile.coverage_radius_miles} mi radius`
-                  : ""}
+      {/* MAIN CONTENT (stays nicely centered) */}
+      <div className="mx-auto max-w-6xl px-4 pb-12 pt-12">
+        <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+          <Card className="rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-6">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                About
               </div>
-            )}
-            {profile.bio && (
-              <p className="mt-2 max-w-2xl text-sm text-slate-700">
-                {profile.bio}
-              </p>
-            )}
-            <div className="mt-2 text-xs text-slate-500">
-              Profile URL:{" "}
-              <span className="font-mono text-[11px]">
-                /profiles/{profile.username}
-              </span>
-            </div>
-          </div>
-        </header>
-
-        {/* CONTACT + MAP */}
-        <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          {/* Contact card */}
-          <Card className="p-4">
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">
-              Contact
-            </h2>
-            <div className="space-y-1 text-sm text-slate-700">
-              <div>
-                <span className="font-medium">Email:</span>{" "}
-                {profile.contact_email ? (
-                  <a
-                    href={`mailto:${profile.contact_email}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {profile.contact_email}
-                  </a>
-                ) : (
-                  "—"
-                )}
-              </div>
-              <div>
-                <span className="font-medium">Phone:</span>{" "}
-                {profile.contact_phone || "—"}
+              <div className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-slate-700">
+                {user.bio ? user.bio : "No bio added yet."}
               </div>
             </div>
           </Card>
 
-          {/* Map card */}
-          {mapSrc && (
-            <Card className="p-4">
-              <h2 className="mb-2 text-sm font-semibold text-slate-900">
-                Service area
-              </h2>
-              <div className="aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
-                <iframe
-                  src={mapSrc}
-                  title="Service area map"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  className="h-full w-full border-0"
-                />
+          <Card className="rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-6">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Quick info
               </div>
-            </Card>
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div>
+                  <span className="text-slate-500">Username:</span>{" "}
+                  <span className="font-medium">{user.username}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Company:</span>{" "}
+                  <span className="font-medium">{user.company_name || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Location:</span>{" "}
+                  <span className="font-medium">{user.location || "—"}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* PROJECT GALLERY */}
+        <div className="mt-10">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold text-slate-900">Project Gallery</div>
+              <div className="text-xs text-slate-500">
+                {projects.length} project{projects.length === 1 ? "" : "s"}
+              </div>
+            </div>
+          </div>
+
+          {projects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-600">
+              No projects yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {projects.map((p) => {
+                const cover =
+                  p?.cover_image ||
+                  p?.hero_image ||
+                  p?.thumbnail ||
+                  (Array.isArray(p?.images) && p.images[0]?.url) ||
+                  null;
+
+                return (
+                  <Link
+                    key={p.id}
+                    to={`/projects/${p.id}`}
+                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="h-44 bg-slate-100">
+                      {cover ? (
+                        <img
+                          src={toUrl(cover)}
+                          alt={p.title || ""}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {p.title || `Project #${p.id}`}
+                      </div>
+                      {p.summary ? (
+                        <div className="mt-1 line-clamp-2 text-xs text-slate-600">
+                          {p.summary}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-slate-500">View details →</div>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {/* PROJECTS */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-slate-900">Projects</h2>
+        {/* SELECTED COMMENTS */}
+        <div className="mt-12">
+          <div className="mb-3 text-lg font-semibold text-slate-900">Selected Comments</div>
 
-          {projects.length === 0 ? (
-            <p className="text-sm text-slate-600">
-              No public projects published yet.
-            </p>
+          {selectedComments.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+              No featured comments yet.
+            </div>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-              {projects.map((p) => (
-                <Link
-                  key={p.id}
-                  to={`/projects/${p.id}`}
-                  className="block text-inherit no-underline"
-                >
-                  <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
-                    {p.cover_image && (
-                      <img
-                        src={p.cover_image}
-                        alt={p.title || "project cover"}
-                        className="h-40 w-full object-cover"
-                      />
-                    )}
-                    <div className="p-3">
-                      <h3 className="mb-1 truncate text-sm font-semibold text-slate-900">
-                        {p.title}
-                      </h3>
-                      <p className="line-clamp-2 text-xs text-slate-600">
-                        {p.summary || "No summary provided."}
-                      </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {selectedComments.map((c, idx) => (
+                <Card key={c.id || idx} className="rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="p-5">
+                    <div className="whitespace-pre-line text-sm text-slate-700">{c.text}</div>
+                    <div className="mt-3 text-xs text-slate-500">
+                      — {c.author_username || "Anonymous"}
                     </div>
-                  </Card>
-                </Link>
+                  </div>
+                </Card>
               ))}
             </div>
           )}
-        </section>
-      </Container>
+        </div>
+      </div>
     </div>
   );
 }

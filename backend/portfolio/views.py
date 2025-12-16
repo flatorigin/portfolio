@@ -2,6 +2,7 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 
 from rest_framework import viewsets, permissions, status, generics
 from rest_framework.decorators import action
@@ -9,6 +10,10 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+
+from .models import Project
+from .serializers import ProjectSerializer, PublicUserSerializer 
+
 
 from .models import (
     Project,
@@ -28,6 +33,7 @@ from .serializers import (
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 
+User = get_user_model()
 
 # ---------------------------------------------------
 # Comments: list + create
@@ -226,6 +232,27 @@ class FavoriteProjectListView(generics.ListAPIView):
             .select_related("project", "project__owner")
             .order_by("-created_at")
         )
+
+
+class PublicProfileView(APIView):
+    permission_classes = []  # public
+
+    def get(self, request, username):
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        projects = Project.objects.filter(owner=user, is_public=True).order_by("-created_at")
+
+        return Response(
+            {
+                "user": PublicUserSerializer(user).data,
+                "projects": ProjectSerializer(projects, many=True).data,
+                "selected_comments": [],
+            }
+        )
+
 # ---------------------------------------------------
 # Private messaging
 # ---------------------------------------------------
