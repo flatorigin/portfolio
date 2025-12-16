@@ -33,6 +33,7 @@ export default function ProjectDetail() {
   const [editData, setEditData] = useState(null);
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
+  const [heroBanner, setHeroBanner] = useState(null);
 
   // extra materials / links rows in the edit form
   const [extraLinks, setExtraLinks] = useState([]);
@@ -123,6 +124,8 @@ export default function ProjectDetail() {
           material_url: meta.material_url || "",
         });
 
+        setHeroBanner(null);
+
         setExtraLinks(
           Array.isArray(meta.extra_links)
             ? meta.extra_links.map((row) => ({
@@ -142,6 +145,7 @@ export default function ProjectDetail() {
       setComments([]);
       setEditData(null);
       setExtraLinks([]);
+      setHeroBanner(null);
     }
   }, [id]);
 
@@ -434,7 +438,25 @@ export default function ProjectDetail() {
 
       console.log("[handleSaveEdits] sending payload:", payload);
 
-      const { data } = await api.patch(`/projects/${projectId}/`, payload);
+      const useFormData = !!heroBanner;
+      const requestBody = useFormData ? new FormData() : payload;
+
+      if (useFormData) {
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value === null || value === undefined) {
+            requestBody.append(key, "");
+          } else if (Array.isArray(value) || typeof value === "object") {
+            requestBody.append(key, JSON.stringify(value));
+          } else {
+            requestBody.append(key, value);
+          }
+        });
+        requestBody.append("cover_image", heroBanner);
+      }
+
+      const { data } = await api.patch(`/projects/${projectId}/`, requestBody, {
+        headers: useFormData ? { "Content-Type": "multipart/form-data" } : undefined,
+      });
 
       setProject(data);
       setEditData({
@@ -455,6 +477,8 @@ export default function ProjectDetail() {
             }))
           : []
       );
+
+      setHeroBanner(null);
 
       setIsEditing(false);
     } catch (err) {
@@ -796,6 +820,36 @@ export default function ProjectDetail() {
                   </div>
                 </div>
 
+                {/* Hero banner (cover image) */}
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px] sm:items-center">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Hero banner image
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setHeroBanner(e.target.files?.[0] || null)}
+                      className="block w-full text-sm"
+                    />
+                    {heroBanner ? (
+                      <div className="mt-1 truncate text-xs text-slate-500">{heroBanner.name}</div>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Upload a wide image to feature as the page hero.
+                      </p>
+                    )}
+                  </div>
+
+                  {project?.cover_image && (
+                    <img
+                      src={toUrl(project.cover_image)}
+                      alt="Current hero banner"
+                      className="h-24 w-full rounded-md object-cover ring-1 ring-slate-200"
+                    />
+                  )}
+                </div>
+
                 {/* Highlights */}
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -926,9 +980,10 @@ export default function ProjectDetail() {
                                 label: row.label || "",
                                 url: row.url || "",
                               }))
-                            : []
+                          : []
                         );
                       }
+                      setHeroBanner(null);
                       setIsEditing(false);
                     }}
                   >
