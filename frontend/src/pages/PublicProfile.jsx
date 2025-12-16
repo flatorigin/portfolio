@@ -105,7 +105,6 @@ export default function PublicProfile() {
                   }
             }
           />
-        ) : (
           <div className="absolute inset-0 bg-slate-900/20" />
           <div className="absolute left-1/2 top-[200px] w-full -translate-x-1/2">
             <Container className="flex items-center">
@@ -126,120 +125,122 @@ export default function PublicProfile() {
           </div>
         </div>
       </div>
-      {/* HEADER */}
-      <header className="flex flex-wrap items-start gap-4">
 
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold text-slate-900">
-            {displayName}
-          </h1>
-          {profile.service_location && (
-            <div className="mt-1 text-sm text-slate-600">
-              Serves: {profile.service_location}
-              {profile.coverage_radius_miles
-                ? ` · ~${profile.coverage_radius_miles} mi radius`
-                : ""}
-            </div>
-          )}
-          {profile.bio && (
-            <p className="mt-2 max-w-2xl text-sm text-slate-700">
-              {profile.bio}
-            </p>
-          )}
-          <div className="mt-2 text-xs text-slate-500">
-            Profile URL:{" "}
-            <span className="font-mono text-[11px]">
-              /profiles/{profile.username}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* CONTACT + MAP */}
-      <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        {/* Contact card */}
-        <Card className="p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-900">
-            Contact
-          </h2>
-          <div className="space-y-1 text-sm text-slate-700">
-            <div>
-              <span className="font-medium">Email:</span>{" "}
-              {profile.contact_email ? (
-                <a
-                  href={`mailto:${profile.contact_email}`}
-                  className="text-blue-600 hover:underline"
-                >
-                  {profile.contact_email}
-                </a>
-              ) : (
-                "—"
-              )}
-            </div>
-            <div>
-              <span className="font-medium">Phone:</span>{" "}
-              {profile.contact_phone || "—"}
+      <Container className="space-y-8">
+        {/* HEADER */}
+        <header className="flex flex-wrap items-start gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold text-slate-900">
+              {displayName}
+            </h1>
+            {profile.service_location && (
+              <div className="mt-1 text-sm text-slate-600">
+                Serves: {profile.service_location}
+                {profile.coverage_radius_miles
+                  ? ` · ~${profile.coverage_radius_miles} mi radius`
+                  : ""}
+              </div>
+            )}
+            {profile.bio && (
+              <p className="mt-2 max-w-2xl text-sm text-slate-700">
+                {profile.bio}
+              </p>
+            )}
+            <div className="mt-2 text-xs text-slate-500">
+              Profile URL:{" "}
+              <span className="font-mono text-[11px]">
+                /profiles/{profile.username}
+              </span>
             </div>
           </div>
-        </Card>
+        </header>
 
-        {/* Map card */}
-        {mapSrc && (
+        {/* CONTACT + MAP */}
+        <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          {/* Contact card */}
           <Card className="p-4">
             <h2 className="mb-2 text-sm font-semibold text-slate-900">
-              Service area
+              Contact
             </h2>
-            <div className="aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
-              <iframe
-                src={mapSrc}
-                title="Service area map"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="h-full w-full border-0"
-              />
+            <div className="space-y-1 text-sm text-slate-700">
+              <div>
+                <span className="font-medium">Email:</span>{" "}
+                {profile.contact_email ? (
+                  <a
+                    href={`mailto:${profile.contact_email}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {profile.contact_email}
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </div>
+              <div>
+                <span className="font-medium">Phone:</span>{" "}
+                {profile.contact_phone || "—"}
+              </div>
             </div>
           </Card>
-        )}
-      </div>
 
-      {/* PROJECTS */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">Projects</h2>
+          {/* Map card */}
+          {mapSrc && (
+            <Card className="p-4">
+              <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                Service area
+              </h2>
+              <div className="aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
+                <iframe
+                  src={mapSrc}
+                  title="Service area map"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="h-full w-full border-0"
+                />
+              </div>
+            </Card>
+          )}
+        </div>
 
-        {projects.length === 0 ? (
-          <p className="text-sm text-slate-600">
-            No public projects published yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-            {projects.map((p) => (
-              <Link
-                key={p.id}
-                to={`/projects/${p.id}`}
-                className="block text-inherit no-underline"
-              >
-                <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
-                  {p.cover_image && (
-                    <img
-                      src={p.cover_image}
-                      alt={p.title || "project cover"}
-                      className="h-40 w-full object-cover"
-                    />
-                  )}
-                  <div className="p-3">
-                    <h3 className="mb-1 truncate text-sm font-semibold text-slate-900">
-                      {p.title}
-                    </h3>
-                    <p className="line-clamp-2 text-xs text-slate-600">
-                      {p.summary || "No summary provided."}
-                    </p>
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+        {/* PROJECTS */}
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-slate-900">Projects</h2>
+
+          {projects.length === 0 ? (
+            <p className="text-sm text-slate-600">
+              No public projects published yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+              {projects.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/projects/${p.id}`}
+                  className="block text-inherit no-underline"
+                >
+                  <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
+                    {p.cover_image && (
+                      <img
+                        src={p.cover_image}
+                        alt={p.title || "project cover"}
+                        className="h-40 w-full object-cover"
+                      />
+                    )}
+                    <div className="p-3">
+                      <h3 className="mb-1 truncate text-sm font-semibold text-slate-900">
+                        {p.title}
+                      </h3>
+                      <p className="line-clamp-2 text-xs text-slate-600">
+                        {p.summary || "No summary provided."}
+                      </p>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      </Container>
     </div>
   );
 }
