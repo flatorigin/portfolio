@@ -638,6 +638,12 @@ export default function ProjectDetail() {
       ? images[Math.min(activeImageIdx, images.length - 1)]
       : null;
 
+  const heroImageUrl = useMemo(() => {
+    if (project?.cover_image) return toUrl(project.cover_image);
+    if (currentImage?.url) return currentImage.url;
+    return null;
+  }, [project?.cover_image, currentImage]);
+
   // ─────────────────────────────
   // RENDER
   // ─────────────────────────────
@@ -665,61 +671,73 @@ export default function ProjectDetail() {
       {/* Main project card */}
       <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
         {/* header */}
-        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 text-white sm:px-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            {/* LEFT: title + meta */}
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold sm:text-2xl">
-                {project?.title || `Project #${id}`}
-              </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-200/90">
-                {project?.category && (
-                  <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
-                    {project.category}
-                  </span>
-                )}
-                {project?.owner_username && (
-                  <Link
-                    to={{
-                      pathname: `/profiles/${project.owner_username}`,
-                      search:
-                        project?.id || id
-                          ? `?fromProjectId=${project?.id || id}`
-                          : "",
-                      state: { fromProjectId: project?.id || id },
-                    }}
-                    className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white transition hover:bg-white/10 hover:text-white"
+        <div className="relative border-b border-slate-100">
+          {heroImageUrl && (
+            <img
+              src={heroImageUrl}
+              alt="Project hero"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
+
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-800/95 to-slate-900/80" />
+
+          <div className="relative px-5 py-4 text-white sm:px-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              {/* LEFT: title + meta */}
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-semibold sm:text-2xl">
+                  {project?.title || `Project #${id}`}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-200/90">
+                  {project?.category && (
+                    <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
+                      {project.category}
+                    </span>
+                  )}
+                  {project?.owner_username && (
+                    <Link
+                      to={{
+                        pathname: `/profiles/${project.owner_username}`,
+                        search:
+                          project?.id || id
+                            ? `?fromProjectId=${project?.id || id}`
+                            : "",
+                        state: { fromProjectId: project?.id || id },
+                      }}
+                      className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white transition hover:bg-white/10 hover:text-white"
+                    >
+                      by {project.owner_username}
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              {/* RIGHT: owner edit button OR Save button */}
+              <div className="flex items-start gap-2">
+                {authed && project && isOwnerUser && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditing((prev) => !prev)}
                   >
-                    by {project.owner_username}
-                  </Link>
+                    {isEditing ? "Close edit" : "Edit project"}
+                  </Button>
+                )}
+
+                {authed && project && !isOwnerUser && (
+                  <Button
+                    type="button"
+                    variant={isSaved ? "outline" : "default"}
+                    onClick={toggleSave}
+                    disabled={saveBusy || isSaved}
+                    className="text-sm"
+                  >
+                    {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
+                  </Button>
                 )}
               </div>
-            </div>
-
-            {/* RIGHT: owner edit button OR Save button */}
-            <div className="flex items-start gap-2">
-              {authed && project && isOwnerUser && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditing((prev) => !prev)}
-                >
-                  {isEditing ? "Close edit" : "Edit project"}
-                </Button>
-              )}
-
-              {authed && project && !isOwnerUser && (
-                <Button
-                  type="button"
-                  variant={isSaved ? "outline" : "default"}
-                  onClick={toggleSave}
-                  disabled={saveBusy || isSaved}
-                  className="text-sm"
-                >
-                  {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
-                </Button>
-              )}
             </div>
           </div>
         </div>
