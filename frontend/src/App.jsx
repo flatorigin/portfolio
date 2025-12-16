@@ -73,11 +73,16 @@ export default function App() {
         </Container>
       </header>
 
-      <main className="py-6">
-        <Container>
+      <main className={pathname.startsWith("/profiles/") ? "" : "py-6"}>
+        {pathname.startsWith("/profiles/") ? (
           <Outlet />
-        </Container>
+        ) : (
+          <Container>
+            <Outlet />
+          </Container>
+        )}
       </main>
+
     </div>
   );
 }

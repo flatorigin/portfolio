@@ -27,7 +27,7 @@ def direct_message_upload_path(instance, filename):
 
 def project_cover_upload_path(instance, filename):
     return f"projects/{instance.owner_id}/{instance.id or 'new'}/cover/{filename}"
-
+    """Backward compatibility for old migrations that import this symbol."""
 
 def project_image_upload_path(instance, filename):
     # instance is ProjectImage
@@ -35,7 +35,6 @@ def project_image_upload_path(instance, filename):
 
 
 class Project(models.Model):
-    cover_image = models.ImageField(upload_to="project_covers/", blank=True, null=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects")
 
     title = models.CharField(max_length=255)
@@ -69,7 +68,7 @@ class Project(models.Model):
 
     def save(self, *args, **kwargs):
         if self.cover_image and hasattr(self.cover_image, "file"):
-            convert_field_file_to_webp(self.cover_image, quality=80)
+            convert_field_file_to_webp(self, "cover_image", quality=80)
         super().save(*args, **kwargs)
     pass
 

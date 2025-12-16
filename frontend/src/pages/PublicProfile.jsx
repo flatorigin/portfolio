@@ -2,7 +2,7 @@
 // file: frontend/src/pages/PublicProfile.jsx
 // Public profile + projects + contact + map
 // =======================================
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card, Container } from "../ui";
@@ -17,9 +17,14 @@ function buildMapSrc(location) {
 
 export default function PublicProfile() {
   const { username } = useParams();
+  const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const authed = !!localStorage.getItem("access");
+  const [searchParams] = useSearchParams();
+  const fromProjectId =
+    location.state?.fromProjectId || searchParams.get("fromProjectId") || null;
 
   useEffect(() => {
     let alive = true;

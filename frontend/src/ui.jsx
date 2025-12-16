@@ -39,9 +39,9 @@ export function Textarea(props) {
   );
 }
 
-export function Button({ className = "", ...props }) {
+export function Button({ className = "",as: Component = "button", ...props }) {
   return (
-    <button
+    <Component
       {...props}
       className={
         "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium " +
@@ -52,9 +52,9 @@ export function Button({ className = "", ...props }) {
   );
 }
 
-export function GhostButton({ className = "", ...props }) {
+export function GhostButton({ className = "", as:Component = "button", ...props }) {
   return (
-    <button
+    <Component
       {...props}
       className={
         "inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white " +

@@ -12,6 +12,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import PublicProfile from "./pages/PublicProfile";
 import MessagesThread from "./pages/MessagesThread";
+import UserHome from "./pages/UserHome";
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
       { path: "projects/:id", element: <ProjectDetail /> },
       { path: "messages/:threadId?", element: <MessagesThread /> },
       { path: "profiles/:username", element: <PublicProfile /> },
+      { path: "profiles/:username/home", element: <UserHome /> },
       { path: "login", element: <Login /> },
       { path: "register", element: <Register /> },
       { path: "forgot-password", element: <ForgotPassword /> },
