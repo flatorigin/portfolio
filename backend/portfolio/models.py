@@ -33,6 +33,16 @@ def project_image_upload_path(instance, filename):
     # instance is ProjectImage
     return f"projects/{instance.project.owner_id}/{instance.project_id}/images/{filename}"
 
+class Profile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="portfolio_profile",
+        related_query_name="portfolio_profile",
+    )
+    logo = models.ImageField(upload_to="profiles/logos/", blank=True, null=True)
+    banner = models.ImageField(upload_to="profiles/banners/", blank=True, null=True)
+
 
 class Project(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects")

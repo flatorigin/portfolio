@@ -11,9 +11,16 @@ def logo_upload_path(instance, filename):
 def avatar_upload_path(instance, filename):
     # alias kept so existing migrations referencing this still work
     return logo_upload_path(instance, filename) 
-    
+
+def banner_upload_path(instance, filename):
+    return f"banners/user_{instance.user_id}/{filename}"
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    ...
+    logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
+    avatar = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
+    banner = models.ImageField(upload_to=banner_upload_path, blank=True, null=True)  # ✅ add
 
     # Identity / company
     display_name = models.CharField(max_length=255, blank=True, default="")
@@ -28,12 +35,6 @@ class Profile(models.Model):
     # Optional contact info (NEW)
     contact_email = models.EmailField(blank=True, default="")
     contact_phone = models.CharField(max_length=50, blank=True, default="")
-    
-    # Media
-    logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
-
-    # Back-compat with old name if needed
-    avatar = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"
