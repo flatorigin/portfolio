@@ -86,8 +86,19 @@ export default function PublicProfile() {
 
   const displayName = profile.display_name || profile.username;
   const avatarSrc = profile.avatar_url || profile.logo || null;
-  const coverImage =
-    profile.cover_image || profile.cover_photo || profile.cover || null;
+  const heroImage = useMemo(() => {
+    const projectBanner = projects.find(
+      (p) => p.cover_image || p.cover_photo || p.cover
+    );
+
+    if (projectBanner) {
+      return (
+        projectBanner.cover_image || projectBanner.cover_photo || projectBanner.cover
+      );
+    }
+
+    return profile?.cover_image || profile?.cover_photo || profile?.cover || null;
+  }, [projects, profile]);
 
   return (
     <div className="space-y-8">
@@ -97,8 +108,8 @@ export default function PublicProfile() {
           <div
             className="absolute inset-0 bg-cover bg-center"
             style={
-              coverImage
-                ? { backgroundImage: `url(${coverImage})` }
+              heroImage
+                ? { backgroundImage: `url(${heroImage})` }
                 : {
                     backgroundImage:
                       "linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 40%, #94a3b8 100%)",
