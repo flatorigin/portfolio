@@ -655,9 +655,19 @@ export default function ProjectDetail() {
                   </span>
                 )}
                 {project?.owner_username && (
-                  <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
+                  <Link
+                    to={{
+                      pathname: `/profiles/${project.owner_username}`,
+                      search:
+                        project?.id || id
+                          ? `?fromProjectId=${project?.id || id}`
+                          : "",
+                      state: { fromProjectId: project?.id || id },
+                    }}
+                    className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white transition hover:bg-white/10 hover:text-white"
+                  >
                     by {project.owner_username}
-                  </span>
+                  </Link>
                 )}
               </div>
             </div>

@@ -2,10 +2,10 @@
 // file: frontend/src/pages/PublicProfile.jsx
 // Public profile + projects + contact + map
 // =======================================
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
-import { Card } from "../ui";
+import { Card, Container } from "../ui";
 
 // Map helper (zip / city / address → Google Maps embed)
 function buildMapSrc(location) {
@@ -17,9 +17,14 @@ function buildMapSrc(location) {
 
 export default function PublicProfile() {
   const { username } = useParams();
+  const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const authed = !!localStorage.getItem("access");
+  const [searchParams] = useSearchParams();
+  const fromProjectId =
+    location.state?.fromProjectId || searchParams.get("fromProjectId") || null;
 
   useEffect(() => {
     let alive = true;
@@ -81,22 +86,48 @@ export default function PublicProfile() {
 
   const displayName = profile.display_name || profile.username;
   const avatarSrc = profile.avatar_url || profile.logo || null;
+  const coverImage =
+    profile.cover_image || profile.cover_photo || profile.cover || null;
 
   return (
     <div className="space-y-8">
-      {/* HEADER */}
-      <header className="flex flex-wrap items-center gap-4">
-        {avatarSrc ? (
-          <img
-            src={avatarSrc}
-            alt={displayName}
-            className="h-20 w-20 rounded-full object-cover"
+      {/* BANNER */}
+      <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+        <div className="relative h-[300px] w-full overflow-hidden bg-slate-200">
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={
+              coverImage
+                ? { backgroundImage: `url(${coverImage})` }
+                : {
+                    backgroundImage:
+                      "linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 40%, #94a3b8 100%)",
+                  }
+            }
           />
         ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-xl font-semibold text-slate-700">
-            {displayName?.charAt(0)?.toUpperCase() || "?"}
+          <div className="absolute inset-0 bg-slate-900/20" />
+          <div className="absolute left-1/2 top-[200px] w-full -translate-x-1/2">
+            <Container className="flex items-center">
+              <div className="rounded-full bg-white p-1 shadow-lg">
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt={displayName}
+                    className="h-20 w-20 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-xl font-semibold text-slate-700">
+                    {displayName?.charAt(0)?.toUpperCase() || "?"}
+                  </div>
+                )}
+              </div>
+            </Container>
           </div>
-        )}
+        </div>
+      </div>
+      {/* HEADER */}
+      <header className="flex flex-wrap items-start gap-4">
 
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold text-slate-900">
