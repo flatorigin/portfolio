@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from .models import ProjectComment, Project, ProjectImage, MessageThread, PrivateMessage, ProjectFavorite
 from accounts.serializers import ProfileSerializer
+from .models import ProjectComment, Project, ProjectImage, MessageThread, PrivateMessage, ProjectFavorite
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -172,10 +172,56 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         return attrs
 
 class PublicUserSerializer(serializers.ModelSerializer):
-    # If these live on a Profile model instead, tell me and I’ll adjust.
+    """Public-friendly projection of a user + their profile fields."""
+
+    # Profile-driven fields
+    company_name = serializers.CharField(source="profile.company_name", read_only=True)
+    full_name = serializers.SerializerMethodField()
+    bio = serializers.CharField(source="profile.bio", read_only=True)
+    location = serializers.CharField(source="profile.location", read_only=True)
+    contact_email = serializers.EmailField(source="profile.contact_email", read_only=True)
+    contact_phone = serializers.CharField(source="profile.contact_phone", read_only=True)
+
+    # Asset URLs
+    logo_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name"]  # adjust if needed
+        fields = [
+            "username",
+            "full_name",
+            "company_name",
+            "bio",
+            "location",
+            "contact_email",
+            "contact_phone",
+            "logo_url",
+            "banner_url",
+        ]
+
+    def get_full_name(self, obj):
+        display = (obj.profile.display_name or "").strip()
+        if display:
+            return display
+        full = obj.get_full_name().strip()
+        return full or obj.username
+
+    def _abs_url(self, maybe_field):
+        if not maybe_field:
+            return None
+
+        request = self.context.get("request")
+        url = getattr(maybe_field, "url", None)
+        if not url:
+            return None
+        return request.build_absolute_uri(url) if request else url
+
+    def get_logo_url(self, obj):
+        return self._abs_url(obj.profile.logo)
+
+    def get_banner_url(self, obj):
+        return self._abs_url(obj.profile.banner)
 
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")

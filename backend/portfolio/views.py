@@ -11,8 +11,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
+from accounts.models import Profile
 from .models import Project
-from .serializers import ProjectSerializer, PublicUserSerializer 
+from .serializers import ProjectSerializer, PublicUserSerializer
 
 
 from .models import (
@@ -239,16 +240,25 @@ class PublicProfileView(APIView):
 
     def get(self, request, username):
         try:
-            user = User.objects.get(username=username)
+            user = (
+                User.objects
+                .select_related("profile")
+                .get(username=username)
+            )
         except User.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Ensure a public profile exists so serialization never fails
+        Profile.objects.get_or_create(user=user)
 
         projects = Project.objects.filter(owner=user, is_public=True).order_by("-created_at")
 
         return Response(
             {
-                "user": PublicUserSerializer(user).data,
-                "projects": ProjectSerializer(projects, many=True).data,
+                "user": PublicUserSerializer(user, context={"request": request}).data,
+                "projects": ProjectSerializer(
+                    projects, many=True, context={"request": request}
+                ).data,
                 "selected_comments": [],
             }
         )

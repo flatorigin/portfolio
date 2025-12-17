@@ -5,12 +5,14 @@ from .models import Profile
 
 User = get_user_model()
 
+
 class MeSerializer(serializers.ModelSerializer):
     # read-only user identity
     username = serializers.CharField(source="user.username", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
 
     avatar_url = serializers.SerializerMethodField()
+    location = serializers.CharField(source="service_location", required=False, allow_blank=True)
 
     class Meta:
         model = Profile
@@ -19,6 +21,8 @@ class MeSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "display_name",
+            "company_name",
+            "location",
             "service_location",
             "coverage_radius_miles",
             "contact_email",      # NEW
@@ -26,6 +30,7 @@ class MeSerializer(serializers.ModelSerializer):
             "bio",
             "logo",
             "avatar",
+            "banner",
             "avatar_url",
         ]
         read_only_fields = ["id", "username", "email", "avatar_url"]
@@ -47,6 +52,7 @@ class MeSerializer(serializers.ModelSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     avatar_url = serializers.SerializerMethodField()
+    location = serializers.CharField(source="service_location", required=False, allow_blank=True)
 
     class Meta:
         model = Profile
@@ -54,10 +60,14 @@ class ProfileSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "display_name",
+            "company_name",
+            "bio",
+            "location",
             "service_location",
             "contact_email",      # NEW
             "contact_phone",      # NEW
             "logo",
+            "banner",
             "avatar_url",
         ]
         read_only_fields = fields
