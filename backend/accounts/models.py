@@ -17,13 +17,13 @@ def banner_upload_path(instance, filename):
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
-    ...
     logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
     avatar = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
-    banner = models.ImageField(upload_to=banner_upload_path, blank=True, null=True)  # ✅ add
+    banner = models.ImageField(upload_to=banner_upload_path, blank=True, null=True)
 
     # Identity / company
     display_name = models.CharField(max_length=255, blank=True, default="")
+    company_name = models.CharField(max_length=255, blank=True, default="")
 
     # Service
     service_location = models.CharField(max_length=255, blank=True, default="")
@@ -35,6 +35,15 @@ class Profile(models.Model):
     # Optional contact info (NEW)
     contact_email = models.EmailField(blank=True, default="")
     contact_phone = models.CharField(max_length=50, blank=True, default="")
+
+    @property
+    def location(self):
+        """Public-facing alias for service_location."""
+        return self.service_location
+
+    @location.setter
+    def location(self, value):
+        self.service_location = value
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"

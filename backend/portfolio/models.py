@@ -4,7 +4,6 @@ import os
 import logging
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import models
@@ -12,7 +11,6 @@ from PIL import Image
 
 from .utils import convert_field_file_to_webp
 
-User = get_user_model()
 
 
 def direct_message_upload_path(instance, filename):
@@ -32,17 +30,6 @@ def project_cover_upload_path(instance, filename):
 def project_image_upload_path(instance, filename):
     # instance is ProjectImage
     return f"projects/{instance.project.owner_id}/{instance.project_id}/images/{filename}"
-
-class Profile(models.Model):
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="portfolio_profile",
-        related_query_name="portfolio_profile",
-    )
-    logo = models.ImageField(upload_to="profiles/logos/", blank=True, null=True)
-    banner = models.ImageField(upload_to="profiles/banners/", blank=True, null=True)
-
 
 class Project(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects")
