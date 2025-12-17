@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
+from accounts.models import Profile
 from .models import Project
 from .serializers import ProjectSerializer, PublicUserSerializer 
 
@@ -242,6 +243,10 @@ class PublicProfileView(APIView):
             user = User.objects.get(username=username)
         except User.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Ensure a public profile exists so serialization never fails
+        Profile.objects.get_or_create(user=user)
+
 
         projects = Project.objects.filter(owner=user, is_public=True).order_by("-created_at")
 
