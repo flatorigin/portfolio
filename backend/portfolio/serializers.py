@@ -172,10 +172,11 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         return attrs
 
 class PublicUserSerializer(serializers.ModelSerializer):
-    # If these live on a Profile model instead, tell me and I’ll adjust.
+    profile = ProfileSerializer(read_only=True)
+
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name"]  # adjust if needed
+        fields = ["username", "first_name", "last_name", "profile"]
 
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")
