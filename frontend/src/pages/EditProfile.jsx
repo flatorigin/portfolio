@@ -7,17 +7,44 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 
-export default function EditProfile() {
-  const [form, setForm] = useState({
-    display_name: "",
-    service_location: "",
-    coverage_radius_miles: "",
-    contact_email: "",
-    contact_phone: "",
-    bio: "",
-  });
+const LOCAL_CACHE_KEY = "edit_profile_form_cache";
+const DEFAULT_FORM = {
+  display_name: "",
+  service_location: "",
+  coverage_radius_miles: "",
+  contact_email: "",
+  contact_phone: "",
+  bio: "",
+};
 
-  const [avatarPreview, setAvatarPreview] = useState(null);
+function readCachedForm() {
+  try {
+    const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      return { ...DEFAULT_FORM, ...parsed };
+    }
+  } catch (err) {
+    console.warn("[EditProfile] could not read cached profile", err);
+  }
+  return null;
+}
+
+function persistForm(form) {
+  try {
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(form));
+  } catch (err) {
+    console.warn("[EditProfile] could not cache profile", err);
+  }
+}
+
+export default function EditProfile() {
+  const [form, setForm] = useState(() => readCachedForm() || DEFAULT_FORM);
+
+  const [avatarPreview, setAvatarPreview] = useState(
+    localStorage.getItem("profile_logo") || null
+  );
   const [logoFile, setLogoFile] = useState(null);
 
   const [loading, setLoading] = useState(true);
@@ -39,7 +66,7 @@ export default function EditProfile() {
       .then(({ data }) => {
         if (!alive) return;
 
-        setForm({
+        const nextForm = {
           display_name: data.display_name || "",
           service_location: data.service_location || "",
           coverage_radius_miles:
@@ -50,9 +77,16 @@ export default function EditProfile() {
           contact_email: data.contact_email || "",
           contact_phone: data.contact_phone || "",
           bio: data.bio || "",
-        });
+        };
 
-        setAvatarPreview(data.avatar_url || data.logo || null);
+        setForm(nextForm);
+        persistForm(nextForm);
+
+        const avatar = data.avatar_url || data.logo || null;
+        setAvatarPreview(avatar);
+        if (avatar) {
+          localStorage.setItem("profile_logo", avatar);
+        }
       })
       .catch((err) => {
         console.error("[EditProfile] load error", err?.response || err);
@@ -72,7 +106,11 @@ export default function EditProfile() {
   // ----------------------------
   const updateField = (key) => (e) => {
     const value = e.target.value;
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      persistForm(next);
+      return next;
+    });
   };
 
   const handleLogoChange = (e) => {
@@ -117,22 +155,28 @@ export default function EditProfile() {
       setMessage("Profile updated.");
 
       // keep form in sync with backend response
-      setForm((prev) => ({
-        ...prev,
-        display_name: updated.display_name ?? prev.display_name,
-        service_location: updated.service_location ?? prev.service_location,
-        coverage_radius_miles:
-          updated.coverage_radius_miles !== null &&
-          updated.coverage_radius_miles !== undefined
-            ? String(updated.coverage_radius_miles)
-            : prev.coverage_radius_miles,
-        contact_email: updated.contact_email ?? prev.contact_email,
-        contact_phone: updated.contact_phone ?? prev.contact_phone,
-        bio: updated.bio ?? prev.bio,
-      }));
+      setForm((prev) => {
+        const next = {
+          ...prev,
+          display_name: updated.display_name ?? prev.display_name,
+          service_location: updated.service_location ?? prev.service_location,
+          coverage_radius_miles:
+            updated.coverage_radius_miles !== null &&
+            updated.coverage_radius_miles !== undefined
+              ? String(updated.coverage_radius_miles)
+              : prev.coverage_radius_miles,
+          contact_email: updated.contact_email ?? prev.contact_email,
+          contact_phone: updated.contact_phone ?? prev.contact_phone,
+          bio: updated.bio ?? prev.bio,
+        };
+        persistForm(next);
+        return next;
+      });
 
-      if (updated.avatar_url || updated.logo) {
-        setAvatarPreview(updated.avatar_url || updated.logo);
+      const avatar = updated.avatar_url || updated.logo;
+      if (avatar) {
+        setAvatarPreview(avatar);
+        localStorage.setItem("profile_logo", avatar);
       }
     } catch (err) {
       console.error("[EditProfile] save error", err?.response || err);
