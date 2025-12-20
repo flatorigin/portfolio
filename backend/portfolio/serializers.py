@@ -182,6 +182,7 @@ class MessageThreadSerializer(serializers.ModelSerializer):
     owner_username = serializers.ReadOnlyField(source="owner.username")
     client_username = serializers.ReadOnlyField(source="client.username")
     latest_message = serializers.SerializerMethodField()
+    received_messages = serializers.SerializerMethodField()
     owner_profile = ProfileSerializer(source="owner.profile", read_only=True)
     client_profile = ProfileSerializer(source="client.profile", read_only=True)
 
@@ -207,6 +208,7 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "latest_message",
+            "received_messages",
         ]
         read_only_fields = [
             "id",
@@ -226,6 +228,7 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "latest_message",
+            "received_messages",
         ]
 
     def get_latest_message(self, obj):
@@ -233,6 +236,16 @@ class MessageThreadSerializer(serializers.ModelSerializer):
         if not msg:
             return None
         return PrivateMessageSerializer(msg, context=self.context).data
+
+    def get_received_messages(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return []
+        messages = obj.messages.exclude(sender=user).order_by("-created_at")
+        return PrivateMessageSerializer(
+            messages, many=True, context=self.context
+        ).data
 
 
     def get_unread_count(self, obj):

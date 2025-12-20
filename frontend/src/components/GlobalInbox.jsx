@@ -101,16 +101,28 @@ export default function GlobalInbox() {
     };
   }, [open]);
 
-  // sort newest first by latest message time
-  const sortedThreads = useMemo(() => {
-    return [...threads].sort((a, b) => {
-      const aTime =
-        a.latest_message?.created_at || a.updated_at || a.created_at || "";
-      const bTime =
-        b.latest_message?.created_at || b.updated_at || b.created_at || "";
+  const receivedMessages = useMemo(() => {
+    const items = [];
+    threads.forEach((thread) => {
+      const received = Array.isArray(thread.received_messages)
+        ? thread.received_messages
+        : [];
+      const counterpart = counterpartFor(thread);
+      received.forEach((message) => {
+        items.push({
+          threadId: thread.id,
+          message,
+          counterpart,
+        });
+      });
+    });
+
+    return items.sort((a, b) => {
+      const aTime = a.message?.created_at || "";
+      const bTime = b.message?.created_at || "";
       return (bTime || "").localeCompare(aTime || "");
     });
-  }, [threads]);
+  }, [threads, meLower]);
 
   return (
     <div className="relative">
@@ -131,32 +143,35 @@ export default function GlobalInbox() {
 
             {loading ? (
               <div className="p-3 text-xs text-slate-500">Loading…</div>
-            ) : sortedThreads.length === 0 ? (
+            ) : receivedMessages.length === 0 ? (
               <div className="p-3 text-xs text-slate-500">
-                No private conversations yet.
+                No received messages yet.
               </div>
             ) : (
               <div className="max-h-80 overflow-y-auto">
-                {sortedThreads.map((t) => {
-                  const cp = counterpartFor(t);
-                  const name = cp?.display_name || cp?.username || "User";
-
-                  const latest = t.latest_message || null;
-                  const preview = latest?.text || "(attachment)";
-                  const timeLabel = latest?.created_at
-                    ? new Date(latest.created_at).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })
+                {receivedMessages.map((item) => {
+                  const name =
+                    item.counterpart?.display_name ||
+                    item.counterpart?.username ||
+                    "User";
+                  const preview = item.message?.text || "(attachment)";
+                  const timeLabel = item.message?.created_at
+                    ? new Date(item.message.created_at).toLocaleTimeString(
+                        [],
+                        {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        }
+                      )
                     : "";
 
                   return (
                     <button
-                      key={t.id}
+                      key={item.message?.id || `${item.threadId}-message`}
                       type="button"
                       onClick={() => {
                         setOpen(false);
-                        navigate(`/messages/${t.id}`);
+                        navigate(`/messages/${item.threadId}`);
                       }}
                       className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-50"
                     >
