@@ -181,6 +181,40 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="cover",
+    )
+    def cover(self, request, pk=None):
+        """
+        POST /api/projects/:id/cover/ → set cover image from existing project image
+        body: { "image_id": <project image id> }
+        """
+        project = self.get_object()
+
+        if project.owner != request.user:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        image_id = request.data.get("image_id")
+        if not image_id:
+            return Response(
+                {"detail": "image_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            img = ProjectImage.objects.get(id=image_id, project=project)
+        except ProjectImage.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        project.cover_image = img.image
+        project.save(update_fields=["cover_image"])
+
+        ser = ProjectSerializer(project, context={"request": request})
+        return Response(ser.data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=True,
         methods=["get", "post", "delete"],
         permission_classes=[permissions.IsAuthenticated],
         url_path="favorite",
