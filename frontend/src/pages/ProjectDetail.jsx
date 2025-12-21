@@ -865,35 +865,23 @@ export default function ProjectDetail() {
                   </div>
                 </div>
 
-                {/* Hero banner (cover image) */}
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px] sm:items-center">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Hero banner image
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setHeroBanner(e.target.files?.[0] || null)}
-                      className="block w-full text-sm"
-                    />
-                    {heroBanner ? (
-                      <div className="mt-1 truncate text-xs text-slate-500">{heroBanner.name}</div>
-                    ) : (
+                {project?.cover_image && (
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px] sm:items-center">
+                    <div>
+                      <div className="text-xs font-medium text-slate-700">
+                        Hero banner image
+                      </div>
                       <p className="mt-1 text-[11px] text-slate-500">
-                        Upload a wide image to feature as the page hero.
+                        The hero banner uses the selected cover image.
                       </p>
-                    )}
-                  </div>
-
-                  {project?.cover_image && (
+                    </div>
                     <img
                       src={toUrl(project.cover_image)}
                       alt="Current hero banner"
                       className="h-24 w-full rounded-md object-cover ring-1 ring-slate-200"
                     />
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Highlights */}
                 <div>
