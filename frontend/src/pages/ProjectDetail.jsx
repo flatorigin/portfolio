@@ -27,6 +27,7 @@ export default function ProjectDetail() {
   // project + media
   const [project, setProject] = useState(null);
   const [images, setImages] = useState([]);
+  const [coverBusyId, setCoverBusyId] = useState(null);
 
   // edit project state
   const [isEditing, setIsEditing] = useState(false);
@@ -103,6 +104,7 @@ export default function ProjectDetail() {
       setImages(
         (imgs || [])
           .map((x) => ({
+            id: x.id,
             url: toUrl(x.url || x.image || x.src || x.file),
             caption: x.caption || "",
           }))
@@ -644,6 +646,31 @@ export default function ProjectDetail() {
     return null;
   }, [project?.cover_image, currentImage]);
 
+  const coverImageUrl = useMemo(() => {
+    if (!project?.cover_image) return "";
+    return toUrl(project.cover_image);
+  }, [project?.cover_image]);
+
+  const setCoverFromImage = useCallback(
+    async (img) => {
+      if (!project?.id || !img?.id || coverBusyId) return;
+
+      setCoverBusyId(img.id);
+      try {
+        const { data } = await api.post(`/projects/${project.id}/cover/`, {
+          image_id: img.id,
+        });
+        setProject(data);
+      } catch (err) {
+        console.error("[ProjectDetail] set cover failed:", err?.response || err);
+        alert("Failed to set the cover image. Please try again.");
+      } finally {
+        setCoverBusyId(null);
+      }
+    },
+    [project?.id, coverBusyId]
+  );
+
   // ─────────────────────────────
   // RENDER
   // ─────────────────────────────
@@ -838,35 +865,23 @@ export default function ProjectDetail() {
                   </div>
                 </div>
 
-                {/* Hero banner (cover image) */}
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px] sm:items-center">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Hero banner image
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setHeroBanner(e.target.files?.[0] || null)}
-                      className="block w-full text-sm"
-                    />
-                    {heroBanner ? (
-                      <div className="mt-1 truncate text-xs text-slate-500">{heroBanner.name}</div>
-                    ) : (
+                {project?.cover_image && (
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px] sm:items-center">
+                    <div>
+                      <div className="text-xs font-medium text-slate-700">
+                        Hero banner image
+                      </div>
                       <p className="mt-1 text-[11px] text-slate-500">
-                        Upload a wide image to feature as the page hero.
+                        The hero banner uses the selected cover image.
                       </p>
-                    )}
-                  </div>
-
-                  {project?.cover_image && (
+                    </div>
                     <img
                       src={toUrl(project.cover_image)}
                       alt="Current hero banner"
                       className="h-24 w-full rounded-md object-cover ring-1 ring-slate-200"
                     />
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Highlights */}
                 <div>
@@ -1186,28 +1201,51 @@ export default function ProjectDetail() {
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-                {images.map((img, i) => (
-                  <button
-                    type="button"
-                    key={img.url + i}
-                    onClick={() => {
-                      setActiveImageIdx(i);
-                      setCommentsOpen(true);
-                    }}
-                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white text-left"
-                  >
-                    <img
-                      src={img.url}
-                      alt={img.caption || ""}
-                      className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
-                    />
-                    {img.caption && (
-                      <div className="px-3 py-2 text-xs text-slate-700">
-                        {img.caption}
-                      </div>
-                    )}
-                  </button>
-                ))}
+                {images.map((img, i) => {
+                  const isCover = !!coverImageUrl && img.url === coverImageUrl;
+
+                  return (
+                    <div
+                      key={img.url + i}
+                      className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white"
+                    >
+                      {isOwnerUser && (
+                        <label
+                          className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-3 w-3"
+                            checked={isCover}
+                            disabled={!!coverBusyId && coverBusyId !== img.id}
+                            onChange={() => setCoverFromImage(img)}
+                          />
+                          {coverBusyId === img.id ? "Setting…" : "Cover"}
+                        </label>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveImageIdx(i);
+                          setCommentsOpen(true);
+                        }}
+                        className="block w-full text-left"
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.caption || ""}
+                          className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
+                        />
+                        {img.caption && (
+                          <div className="px-3 py-2 text-xs text-slate-700">
+                            {img.caption}
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
