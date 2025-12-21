@@ -1,8 +1,8 @@
 // ============================================================================
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api";
 import ImageUploader from "../components/ImageUploader";
 import {
@@ -35,6 +35,7 @@ function extractProjectId(fav) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // ---- Profile header (live) ----
   const [meLite, setMeLite] = useState({
@@ -214,7 +215,6 @@ export default function Dashboard() {
   });
   const [editCover, setEditCover] = useState(null);
   const [editImgs, setEditImgs] = useState([]);
-  const editorRef = useRef(null);
 
   // current user (ownership)
   const [meUser, setMeUser] = useState({
@@ -278,6 +278,7 @@ export default function Dashboard() {
   const loadEditor = useCallback(
     async (id) => {
       const pid = String(id);
+      if (!pid) return;
       setEditingId(pid);
       const { data: meta } = await api.get(`/projects/${pid}/`);
       setEditForm({
@@ -294,35 +295,37 @@ export default function Dashboard() {
       });
       setEditCover(null);
       await refreshImages(pid);
-      setTimeout(() => {
-        editorRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 150);
     },
     [refreshImages]
   );
 
+  const openEditor = useCallback(
+    (id) => {
+      const next = new URLSearchParams(searchParams);
+      next.set("edit", String(id));
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams]
+  );
+
+  const closeEditor = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("edit");
+    setSearchParams(next);
+    setEditingId("");
+    setEditCover(null);
+    setEditImgs([]);
+  }, [searchParams, setSearchParams]);
+
   useEffect(() => {
-    if (!editingId) return;
-    let attempts = 0;
-    function tryScroll() {
-      if (editorRef.current) {
-        const top =
-          editorRef.current.getBoundingClientRect().top +
-          window.scrollY -
-          80;
-        window.scrollTo({ top, behavior: "smooth" });
-        return;
-      }
-      if (attempts < 10) {
-        attempts++;
-        setTimeout(tryScroll, 50);
-      }
+    const editParam = searchParams.get("edit");
+    if (!editParam) {
+      setEditingId("");
+      return;
     }
-    tryScroll();
-  }, [editingId]);
+    if (String(editParam) === String(editingId)) return;
+    loadEditor(editParam);
+  }, [searchParams, loadEditor, editingId]);
 
   async function createProject(e) {
     e.preventDefault();
@@ -365,7 +368,7 @@ export default function Dashboard() {
       });
       setCover(null);
       setCreateOk(true);
-      if (data?.id) await loadEditor(data.id);
+      if (data?.id) openEditor(data.id);
     } catch (err) {
       const msg = err?.response?.data
         ? typeof err.response.data === "string"
@@ -961,7 +964,7 @@ export default function Dashboard() {
                     >
                       Open
                     </GhostButton>
-                    <Button onClick={() => loadEditor(p.id)}>Edit</Button>
+                    <Button onClick={() => openEditor(p.id)}>Edit</Button>
                   </div>
                 </div>
               </Card>
@@ -972,9 +975,9 @@ export default function Dashboard() {
 
       {/* 3) EDITOR */}
       {editingId && (
-        <div ref={editorRef}>
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div className="text-sm font-semibold text-slate-800">
                 Editing Project #{editingId}
               </div>
@@ -986,281 +989,281 @@ export default function Dashboard() {
                 >
                   View
                 </GhostButton>
-                <GhostButton onClick={() => setEditingId("")}>
-                  Close
-                </GhostButton>
+                <GhostButton onClick={closeEditor}>Close</GhostButton>
               </div>
             </div>
 
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Project Info (Draft)
-            </div>
-
-            <form
-              onSubmit={saveProjectInfo}
-              className="grid grid-cols-1 gap-3 md:grid-cols-2"
-            >
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Project Name
-                </label>
-                <Input
-                  value={editForm.title}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, title: e.target.value })
-                  }
-                  placeholder="Project name"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Category
-                </label>
-                <Input
-                  value={editForm.category}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      category: e.target.value,
-                    })
-                  }
-                  placeholder="Category"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm text-slate-600">
-                  Summary
-                </label>
-                <Textarea
-                  value={editForm.summary}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      summary: e.target.value,
-                    })
-                  }
-                  placeholder="Short description..."
-                />
+            <div className="max-h-[85vh] overflow-y-auto p-5">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Project Info
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Location (not address)
-                </label>
-                <Input
-                  value={editForm.location}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      location: e.target.value,
-                    })
-                  }
-                  placeholder="City, State"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Budget
-                </label>
-                <Input
-                  value={editForm.budget}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      budget: e.target.value,
-                    })
-                  }
-                  inputMode="numeric"
-                  placeholder="e.g. 250000"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Square Feet
-                </label>
-                <Input
-                  value={editForm.sqf}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      sqf: e.target.value,
-                    })
-                  }
-                  inputMode="numeric"
-                  placeholder="e.g. 1800"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Highlights (tags / text)
-                </label>
-                <Input
-                  value={editForm.highlights}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      highlights: e.target.value,
-                    })
-                  }
-                  placeholder="comma-separated tags"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Material / tool link (optional)
-                </label>
-                <Input
-                  value={editForm.material_url}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      material_url: e.target.value,
-                    })
-                  }
-                  placeholder="https://www.example.com/product/123"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Material label (title + price)
-                </label>
-                <Input
-                  value={editForm.material_label}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      material_label: e.target.value,
-                    })
-                  }
-                  placeholder="e.g. Bosch SDS Hammer Drill – $129"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Cover (replace)
-                </label>
-                <input
-                  type="file"
-                  onChange={(e) =>
-                    setEditCover(e.target.files?.[0] || null)
-                  }
-                />
-                {editCover && (
-                  <div className="mt-1 truncate text-xs text-slate-500">
-                    {editCover.name}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mr-2 align-middle"
-                    checked={!!editForm.is_public}
+              <form
+                onSubmit={saveProjectInfo}
+                className="grid grid-cols-1 gap-3 md:grid-cols-2"
+              >
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Project Name
+                  </label>
+                  <Input
+                    value={editForm.title}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, title: e.target.value })
+                    }
+                    placeholder="Project name"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Category
+                  </label>
+                  <Input
+                    value={editForm.category}
                     onChange={(e) =>
                       setEditForm({
                         ...editForm,
-                        is_public: e.target.checked,
+                        category: e.target.value,
                       })
                     }
+                    placeholder="Category"
                   />
-                  Public
-                </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <Button disabled={busy}>Save Changes</Button>
-              </div>
-            </form>
-
-            {/* Images */}
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm text-slate-600">Images</div>
-                <Badge>{editImgs.length} total</Badge>
-              </div>
-              {editImgs.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  No images yet.
                 </div>
-              ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-                  {editImgs.map((it) => (
-                    <figure
-                      key={it.id ?? it.url}
-                      className="rounded-xl border border-slate-200 bg-white p-3"
-                    >
-                      <img
-                        src={it.url}
-                        alt=""
-                        className="mb-2 h-36 w-full rounded-md object-cover"
-                      />
-                      <input
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="Caption…"
-                        value={it._localCaption}
-                        onChange={(e) =>
-                          setEditImgs((prev) =>
-                            prev.map((x) =>
-                              x.id === it.id
-                                ? {
-                                    ...x,
-                                    _localCaption: e.target.value,
-                                  }
-                                : x
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Summary
+                  </label>
+                  <Textarea
+                    value={editForm.summary}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        summary: e.target.value,
+                      })
+                    }
+                    placeholder="Short description..."
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Location (not address)
+                  </label>
+                  <Input
+                    value={editForm.location}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        location: e.target.value,
+                      })
+                    }
+                    placeholder="City, State"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Budget
+                  </label>
+                  <Input
+                    value={editForm.budget}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        budget: e.target.value,
+                      })
+                    }
+                    inputMode="numeric"
+                    placeholder="e.g. 250000"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Square Feet
+                  </label>
+                  <Input
+                    value={editForm.sqf}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        sqf: e.target.value,
+                      })
+                    }
+                    inputMode="numeric"
+                    placeholder="e.g. 1800"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Highlights (tags / text)
+                  </label>
+                  <Input
+                    value={editForm.highlights}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        highlights: e.target.value,
+                      })
+                    }
+                    placeholder="comma-separated tags"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Material / tool link (optional)
+                  </label>
+                  <Input
+                    value={editForm.material_url}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        material_url: e.target.value,
+                      })
+                    }
+                    placeholder="https://www.example.com/product/123"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Material label (title + price)
+                  </label>
+                  <Input
+                    value={editForm.material_label}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        material_label: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. Bosch SDS Hammer Drill – $129"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-slate-600">
+                    Cover (replace)
+                  </label>
+                  <input
+                    type="file"
+                    onChange={(e) =>
+                      setEditCover(e.target.files?.[0] || null)
+                    }
+                  />
+                  {editCover && (
+                    <div className="mt-1 truncate text-xs text-slate-500">
+                      {editCover.name}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      className="mr-2 align-middle"
+                      checked={!!editForm.is_public}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          is_public: e.target.checked,
+                        })
+                      }
+                    />
+                    Public
+                  </label>
+                </div>
+
+                <div className="md:col-span-2">
+                  <Button disabled={busy}>Save Changes</Button>
+                </div>
+              </form>
+
+              {/* Images */}
+              <div className="mt-6">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-sm text-slate-600">Images</div>
+                  <Badge>{editImgs.length} total</Badge>
+                </div>
+                {editImgs.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    No images yet.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+                    {editImgs.map((it) => (
+                      <figure
+                        key={it.id ?? it.url}
+                        className="rounded-xl border border-slate-200 bg-white p-3"
+                      >
+                        <img
+                          src={it.url}
+                          alt=""
+                          className="mb-2 h-36 w-full rounded-md object-cover"
+                        />
+                        <input
+                          className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                          placeholder="Caption…"
+                          value={it._localCaption}
+                          onChange={(e) =>
+                            setEditImgs((prev) =>
+                              prev.map((x) =>
+                                x.id === it.id
+                                  ? {
+                                      ...x,
+                                      _localCaption: e.target.value,
+                                    }
+                                  : x
+                              )
                             )
-                          )
-                        }
-                      />
-                      <div className="mt-2 flex items-center justify-between">
-                        <GhostButton
-                          onClick={() => {
-                            if (it.id) deleteImage(it);
-                          }}
-                          disabled={!it.id || busy}
-                          title={
-                            it.id
-                              ? "Delete this image"
-                              : "This API response has no image id — delete is disabled"
                           }
-                        >
-                          Delete
-                        </GhostButton>
-                        <Button
-                          onClick={() => saveImageCaption(it)}
-                          disabled={
-                            it._saving ||
-                            it._localCaption === it.caption
-                          }
-                        >
-                          {it._saving ? "Saving…" : "Save caption"}
-                        </Button>
-                      </div>
-                    </figure>
-                  ))}
-                </div>
-              )}
-            </div>
+                        />
+                        <div className="mt-2 flex items-center justify-between">
+                          <GhostButton
+                            onClick={() => {
+                              if (it.id) deleteImage(it);
+                            }}
+                            disabled={!it.id || busy}
+                            title={
+                              it.id
+                                ? "Delete this image"
+                                : "This API response has no image id — delete is disabled"
+                            }
+                          >
+                            Delete
+                          </GhostButton>
+                          <Button
+                            onClick={() => saveImageCaption(it)}
+                            disabled={
+                              it._saving ||
+                              it._localCaption === it.caption
+                            }
+                          >
+                            {it._saving ? "Saving…" : "Save caption"}
+                          </Button>
+                        </div>
+                      </figure>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            {/* Uploader */}
-            <div className="mt-6">
-              <div className="mb-2 text-sm font-semibold text-slate-800">
-                Add Images
+              {/* Uploader */}
+              <div className="mt-6">
+                <div className="mb-2 text-sm font-semibold text-slate-800">
+                  Add Images
+                </div>
+                <div className="mb-2 text-xs text-slate-600">
+                  Drag & drop or click; add captions; upload.
+                </div>
+                <ImageUploader
+                  projectId={editingId}
+                  onUploaded={async () => {
+                    await refreshImages(editingId);
+                    await refreshProjects();
+                  }}
+                />
               </div>
-              <div className="mb-2 text-xs text-slate-600">
-                Drag & drop or click; add captions; upload.
-              </div>
-              <ImageUploader
-                projectId={editingId}
-                onUploaded={async () => {
-                  await refreshImages(editingId);
-                  await refreshProjects();
-                }}
-              />
             </div>
-          </Card>
+          </div>
         </div>
       )}
     </div>

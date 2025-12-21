@@ -3,7 +3,7 @@
 // Project page + lightbox-style comments modal + project edit + extra links
 // =======================================
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
 
@@ -23,20 +23,12 @@ function buildMapSrc(location) {
 
 export default function ProjectDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
 
   // project + media
   const [project, setProject] = useState(null);
   const [images, setImages] = useState([]);
-
-  // edit project state
-  const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState(null);
-  const [savingEdits, setSavingEdits] = useState(false);
-  const [editError, setEditError] = useState("");
-  const [heroBanner, setHeroBanner] = useState(null);
-
-  // extra materials / links rows in the edit form
-  const [extraLinks, setExtraLinks] = useState([]);
+  const [coverBusyId, setCoverBusyId] = useState(null);
 
   // current user
   const [meUser, setMeUser] = useState(null);
@@ -103,6 +95,7 @@ export default function ProjectDetail() {
       setImages(
         (imgs || [])
           .map((x) => ({
+            id: x.id,
             url: toUrl(x.url || x.image || x.src || x.file),
             caption: x.caption || "",
           }))
@@ -111,41 +104,11 @@ export default function ProjectDetail() {
 
       setComments(Array.isArray(cmts) ? cmts : []);
 
-      // init editData + extraLinks from meta
-      if (meta) {
-        setEditData({
-          title: meta.title || "",
-          summary: meta.summary || "",
-          location: meta.location || "",
-          budget: meta.budget || "",
-          sqf: meta.sqf || "",
-          highlights: meta.highlights || "",
-          material_label: meta.material_label || "",
-          material_url: meta.material_url || "",
-        });
-
-        setHeroBanner(null);
-
-        setExtraLinks(
-          Array.isArray(meta.extra_links)
-            ? meta.extra_links.map((row) => ({
-                label: row.label || "",
-                url: row.url || "",
-              }))
-            : []
-        );
-      } else {
-        setEditData(null);
-        setExtraLinks([]);
-      }
     } catch (err) {
       console.error("[ProjectDetail] fetch failed:", err);
       setProject(null);
       setImages([]);
       setComments([]);
-      setEditData(null);
-      setExtraLinks([]);
-      setHeroBanner(null);
     }
   }, [id]);
 
@@ -391,136 +354,6 @@ export default function ProjectDetail() {
     }
   }
 
-  // ─────────────────────────────
-  // PROJECT EDIT SAVE HANDLER
-  // ─────────────────────────────
-  async function handleSaveEdits(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!editData || !project) return;
-
-    setSavingEdits(true);
-    setEditError("");
-
-    const normalizeText = (val) => {
-      if (val === undefined || val === null) return "";
-      return String(val).trim();
-    };
-
-    const normalizeNumber = (val) => {
-      if (val === undefined || val === null) return null;
-      const s = String(val).trim();
-      if (!s) return null;
-      const cleaned = s.replace(/,/g, "");
-      const n = Number(cleaned);
-      return Number.isNaN(n) ? null : n;
-    };
-
-    try {
-      const projectId = project.id;
-      if (!projectId) throw new Error("Missing project id");
-
-      const payload = {
-        title: normalizeText(editData.title),
-        summary: normalizeText(editData.summary),
-        location: normalizeText(editData.location),
-        budget: normalizeNumber(editData.budget),
-        sqf: normalizeNumber(editData.sqf),
-        highlights: normalizeText(editData.highlights),
-        material_label: normalizeText(editData.material_label),
-        material_url: normalizeText(editData.material_url),
-        extra_links: extraLinks
-          .filter((row) => row.label || row.url)
-          .map((row) => ({
-            label: row.label.trim(),
-            url: row.url.trim(),
-          })),
-      };
-
-      console.log("[handleSaveEdits] sending payload:", payload);
-
-      const useFormData = !!heroBanner;
-      const requestBody = useFormData ? new FormData() : payload;
-
-      if (useFormData) {
-        Object.entries(payload).forEach(([key, value]) => {
-          if (value === null || value === undefined) {
-            requestBody.append(key, "");
-          } else if (Array.isArray(value) || typeof value === "object") {
-            requestBody.append(key, JSON.stringify(value));
-          } else {
-            requestBody.append(key, value);
-          }
-        });
-        requestBody.append("cover_image", heroBanner);
-      }
-
-      const { data } = await api.patch(`/projects/${projectId}/`, requestBody, {
-        headers: useFormData ? { "Content-Type": "multipart/form-data" } : undefined,
-      });
-
-      setProject(data);
-      setEditData({
-        title: data.title || "",
-        summary: data.summary || "",
-        location: data.location || "",
-        budget: data.budget ?? "",
-        sqf: data.sqf ?? "",
-        highlights: data.highlights || "",
-        material_label: data.material_label || "",
-        material_url: data.material_url || "",
-      });
-      setExtraLinks(
-        Array.isArray(data.extra_links)
-          ? data.extra_links.map((row) => ({
-              label: row.label || "",
-              url: row.url || "",
-            }))
-          : []
-      );
-
-      setHeroBanner(null);
-
-      setIsEditing(false);
-    } catch (err) {
-      console.error("[handleSaveEdits] error:", err?.response || err);
-
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-
-      let msg =
-        data?.detail ||
-        data?.message ||
-        data?.non_field_errors ||
-        err?.message ||
-        data ||
-        "Could not save changes. Please try again.";
-
-      if (typeof msg !== "string") {
-        msg = JSON.stringify(msg, null, 2);
-      }
-
-      const full = `Save failed${status ? ` (status ${status})` : ""}: ${msg}`;
-      setEditError(full);
-      alert(full);
-    } finally {
-      setSavingEdits(false);
-    }
-  }
-
-  function addLinkRow() {
-    setExtraLinks((prev) => [...prev, { label: "", url: "" }]);
-  }
-
-  function updateLinkRow(index, field, value) {
-    setExtraLinks((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
-    );
-  }
-
-  function removeLinkRow(index) {
-    setExtraLinks((prev) => prev.filter((_, i) => i !== index));
-  }
-
   const mapSrc = buildMapSrc(project?.location || "");
 
   // ─────────────────────────────
@@ -644,6 +477,31 @@ export default function ProjectDetail() {
     return null;
   }, [project?.cover_image, currentImage]);
 
+  const coverImageUrl = useMemo(() => {
+    if (!project?.cover_image) return "";
+    return toUrl(project.cover_image);
+  }, [project?.cover_image]);
+
+  const setCoverFromImage = useCallback(
+    async (img) => {
+      if (!project?.id || !img?.id || coverBusyId) return;
+
+      setCoverBusyId(img.id);
+      try {
+        const { data } = await api.post(`/projects/${project.id}/cover/`, {
+          image_id: img.id,
+        });
+        setProject(data);
+      } catch (err) {
+        console.error("[ProjectDetail] set cover failed:", err?.response || err);
+        alert("Failed to set the cover image. Please try again.");
+      } finally {
+        setCoverBusyId(null);
+      }
+    },
+    [project?.id, coverBusyId]
+  );
+
   // ─────────────────────────────
   // RENDER
   // ─────────────────────────────
@@ -720,9 +578,9 @@ export default function ProjectDetail() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsEditing((prev) => !prev)}
+                    onClick={() => navigate(`/dashboard?edit=${project.id}`)}
                   >
-                    {isEditing ? "Close edit" : "Edit project"}
+                    Edit project
                   </Button>
                 )}
 
@@ -748,275 +606,6 @@ export default function ProjectDetail() {
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">
               {project.summary}
             </p>
-          )}
-
-          {/* OWNER-ONLY PROJECT EDIT FORM */}
-          {isOwnerUser && isEditing && editData && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
-                Edit project
-              </div>
-
-              <form onSubmit={handleSaveEdits} className="space-y-3">
-                {/* Title */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Title
-                  </label>
-                  <input
-                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                    value={editData.title}
-                    onChange={(e) =>
-                      setEditData((prev) => ({ ...prev, title: e.target.value }))
-                    }
-                  />
-                </div>
-
-                {/* Summary */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Summary
-                  </label>
-                  <Textarea
-                    rows={3}
-                    value={editData.summary}
-                    onChange={(e) =>
-                      setEditData((prev) => ({
-                        ...prev,
-                        summary: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                {/* Location / Budget / Sq Ft */}
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Location
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={editData.location}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          location: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Budget
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={editData.budget}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          budget: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Sq Ft
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={editData.sqf}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          sqf: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Hero banner (cover image) */}
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px] sm:items-center">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Hero banner image
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setHeroBanner(e.target.files?.[0] || null)}
-                      className="block w-full text-sm"
-                    />
-                    {heroBanner ? (
-                      <div className="mt-1 truncate text-xs text-slate-500">{heroBanner.name}</div>
-                    ) : (
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Upload a wide image to feature as the page hero.
-                      </p>
-                    )}
-                  </div>
-
-                  {project?.cover_image && (
-                    <img
-                      src={toUrl(project.cover_image)}
-                      alt="Current hero banner"
-                      className="h-24 w-full rounded-md object-cover ring-1 ring-slate-200"
-                    />
-                  )}
-                </div>
-
-                {/* Highlights */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Highlights
-                  </label>
-                  <Textarea
-                    rows={2}
-                    value={editData.highlights}
-                    onChange={(e) =>
-                      setEditData((prev) => ({
-                        ...prev,
-                        highlights: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                {/* Materials / links */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-medium text-slate-700">
-                      Materials &amp; links
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addLinkRow}
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                      title="Add another link"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  {/* main label+url row */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Label
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="e.g. Deck boards – Trex"
-                        value={editData.material_label}
-                        onChange={(e) =>
-                          setEditData((prev) => ({
-                            ...prev,
-                            material_label: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Link
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="https://…"
-                        value={editData.material_url}
-                        onChange={(e) =>
-                          setEditData((prev) => ({
-                            ...prev,
-                            material_url: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  {/* extra link rows */}
-                  {extraLinks.length > 0 && (
-                    <div className="space-y-2">
-                      {extraLinks.map((row, index) => (
-                        <div
-                          key={index}
-                          className="grid gap-2 sm:grid-cols-[1fr_minmax(0,1.4fr)_auto]"
-                        >
-                          <input
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="Label"
-                            value={row.label}
-                            onChange={(e) =>
-                              updateLinkRow(index, "label", e.target.value)
-                            }
-                          />
-                          <input
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="https://…"
-                            value={row.url}
-                            onChange={(e) =>
-                              updateLinkRow(index, "url", e.target.value)
-                            }
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeLinkRow(index)}
-                            className="self-center text-[11px] text-slate-500 hover:text-red-500"
-                            title="Remove this link"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      if (project) {
-                        setEditData({
-                          title: project.title || "",
-                          summary: project.summary || "",
-                          location: project.location || "",
-                          budget: project.budget || "",
-                          sqf: project.sqf || "",
-                          highlights: project.highlights || "",
-                          material_label: project.material_label || "",
-                          material_url: project.material_url || "",
-                        });
-                        setExtraLinks(
-                          Array.isArray(project.extra_links)
-                            ? project.extra_links.map((row) => ({
-                                label: row.label || "",
-                                url: row.url || "",
-                              }))
-                          : []
-                        );
-                      }
-                      setHeroBanner(null);
-                      setIsEditing(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={savingEdits}>
-                    {savingEdits ? "Saving…" : "Save"}
-                  </Button>
-                </div>
-              </form>
-
-              {editError && (
-                <p className="mt-2 text-xs text-red-600">{editError}</p>
-              )}
-            </div>
           )}
 
           {/* Meta / Project details */}
@@ -1186,28 +775,51 @@ export default function ProjectDetail() {
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-                {images.map((img, i) => (
-                  <button
-                    type="button"
-                    key={img.url + i}
-                    onClick={() => {
-                      setActiveImageIdx(i);
-                      setCommentsOpen(true);
-                    }}
-                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white text-left"
-                  >
-                    <img
-                      src={img.url}
-                      alt={img.caption || ""}
-                      className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
-                    />
-                    {img.caption && (
-                      <div className="px-3 py-2 text-xs text-slate-700">
-                        {img.caption}
-                      </div>
-                    )}
-                  </button>
-                ))}
+                {images.map((img, i) => {
+                  const isCover = !!coverImageUrl && img.url === coverImageUrl;
+
+                  return (
+                    <div
+                      key={img.url + i}
+                      className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white"
+                    >
+                      {isOwnerUser && (
+                        <label
+                          className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-3 w-3"
+                            checked={isCover}
+                            disabled={!!coverBusyId && coverBusyId !== img.id}
+                            onChange={() => setCoverFromImage(img)}
+                          />
+                          {coverBusyId === img.id ? "Setting…" : "Cover"}
+                        </label>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveImageIdx(i);
+                          setCommentsOpen(true);
+                        }}
+                        className="block w-full text-left"
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.caption || ""}
+                          className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
+                        />
+                        {img.caption && (
+                          <div className="px-3 py-2 text-xs text-slate-700">
+                            {img.caption}
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
