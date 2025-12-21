@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import ImageUploader from "../components/ImageUploader";
+import { EditProjectContentButton } from "../components/ProjectEditModal";
 import { SectionTitle, Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
 
 // normalize media
@@ -88,11 +89,6 @@ export default function Dashboard(){
 
   // Editor
   const [editingId, setEditingId] = useState("");
-  const [editForm,setEditForm]=useState({
-    title:"", summary:"", category:"", is_public:true,
-    location:"", budget:"", sqf:"", highlights:"",
-  });
-  const [editCover,setEditCover]=useState(null);
   const [editImgs, setEditImgs] = useState([]); // [{id,url,caption,_localCaption,_saving}]
 
   // 🔽 ref for scrolling to editor
@@ -149,21 +145,9 @@ export default function Dashboard(){
     setEditImgs(arr);
   },[]);
 
-  const loadEditor = useCallback(async (id)=>{
+  const openProjectEditor = useCallback(async (id)=>{
     const pid = String(id);
     setEditingId(pid);
-    const {data: meta} = await api.get(`/projects/${pid}/`);
-    setEditForm({
-      title: meta?.title || "",
-      summary: meta?.summary || "",
-      category: meta?.category || "",
-      is_public: !!meta?.is_public,
-      location: meta?.location || "",
-      budget: meta?.budget ?? "",
-      sqf: meta?.sqf ?? "",
-      highlights: meta?.highlights || "",
-    });
-    setEditCover(null);
     await refreshImages(pid);
     setTimeout(() => {
       editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -224,7 +208,7 @@ export default function Dashboard(){
       setForm({ title:"", summary:"", category:"", is_public:true, location:"", budget:"", sqf:"", highlights:"" });
       setCover(null);
       setCreateOk(true);
-      if (data?.id) await loadEditor(data.id); // jump into editor
+      if (data?.id) await openProjectEditor(data.id); // jump into editor
     } catch (err){
       // surface DRF errors (400/403) or network issues
       const msg = err?.response?.data
@@ -237,23 +221,6 @@ export default function Dashboard(){
     } finally {
       setBusy(false);
     }
-  }
-
-  async function saveProjectInfo(e){
-    e?.preventDefault?.();
-    if (!editingId) return;
-    setBusy(true);
-    try{
-      if (editCover) {
-        const fd = new FormData();
-        Object.entries(editForm).forEach(([k,v])=> fd.append(k, v ?? ""));
-        fd.append("cover_image", editCover);
-        await api.patch(`/projects/${editingId}/`, fd, { headers:{ "Content-Type":"multipart/form-data" }});
-      } else {
-        await api.patch(`/projects/${editingId}/`, editForm);
-      }
-      await refreshProjects();
-    } finally { setBusy(false); }
   }
 
   async function saveImageCaption(img){
@@ -507,7 +474,13 @@ export default function Dashboard(){
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <GhostButton onClick={()=>window.open(`/projects/${p.id}`, "_self")}>Open</GhostButton>
-                    <Button onClick={()=>loadEditor(p.id)}>Edit</Button>
+                    <EditProjectContentButton
+                      projectId={p.id}
+                      onOpen={() => openProjectEditor(p.id)}
+                      onSaved={refreshProjects}
+                    >
+                      Edit
+                    </EditProjectContentButton>
                   </div>
                 </div>
               </Card>
@@ -524,96 +497,14 @@ export default function Dashboard(){
               <div className="text-sm font-semibold text-slate-800">Editing Project #{editingId}</div>
               <div className="flex items-center gap-2">
                 <GhostButton onClick={()=>window.open(`/projects/${editingId}`, "_self")}>View</GhostButton>
+                <EditProjectContentButton
+                  projectId={editingId}
+                  variant="ghost"
+                  onSaved={refreshProjects}
+                />
                 <GhostButton onClick={()=>setEditingId("")}>Close</GhostButton>
               </div>
             </div>
-
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Project Info (Draft)
-            </div>
-
-            <form onSubmit={saveProjectInfo} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Project Name</label>
-                <Input
-                  value={editForm.title}
-                  onChange={e=>setEditForm({...editForm, title:e.target.value})}
-                  placeholder="Project name"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Category</label>
-                <Input
-                  value={editForm.category}
-                  onChange={e=>setEditForm({...editForm, category:e.target.value})}
-                  placeholder="Category"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm text-slate-600">Summary</label>
-                <Textarea
-                  value={editForm.summary}
-                  onChange={e=>setEditForm({...editForm, summary:e.target.value})}
-                  placeholder="Short description..."
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
-                <Input
-                  value={editForm.location}
-                  onChange={e=>setEditForm({...editForm, location:e.target.value})}
-                  placeholder="City, State"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Budget</label>
-                <Input
-                  value={editForm.budget}
-                  onChange={e=>setEditForm({...editForm, budget:e.target.value})}
-                  inputMode="numeric"
-                  placeholder="e.g. 250000"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
-                <Input
-                  value={editForm.sqf}
-                  onChange={e=>setEditForm({...editForm, sqf:e.target.value})}
-                  inputMode="numeric"
-                  placeholder="e.g. 1800"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
-                <Input
-                  value={editForm.highlights}
-                  onChange={e=>setEditForm({...editForm, highlights:e.target.value})}
-                  placeholder="comma-separated tags"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Cover (replace)</label>
-                <input type="file" onChange={e=>setEditCover(e.target.files?.[0]||null)} />
-                {editCover && <div className="mt-1 truncate text-xs text-slate-500">{editCover.name}</div>}
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mr-2 align-middle"
-                    checked={!!editForm.is_public}
-                    onChange={e=>setEditForm({...editForm, is_public:e.target.checked})}
-                  />
-                  Public
-                </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <Button disabled={busy}>Save Changes</Button>
-              </div>
-            </form>
 
             {/* Images */}
             <div className="mt-6">
