@@ -1,10 +1,10 @@
 // ============================================================================
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
-import ImageUploader from "../components/ImageUploader";
+import { ProjectEditModal } from "../components/ProjectEditModal";
 import { SectionTitle, Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
 
 // normalize media
@@ -86,17 +86,8 @@ export default function Dashboard(){
   // NEW: toggle for create project card
   const [showCreate, setShowCreate] = useState(false);
 
-  // Editor
-  const [editingId, setEditingId] = useState("");
-  const [editForm,setEditForm]=useState({
-    title:"", summary:"", category:"", is_public:true,
-    location:"", budget:"", sqf:"", highlights:"",
-  });
-  const [editCover,setEditCover]=useState(null);
-  const [editImgs, setEditImgs] = useState([]); // [{id,url,caption,_localCaption,_saving}]
-
-  // 🔽 ref for scrolling to editor
-  const editorRef = useRef(null);
+  const [editModalProjectId, setEditModalProjectId] = useState("");
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   // current user (ownership)
   const [meUser, setMeUser] = useState({ username: localStorage.getItem("username") || "" });
@@ -135,63 +126,10 @@ export default function Dashboard(){
 
   const list = owned.length ? owned : projects;
 
-  const refreshImages = useCallback(async (pid)=>{
-    const {data} = await api.get(`/projects/${pid}/images/`);
-    const arr = (data||[])
-      .map(x=>({
-        id: x.id,
-        url: x.url || x.image || x.src || x.file,
-        caption: x.caption || "",
-        _localCaption: x.caption || "",
-        _saving: false,
-      }))
-      .filter(x=>!!x.url);
-    setEditImgs(arr);
-  },[]);
-
-  const loadEditor = useCallback(async (id)=>{
-    const pid = String(id);
-    setEditingId(pid);
-    const {data: meta} = await api.get(`/projects/${pid}/`);
-    setEditForm({
-      title: meta?.title || "",
-      summary: meta?.summary || "",
-      category: meta?.category || "",
-      is_public: !!meta?.is_public,
-      location: meta?.location || "",
-      budget: meta?.budget ?? "",
-      sqf: meta?.sqf ?? "",
-      highlights: meta?.highlights || "",
-    });
-    setEditCover(null);
-    await refreshImages(pid);
-    setTimeout(() => {
-      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 150);
-  },[refreshImages]);
-
-  // 🔽 when editingId changes, scroll down a bit to show the editor block
-  useEffect(() => {
-    if (!editingId) return;
-
-    let attempts = 0;
-
-    function tryScroll() {
-      if (editorRef.current) {
-        const top = editorRef.current.getBoundingClientRect().top + window.scrollY - 80;
-        window.scrollTo({ top, behavior: "smooth" });
-        return; // success
-      }
-
-      // retry because layout may not be ready
-      if (attempts < 10) {
-        attempts++;
-        setTimeout(tryScroll, 50);
-      }
-    }
-
-    tryScroll();
-  }, [editingId]);
+  const openEditModal = useCallback((id) => {
+    setEditModalProjectId(String(id));
+    setEditModalOpen(true);
+  }, []);
 
 
   async function createProject(e){
@@ -224,7 +162,7 @@ export default function Dashboard(){
       setForm({ title:"", summary:"", category:"", is_public:true, location:"", budget:"", sqf:"", highlights:"" });
       setCover(null);
       setCreateOk(true);
-      if (data?.id) await loadEditor(data.id); // jump into editor
+      if (data?.id) openEditModal(data.id); // open modal after create
     } catch (err){
       // surface DRF errors (400/403) or network issues
       const msg = err?.response?.data
@@ -234,48 +172,6 @@ export default function Dashboard(){
         : (err?.message || String(err));
       setCreateErr(msg);
       console.error("[createProject] failed:", err);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveProjectInfo(e){
-    e?.preventDefault?.();
-    if (!editingId) return;
-    setBusy(true);
-    try{
-      if (editCover) {
-        const fd = new FormData();
-        Object.entries(editForm).forEach(([k,v])=> fd.append(k, v ?? ""));
-        fd.append("cover_image", editCover);
-        await api.patch(`/projects/${editingId}/`, fd, { headers:{ "Content-Type":"multipart/form-data" }});
-      } else {
-        await api.patch(`/projects/${editingId}/`, editForm);
-      }
-      await refreshProjects();
-    } finally { setBusy(false); }
-  }
-
-  async function saveImageCaption(img){
-    if (!editingId || !img?.id) return;
-    if (img._localCaption === img.caption) return;
-    setEditImgs(prev => prev.map(x => x.id===img.id ? {...x, _saving:true} : x));
-    try{
-      await api.patch(`/projects/${editingId}/images/${img.id}/`, { caption: img._localCaption });
-      await refreshImages(editingId);
-    } catch (e){
-      alert(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
-      setEditImgs(prev => prev.map(x => x.id===img.id ? {...x, _saving:false} : x));
-    }
-  }
-
-  async function deleteImage(img){
-    if (!editingId || !img?.id) return;
-    if (!window.confirm("Delete this image? This cannot be undone.")) return;
-    setBusy(true);
-    try{
-      await api.delete(`/projects/${editingId}/images/${img.id}/`);
-      await refreshImages(editingId);
     } finally {
       setBusy(false);
     }
@@ -507,7 +403,7 @@ export default function Dashboard(){
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <GhostButton onClick={()=>window.open(`/projects/${p.id}`, "_self")}>Open</GhostButton>
-                    <Button onClick={()=>loadEditor(p.id)}>Edit</Button>
+                    <Button onClick={() => openEditModal(p.id)}>Edit</Button>
                   </div>
                 </div>
               </Card>
@@ -515,163 +411,15 @@ export default function Dashboard(){
           </div>
         )}
       </Card>
-
-      {/* 3) EDITOR */}
-      {editingId && (
-        <div ref={editorRef}>
-          <Card className="p-5" ref={editorRef}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-800">Editing Project #{editingId}</div>
-              <div className="flex items-center gap-2">
-                <GhostButton onClick={()=>window.open(`/projects/${editingId}`, "_self")}>View</GhostButton>
-                <GhostButton onClick={()=>setEditingId("")}>Close</GhostButton>
-              </div>
-            </div>
-
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Project Info (Draft)
-            </div>
-
-            <form onSubmit={saveProjectInfo} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Project Name</label>
-                <Input
-                  value={editForm.title}
-                  onChange={e=>setEditForm({...editForm, title:e.target.value})}
-                  placeholder="Project name"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Category</label>
-                <Input
-                  value={editForm.category}
-                  onChange={e=>setEditForm({...editForm, category:e.target.value})}
-                  placeholder="Category"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm text-slate-600">Summary</label>
-                <Textarea
-                  value={editForm.summary}
-                  onChange={e=>setEditForm({...editForm, summary:e.target.value})}
-                  placeholder="Short description..."
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
-                <Input
-                  value={editForm.location}
-                  onChange={e=>setEditForm({...editForm, location:e.target.value})}
-                  placeholder="City, State"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Budget</label>
-                <Input
-                  value={editForm.budget}
-                  onChange={e=>setEditForm({...editForm, budget:e.target.value})}
-                  inputMode="numeric"
-                  placeholder="e.g. 250000"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
-                <Input
-                  value={editForm.sqf}
-                  onChange={e=>setEditForm({...editForm, sqf:e.target.value})}
-                  inputMode="numeric"
-                  placeholder="e.g. 1800"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
-                <Input
-                  value={editForm.highlights}
-                  onChange={e=>setEditForm({...editForm, highlights:e.target.value})}
-                  placeholder="comma-separated tags"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">Cover (replace)</label>
-                <input type="file" onChange={e=>setEditCover(e.target.files?.[0]||null)} />
-                {editCover && <div className="mt-1 truncate text-xs text-slate-500">{editCover.name}</div>}
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mr-2 align-middle"
-                    checked={!!editForm.is_public}
-                    onChange={e=>setEditForm({...editForm, is_public:e.target.checked})}
-                  />
-                  Public
-                </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <Button disabled={busy}>Save Changes</Button>
-              </div>
-            </form>
-
-            {/* Images */}
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm text-slate-600">Images</div>
-                <Badge>{editImgs.length} total</Badge>
-              </div>
-              {editImgs.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  No images yet.
-                </div>
-              ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-                  {editImgs.map((it)=>(
-                    <figure key={it.id ?? it.url} className="rounded-xl border border-slate-200 bg-white p-3">
-                      <img src={it.url} alt="" className="mb-2 h-36 w-full rounded-md object-cover"/>
-                      <input
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="Caption…"
-                        value={it._localCaption}
-                        onChange={(e)=> setEditImgs(prev => prev.map(x => x.id===it.id ? {...x, _localCaption: e.target.value} : x))}
-                      />
-                      <div className="mt-2 flex items-center justify-between">
-                        <GhostButton
-                          onClick={()=>{ if (it.id) deleteImage(it); }}
-                          disabled={!it.id || busy}
-                          title={it.id ? "Delete this image" : "This API response has no image id — delete is disabled"}
-                        >
-                          Delete
-                        </GhostButton>
-                        <Button
-                          onClick={()=>saveImageCaption(it)}
-                          disabled={it._saving || it._localCaption === it.caption}
-                        >
-                          {it._saving ? "Saving…" : "Save caption"}
-                        </Button>
-                      </div>
-                    </figure>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Uploader */}
-            <div className="mt-6">
-              <div className="mb-2 text-sm font-semibold text-slate-800">Add Images</div>
-              <div className="mb-2 text-xs text-slate-600">Drag & drop or click; add captions; upload.</div>
-              <ImageUploader
-                projectId={editingId}
-                onUploaded={async ()=>{
-                  await refreshImages(editingId);
-                  await refreshProjects();
-                }}
-              />
-            </div>
-        </Card>
-      </div>
-      )}
+      <ProjectEditModal
+        projectId={editModalProjectId}
+        isOpen={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditModalProjectId("");
+        }}
+        onSaved={refreshProjects}
+      />
     </div>
   );
 }
