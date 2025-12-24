@@ -1,13 +1,9 @@
-// =======================================
-// file: frontend/src/pages/PublicProfile.jsx
-// Public profile + projects + contact + map
-// =======================================
+// frontend/src/pages/PublicProfile.jsx
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
 
-// small helper (same spirit as ProjectDetail toUrl)
 function toUrl(raw) {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
@@ -16,11 +12,9 @@ function toUrl(raw) {
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
-// Map helper (zip / city / address → Google Maps embed)
 function buildMapSrc(location) {
   if (!location) return null;
   const q = encodeURIComponent(location);
-  // z=11 → nice “service area” zoom
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
 }
 
@@ -68,11 +62,30 @@ export default function PublicProfile() {
     };
   }, [username]);
 
-  const mapSrc = useMemo(
-    () => buildMapSrc(profile?.service_location || ""),
-    [profile]
-  );
+  // ✅ Hooks MUST be above any early return
+  const displayName = useMemo(() => {
+    return profile?.display_name || profile?.username || "";
+  }, [profile?.display_name, profile?.username]);
 
+  const avatarSrc = useMemo(() => {
+    return toUrl(profile?.logo || profile?.avatar_url || profile?.avatar || "");
+  }, [profile?.logo, profile?.avatar_url, profile?.avatar]);
+
+  const bannerStyle = useMemo(() => {
+    const url = toUrl(profile?.banner_url || profile?.banner || "");
+    if (!url) return {};
+    return {
+      backgroundImage: `url(${url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }, [profile?.banner_url, profile?.banner]);
+
+  const mapSrc = useMemo(() => {
+    return buildMapSrc(profile?.service_location || "");
+  }, [profile?.service_location]);
+
+  // ✅ Now early returns are safe
   if (loading && !profile) {
     return <div className="text-sm text-slate-500">Loading profile…</div>;
   }
@@ -87,18 +100,6 @@ export default function PublicProfile() {
       </div>
     );
   }
-
-  const displayName = profile.display_name || profile.username;
-  const avatarSrc = toUrl(profile.logo || profile.avatar_url || "");
-  const bannerStyle = useMemo(() => {
-    const url = toUrl(profile.banner_url || profile.banner || "");
-    if (!url) return {};
-    return {
-      backgroundImage: `url(${url})`,
-      backgroundSize: "cover",
-      backgroundPosition: "center",
-    };
-  }, [profile]);
 
   return (
     <div className="min-h-screen bg-white">
