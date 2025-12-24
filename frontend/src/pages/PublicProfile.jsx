@@ -7,6 +7,15 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
 
+// small helper (same spirit as ProjectDetail toUrl)
+function toUrl(raw) {
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+  const origin = base.replace(/\/api\/?$/, "");
+  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+}
+
 // Map helper (zip / city / address → Google Maps embed)
 function buildMapSrc(location) {
   if (!location) return null;
@@ -80,135 +89,212 @@ export default function PublicProfile() {
   }
 
   const displayName = profile.display_name || profile.username;
-  const avatarSrc = profile.avatar_url || profile.logo || null;
+  const avatarSrc = toUrl(profile.logo || profile.avatar_url || "");
+  const bannerStyle = useMemo(() => {
+    const url = toUrl(profile.banner_url || profile.banner || "");
+    if (!url) return {};
+    return {
+      backgroundImage: `url(${url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }, [profile]);
 
   return (
-    <div className="space-y-8">
-      {/* HEADER */}
-      <header className="flex flex-wrap items-center gap-4">
-        {avatarSrc ? (
-          <img
-            src={avatarSrc}
-            alt={displayName}
-            className="h-20 w-20 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-xl font-semibold text-slate-700">
-            {displayName?.charAt(0)?.toUpperCase() || "?"}
-          </div>
-        )}
+    <div className="min-h-screen bg-white">
+      {/* FULL-WIDTH TOP BANNER */}
+      <div className="relative w-full">
+        <div
+          className="h-[300px] w-full bg-slate-900"
+          style={bannerStyle}
+          aria-label="Profile banner"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0">
+          <div className="mx-auto max-w-6xl px-4 pb-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex items-end gap-4">
+                <div className="-mb-6 h-24 w-24 overflow-hidden rounded-2xl border border-white/40 bg-white shadow-lg">
+                  {avatarSrc ? (
+                    <img
+                      src={avatarSrc}
+                      alt={displayName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-500">
+                      LOGO
+                    </div>
+                  )}
+                </div>
 
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold text-slate-900">
-            {displayName}
-          </h1>
-          {profile.service_location && (
-            <div className="mt-1 text-sm text-slate-600">
-              Serves: {profile.service_location}
-              {profile.coverage_radius_miles
-                ? ` · ~${profile.coverage_radius_miles} mi radius`
-                : ""}
+                <div className="text-white">
+                  <div className="text-2xl font-semibold sm:text-3xl">
+                    {displayName}
+                  </div>
+                  <div className="mt-1 text-xs text-white/80">
+                    @{profile.username}
+                    {profile.service_location ? (
+                      <>
+                        <span className="mx-2">•</span>
+                        <span>{profile.service_location}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 sm:pb-1">
+                <Link
+                  to="/"
+                  className="rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur hover:bg-white/20"
+                >
+                  Explore
+                </Link>
+                <Link
+                  to={`/messages?to=${profile.username}`}
+                  className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
+                >
+                  Message
+                </Link>
+              </div>
             </div>
-          )}
-          {profile.bio && (
-            <p className="mt-2 max-w-2xl text-sm text-slate-700">
-              {profile.bio}
-            </p>
-          )}
-          <div className="mt-2 text-xs text-slate-500">
-            Profile URL:{" "}
-            <span className="font-mono text-[11px]">
-              /profiles/{profile.username}
-            </span>
           </div>
         </div>
-      </header>
-
-      {/* CONTACT + MAP */}
-      <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        {/* Contact card */}
-        <Card className="p-4">
-          <h2 className="mb-2 text-sm font-semibold text-slate-900">
-            Contact
-          </h2>
-          <div className="space-y-1 text-sm text-slate-700">
-            <div>
-              <span className="font-medium">Email:</span>{" "}
-              {profile.contact_email ? (
-                <a
-                  href={`mailto:${profile.contact_email}`}
-                  className="text-blue-600 hover:underline"
-                >
-                  {profile.contact_email}
-                </a>
-              ) : (
-                "—"
-              )}
-            </div>
-            <div>
-              <span className="font-medium">Phone:</span>{" "}
-              {profile.contact_phone || "—"}
-            </div>
-          </div>
-        </Card>
-
-        {/* Map card */}
-        {mapSrc && (
-          <Card className="p-4">
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">
-              Service area
-            </h2>
-            <div className="aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
-              <iframe
-                src={mapSrc}
-                title="Service area map"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="h-full w-full border-0"
-              />
-            </div>
-          </Card>
-        )}
       </div>
 
-      {/* PROJECTS */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">Projects</h2>
+      {/* MAIN CONTENT */}
+      <div className="mx-auto max-w-6xl px-4 pb-12 pt-12">
+        <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+          <Card className="rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-6">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                About
+              </div>
+              <div className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-slate-700">
+                {profile.bio ? profile.bio : "No bio added yet."}
+              </div>
+            </div>
+          </Card>
 
-        {projects.length === 0 ? (
-          <p className="text-sm text-slate-600">
-            No public projects published yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-            {projects.map((p) => (
-              <Link
-                key={p.id}
-                to={`/projects/${p.id}`}
-                className="block text-inherit no-underline"
-              >
-                <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
-                  {p.cover_image && (
-                    <img
-                      src={p.cover_image}
-                      alt={p.title || "project cover"}
-                      className="h-40 w-full object-cover"
-                    />
+          <Card className="rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-6">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Quick info
+              </div>
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div>
+                  <span className="text-slate-500">Username:</span>{" "}
+                  <span className="font-medium">{profile.username}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Service area:</span>{" "}
+                  <span className="font-medium">
+                    {profile.service_location || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Email:</span>{" "}
+                  {profile.contact_email ? (
+                    <a
+                      href={`mailto:${profile.contact_email}`}
+                      className="font-medium text-blue-600 hover:underline"
+                    >
+                      {profile.contact_email}
+                    </a>
+                  ) : (
+                    <span className="font-medium">—</span>
                   )}
-                  <div className="p-3">
-                    <h3 className="mb-1 truncate text-sm font-semibold text-slate-900">
-                      {p.title}
-                    </h3>
-                    <p className="line-clamp-2 text-xs text-slate-600">
-                      {p.summary || "No summary provided."}
-                    </p>
-                  </div>
-                </Card>
-              </Link>
-            ))}
+                </div>
+                <div>
+                  <span className="text-slate-500">Phone:</span>{" "}
+                  <span className="font-medium">
+                    {profile.contact_phone || "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {mapSrc && (
+          <div className="mt-8">
+            <Card className="rounded-2xl border border-slate-200 shadow-sm">
+              <div className="p-6">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Service area map
+                </div>
+                <div className="mt-4 aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
+                  <iframe
+                    src={mapSrc}
+                    title="Service area map"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="h-full w-full border-0"
+                  />
+                </div>
+              </div>
+            </Card>
           </div>
         )}
-      </section>
+
+        <div className="mt-10">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold text-slate-900">
+                Project Gallery
+              </div>
+              <div className="text-xs text-slate-500">
+                {projects.length} project{projects.length === 1 ? "" : "s"}
+              </div>
+            </div>
+          </div>
+
+          {projects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-600">
+              No public projects published yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {projects.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/projects/${p.id}`}
+                  className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                >
+                  <div className="h-44 bg-slate-100">
+                    {p.cover_image ? (
+                      <img
+                        src={toUrl(p.cover_image)}
+                        alt={p.title || "project cover"}
+                        className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                        No image
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="truncate text-sm font-semibold text-slate-900">
+                      {p.title || `Project #${p.id}`}
+                    </div>
+                    {p.summary ? (
+                      <div className="mt-1 line-clamp-2 text-xs text-slate-600">
+                        {p.summary}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-xs text-slate-500">
+                        View details →
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
