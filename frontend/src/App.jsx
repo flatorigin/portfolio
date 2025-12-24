@@ -73,7 +73,7 @@ export default function App() {
         </Container>
       </header>
 
-      <main className="py-6">
+      <main>
         <Container>
           <Outlet />
         </Container>

@@ -102,9 +102,9 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white pt-0">
       {/* FULL-WIDTH TOP BANNER */}
-      <div className="relative w-full">
+      <div className="relative w-full mt-0 pt-0">
         <div
           className="h-[300px] w-full bg-slate-900"
           style={bannerStyle}
