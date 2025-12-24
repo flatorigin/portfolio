@@ -11,6 +11,9 @@ def logo_upload_path(instance, filename):
 def avatar_upload_path(instance, filename):
     # alias kept so existing migrations referencing this still work
     return logo_upload_path(instance, filename) 
+
+def hero_upload_path(instance, filename):
+    return f"heroes/user_{instance.user_id}/{filename}"
     
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
@@ -34,6 +37,9 @@ class Profile(models.Model):
 
     # Back-compat with old name if needed
     avatar = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
+
+    # Profile hero/cover image
+    hero_image = models.ImageField(upload_to=hero_upload_path, blank=True, null=True)
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"

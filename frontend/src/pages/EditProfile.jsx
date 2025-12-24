@@ -19,6 +19,9 @@ export default function EditProfile() {
 
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const [heroPreview, setHeroPreview] = useState(null);
+  const [heroFile, setHeroFile] = useState(null);
+  const [heroWarning, setHeroWarning] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,6 +56,7 @@ export default function EditProfile() {
         });
 
         setAvatarPreview(data.avatar_url || data.logo || null);
+        setHeroPreview(data.hero_image_url || data.hero_image || null);
       })
       .catch((err) => {
         console.error("[EditProfile] load error", err?.response || err);
@@ -85,6 +89,31 @@ export default function EditProfile() {
     }
   };
 
+  const handleHeroChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setHeroFile(file);
+    setHeroWarning("");
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        setHeroPreview(result);
+        const img = new Image();
+        img.onload = () => {
+          if (img.width < 1200 || img.height < 400) {
+            setHeroWarning(
+              `Image is ${img.width}×${img.height}. For best results, use at least 1200×400.`
+            );
+          }
+        };
+        img.src = result;
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // ----------------------------
   // Save profile (PATCH /api/users/me/)
   // ----------------------------
@@ -107,6 +136,9 @@ export default function EditProfile() {
 
       if (logoFile) {
         data.append("logo", logoFile);
+      }
+      if (heroFile) {
+        data.append("hero_image", heroFile);
       }
 
       const resp = await api.patch("/users/me/", data, {
@@ -133,6 +165,9 @@ export default function EditProfile() {
 
       if (updated.avatar_url || updated.logo) {
         setAvatarPreview(updated.avatar_url || updated.logo);
+      }
+      if (updated.hero_image_url || updated.hero_image) {
+        setHeroPreview(updated.hero_image_url || updated.hero_image);
       }
     } catch (err) {
       console.error("[EditProfile] save error", err?.response || err);
@@ -199,6 +234,44 @@ export default function EditProfile() {
                     />
                     Choose image…
                   </label>
+                </div>
+              </div>
+
+              {/* 🔹 Hero / cover image */}
+              <div className="rounded-xl border border-slate-200 p-3">
+                <p className="text-sm font-medium text-slate-800">
+                  Profile hero image
+                </p>
+                <p className="text-xs text-slate-500">
+                  Recommended: wide images (min 1200×400). Shows at the top of
+                  your public profile.
+                </p>
+                <div className="mt-3">
+                  {heroPreview ? (
+                    <img
+                      src={heroPreview}
+                      alt="Current hero"
+                      className="h-32 w-full rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-32 w-full items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-400">
+                      No hero image
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleHeroChange}
+                    />
+                    Choose hero image…
+                  </label>
+                  {heroWarning && (
+                    <p className="text-xs text-amber-600">{heroWarning}</p>
+                  )}
                 </div>
               </div>
 
