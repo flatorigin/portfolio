@@ -1,4 +1,7 @@
-// frontend/src/pages/PublicProfile.jsx
+// =======================================
+// file: frontend/src/pages/PublicProfile.jsx
+// Public profile + projects + contact + map
+// =======================================
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
@@ -17,6 +20,10 @@ function buildMapSrc(location) {
   const q = encodeURIComponent(location);
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
 }
+
+// If your layout adds top padding (like pt-16) and pushes the banner down,
+// keep this as "-mt-16". If not needed, set to "".
+const BANNER_OFFSET_CLASS = "";
 
 export default function PublicProfile() {
   const { username } = useParams();
@@ -102,15 +109,22 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-white pt-0">
-      {/* FULL-WIDTH TOP BANNER */}
-      <div className="relative w-full mt-0 pt-0">
+    <div className="min-h-screen bg-white overflow-x-hidden">
+      {/* FULL-VIEWPORT TOP BANNER (breaks out of any parent container) */}
+      <div
+        className={[
+          "relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw]",
+          BANNER_OFFSET_CLASS,
+        ].join(" ")}
+      >
         <div
-          className="h-[300px] w-full bg-slate-900"
+          className="h-[600px] w-full bg-slate-900"
           style={bannerStyle}
           aria-label="Profile banner"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+
+        {/* Bottom content overlay */}
         <div className="absolute inset-x-0 bottom-0">
           <div className="mx-auto max-w-6xl px-4 pb-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

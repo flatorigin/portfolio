@@ -12,6 +12,12 @@ export default function App() {
   const { pathname } = useLocation();
   const authed = !!localStorage.getItem("access");
 
+  // Pages that should NOT be wrapped in <Container> (need full-bleed layouts)
+  const isFullBleed =
+    pathname.startsWith("/profiles/") ||
+    pathname.startsWith("/public/") || // optional if you have it
+    false;
+
   const NavLink = ({ to, children }) => {
     const active = pathname === to;
     return (
@@ -73,10 +79,16 @@ export default function App() {
         </Container>
       </header>
 
-      <main>
-        <Container>
+      <main className="w-full">
+        {isFullBleed ? (
+          // Full-bleed pages render directly with no container constraint
           <Outlet />
-        </Container>
+        ) : (
+          // Default: keep everything nicely centered
+          <Container>
+            <Outlet />
+          </Container>
+        )}
       </main>
     </div>
   );
