@@ -8,6 +8,9 @@ import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 
 export default function EditProfile() {
+  const HERO_MIN_WIDTH = 1200;
+  const HERO_MIN_HEIGHT = 400;
+
   const [form, setForm] = useState({
     display_name: "",
     service_location: "",
@@ -15,10 +18,14 @@ export default function EditProfile() {
     contact_email: "",
     contact_phone: "",
     bio: "",
+    hero_image_url: "",
   });
 
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const [heroPreview, setHeroPreview] = useState(null);
+  const [heroFile, setHeroFile] = useState(null);
+  const [heroWarning, setHeroWarning] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,9 +57,11 @@ export default function EditProfile() {
           contact_email: data.contact_email || "",
           contact_phone: data.contact_phone || "",
           bio: data.bio || "",
+          hero_image_url: data.hero_image_url || "",
         });
 
         setAvatarPreview(data.avatar_url || data.logo || null);
+        setHeroPreview(data.hero_image || data.hero_image_url || null);
       })
       .catch((err) => {
         console.error("[EditProfile] load error", err?.response || err);
@@ -85,6 +94,53 @@ export default function EditProfile() {
     }
   };
 
+  const setHeroWarningFromSize = (width, height) => {
+    if (width < HERO_MIN_WIDTH || height < HERO_MIN_HEIGHT) {
+      setHeroWarning(
+        `Image is ${width}×${height}. For best results use at least ${HERO_MIN_WIDTH}×${HERO_MIN_HEIGHT}.`
+      );
+    } else {
+      setHeroWarning("");
+    }
+  };
+
+  const handleHeroUrlChange = (e) => {
+    const value = e.target.value;
+    setForm((prev) => ({ ...prev, hero_image_url: value }));
+    setHeroFile(null);
+    if (!value) {
+      setHeroPreview(null);
+      setHeroWarning("");
+      return;
+    }
+    setHeroPreview(value);
+    const img = new Image();
+    img.onload = () => setHeroWarningFromSize(img.naturalWidth, img.naturalHeight);
+    img.onerror = () =>
+      setHeroWarning("Could not load that image URL. Check the link.");
+    img.src = value;
+  };
+
+  const handleHeroFileChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setHeroFile(file);
+    setForm((prev) => ({ ...prev, hero_image_url: "" }));
+    if (!file) {
+      setHeroPreview(null);
+      setHeroWarning("");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      setHeroPreview(result);
+      const img = new Image();
+      img.onload = () => setHeroWarningFromSize(img.naturalWidth, img.naturalHeight);
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   // ----------------------------
   // Save profile (PATCH /api/users/me/)
   // ----------------------------
@@ -104,9 +160,13 @@ export default function EditProfile() {
       data.append("contact_email", form.contact_email || "");
       data.append("contact_phone", form.contact_phone || "");
       data.append("bio", form.bio || "");
+      data.append("hero_image_url", form.hero_image_url || "");
 
       if (logoFile) {
         data.append("logo", logoFile);
+      }
+      if (heroFile) {
+        data.append("hero_image", heroFile);
       }
 
       const resp = await api.patch("/users/me/", data, {
@@ -129,10 +189,14 @@ export default function EditProfile() {
         contact_email: updated.contact_email ?? prev.contact_email,
         contact_phone: updated.contact_phone ?? prev.contact_phone,
         bio: updated.bio ?? prev.bio,
+        hero_image_url: updated.hero_image_url ?? prev.hero_image_url,
       }));
 
       if (updated.avatar_url || updated.logo) {
         setAvatarPreview(updated.avatar_url || updated.logo);
+      }
+      if (updated.hero_image || updated.hero_image_url) {
+        setHeroPreview(updated.hero_image || updated.hero_image_url);
       }
     } catch (err) {
       console.error("[EditProfile] save error", err?.response || err);
@@ -200,6 +264,58 @@ export default function EditProfile() {
                     Choose image…
                   </label>
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-slate-800">
+                  Public hero image
+                </div>
+                <p className="text-xs text-slate-500">
+                  Recommended: wide images at least {HERO_MIN_WIDTH}×
+                  {HERO_MIN_HEIGHT}.
+                </p>
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  {heroPreview ? (
+                    <img
+                      src={heroPreview}
+                      alt="Hero preview"
+                      className="h-32 w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-32 items-center justify-center bg-gradient-to-r from-slate-100 to-slate-200 text-xs text-slate-500">
+                      Upload or paste a hero image URL
+                    </div>
+                  )}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Hero image URL
+                    </label>
+                    <Input
+                      value={form.hero_image_url}
+                      onChange={handleHeroUrlChange}
+                      placeholder="https://example.com/cover.jpg"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Upload hero image
+                    </label>
+                    <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleHeroFileChange}
+                      />
+                      Choose image…
+                    </label>
+                  </div>
+                </div>
+                {heroWarning && (
+                  <p className="text-xs text-amber-600">{heroWarning}</p>
+                )}
               </div>
 
               {/* Identity */}

@@ -81,9 +81,24 @@ export default function PublicProfile() {
 
   const displayName = profile.display_name || profile.username;
   const avatarSrc = profile.avatar_url || profile.logo || null;
+  const heroSrc = profile.hero_image || profile.hero_image_url || null;
 
   return (
     <div className="space-y-8">
+      <div className="relative left-1/2 right-1/2 -mx-[50vw] -mt-6 h-[200px] w-screen overflow-hidden bg-slate-200">
+        {heroSrc ? (
+          <img
+            src={heroSrc}
+            alt={`${displayName} hero`}
+            className="h-full w-full object-cover object-center"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-r from-slate-100 to-slate-200 text-sm font-medium text-slate-500">
+            Hero image coming soon
+          </div>
+        )}
+      </div>
+
       {/* HEADER */}
       <header className="flex flex-wrap items-center gap-4">
         {avatarSrc ? (

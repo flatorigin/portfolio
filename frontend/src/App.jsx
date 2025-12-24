@@ -11,6 +11,7 @@ export default function App() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const authed = !!localStorage.getItem("access");
+  const isPublicProfile = pathname.startsWith("/profiles/");
 
   const NavLink = ({ to, children }) => {
     const active = pathname === to;
@@ -42,13 +43,21 @@ export default function App() {
             </Link>
 
             <NavLink to="/">Explore</NavLink>
-            <NavLink to="/profile/edit">Edit Profile</NavLink>
-            <NavLink to="/dashboard">Dashboard</NavLink>
+            {!isPublicProfile && (
+              <>
+                <NavLink to="/profile/edit">Edit Profile</NavLink>
+                <NavLink to="/dashboard">Dashboard</NavLink>
+              </>
+            )}
 
             <div className="ml-auto flex items-center gap-2">
-              {authed && <GlobalInbox />}
+              {!isPublicProfile && authed && <GlobalInbox />}
 
-              {!authed ? (
+              {isPublicProfile ? (
+                <GhostButton as="a">
+                  <Link to="/login">Login</Link>
+                </GhostButton>
+              ) : !authed ? (
                 <>
                   <GhostButton as="a">
                     <Link to="/login">Login</Link>

@@ -26,6 +26,8 @@ class MeSerializer(serializers.ModelSerializer):
             "bio",
             "logo",
             "avatar",
+            "hero_image",
+            "hero_image_url",
             "avatar_url",
         ]
         read_only_fields = ["id", "username", "email", "avatar_url"]
@@ -58,6 +60,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             "contact_email",      # NEW
             "contact_phone",      # NEW
             "logo",
+            "hero_image",
+            "hero_image_url",
             "avatar_url",
         ]
         read_only_fields = fields
