@@ -2,10 +2,19 @@
 // EditProfile.jsx
 // Loads / updates /api/users/me/
 // Shows contact info + simple service-area map
+// + Banner/Hero upload (for PublicProfile hero)
 // =======================================
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
+
+function toUrl(raw) {
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+  const origin = base.replace(/\/api\/?$/, "");
+  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+}
 
 export default function EditProfile() {
   const [form, setForm] = useState({
@@ -20,10 +29,26 @@ export default function EditProfile() {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
 
+  // NEW: hero/banner state
+  const [bannerPreview, setBannerPreview] = useState(null);
+  const [bannerFile, setBannerFile] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
+  function toUrl(raw) {
+    if (!raw) return "";
+    // ✅ allow preview URLs
+    if (/^(data:|blob:)/i.test(raw)) return raw;
+
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+    const origin = base.replace(/\/api\/?$/, "");
+    return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+  }
+
 
   // ----------------------------
   // Load current profile: /api/users/me/
@@ -52,7 +77,11 @@ export default function EditProfile() {
           bio: data.bio || "",
         });
 
-        setAvatarPreview(data.avatar_url || data.logo || null);
+        // existing logo/avatar preview
+        setAvatarPreview(toUrl(data.avatar_url || data.logo || null));
+
+        // NEW: banner preview (what PublicProfile uses)
+        setBannerPreview((data.banner_url || data.banner || null));
       })
       .catch((err) => {
         console.error("[EditProfile] load error", err?.response || err);
@@ -83,6 +112,39 @@ export default function EditProfile() {
       reader.onload = () => setAvatarPreview(reader.result);
       reader.readAsDataURL(file);
     }
+    e.target.value = "";
+  };
+
+  // NEW: banner uploader
+  const handleBannerChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setBannerFile(file);
+
+    if (!file) {
+      e.target.value = "";
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file (jpg/png/webp) for the hero banner.");
+      setBannerFile(null);
+      e.target.value = "";
+      return;
+    }
+
+    // Preview immediately
+    const reader = new FileReader();
+    reader.onload = () => setBannerPreview(reader.result);
+    reader.readAsDataURL(file);
+
+    e.target.value = "";
+  };
+
+  const clearBanner = () => {
+    setBannerFile(null);
+    setBannerPreview(null);
+    // also clear on server by sending empty string
+    // (handled in submit: we send banner_clear when preview is null & no file)
   };
 
   // ----------------------------
@@ -109,6 +171,20 @@ export default function EditProfile() {
         data.append("logo", logoFile);
       }
 
+      // NEW: include banner file if selected
+      // IMPORTANT: field name must match your backend model/serializer.
+      // Try "banner" first (most common). If your backend expects "banner_image" or "banner_file", rename here.
+      if (bannerFile) {
+        data.append("banner", bannerFile);
+      }
+
+      // If user removed banner (no file + no preview), send empty banner_url/banner to clear.
+      // This works only if your backend allows blank string. If not, remove these two lines.
+      if (!bannerFile && !bannerPreview) {
+        data.append("banner_url", "");
+        data.append("banner", "");
+      }
+
       const resp = await api.patch("/users/me/", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -132,13 +208,23 @@ export default function EditProfile() {
       }));
 
       if (updated.avatar_url || updated.logo) {
-        setAvatarPreview(updated.avatar_url || updated.logo);
+        setAvatarPreview(toUrl(updated.avatar_url || updated.logo));
       }
+
+      // NEW: update banner preview from response
+      if (updated.banner_url || updated.banner) {
+        setBannerPreview(toUrl(updated.banner_url || updated.banner));
+      }
+
+      // reset files after save
+      setLogoFile(null);
+      setBannerFile(null);
     } catch (err) {
       console.error("[EditProfile] save error", err?.response || err);
       const detail =
         err?.response?.data?.detail ||
         err?.response?.data?.non_field_errors ||
+        err?.response?.data ||
         "Could not save your profile.";
       setError(
         typeof detail === "string" ? detail : JSON.stringify(detail, null, 2)
@@ -158,6 +244,8 @@ export default function EditProfile() {
         )}&output=embed`
       : null;
 
+  const bannerPreviewSafe = useMemo(() => toUrl(bannerPreview), [bannerPreview]);
+
   return (
     <div>
       <SectionTitle>Edit profile</SectionTitle>
@@ -169,6 +257,61 @@ export default function EditProfile() {
           {/* LEFT: form */}
           <Card className="space-y-4 p-4">
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* NEW: Hero / banner uploader */}
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      Hero banner (public profile header)
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      This image will show at the top of your public profile page.
+                      Recommended: wide image (e.g. 1600×600).
+                    </p>
+                  </div>
+
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleBannerChange}
+                    />
+                    Choose hero image…
+                  </label>
+                </div>
+
+                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                  <div
+                    className="h-[180px] w-full bg-slate-900"
+                    style={
+                      bannerPreviewSafe
+                        ? {
+                            backgroundImage: `url(${bannerPreviewSafe})`,
+                            backgroundSize: "cover",
+                            backgroundPosition: "center",
+                          }
+                        : {}
+                    }
+                  />
+                  {!bannerPreviewSafe && (
+                    <div className="px-3 py-2 text-xs text-slate-600">
+                      No hero banner set yet.
+                    </div>
+                  )}
+                </div>
+
+                {bannerPreviewSafe ? (
+                  <button
+                    type="button"
+                    onClick={clearBanner}
+                    className="mt-2 text-xs font-medium text-slate-600 hover:underline"
+                  >
+                    Remove hero banner
+                  </button>
+                ) : null}
+              </div>
+
               {/* 🔹 Logo / profile image at the top */}
               <div className="flex items-center gap-3">
                 {avatarPreview ? (
