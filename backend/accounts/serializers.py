@@ -11,6 +11,7 @@ class MeSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
 
     avatar_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -27,8 +28,10 @@ class MeSerializer(serializers.ModelSerializer):
             "logo",
             "avatar",
             "avatar_url",
+            "banner",
+            "banner_url",
         ]
-        read_only_fields = ["id", "username", "email", "avatar_url"]
+        read_only_fields = ["id", "username", "email", "avatar_url", "banner_url"]
 
     def get_avatar_url(self, obj):
         request = self.context.get("request")
@@ -42,6 +45,13 @@ class MeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
+
+    def get_banner_url(self, obj):
+        request = self.context.get("request")
+        banner = getattr(obj, "banner", None)
+        if banner and hasattr(banner, "url"):
+            return request.build_absolute_uri(banner.url) if request else banner.url
+        return None
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -80,7 +90,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         IMPORTANT: change 'banner' below if your Profile model uses a different field name.
         """
         request = self.context.get("request")
-        banner = getattr(obj, "banner_url", None)  # 👈 if your field is Profile.banner
+        banner = getattr(obj, "banner", None)  # 👈 if your field is Profile.banner
 
         if banner and hasattr(banner, "url"):
             url = banner.url
