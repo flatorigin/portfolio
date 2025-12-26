@@ -35,5 +35,8 @@ class Profile(models.Model):
     # Back-compat with old name if needed
     avatar = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
 
+    banner = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
+
+
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"

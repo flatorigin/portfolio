@@ -12,30 +12,37 @@ User = get_user_model()
 
 
 class MeView(APIView):
+    """
+    Authenticated user's own profile.
+    GET  /api/users/me/
+    PATCH /api/users/me/   (multipart for logo/banner + text fields)
+    """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def get_profile(self, user):
-        # Ensure a Profile exists for this user
-        profile, _ = Profile.objects.get_or_create(user=user)
+    def _get_profile(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
         return profile
 
     def get(self, request, *args, **kwargs):
-        prof = self.get_profile(request.user)
-        ser = MeSerializer(prof, context={"request": request})
-        return Response(ser.data)
+        profile = self._get_profile(request)
+        serializer = ProfileSerializer(profile, context={"request": request})
+        return Response(serializer.data)
 
     def patch(self, request, *args, **kwargs):
-        prof = self.get_profile(request.user)
-        ser = MeSerializer(
-            prof,
+        profile = self._get_profile(request)
+
+        # NOTE: request.data already merges form fields + files
+        serializer = ProfileSerializer(
+            profile,
             data=request.data,
-            partial=True,
+            partial=True,                 # <-- allow partial updates
             context={"request": request},
         )
-        ser.is_valid(raise_exception=True)
-        ser.save()
-        return Response(ser.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
 
 class PublicProfileView(APIView):
     """

@@ -45,44 +45,47 @@ class MeSerializer(serializers.ModelSerializer):
 
 
 class ProfileSerializer(serializers.ModelSerializer):
+    # expose username from related User
     username = serializers.CharField(source="user.username", read_only=True)
+
+    # computed URLs for images
     avatar_url = serializers.SerializerMethodField()
-    banner_url = serializers.SerializerMethodField()  # 👈 NEW
+    banner_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        fields = [
+        fields = (
             "id",
             "username",
             "display_name",
             "service_location",
-            "contact_email",      # NEW
-            "contact_phone",      # NEW
+            "coverage_radius_miles",
+            "bio",
+            "contact_email",
+            "contact_phone",
             "logo",
+            "avatar",
             "avatar_url",
-            "banner_url",  # 👈 NEW
-        ]
-        read_only_fields = fields
+            "banner",      # raw file field (for /users/me/ write)
+            "banner_url",  # absolute URL for public hero
+        )
+
+    def _build_abs_url(self, request, url: str):
+        if not url:
+            return None
+        return request.build_absolute_uri(url) if request else url
 
     def get_avatar_url(self, obj):
         request = self.context.get("request")
-        if obj.logo and hasattr(obj.logo, "url"):
-            return (
-                request.build_absolute_uri(obj.logo.url)
-                if request
-                else obj.logo.url
-            )
+        # prefer explicit avatar, fall back to logo
+        image = obj.avatar or obj.logo
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
         return None
 
     def get_banner_url(self, obj):
-        """
-        Return an absolute URL for the hero/banner image, if it exists.
-        IMPORTANT: change 'banner' below if your Profile model uses a different field name.
-        """
         request = self.context.get("request")
-        banner = getattr(obj, "banner_url", None)  # 👈 if your field is Profile.banner
-
-        if banner and hasattr(banner, "url"):
-            url = banner.url
-            return request.build_absolute_uri(url) if request else url
+        image = obj.banner
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
         return None
