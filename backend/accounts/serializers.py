@@ -47,6 +47,7 @@ class MeSerializer(serializers.ModelSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     avatar_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()  # 👈 NEW
 
     class Meta:
         model = Profile
@@ -59,6 +60,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             "contact_phone",      # NEW
             "logo",
             "avatar_url",
+            "banner_url",  # 👈 NEW
         ]
         read_only_fields = fields
 
@@ -70,4 +72,17 @@ class ProfileSerializer(serializers.ModelSerializer):
                 if request
                 else obj.logo.url
             )
+        return None
+
+    def get_banner_url(self, obj):
+        """
+        Return an absolute URL for the hero/banner image, if it exists.
+        IMPORTANT: change 'banner' below if your Profile model uses a different field name.
+        """
+        request = self.context.get("request")
+        banner = getattr(obj, "banner_url", None)  # 👈 if your field is Profile.banner
+
+        if banner and hasattr(banner, "url"):
+            url = banner.url
+            return request.build_absolute_uri(url) if request else url
         return None

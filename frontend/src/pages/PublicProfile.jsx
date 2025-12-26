@@ -1,6 +1,7 @@
 // =======================================
 // file: frontend/src/pages/PublicProfile.jsx
 // Public profile + projects + contact + map
+// Hero/banner is read from /profiles/:username/ only (public)
 // =======================================
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -9,10 +10,47 @@ import { Card } from "../ui";
 
 function toUrl(raw) {
   if (!raw) return "";
+  // allow data: / blob: URLs (safety)
+  if (/^(data:|blob:)/i.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
+
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+}
+
+// Try to find a hero/banner-like field on the profile object
+function extractHeroFromProfile(profile) {
+  if (!profile) return "";
+
+  const explicitKeys = [
+    "banner_url",
+    "banner",
+    "hero_url",
+    "hero",
+    "header_image",
+    "profile_banner",
+    "profile_header",
+  ];
+
+  for (const k of explicitKeys) {
+    if (typeof profile[k] === "string" && profile[k].trim()) {
+      return profile[k];
+    }
+  }
+
+  // fallback: scan any key containing banner/hero
+  for (const key of Object.keys(profile)) {
+    const lower = key.toLowerCase();
+    if (lower.includes("banner") || lower.includes("hero")) {
+      const val = profile[key];
+      if (typeof val === "string" && val.trim()) {
+        return val;
+      }
+    }
+  }
+
+  return "";
 }
 
 function buildMapSrc(location) {
@@ -21,16 +59,16 @@ function buildMapSrc(location) {
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
 }
 
-// If your layout adds top padding (like pt-16) and pushes the banner down,
-// keep this as "-mt-16". If not needed, set to "".
-const BANNER_OFFSET_CLASS = "";
-
 export default function PublicProfile() {
   const { username } = useParams();
+
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // ─────────────────────────────
+  // Load profile + projects
+  // ─────────────────────────────
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -69,7 +107,6 @@ export default function PublicProfile() {
     };
   }, [username]);
 
-  // ✅ Hooks MUST be above any early return
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
   }, [profile?.display_name, profile?.username]);
@@ -78,21 +115,25 @@ export default function PublicProfile() {
     return toUrl(profile?.logo || profile?.avatar_url || profile?.avatar || "");
   }, [profile?.logo, profile?.avatar_url, profile?.avatar]);
 
+  const bannerUrl = useMemo(() => {
+    const raw = extractHeroFromProfile(profile);
+    const finalUrl = toUrl(raw || "");
+    return finalUrl;
+  }, [profile]);
+
   const bannerStyle = useMemo(() => {
-    const url = toUrl(profile?.banner_url || profile?.banner || "");
-    if (!url) return {};
+    if (!bannerUrl) return {};
     return {
-      backgroundImage: `url(${url})`,
+      backgroundImage: `url(${bannerUrl})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
-  }, [profile?.banner_url, profile?.banner]);
+  }, [bannerUrl]);
 
   const mapSrc = useMemo(() => {
     return buildMapSrc(profile?.service_location || "");
   }, [profile?.service_location]);
 
-  // ✅ Now early returns are safe
   if (loading && !profile) {
     return <div className="text-sm text-slate-500">Loading profile…</div>;
   }
@@ -110,21 +151,16 @@ export default function PublicProfile() {
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
-      {/* FULL-VIEWPORT TOP BANNER (breaks out of any parent container) */}
-      <div
-        className={[
-          "relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw]",
-          BANNER_OFFSET_CLASS,
-        ].join(" ")}
-      >
+      {/* FULL-WIDTH TOP BANNER */}
+      <div className="relative w-full">
         <div
-          className="h-[600px] w-full bg-slate-900"
+          className="h-[300px] w-full bg-slate-900"
           style={bannerStyle}
           aria-label="Profile banner"
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
-        {/* Bottom content overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
+
         <div className="absolute inset-x-0 bottom-0">
           <div className="mx-auto max-w-6xl px-4 pb-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
