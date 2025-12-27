@@ -154,7 +154,7 @@ export default function PublicProfile() {
       {/* FULL-WIDTH TOP BANNER */}
       <div className="relative w-full">
         <div
-          className="h-[300px] w-full bg-slate-900"
+          className="h-[600px] w-full bg-slate-900"
           style={bannerStyle}
           aria-label="Profile banner"
         />
