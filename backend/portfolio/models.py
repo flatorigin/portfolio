@@ -42,6 +42,8 @@ class Project(models.Model):
     summary = models.TextField(blank=True)
     category = models.CharField(max_length=100, blank=True)
 
+    is_job_posting = models.BooleanField(default=False)
+
     cover_image = models.ImageField(upload_to="projects/covers/", blank=True, null=True)
 
     is_public = models.BooleanField(default=True)

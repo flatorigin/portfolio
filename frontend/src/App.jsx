@@ -1,6 +1,7 @@
 // =======================================
 // file: frontend/src/App.jsx
 // Layout + nav with avatar dropdown + full-bleed support + bundler icons
+// Owner vs non-owner profile header variants
 // =======================================
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -30,11 +31,17 @@ export default function App() {
   const { pathname } = useLocation();
   const authed = !!localStorage.getItem("access");
 
-  // Pages that should NOT be wrapped in <Container> (need full-bleed layouts)
+  // Full-bleed layouts (e.g. profile hero full-width)
   const isFullBleed =
     pathname.startsWith("/profiles/") ||
-    pathname.startsWith("/public/") || // optional if you have it
+    pathname.startsWith("/public/") ||
     false;
+
+  // Detect if we're on a public profile and if it's our own
+  const isProfilePage = pathname.startsWith("/profiles/");
+  const viewedProfileUsername = isProfilePage
+    ? pathname.split("/")[2] || ""
+    : "";
 
   // user + menu state
   const [me, setMe] = useState(null);
@@ -109,6 +116,14 @@ export default function App() {
       ? username.trim().charAt(0).toUpperCase()
       : "";
 
+  // owner vs non-owner of the current profile page
+  const isOwnerViewingOwnProfile =
+    authed &&
+    isProfilePage &&
+    username &&
+    viewedProfileUsername &&
+    username.toLowerCase() === viewedProfileUsername.toLowerCase();
+
   const handleSignOut = () => {
     logout();
     setMenuOpen(false);
@@ -132,7 +147,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Make header float above content */}
+      {/* Header stays above banners, etc. */}
       <header className="relative z-30 border-b border-slate-200 bg-white">
         <Container className="py-3">
           <nav className="flex items-center gap-2">
@@ -143,11 +158,26 @@ export default function App() {
               Portfolio
             </Link>
 
-            <NavLink to="/">Explore</NavLink>
-            <NavLink to="/profile/edit">Edit Profile</NavLink>
-            <NavLink to="/dashboard">Dashboard</NavLink>
+            {/* ─────────────────────────────
+                NAV VARIANTS
+               ───────────────────────────── */}
+            {/* If we're on someone else's profile: simplified nav */}
+            {isProfilePage && !isOwnerViewingOwnProfile ? (
+              <>
+                <NavLink to="/">Explore</NavLink>
+                <NavLink to="/work">Find Local Work</NavLink>
+                <NavLink to="/community">Community</NavLink>
+              </>
+            ) : (
+              // Default / owner nav
+              <>
+                <NavLink to="/">Explore</NavLink>
+                <NavLink to="/profile/edit">Edit Profile</NavLink>
+                <NavLink to="/dashboard">Dashboard</NavLink>
+              </>
+            )}
 
-            {/* relative so dropdown positions under avatar */}
+            {/* Right side: avatar + icons */}
             <div
               className="relative ml-auto flex items-center gap-3"
               ref={menuRef}
@@ -290,7 +320,11 @@ export default function App() {
                         }}
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          <img src={ICONS.register} alt="" className="h-4 w-4" />
+                          <img
+                            src={ICONS.register}
+                            alt=""
+                            className="h-4 w-4"
+                          />
                         </span>
                         <span>Register</span>
                       </button>

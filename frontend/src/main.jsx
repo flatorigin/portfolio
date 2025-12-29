@@ -15,6 +15,7 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import MessagesThread from "./pages/MessagesThread.jsx";
 import NotFound from "./pages/NotFound";
+import FindLocalWork from "./pages/FindLocalWork";
 
 function RequireAuth({ children }) {
   return localStorage.getItem("access") ? (
@@ -31,12 +32,12 @@ createRoot(document.getElementById("root")).render(
       <Route path="/" element={<App />}>
         {/* "/" → Explore */}
         <Route index element={<Explore />} />
-
         {/* Auth + public routes */}
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
+        <Route path="/work" element={<FindLocalWork />} />
 
         {/* Public profile + project detail */}
         {/* ✅ This matches /profiles/Artin etc */}

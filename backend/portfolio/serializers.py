@@ -35,6 +35,7 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
             "is_owner",
             "text",
             "created_at",
+            "is_job_posting",
         ]
         read_only_fields = [
             "id",
@@ -55,6 +56,7 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="owner.username", read_only=True)
+    is_job_posting = serializers.BooleanField(required=False)
     images = ProjectImageSerializer(many=True, read_only=True)
 
     class Meta:
@@ -79,6 +81,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             "material_url",
             "material_label",
             "extra_links",  # 🔹 NEW
+            "is_job_posting",
+
         )
         read_only_fields = (
             "id",

@@ -121,6 +121,8 @@ export default function ProjectDetail() {
           highlights: meta.highlights || "",
           material_label: meta.material_label || "",
           material_url: meta.material_url || "",
+          // 🔹 NEW: carry the job flag into edit state
+          is_job_posting: !!meta.is_job_posting,
         });
 
         setExtraLinks(
@@ -430,6 +432,8 @@ export default function ProjectDetail() {
             label: row.label.trim(),
             url: row.url.trim(),
           })),
+        // 🔹 NEW: send the job posting flag as a real boolean
+        is_job_posting: !!editData.is_job_posting,
       };
 
       console.log("[handleSaveEdits] sending payload:", payload);
@@ -446,6 +450,7 @@ export default function ProjectDetail() {
         highlights: data.highlights || "",
         material_label: data.material_label || "",
         material_url: data.material_url || "",
+        is_job_posting: !!data.is_job_posting,
       });
       setExtraLinks(
         Array.isArray(data.extra_links)
@@ -659,6 +664,11 @@ export default function ProjectDetail() {
                     by {project.owner_username}
                   </span>
                 )}
+                {project?.is_job_posting && (
+                  <Badge className="border border-emerald-300/80 bg-emerald-500/95 text-[10px] font-semibold uppercase tracking-wide text-emerald-50">
+                    Job posting
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -786,6 +796,32 @@ export default function ProjectDetail() {
                   </div>
                 </div>
 
+                {/* 🔹 Job posting toggle */}
+                <div className="flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+                  <input
+                    id="is_job_posting"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                    checked={!!editData.is_job_posting}
+                    onChange={(e) =>
+                      setEditData((prev) => ({
+                        ...prev,
+                        is_job_posting: e.target.checked,
+                      }))
+                    }
+                  />
+                  <label
+                    htmlFor="is_job_posting"
+                    className="text-xs text-slate-800"
+                  >
+                    This is a{" "}
+                    <span className="font-semibold">job posting</span>{" "}
+                    <span className="text-slate-500">
+                      (clients can contact me to hire).
+                    </span>
+                  </label>
+                </div>
+
                 {/* Highlights */}
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -909,6 +945,7 @@ export default function ProjectDetail() {
                           highlights: project.highlights || "",
                           material_label: project.material_label || "",
                           material_url: project.material_url || "",
+                          is_job_posting: !!project.is_job_posting,
                         });
                         setExtraLinks(
                           Array.isArray(project.extra_links)
