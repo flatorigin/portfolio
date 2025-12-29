@@ -646,14 +646,21 @@ export default function ProjectDetail() {
       {/* Main project card */}
       <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
         {/* header */}
-        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 text-white sm:px-6">
+        <div
+          className={
+            "border-b border-slate-100 px-5 py-4 text-white sm:px-6 " +
+            (project?.is_job_posting
+              ? "bg-[#37C5F0]" // 💙 job posting header color
+              : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900") // default
+          }
+        >
           <div className="flex flex-wrap items-start justify-between gap-3">
             {/* LEFT: title + meta */}
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold sm:text-2xl">
                 {project?.title || `Project #${id}`}
               </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-200/90">
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
                 {project?.category && (
                   <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
                     {project.category}
@@ -664,10 +671,11 @@ export default function ProjectDetail() {
                     by {project.owner_username}
                   </span>
                 )}
+
                 {project?.is_job_posting && (
-                  <Badge className="border border-emerald-300/80 bg-emerald-500/95 text-[10px] font-semibold uppercase tracking-wide text-emerald-50">
-                    Job posting
-                  </Badge>
+                  <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-semibold tracking-wide text-[#0A3443]">
+                    JOB POSTING
+                  </span>
                 )}
               </div>
             </div>
@@ -680,6 +688,7 @@ export default function ProjectDetail() {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsEditing((prev) => !prev)}
+                  className="border-white/70 bg-white/10 text-white hover:bg-white/20"
                 >
                   {isEditing ? "Close edit" : "Edit project"}
                 </Button>
@@ -691,7 +700,12 @@ export default function ProjectDetail() {
                   variant={isSaved ? "outline" : "default"}
                   onClick={toggleSave}
                   disabled={saveBusy || isSaved}
-                  className="text-sm"
+                  className={
+                    "text-sm " +
+                    (isSaved
+                      ? "bg-white text-[#0A3443] hover:bg-white"
+                      : "bg-white text-[#0A3443] hover:bg-sky-50")
+                  }
                 >
                   {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
                 </Button>
@@ -699,6 +713,7 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
+
 
         {/* body */}
         <div className="space-y-6 p-4 sm:p-6">
