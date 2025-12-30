@@ -1,7 +1,6 @@
 // =======================================
 // file: frontend/src/pages/ProjectDetail.jsx
 // Project page + lightbox-style comments modal + project edit + extra links
-// + Project photos dropzone in Edit Project
 // =======================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
@@ -38,12 +37,10 @@ export default function ProjectDetail() {
   // extra materials / links rows in the edit form
   const [extraLinks, setExtraLinks] = useState([]);
 
-  // image upload state (dropzone in Edit Project)
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const [photoError, setPhotoError] = useState("");
-  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+  // cover image upload for EDIT form (dropzone)
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState(null);
+  const [coverError, setCoverError] = useState("");
 
   // current user
   const [meUser, setMeUser] = useState(null);
@@ -93,16 +90,6 @@ export default function ProjectDetail() {
     })();
   }, [authed]);
 
-  // helper to map /images/ API response → images state
-  function mapImages(apiImages) {
-    return (apiImages || [])
-      .map((x) => ({
-        url: toUrl(x.url || x.image || x.src || x.file),
-        caption: x.caption || "",
-      }))
-      .filter((x) => !!x.url);
-  }
-
   // ─────────────────────────────
   // LOAD PROJECT + IMAGES + COMMENTS
   // ─────────────────────────────
@@ -116,17 +103,26 @@ export default function ProjectDetail() {
         ]);
 
       setProject(meta || null);
-      setImages(mapImages(imgs));
+
+      const mappedImages = (imgs || [])
+        .map((x) => ({
+          url: toUrl(x.url || x.image || x.src || x.file),
+          caption: x.caption || "",
+        }))
+        .filter((x) => !!x.url);
+
+      setImages(mappedImages);
       setComments(Array.isArray(cmts) ? cmts : []);
 
       // init editData + extraLinks from meta
       if (meta) {
         setEditData({
           title: meta.title || "",
+          category: meta.category || "",
           summary: meta.summary || "",
           location: meta.location || "",
-          budget: meta.budget ?? "",
-          sqf: meta.sqf ?? "",
+          budget: meta.budget || "",
+          sqf: meta.sqf || "",
           highlights: meta.highlights || "",
           material_label: meta.material_label || "",
           material_url: meta.material_url || "",
@@ -141,9 +137,19 @@ export default function ProjectDetail() {
               }))
             : []
         );
+
+        // cover preview: prefer explicit cover_image, else first media item
+        if (meta.cover_image) {
+          setCoverPreview(toUrl(meta.cover_image));
+        } else if (mappedImages.length > 0) {
+          setCoverPreview(mappedImages[0].url);
+        } else {
+          setCoverPreview(null);
+        }
       } else {
         setEditData(null);
         setExtraLinks([]);
+        setCoverPreview(null);
       }
     } catch (err) {
       console.error("[ProjectDetail] fetch failed:", err);
@@ -152,6 +158,7 @@ export default function ProjectDetail() {
       setComments([]);
       setEditData(null);
       setExtraLinks([]);
+      setCoverPreview(null);
     }
   }, [id]);
 
@@ -192,6 +199,7 @@ export default function ProjectDetail() {
       try {
         const { data } = await api.get(`/projects/${project.id}/favorite/`);
         const favored = data?.is_favorited ?? data?.favorited ?? true;
+
         if (!cancelled) setIsSaved(!!favored);
       } catch (err) {
         if (cancelled) return;
@@ -402,6 +410,7 @@ export default function ProjectDetail() {
 
     setSavingEdits(true);
     setEditError("");
+    setCoverError("");
 
     const normalizeText = (val) => {
       if (val === undefined || val === null) return "";
@@ -423,6 +432,7 @@ export default function ProjectDetail() {
 
       const payload = {
         title: normalizeText(editData.title),
+        category: normalizeText(editData.category),
         summary: normalizeText(editData.summary),
         location: normalizeText(editData.location),
         budget: normalizeNumber(editData.budget),
@@ -443,9 +453,29 @@ export default function ProjectDetail() {
 
       const { data } = await api.patch(`/projects/${projectId}/`, payload);
 
-      setProject(data);
+      // If a cover file was chosen, upload it separately
+      if (coverFile) {
+        const fd = new FormData();
+        fd.append("image", coverFile);
+        try {
+          await api.post(`/projects/${projectId}/images/`, fd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+        } catch (uploadErr) {
+          console.error("[handleSaveEdits] cover upload error:", uploadErr);
+          setCoverError(
+            "Project info saved, but there was a problem uploading the image."
+          );
+        }
+      }
+
+      // Refresh full project + images from backend
+      await fetchAll();
+
+      // keep editData synced with response
       setEditData({
         title: data.title || "",
+        category: data.category || "",
         summary: data.summary || "",
         location: data.location || "",
         budget: data.budget ?? "",
@@ -455,6 +485,7 @@ export default function ProjectDetail() {
         material_url: data.material_url || "",
         is_job_posting: !!data.is_job_posting,
       });
+
       setExtraLinks(
         Array.isArray(data.extra_links)
           ? data.extra_links.map((row) => ({
@@ -505,80 +536,59 @@ export default function ProjectDetail() {
     setExtraLinks((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const mapSrc = buildMapSrc(project?.location || "");
+  function resetEditFormFromProject() {
+    if (!project) return;
+    setEditData({
+      title: project.title || "",
+      category: project.category || "",
+      summary: project.summary || "",
+      location: project.location || "",
+      budget: project.budget ?? "",
+      sqf: project.sqf ?? "",
+      highlights: project.highlights || "",
+      material_label: project.material_label || "",
+      material_url: project.material_url || "",
+      is_job_posting: !!project.is_job_posting,
+    });
+    setExtraLinks(
+      Array.isArray(project.extra_links)
+        ? project.extra_links.map((row) => ({
+            label: row.label || "",
+            url: row.url || "",
+          }))
+        : []
+    );
+    // reset cover state to latest
+    if (project.cover_image) {
+      setCoverPreview(toUrl(project.cover_image));
+    } else if (images.length > 0) {
+      setCoverPreview(images[0].url);
+    } else {
+      setCoverPreview(null);
+    }
+    setCoverFile(null);
+    setCoverError("");
+  }
 
-  // ─────────────────────────────
-  // PHOTO DROPZONE HANDLERS (Edit Project)
-// ─────────────────────────────
-  const handlePhotoSelect = (e) => {
+  // Dropzone handlers
+  const handleCoverInputChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhotoFile(file);
-    setPhotoError("");
-
-    const reader = new FileReader();
-    reader.onload = () => setPhotoPreview(reader.result);
-    reader.readAsDataURL(file);
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+    setCoverError("");
   };
 
-  const handlePhotoDragOver = (e) => {
+  const handleCoverDrop = (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingPhoto(true);
-  };
-
-  const handlePhotoDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingPhoto(false);
-  };
-
-  const handlePhotoDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingPhoto(false);
-    const file = e.dataTransfer?.files?.[0];
+    const file = e.dataTransfer.files?.[0];
     if (!file) return;
-    setPhotoFile(file);
-    setPhotoError("");
-
-    const reader = new FileReader();
-    reader.onload = () => setPhotoPreview(reader.result);
-    reader.readAsDataURL(file);
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+    setCoverError("");
   };
 
-  async function handlePhotoUpload() {
-    if (!project || !photoFile) return;
-    setPhotoBusy(true);
-    setPhotoError("");
-
-    try {
-      const fd = new FormData();
-      fd.append("image", photoFile);
-
-      await api.post(`/projects/${project.id}/images/`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      // refresh only images
-      const { data: imgs } = await api.get(`/projects/${project.id}/images/`);
-      setImages(mapImages(imgs));
-
-      setPhotoFile(null);
-      setPhotoPreview(null);
-    } catch (err) {
-      console.error("[ProjectDetail] photo upload error", err?.response || err);
-      const detail =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        "Could not upload image.";
-      setPhotoError(
-        typeof detail === "string" ? detail : JSON.stringify(detail, null, 2)
-      );
-    } finally {
-      setPhotoBusy(false);
-    }
-  }
+  const mapSrc = buildMapSrc(project?.location || "");
 
   // ─────────────────────────────
   // RENDER HELPERS
@@ -695,7 +705,12 @@ export default function ProjectDetail() {
       ? images[Math.min(activeImageIdx, images.length - 1)]
       : null;
 
-  const isJobPosting = !!project?.is_job_posting;
+  const headerIsJobPosting = !!project?.is_job_posting;
+  const headerClasses =
+    "border-b px-5 py-4 text-white sm:px-6 " +
+    (headerIsJobPosting
+      ? "bg-[#37C5F0]"
+      : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900");
 
   // ─────────────────────────────
   // RENDER
@@ -724,34 +739,29 @@ export default function ProjectDetail() {
       {/* Main project card */}
       <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
         {/* header */}
-        <div
-          className={
-            "border-b border-slate-100 px-5 py-4 text-white sm:px-6 " +
-            (isJobPosting
-              ? "bg-gradient-to-r from-[#37C5F0] via-[#1B9AD6] to-[#005B96]"
-              : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900")
-          }
-        >
+        <div className={headerClasses}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             {/* LEFT: title + meta */}
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold sm:text-2xl">
                 {project?.title || `Project #${id}`}
               </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-200/90">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-100/90">
                 {project?.category && (
                   <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
                     {project.category}
                   </span>
                 )}
+
                 {project?.owner_username && (
-                  <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
+                  <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px]">
                     by {project.owner_username}
                   </span>
                 )}
+
                 {project?.is_job_posting && (
-                  <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-900">
-                    JOB POSTING
+                  <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-900">
+                    Job posting
                   </span>
                 )}
               </div>
@@ -764,7 +774,13 @@ export default function ProjectDetail() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsEditing((prev) => !prev)}
+                  onClick={() => {
+                    if (!isEditing) {
+                      resetEditFormFromProject();
+                    }
+                    setIsEditing((prev) => !prev);
+                  }}
+                  className="bg-white/10 text-white hover:bg-white hover:text-slate-900 border-white/40"
                 >
                   {isEditing ? "Close edit" : "Edit project"}
                 </Button>
@@ -793,47 +809,59 @@ export default function ProjectDetail() {
             </p>
           )}
 
-          {/* OWNER-ONLY PROJECT EDIT FORM */}
+          {/* OWNER-ONLY PROJECT EDIT FORM (Dashboard-style) */}
           {isOwnerUser && isEditing && editData && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
-                Edit project
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              {/* Header row – matches Dashboard card */}
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    Edit Project
+                  </div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Project info
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Changes are saved when you click{" "}
+                  <span className="font-semibold">Save</span>.
+                </div>
               </div>
 
-              <form onSubmit={handleSaveEdits} className="space-y-4">
-                {/* Job posting toggle at top */}
-                <div className="rounded-xl border border-[#37C5F0]/25 bg-[#E5F7FD] px-3 py-2">
-                  <label className="flex items-start gap-2 text-xs text-slate-900">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 rounded border-[#37C5F0]/70 text-[#37C5F0] focus:ring-[#37C5F0]"
-                      checked={!!editData.is_job_posting}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          is_job_posting: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>
-                      <span className="font-semibold">
-                        This is a job posting
-                      </span>{" "}
-                      <span className="text-[11px] text-slate-700">
-                        (clients can contact me to hire).
-                      </span>
+              {/* Job posting banner */}
+              <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
+                <label className="flex items-start gap-3 text-xs text-sky-900">
+                  <input
+                    type="checkbox"
+                    className="mt-[2px] h-4 w-4 rounded border-sky-300 text-sky-600 focus:ring-sky-500"
+                    checked={!!editData.is_job_posting}
+                    onChange={(e) =>
+                      setEditData((prev) => ({
+                        ...prev,
+                        is_job_posting: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    <span className="font-semibold">
+                      This is a job posting
+                    </span>{" "}
+                    <span className="text-[11px] text-sky-800">
+                      (clients can contact me to hire).
                     </span>
-                  </label>
-                </div>
+                  </span>
+                </label>
+              </div>
 
-                {/* Title & category row (category optional) */}
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <form onSubmit={handleSaveEdits} className="space-y-5">
+                {/* Project name + category */}
+                <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
                       Project Name
                     </label>
                     <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       value={editData.title}
                       onChange={(e) =>
                         setEditData((prev) => ({
@@ -845,12 +873,12 @@ export default function ProjectDetail() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
                       Category
                     </label>
                     <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={editData.category || project?.category || ""}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      value={editData.category || ""}
                       onChange={(e) =>
                         setEditData((prev) => ({
                           ...prev,
@@ -864,11 +892,11 @@ export default function ProjectDetail() {
 
                 {/* Summary */}
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
                     Summary
                   </label>
                   <Textarea
-                    rows={3}
+                    rows={4}
                     value={editData.summary}
                     onChange={(e) =>
                       setEditData((prev) => ({
@@ -877,17 +905,18 @@ export default function ProjectDetail() {
                       }))
                     }
                     placeholder="One or two sentences…"
+                    className="min-h-[120px]"
                   />
                 </div>
 
                 {/* Location / Budget / Sq Ft */}
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
                       Location (not address)
                     </label>
                     <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       value={editData.location}
                       onChange={(e) =>
                         setEditData((prev) => ({
@@ -899,11 +928,11 @@ export default function ProjectDetail() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
                       Budget
                     </label>
                     <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       value={editData.budget}
                       onChange={(e) =>
                         setEditData((prev) => ({
@@ -915,11 +944,11 @@ export default function ProjectDetail() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-700">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
                       Square Feet
                     </label>
                     <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       value={editData.sqf}
                       onChange={(e) =>
                         setEditData((prev) => ({
@@ -934,7 +963,7 @@ export default function ProjectDetail() {
 
                 {/* Highlights */}
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
                     Highlights (tags / text)
                   </label>
                   <Textarea
@@ -947,33 +976,23 @@ export default function ProjectDetail() {
                       }))
                     }
                     placeholder="comma-separated: modern, lake-view…"
+                    className="min-h-[100px]"
                   />
                 </div>
 
-                {/* Materials / links */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-medium text-slate-700">
-                      Materials &amp; links
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addLinkRow}
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                      title="Add another link"
-                    >
-                      +
-                    </button>
+                {/* Materials & links */}
+                <div className="space-y-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Materials &amp; links
                   </div>
 
-                  {/* main label+url row */}
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      <label className="mb-1 block text-xs font-medium text-slate-600">
                         Material label (title + price)
                       </label>
                       <input
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                         placeholder="e.g. Bosch SDS Hammer Drill — $129"
                         value={editData.material_label}
                         onChange={(e) =>
@@ -985,11 +1004,11 @@ export default function ProjectDetail() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      <label className="mb-1 block text-xs font-medium text-slate-600">
                         Material / tool link (optional)
                       </label>
                       <input
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                         placeholder="https://www.example.com/product/123"
                         value={editData.material_url}
                         onChange={(e) =>
@@ -1008,10 +1027,10 @@ export default function ProjectDetail() {
                       {extraLinks.map((row, index) => (
                         <div
                           key={index}
-                          className="grid gap-2 sm:grid-cols-[1fr_minmax(0,1.4fr)_auto]"
+                          className="grid gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_auto]"
                         >
                           <input
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                             placeholder="Label"
                             value={row.label}
                             onChange={(e) =>
@@ -1019,7 +1038,7 @@ export default function ProjectDetail() {
                             }
                           />
                           <input
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                             placeholder="https://…"
                             value={row.url}
                             onChange={(e) =>
@@ -1038,107 +1057,107 @@ export default function ProjectDetail() {
                       ))}
                     </div>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={addLinkRow}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <span className="text-sm leading-none">+</span>
+                    Add another link
+                  </button>
                 </div>
 
-                {/* Project photos dropzone */}
+                {/* Project photos (cover) – dropzone */}
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     Project photos (cover)
                   </div>
+
                   <div
-                    className={
-                      "mt-1 flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-8 text-center text-xs transition " +
-                      (isDraggingPhoto
-                        ? "border-sky-400 bg-sky-50/60"
-                        : "border-slate-300 bg-slate-50/60 hover:border-slate-400 hover:bg-slate-50")
-                    }
-                    onDragOver={handlePhotoDragOver}
-                    onDragLeave={handlePhotoDragLeave}
-                    onDrop={handlePhotoDrop}
+                    className="flex min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 px-4 text-center text-xs text-slate-500 transition hover:border-slate-400 hover:bg-slate-50"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleCoverDrop}
                   >
-                    <p className="mb-1 text-slate-700">
+                    {coverPreview ? (
+                      <div className="mb-3 max-w-full">
+                        <img
+                          src={coverPreview}
+                          alt="Cover preview"
+                          className="mx-auto max-h-40 rounded-xl border border-slate-200 object-cover"
+                        />
+                      </div>
+                    ) : null}
+
+                    <p className="text-[11px] text-slate-600">
                       Drop an image here to add to this project.
                     </p>
-                    <p className="mb-3 text-[11px] text-slate-500">
+                    <p className="mt-1 text-[11px] text-slate-500">
                       Drag &amp; drop a photo, or{" "}
-                      <label className="cursor-pointer font-semibold text-sky-600 hover:text-sky-700">
-                        browse from your device
+                      <label className="cursor-pointer font-medium text-blue-600 hover:underline">
+                        browse from your device.
                         <input
                           type="file"
-                          accept="image/*"
                           className="hidden"
-                          onChange={handlePhotoSelect}
+                          accept="image/*"
+                          onChange={handleCoverInputChange}
                         />
                       </label>
-                      .
                     </p>
 
-                    {photoPreview && (
-                      <div className="mt-3 flex flex-col items-center gap-2">
-                        <div className="h-24 w-40 overflow-hidden rounded-lg border border-slate-300 bg-slate-100">
-                          <img
-                            src={photoPreview}
-                            alt="Preview"
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handlePhotoUpload}
-                          disabled={photoBusy}
-                        >
-                          {photoBusy ? "Uploading…" : "Upload photo"}
-                        </Button>
-                      </div>
+                    {coverFile && (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Selected file:{" "}
+                        <span className="font-medium">{coverFile.name}</span>
+                      </p>
+                    )}
+
+                    {coverError && (
+                      <p className="mt-1 text-[11px] text-red-600">
+                        {coverError}
+                      </p>
                     )}
                   </div>
-                  {photoError && (
-                    <p className="text-[11px] text-red-600">{photoError}</p>
-                  )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      if (project) {
-                        setEditData({
-                          title: project.title || "",
-                          summary: project.summary || "",
-                          location: project.location || "",
-                          budget: project.budget || "",
-                          sqf: project.sqf || "",
-                          highlights: project.highlights || "",
-                          material_label: project.material_label || "",
-                          material_url: project.material_url || "",
-                          is_job_posting: !!project.is_job_posting,
-                        });
-                        setExtraLinks(
-                          Array.isArray(project.extra_links)
-                            ? project.extra_links.map((row) => ({
-                                label: row.label || "",
-                                url: row.url || "",
-                              }))
-                            : []
-                        );
-                      }
-                      setIsEditing(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={savingEdits}>
-                    {savingEdits ? "Saving…" : "Save"}
-                  </Button>
+                {/* Actions + visibility */}
+                <div className="mt-4 flex flex-col items-stretch justify-between gap-3 border-t border-slate-200 pt-3 sm:flex-row sm:items-center">
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-slate-700 focus:ring-slate-500"
+                      checked={!!project?.is_public}
+                      readOnly
+                    />
+                    <span>
+                      <span className="font-semibold">Public</span>
+                      <span className="ml-1 text-[11px] text-slate-500">
+                        (this project is visible on Explore).
+                      </span>
+                    </span>
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        resetEditFormFromProject();
+                        setIsEditing(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={savingEdits}>
+                      {savingEdits ? "Saving…" : "Save"}
+                    </Button>
+                  </div>
                 </div>
+
+                {editError && (
+                  <p className="mt-2 text-xs text-red-600">{editError}</p>
+                )}
               </form>
-
-              {editError && (
-                <p className="mt-2 text-xs text-red-600">{editError}</p>
-              )}
             </div>
           )}
 
