@@ -70,6 +70,7 @@ export default function CreateProjectCard({
 
   return (
     <Card className="p-5">
+      {/* Collapsible header (matches Dashboard style) */}
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-semibold text-slate-800">
           Create Project
@@ -85,16 +86,12 @@ export default function CreateProjectCard({
 
       {isOpen && (
         <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Project Info (Draft)
-            </div>
-
-            {/* Prominent Job Posting toggle */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold tracking-wide text-slate-600">
+          {/* 🔹 Job Posting banner at the very top (same idea as editor card) */}
+          <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
                 Job Posting
-              </span>
+              </div>
               <button
                 type="button"
                 onClick={toggleJobPosting}
@@ -109,10 +106,18 @@ export default function CreateProjectCard({
                 />
               </button>
             </div>
+            <p className="mt-1 text-[11px] text-sky-800">
+              Mark this project as a job opportunity clients can respond to.
+            </p>
+          </div>
+
+          {/* Section label – same as ProjectEditorCard */}
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Project Info (Draft)
           </div>
 
           <form onSubmit={onSubmit} className="space-y-6">
-            {/* Project basics */}
+            {/* Project basics (same fields & order) */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -153,7 +158,7 @@ export default function CreateProjectCard({
               />
             </div>
 
-            {/* Location / Budget / Sq ft / Highlights */}
+            {/* Location / Budget / Sq Ft / Highlights – same order */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -213,7 +218,7 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {/* Material links */}
+            {/* Material / tool link + label – same as editor card */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -247,7 +252,7 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {/* Cover + public */}
+            {/* Cover upload + public toggle – same layout */}
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex-1">
                 <label className="mb-1 block text-sm text-slate-600">
@@ -271,7 +276,7 @@ export default function CreateProjectCard({
                 <input
                   type="checkbox"
                   className="mr-2 h-4 w-4 align-middle"
-                  checked={form.is_public}
+                  checked={!!form.is_public}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
@@ -283,7 +288,7 @@ export default function CreateProjectCard({
               </label>
             </div>
 
-            {/* Images list */}
+            {/* Images list – same structure, just local preview */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-700">
@@ -304,7 +309,6 @@ export default function CreateProjectCard({
                       className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 md:flex-row md:items-center"
                     >
                       <div className="h-32 w-full overflow-hidden rounded-md bg-slate-100 md:w-56">
-                        {/* eslint-disable-next-line jsx-a11y/img-redundant-alt */}
                         <img
                           src={image.url}
                           alt={image.caption || "Project image"}
@@ -322,6 +326,7 @@ export default function CreateProjectCard({
                           }
                         />
                         <div className="flex gap-2">
+                          {/* Just a UI button here – no API yet, so keep it non-submitting */}
                           <Button
                             type="button"
                             variant="outline"
@@ -346,7 +351,7 @@ export default function CreateProjectCard({
               )}
             </div>
 
-            {/* Add images – drag & drop area */}
+            {/* Add images – drag & drop area (same placement as editor card’s uploader) */}
             <div className="space-y-2">
               <div className="text-sm font-medium text-slate-700">
                 Add Images
@@ -379,7 +384,7 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {/* Footer actions + messages */}
+            {/* 🔻 FINAL FOOTER: messages + primary action at the very bottom */}
             <div className="space-y-2">
               {error && (
                 <div className="text-sm text-red-700">

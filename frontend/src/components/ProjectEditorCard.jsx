@@ -24,7 +24,7 @@ export default function ProjectEditorCard({
   setImages,                     // setImages(prev => [...])
   onSaveImageCaption,            // (image) => void
   onDeleteImage,                 // (image) => void
-  onSubmit,                      // (event) => void (parent handles API)
+  onSubmit,                      // () => void or (event) => void
   onClose,                       // () => void
   onView,                        // () => void (open public project page)
   onAfterUpload,                 // async () => { refresh images + projects }
@@ -37,6 +37,7 @@ export default function ProjectEditorCard({
       : "Create Project";
 
   const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
+  const isJobPosting = !!form.is_job_posting;
 
   return (
     <Card className="p-5">
@@ -57,13 +58,68 @@ export default function ProjectEditorCard({
         </div>
       </div>
 
+      {/* Job Posting toggle – TOP of card */}
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+        <div className="flex items-center gap-3">
+          {/* Switch */}
+          <button
+            type="button"
+            onClick={() =>
+              setForm((prev) => ({
+                ...prev,
+                is_job_posting: !prev.is_job_posting,
+              }))
+            }
+            aria-pressed={isJobPosting}
+            className={
+              "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+              (isJobPosting
+                ? "bg-sky-500 border-sky-500"
+                : "bg-slate-200 border-slate-300")
+            }
+          >
+            <span
+              className={
+                "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
+                (isJobPosting ? "translate-x-5" : "translate-x-1")
+              }
+            />
+          </button>
+
+          <div className="text-xs">
+            <div className="font-semibold text-sky-900">
+              Job Posting
+            </div>
+            <div className="text-[11px] text-sky-700/90">
+              Mark this project as a job opportunity clients can respond to.
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden sm:block">
+          <Badge
+            className={
+              isJobPosting
+                ? "bg-sky-600 text-white"
+                : "bg-slate-200 text-slate-700"
+            }
+          >
+            {isJobPosting ? "On" : "Off"}
+          </Badge>
+        </div>
+      </div>
+
       {/* Basic info form */}
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
         Project Info (Draft)
       </div>
 
       <form
-        onSubmit={onSubmit}
+        onSubmit={(e) => {
+          // still support Enter-to-submit
+          e.preventDefault();
+          if (onSubmit) onSubmit(e);
+        }}
         className="grid grid-cols-1 gap-3 md:grid-cols-2"
       >
         <div>
@@ -78,6 +134,7 @@ export default function ProjectEditorCard({
             placeholder="Project name"
           />
         </div>
+
         <div>
           <label className="mb-1 block text-sm text-slate-600">
             Category
@@ -90,6 +147,7 @@ export default function ProjectEditorCard({
             placeholder="Category"
           />
         </div>
+
         <div className="md:col-span-2">
           <label className="mb-1 block text-sm text-slate-600">
             Summary
@@ -115,6 +173,7 @@ export default function ProjectEditorCard({
             placeholder="City, State"
           />
         </div>
+
         <div>
           <label className="mb-1 block text-sm text-slate-600">
             Budget
@@ -128,6 +187,7 @@ export default function ProjectEditorCard({
             placeholder="e.g. 250000"
           />
         </div>
+
         <div>
           <label className="mb-1 block text-sm text-slate-600">
             Square Feet
@@ -141,6 +201,7 @@ export default function ProjectEditorCard({
             placeholder="e.g. 1800"
           />
         </div>
+
         <div>
           <label className="mb-1 block text-sm text-slate-600">
             Highlights (tags / text)
@@ -156,6 +217,7 @@ export default function ProjectEditorCard({
             placeholder="comma-separated tags"
           />
         </div>
+
         <div>
           <label className="mb-1 block text-sm text-slate-600">
             Material / tool link (optional)
@@ -202,6 +264,8 @@ export default function ProjectEditorCard({
             </div>
           )}
         </div>
+
+        {/* Public checkbox */}
         <div className="flex items-center gap-2">
           <label className="text-sm text-slate-600">
             <input
@@ -219,12 +283,15 @@ export default function ProjectEditorCard({
           </label>
         </div>
 
+        {/* Hidden submit so Enter works, but visible button is at bottom of card */}
         <div className="md:col-span-2">
-          <Button disabled={busy}>{submitLabel}</Button>
+          <button type="submit" className="hidden">
+            {submitLabel}
+          </button>
         </div>
       </form>
 
-      {/* Images section */}
+      {/* Images section (edit mode only) */}
       {mode === "edit" && projectId && (
         <>
           <div className="mt-6">
@@ -310,6 +377,19 @@ export default function ProjectEditorCard({
           </div>
         </>
       )}
+
+      {/* PRIMARY SUBMIT BUTTON – BOTTOM of card */}
+      <div className="mt-6 flex justify-end">
+        <Button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (onSubmit) onSubmit();
+          }}
+        >
+          {submitLabel}
+        </Button>
+      </div>
     </Card>
   );
 }
