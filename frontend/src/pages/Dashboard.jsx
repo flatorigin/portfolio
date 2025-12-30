@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import ImageUploader from "../components/ImageUploader";
+import CreateProjectCard from "../components/CreateProjectCard";
 import {
   SectionTitle,
   Card,
@@ -182,7 +183,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  // Create form
+  // Create form state
   const [form, setForm] = useState({
     title: "",
     summary: "",
@@ -194,9 +195,9 @@ export default function Dashboard() {
     highlights: "",
     material_url: "",
     material_label: "",
+    is_job_posting: false, // NEW
   });
   const [cover, setCover] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
 
   // Editor
   const [editingId, setEditingId] = useState("");
@@ -342,7 +343,13 @@ export default function Dashboard() {
       }
 
       const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => fd.append(k, v ?? ""));
+      Object.entries(form).forEach(([k, v]) => {
+        if (k === "is_public" || k === "is_job_posting") {
+          fd.append(k, v ? "true" : "false");
+        } else {
+          fd.append(k, v ?? "");
+        }
+      });
       if (cover) fd.append("cover_image", cover);
 
       const { data } = await api.post("/projects/", fd, {
@@ -362,6 +369,7 @@ export default function Dashboard() {
         highlights: "",
         material_url: "",
         material_label: "",
+        is_job_posting: false, // NEW
       });
       setCover(null);
       setCreateOk(true);
@@ -570,8 +578,6 @@ export default function Dashboard() {
                   fav.project_highlights ||
                   fav.project?.highlights;
 
-
-
                 const removing = removingFavoriteId === projectId;
 
                 return (
@@ -690,198 +696,18 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* 1) CREATE PROJECT — collapsible */}
-      <Card className="p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-800">
-            Create Project
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge>{owned.length} owned</Badge>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          className="mb-3"
-          onClick={() => setShowCreate((v) => !v)}
-        >
-          {showCreate ? "Hide project form" : "Create new project"}
-        </Button>
-
-        {showCreate && (
-          <>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Project Info (Draft)
-            </div>
-
-            <form
-              onSubmit={createProject}
-              className="grid grid-cols-1 gap-3 md:grid-cols-2"
-            >
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Project Name
-                </label>
-                <Input
-                  placeholder="e.g. Lake House Revamp"
-                  value={form.title}
-                  onChange={(e) =>
-                    setForm({ ...form, title: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Category
-                </label>
-                <Input
-                  placeholder="e.g. Residential"
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm({ ...form, category: e.target.value })
-                  }
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm text-slate-600">
-                  Summary
-                </label>
-                <Textarea
-                  placeholder="One or two sentences…"
-                  value={form.summary}
-                  onChange={(e) =>
-                    setForm({ ...form, summary: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Location (not address)
-                </label>
-                <Input
-                  placeholder="City, State (optional)"
-                  value={form.location}
-                  onChange={(e) =>
-                    setForm({ ...form, location: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Budget
-                </label>
-                <Input
-                  placeholder="e.g. 250000"
-                  inputMode="numeric"
-                  value={form.budget}
-                  onChange={(e) =>
-                    setForm({ ...form, budget: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Square Feet
-                </label>
-                <Input
-                  placeholder="e.g. 1800"
-                  inputMode="numeric"
-                  value={form.sqf}
-                  onChange={(e) =>
-                    setForm({ ...form, sqf: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Highlights (tags / text)
-                </label>
-                <Input
-                  placeholder="comma-separated: modern, lake-view"
-                  value={form.highlights}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      highlights: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Material / tool link (optional)
-                </label>
-                <Input
-                  placeholder="https://www.example.com/product/123"
-                  value={form.material_url}
-                  onChange={(e) =>
-                    setForm({ ...form, material_url: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Material label (title + price)
-                </label>
-                <Input
-                  placeholder="e.g. Bosch SDS Hammer Drill – $129"
-                  value={form.material_label}
-                  onChange={(e) =>
-                    setForm({ ...form, material_label: e.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Cover (optional)
-                </label>
-                <input
-                  type="file"
-                  onChange={(e) =>
-                    setCover(e.target.files?.[0] || null)
-                  }
-                />
-                {cover && (
-                  <div className="mt-1 truncate text-xs text-slate-500">
-                    {cover.name}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mr-2 align-middle"
-                    checked={form.is_public}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        is_public: e.target.checked,
-                      })
-                    }
-                  />
-                  Public
-                </label>
-              </div>
-              <div className="md:col-span-2">
-                {createErr && (
-                  <div className="md:col-span-2 text-sm text-red-700">
-                    {createErr}
-                  </div>
-                )}
-                {createOk && !createErr && (
-                  <div className="md:col-span-2 text-sm text-green-700">
-                    Project created.
-                  </div>
-                )}
-                <Button disabled={busy}>Create Project</Button>
-              </div>
-            </form>
-          </>
-        )}
-      </Card>
+      {/* 1) CREATE PROJECT — now collapsible reusable card */}
+      <CreateProjectCard
+        ownedCount={owned.length}
+        form={form}
+        setForm={setForm}
+        cover={cover}
+        setCover={setCover}
+        busy={busy}
+        error={createErr}
+        success={createOk}
+        onSubmit={createProject}
+      />
 
       {/* 2) YOUR PROJECTS */}
       <Card className="p-5">
@@ -893,8 +719,7 @@ export default function Dashboard() {
         </div>
 
         {list.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-s
- 50 p-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             You don’t have any projects yet.
           </div>
         ) : (

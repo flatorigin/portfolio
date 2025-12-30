@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
+import ProjectEditorCard from "../components/ProjectEditorCard";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -24,18 +25,28 @@ function buildMapSrc(location) {
 export default function ProjectDetail() {
   const { id } = useParams();
 
-  // project + media
+  // project + media (public view)
   const [project, setProject] = useState(null);
   const [images, setImages] = useState([]);
 
-  // edit project state
+  // edit project state (for ProjectEditorCard)
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    summary: "",
+    category: "",
+    is_public: true,
+    location: "",
+    budget: "",
+    sqf: "",
+    highlights: "",
+    material_url: "",
+    material_label: "",
+  });
+  const [editCoverFile, setEditCoverFile] = useState(null);
+  const [editImages, setEditImages] = useState([]); // [{id,url,caption,_localCaption,_saving}]
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
-
-  // extra materials / links rows in the edit form
-  const [extraLinks, setExtraLinks] = useState([]);
 
   // current user
   const [meUser, setMeUser] = useState(null);
@@ -85,72 +96,6 @@ export default function ProjectDetail() {
     })();
   }, [authed]);
 
-  // ─────────────────────────────
-  // LOAD PROJECT + IMAGES + COMMENTS
-  // ─────────────────────────────
-  const fetchAll = useCallback(async () => {
-    try {
-      const [{ data: meta }, { data: imgs }, { data: cmts }] =
-        await Promise.all([
-          api.get(`/projects/${id}/`),
-          api.get(`/projects/${id}/images/`),
-          api.get(`/projects/${id}/comments/`).catch(() => ({ data: [] })),
-        ]);
-
-      setProject(meta || null);
-
-      setImages(
-        (imgs || [])
-          .map((x) => ({
-            url: toUrl(x.url || x.image || x.src || x.file),
-            caption: x.caption || "",
-          }))
-          .filter((x) => !!x.url)
-      );
-
-      setComments(Array.isArray(cmts) ? cmts : []);
-
-      // init editData + extraLinks from meta
-      if (meta) {
-        setEditData({
-          title: meta.title || "",
-          summary: meta.summary || "",
-          location: meta.location || "",
-          budget: meta.budget || "",
-          sqf: meta.sqf || "",
-          highlights: meta.highlights || "",
-          material_label: meta.material_label || "",
-          material_url: meta.material_url || "",
-          // 🔹 NEW: carry the job flag into edit state
-          is_job_posting: !!meta.is_job_posting,
-        });
-
-        setExtraLinks(
-          Array.isArray(meta.extra_links)
-            ? meta.extra_links.map((row) => ({
-                label: row.label || "",
-                url: row.url || "",
-              }))
-            : []
-        );
-      } else {
-        setEditData(null);
-        setExtraLinks([]);
-      }
-    } catch (err) {
-      console.error("[ProjectDetail] fetch failed:", err);
-      setProject(null);
-      setImages([]);
-      setComments([]);
-      setEditData(null);
-      setExtraLinks([]);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
-
   const isOwnerUser =
     authed &&
     project &&
@@ -159,6 +104,99 @@ export default function ProjectDetail() {
       (meUser.username || "").toLowerCase();
 
   const myUsername = meUser?.username || null;
+
+  // ─────────────────────────────
+  // IMAGES (for both public view + editor card)
+  // ─────────────────────────────
+  const refreshImages = useCallback(async () => {
+    if (!id) return;
+    try {
+      const { data } = await api.get(`/projects/${id}/images/`);
+      const raw = Array.isArray(data) ? data : [];
+
+      const publicImages = raw
+        .map((x) => ({
+          url: toUrl(x.url || x.image || x.src || x.file),
+          caption: x.caption || "",
+        }))
+        .filter((x) => !!x.url);
+
+      const editableImages = raw
+        .map((x) => ({
+          id: x.id,
+          url: toUrl(x.url || x.image || x.src || x.file),
+          caption: x.caption || "",
+          _localCaption: x.caption || "",
+          _saving: false,
+        }))
+        .filter((x) => !!x.url);
+
+      setImages(publicImages);
+      setEditImages(editableImages);
+    } catch (err) {
+      console.error("[ProjectDetail] refreshImages failed:", err);
+      setImages([]);
+      setEditImages([]);
+    }
+  }, [id]);
+
+  // ─────────────────────────────
+  // LOAD PROJECT + COMMENTS (+ IMAGES via refreshImages)
+  // ─────────────────────────────
+  const fetchAll = useCallback(async () => {
+    if (!id) return;
+    try {
+      const [{ data: meta }, { data: cmts }] = await Promise.all([
+        api.get(`/projects/${id}/`),
+        api.get(`/projects/${id}/comments/`).catch(() => ({ data: [] })),
+      ]);
+
+      setProject(meta || null);
+      setComments(Array.isArray(cmts) ? cmts : []);
+
+      if (meta) {
+        setEditForm({
+          title: meta.title || "",
+          summary: meta.summary || "",
+          category: meta.category || "",
+          is_public: meta.is_public ?? true,
+          location: meta.location || "",
+          budget: meta.budget ?? "",
+          sqf: meta.sqf ?? "",
+          highlights: meta.highlights || "",
+          material_url: meta.material_url || "",
+          material_label: meta.material_label || "",
+        });
+        setEditCoverFile(null);
+      } else {
+        setEditForm({
+          title: "",
+          summary: "",
+          category: "",
+          is_public: true,
+          location: "",
+          budget: "",
+          sqf: "",
+          highlights: "",
+          material_url: "",
+          material_label: "",
+        });
+        setEditCoverFile(null);
+      }
+
+      await refreshImages();
+    } catch (err) {
+      console.error("[ProjectDetail] fetchAll failed:", err);
+      setProject(null);
+      setImages([]);
+      setComments([]);
+      setEditImages([]);
+    }
+  }, [id, refreshImages]);
+
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
   // ─────────────────────────────
   // INITIAL SAVED STATE
@@ -183,11 +221,7 @@ export default function ProjectDetail() {
     (async () => {
       try {
         const { data } = await api.get(`/projects/${project.id}/favorite/`);
-        const favored =
-          data?.is_favorited ??
-          data?.favorited ??
-          true;
-
+        const favored = data?.is_favorited ?? data?.favorited ?? true;
         if (!cancelled) setIsSaved(!!favored);
       } catch (err) {
         if (cancelled) return;
@@ -238,7 +272,7 @@ export default function ProjectDetail() {
   }
 
   // ─────────────────────────────
-  // IMAGE NAVIGATION
+  // IMAGE NAVIGATION (for modal)
   // ─────────────────────────────
   const nextImage = useCallback(() => {
     if (!images.length) return;
@@ -390,77 +424,64 @@ export default function ProjectDetail() {
   }
 
   // ─────────────────────────────
-  // PROJECT EDIT SAVE HANDLER
+  // PROJECT EDIT SAVE HANDLERS (for ProjectEditorCard)
   // ─────────────────────────────
   async function handleSaveEdits(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!editData || !project) return;
+    if (e?.preventDefault) e.preventDefault();
+    if (!project) return;
 
     setSavingEdits(true);
     setEditError("");
-
-    const normalizeText = (val) => {
-      if (val === undefined || val === null) return "";
-      return String(val).trim();
-    };
-
-    const normalizeNumber = (val) => {
-      if (val === undefined || val === null) return null;
-      const s = String(val).trim();
-      if (!s) return null;
-      const cleaned = s.replace(/,/g, "");
-      const n = Number(cleaned);
-      return Number.isNaN(n) ? null : n;
-    };
 
     try {
       const projectId = project.id;
       if (!projectId) throw new Error("Missing project id");
 
       const payload = {
-        title: normalizeText(editData.title),
-        summary: normalizeText(editData.summary),
-        location: normalizeText(editData.location),
-        budget: normalizeNumber(editData.budget),
-        sqf: normalizeNumber(editData.sqf),
-        highlights: normalizeText(editData.highlights),
-        material_label: normalizeText(editData.material_label),
-        material_url: normalizeText(editData.material_url),
-        extra_links: extraLinks
-          .filter((row) => row.label || row.url)
-          .map((row) => ({
-            label: row.label.trim(),
-            url: row.url.trim(),
-          })),
-        // 🔹 NEW: send the job posting flag as a real boolean
-        is_job_posting: !!editData.is_job_posting,
+        title: editForm.title || "",
+        summary: editForm.summary || "",
+        category: editForm.category || "",
+        is_public: !!editForm.is_public,
+        location: editForm.location || "",
+        budget: editForm.budget ?? "",
+        sqf: editForm.sqf ?? "",
+        highlights: editForm.highlights || "",
+        material_url: editForm.material_url || "",
+        material_label: editForm.material_label || "",
       };
 
-      console.log("[handleSaveEdits] sending payload:", payload);
-
-      const { data } = await api.patch(`/projects/${projectId}/`, payload);
+      let data;
+      if (editCoverFile) {
+        const fd = new FormData();
+        Object.entries(payload).forEach(([k, v]) =>
+          fd.append(k, v == null ? "" : v)
+        );
+        fd.append("cover_image", editCoverFile);
+        const resp = await api.patch(`/projects/${projectId}/`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        data = resp.data;
+      } else {
+        const resp = await api.patch(`/projects/${projectId}/`, payload);
+        data = resp.data;
+      }
 
       setProject(data);
-      setEditData({
+      setEditForm({
         title: data.title || "",
         summary: data.summary || "",
+        category: data.category || "",
+        is_public: data.is_public ?? true,
         location: data.location || "",
         budget: data.budget ?? "",
         sqf: data.sqf ?? "",
         highlights: data.highlights || "",
-        material_label: data.material_label || "",
         material_url: data.material_url || "",
-        is_job_posting: !!data.is_job_posting,
+        material_label: data.material_label || "",
       });
-      setExtraLinks(
-        Array.isArray(data.extra_links)
-          ? data.extra_links.map((row) => ({
-              label: row.label || "",
-              url: row.url || "",
-            }))
-          : []
-      );
+      setEditCoverFile(null);
 
+      await refreshImages();
       setIsEditing(false);
     } catch (err) {
       console.error("[handleSaveEdits] error:", err?.response || err);
@@ -488,24 +509,47 @@ export default function ProjectDetail() {
     }
   }
 
-  function addLinkRow() {
-    setExtraLinks((prev) => [...prev, { label: "", url: "" }]);
-  }
-
-  function updateLinkRow(index, field, value) {
-    setExtraLinks((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
+  async function handleSaveImageCaption(img) {
+    if (!project || !img?.id) return;
+    setEditImages((prev) =>
+      prev.map((x) => (x.id === img.id ? { ...x, _saving: true } : x))
     );
+    try {
+      await api.patch(`/projects/${project.id}/images/${img.id}/`, {
+        caption: img._localCaption,
+      });
+      await refreshImages();
+    } catch (e) {
+      alert(
+        e?.response?.data ? JSON.stringify(e.response.data) : String(e)
+      );
+      setEditImages((prev) =>
+        prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x))
+      );
+    }
   }
 
-  function removeLinkRow(index) {
-    setExtraLinks((prev) => prev.filter((_, i) => i !== index));
+  async function handleDeleteImage(img) {
+    if (!project || !img?.id) return;
+    if (!window.confirm("Delete this image? This cannot be undone.")) return;
+    try {
+      await api.delete(`/projects/${project.id}/images/${img.id}/`);
+      await refreshImages();
+    } catch (e) {
+      console.error("delete image error:", e?.response || e);
+      alert("Failed to delete image.");
+    }
   }
 
   const mapSrc = buildMapSrc(project?.location || "");
 
+  const currentImage =
+    images.length && activeImageIdx >= 0
+      ? images[Math.min(activeImageIdx, images.length - 1)]
+      : null;
+
   // ─────────────────────────────
-  // RENDER HELPERS
+  // RENDER
   // ─────────────────────────────
   const renderCommentBlock = (c, isReply = false) => {
     const replies = repliesByParent[c.id] || [];
@@ -614,14 +658,6 @@ export default function ProjectDetail() {
     );
   };
 
-  const currentImage =
-    images.length && activeImageIdx >= 0
-      ? images[Math.min(activeImageIdx, images.length - 1)]
-      : null;
-
-  // ─────────────────────────────
-  // RENDER
-  // ─────────────────────────────
   return (
     <div>
       {/* Breadcrumb */}
@@ -650,8 +686,8 @@ export default function ProjectDetail() {
           className={
             "border-b border-slate-100 px-5 py-4 text-white sm:px-6 " +
             (project?.is_job_posting
-              ? "bg-[#37C5F0]" // 💙 job posting header color
-              : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900") // default
+              ? "bg-[#37C5F0]"
+              : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900")
           }
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -667,7 +703,7 @@ export default function ProjectDetail() {
                   </span>
                 )}
                 {project?.owner_username && (
-                  <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
+                  <span className="inline-flex items-center rounded-full bg.white/5 px-2 py-0.5 text-[11px]">
                     by {project.owner_username}
                   </span>
                 )}
@@ -714,7 +750,6 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-
         {/* body */}
         <div className="space-y-6 p-4 sm:p-6">
           {project?.summary && (
@@ -723,267 +758,32 @@ export default function ProjectDetail() {
             </p>
           )}
 
-          {/* OWNER-ONLY PROJECT EDIT FORM */}
-          {isOwnerUser && isEditing && editData && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
-                Edit project
-              </div>
-
-              <form onSubmit={handleSaveEdits} className="space-y-3">
-                {/* Title */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Title
-                  </label>
-                  <input
-                    className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                    value={editData.title}
-                    onChange={(e) =>
-                      setEditData((prev) => ({ ...prev, title: e.target.value }))
-                    }
-                  />
-                </div>
-
-                {/* Summary */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Summary
-                  </label>
-                  <Textarea
-                    rows={3}
-                    value={editData.summary}
-                    onChange={(e) =>
-                      setEditData((prev) => ({
-                        ...prev,
-                        summary: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                {/* Location / Budget / Sq Ft */}
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Location
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={editData.location}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          location: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Budget
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={editData.budget}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          budget: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Sq Ft
-                    </label>
-                    <input
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={editData.sqf}
-                      onChange={(e) =>
-                        setEditData((prev) => ({
-                          ...prev,
-                          sqf: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* 🔹 Job posting toggle */}
-                <div className="flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
-                  <input
-                    id="is_job_posting"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-slate-900"
-                    checked={!!editData.is_job_posting}
-                    onChange={(e) =>
-                      setEditData((prev) => ({
-                        ...prev,
-                        is_job_posting: e.target.checked,
-                      }))
-                    }
-                  />
-                  <label
-                    htmlFor="is_job_posting"
-                    className="text-xs text-slate-800"
-                  >
-                    This is a{" "}
-                    <span className="font-semibold">job posting</span>{" "}
-                    <span className="text-slate-500">
-                      (clients can contact me to hire).
-                    </span>
-                  </label>
-                </div>
-
-                {/* Highlights */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Highlights
-                  </label>
-                  <Textarea
-                    rows={2}
-                    value={editData.highlights}
-                    onChange={(e) =>
-                      setEditData((prev) => ({
-                        ...prev,
-                        highlights: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                {/* Materials / links */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-medium text-slate-700">
-                      Materials &amp; links
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addLinkRow}
-                      className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                      title="Add another link"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  {/* main label+url row */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Label
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="e.g. Deck boards – Trex"
-                        value={editData.material_label}
-                        onChange={(e) =>
-                          setEditData((prev) => ({
-                            ...prev,
-                            material_label: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Link
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="https://…"
-                        value={editData.material_url}
-                        onChange={(e) =>
-                          setEditData((prev) => ({
-                            ...prev,
-                            material_url: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  {/* extra link rows */}
-                  {extraLinks.length > 0 && (
-                    <div className="space-y-2">
-                      {extraLinks.map((row, index) => (
-                        <div
-                          key={index}
-                          className="grid gap-2 sm:grid-cols-[1fr_minmax(0,1.4fr)_auto]"
-                        >
-                          <input
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="Label"
-                            value={row.label}
-                            onChange={(e) =>
-                              updateLinkRow(index, "label", e.target.value)
-                            }
-                          />
-                          <input
-                            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-                            placeholder="https://…"
-                            value={row.url}
-                            onChange={(e) =>
-                              updateLinkRow(index, "url", e.target.value)
-                            }
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeLinkRow(index)}
-                            className="self-center text-[11px] text-slate-500 hover:text-red-500"
-                            title="Remove this link"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      if (project) {
-                        setEditData({
-                          title: project.title || "",
-                          summary: project.summary || "",
-                          location: project.location || "",
-                          budget: project.budget || "",
-                          sqf: project.sqf || "",
-                          highlights: project.highlights || "",
-                          material_label: project.material_label || "",
-                          material_url: project.material_url || "",
-                          is_job_posting: !!project.is_job_posting,
-                        });
-                        setExtraLinks(
-                          Array.isArray(project.extra_links)
-                            ? project.extra_links.map((row) => ({
-                                label: row.label || "",
-                                url: row.url || "",
-                              }))
-                            : []
-                        );
-                      }
-                      setIsEditing(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={savingEdits}>
-                    {savingEdits ? "Saving…" : "Save"}
-                  </Button>
-                </div>
-              </form>
-
+          {/* OWNER-ONLY PROJECT EDIT CARD (same style/content as ProjectEditorCard) */}
+          {isOwnerUser && isEditing && project && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0">
+              <ProjectEditorCard
+                mode="edit"
+                projectId={project.id}
+                form={editForm}
+                setForm={setEditForm}
+                coverFile={editCoverFile}
+                setCoverFile={setEditCoverFile}
+                busy={savingEdits}
+                images={editImages}
+                setImages={setEditImages}
+                onSaveImageCaption={handleSaveImageCaption}
+                onDeleteImage={handleDeleteImage}
+                onSubmit={handleSaveEdits}
+                onClose={() => setIsEditing(false)}
+                onView={() => window.open(`/projects/${project.id}`, "_self")}
+                onAfterUpload={async () => {
+                  await refreshImages();
+                }}
+              />
               {editError && (
-                <p className="mt-2 text-xs text-red-600">{editError}</p>
+                <p className="px-5 pb-3 pt-1 text-xs text-red-600">
+                  {editError}
+                </p>
               )}
             </div>
           )}
