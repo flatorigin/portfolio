@@ -36,6 +36,7 @@ export default function ProjectDetail() {
     summary: "",
     category: "",
     is_public: true,
+    is_job_posting: false,
     location: "",
     budget: "",
     sqf: "",
@@ -43,8 +44,9 @@ export default function ProjectDetail() {
     material_url: "",
     material_label: "",
   });
-  const [editCoverFile, setEditCoverFile] = useState(null);
+  const [editCoverFile, setEditCoverFile] = useState(null); // kept for backwards-compatibility (not used in UI)
   const [editImages, setEditImages] = useState([]); // [{id,url,caption,_localCaption,_saving}]
+  const [editCoverImageId, setEditCoverImageId] = useState(null); // cover image selected from images list
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -116,6 +118,7 @@ export default function ProjectDetail() {
 
       const publicImages = raw
         .map((x) => ({
+          id: x.id,
           url: toUrl(x.url || x.image || x.src || x.file),
           caption: x.caption || "",
         }))
@@ -133,12 +136,18 @@ export default function ProjectDetail() {
 
       setImages(publicImages);
       setEditImages(editableImages);
+
+      // if we already know cover_image_id from project, keep it;
+      // otherwise, if server sent "cover" flag in image rows, you can set here.
+      if (project?.cover_image_id) {
+        setEditCoverImageId(project.cover_image_id);
+      }
     } catch (err) {
       console.error("[ProjectDetail] refreshImages failed:", err);
       setImages([]);
       setEditImages([]);
     }
-  }, [id]);
+  }, [id, project?.cover_image_id]);
 
   // ─────────────────────────────
   // LOAD PROJECT + COMMENTS (+ IMAGES via refreshImages)
@@ -160,6 +169,7 @@ export default function ProjectDetail() {
           summary: meta.summary || "",
           category: meta.category || "",
           is_public: meta.is_public ?? true,
+          is_job_posting: !!meta.is_job_posting,
           location: meta.location || "",
           budget: meta.budget ?? "",
           sqf: meta.sqf ?? "",
@@ -168,12 +178,14 @@ export default function ProjectDetail() {
           material_label: meta.material_label || "",
         });
         setEditCoverFile(null);
+        setEditCoverImageId(meta.cover_image_id ?? null);
       } else {
         setEditForm({
           title: "",
           summary: "",
           category: "",
           is_public: true,
+          is_job_posting: false,
           location: "",
           budget: "",
           sqf: "",
@@ -182,6 +194,7 @@ export default function ProjectDetail() {
           material_label: "",
         });
         setEditCoverFile(null);
+        setEditCoverImageId(null);
       }
 
       await refreshImages();
@@ -191,6 +204,7 @@ export default function ProjectDetail() {
       setImages([]);
       setComments([]);
       setEditImages([]);
+      setEditCoverImageId(null);
     }
   }, [id, refreshImages]);
 
@@ -370,8 +384,8 @@ export default function ProjectDetail() {
 
   function replyAsOwnerTo(comment) {
     if (!isOwnerUser) return;
-    setReplyingTo(comment);
     const handle = comment.author_username ? `@${comment.author_username} ` : "";
+    setReplyingTo(comment);
     setCommentText((prev) => {
       if (prev.trim().startsWith(handle.trim())) return prev;
       return handle + prev;
@@ -442,15 +456,18 @@ export default function ProjectDetail() {
         summary: editForm.summary || "",
         category: editForm.category || "",
         is_public: !!editForm.is_public,
+        is_job_posting: !!editForm.is_job_posting,
         location: editForm.location || "",
         budget: editForm.budget ?? "",
         sqf: editForm.sqf ?? "",
         highlights: editForm.highlights || "",
         material_url: editForm.material_url || "",
         material_label: editForm.material_label || "",
+        cover_image_id: editCoverImageId || null,
       };
 
       let data;
+      // Cover file branch kept just in case, but normally cover is chosen via cover_image_id
       if (editCoverFile) {
         const fd = new FormData();
         Object.entries(payload).forEach(([k, v]) =>
@@ -472,6 +489,7 @@ export default function ProjectDetail() {
         summary: data.summary || "",
         category: data.category || "",
         is_public: data.is_public ?? true,
+        is_job_posting: !!data.is_job_posting,
         location: data.location || "",
         budget: data.budget ?? "",
         sqf: data.sqf ?? "",
@@ -480,6 +498,7 @@ export default function ProjectDetail() {
         material_label: data.material_label || "",
       });
       setEditCoverFile(null);
+      setEditCoverImageId(data.cover_image_id ?? null);
 
       await refreshImages();
       setIsEditing(false);
@@ -703,7 +722,7 @@ export default function ProjectDetail() {
                   </span>
                 )}
                 {project?.owner_username && (
-                  <span className="inline-flex items-center rounded-full bg.white/5 px-2 py-0.5 text-[11px]">
+                  <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
                     by {project.owner_username}
                   </span>
                 )}
@@ -779,6 +798,8 @@ export default function ProjectDetail() {
                 onAfterUpload={async () => {
                   await refreshImages();
                 }}
+                coverImageId={editCoverImageId}
+                setCoverImageId={setEditCoverImageId}
               />
               {editError && (
                 <p className="px-5 pb-3 pt-1 text-xs text-red-600">
@@ -861,10 +882,16 @@ export default function ProjectDetail() {
                   {project?.material_url && (
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
                       <span className="text-xs text-slate-500">
-                        {new URL(project.material_url).hostname
-                          .replace(/^www\./, "")
-                          .slice(0, 2)
-                          .toUpperCase()}
+                        {(() => {
+                          try {
+                            return new URL(project.material_url).hostname
+                              .replace(/^www\./, "")
+                              .slice(0, 2)
+                              .toUpperCase();
+                          } catch {
+                            return "Lk";
+                          }
+                        })()}
                       </span>
                     </div>
                   )}
@@ -936,7 +963,7 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Project media (hero-ish grid) */}
+          {/* Project media – BLOCK CARD layout (no full-width stretching) */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -954,7 +981,7 @@ export default function ProjectDetail() {
                 No media uploaded for this project.
               </div>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+              <div className="flex flex-wrap gap-4">
                 {images.map((img, i) => (
                   <button
                     type="button"
@@ -963,12 +990,12 @@ export default function ProjectDetail() {
                       setActiveImageIdx(i);
                       setCommentsOpen(true);
                     }}
-                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white text-left"
+                    className="group w-full max-w-xs overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
                   >
                     <img
                       src={img.url}
                       alt={img.caption || ""}
-                      className="block h-[170px] w-full object-cover transition-transform group-hover:scale-[1.02]"
+                      className="block h-40 w-full object-cover transition-transform group-hover:scale-[1.02]"
                     />
                     {img.caption && (
                       <div className="px-3 py-2 text-xs text-slate-700">

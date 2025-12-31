@@ -17,8 +17,8 @@ export default function ProjectEditorCard({
   projectId,                     // id when editing, optional for create
   form,                          // { title, summary, category, ... }
   setForm,                       // setForm(prev => ({...prev, field }))
-  coverFile,
-  setCoverFile,
+  coverFile,                     // (kept in signature but unused after cover refactor)
+  setCoverFile,                  // (kept for backwards compatibility; not used)
   busy = false,
   images = [],                   // [{ id, url, caption, _localCaption, _saving }]
   setImages,                     // setImages(prev => [...])
@@ -28,6 +28,10 @@ export default function ProjectEditorCard({
   onClose,                       // () => void
   onView,                        // () => void (open public project page)
   onAfterUpload,                 // async () => { refresh images + projects }
+
+  // 🔹 NEW: cover image selection (id from images[])
+  coverImageId,
+  setCoverImageId,
 }) {
   const headerTitle =
     mode === "edit"
@@ -38,6 +42,17 @@ export default function ProjectEditorCard({
 
   const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
   const isJobPosting = !!form.is_job_posting;
+
+  const handleSubmit = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (onSubmit) onSubmit(e);
+  };
+
+  const handleToggleJob = () =>
+    setForm((prev) => ({
+      ...prev,
+      is_job_posting: !prev.is_job_posting,
+    }));
 
   return (
     <Card className="p-5">
@@ -64,12 +79,7 @@ export default function ProjectEditorCard({
           {/* Switch */}
           <button
             type="button"
-            onClick={() =>
-              setForm((prev) => ({
-                ...prev,
-                is_job_posting: !prev.is_job_posting,
-              }))
-            }
+            onClick={handleToggleJob}
             aria-pressed={isJobPosting}
             className={
               "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
@@ -77,6 +87,8 @@ export default function ProjectEditorCard({
                 ? "bg-sky-500 border-sky-500"
                 : "bg-slate-200 border-slate-300")
             }
+            role="switch"
+            aria-checked={isJobPosting}
           >
             <span
               className={
@@ -91,7 +103,17 @@ export default function ProjectEditorCard({
               Job Posting
             </div>
             <div className="text-[11px] text-sky-700/90">
-              Mark this project as a job opportunity clients can respond to.
+              {isJobPosting ? (
+                <>
+                  This project is marked as a job posting and will appear on
+                  the public <span className="font-semibold">&quot;Find local work&quot;</span> page.
+                </>
+              ) : (
+                <>
+                  Turn this on to mark the project as a job posting clients can
+                  respond to.
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -115,11 +137,7 @@ export default function ProjectEditorCard({
       </div>
 
       <form
-        onSubmit={(e) => {
-          // still support Enter-to-submit
-          e.preventDefault();
-          if (onSubmit) onSubmit(e);
-        }}
+        onSubmit={handleSubmit}
         className="grid grid-cols-1 gap-3 md:grid-cols-2"
       >
         <div>
@@ -250,21 +268,6 @@ export default function ProjectEditorCard({
           />
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Cover (replace)
-          </label>
-          <input
-            type="file"
-            onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-          />
-          {coverFile && (
-            <div className="mt-1 truncate text-xs text-slate-500">
-              {coverFile.name}
-            </div>
-          )}
-        </div>
-
         {/* Public checkbox */}
         <div className="flex items-center gap-2">
           <label className="text-sm text-slate-600">
@@ -283,7 +286,7 @@ export default function ProjectEditorCard({
           </label>
         </div>
 
-        {/* Hidden submit so Enter works, but visible button is at bottom of card */}
+        {/* Hidden submit so Enter works; main button is at bottom */}
         <div className="md:col-span-2">
           <button type="submit" className="hidden">
             {submitLabel}
@@ -315,6 +318,27 @@ export default function ProjectEditorCard({
                       alt=""
                       className="mb-2 h-36 w-full rounded-md object-cover"
                     />
+
+                    {/* Cover selector */}
+                    {setCoverImageId && (
+                      <div className="mb-2 flex items-center justify-between text-xs">
+                        <label className="flex items-center gap-1 text-slate-700">
+                          <input
+                            type="radio"
+                            name={`cover-image-${projectId}`}
+                            checked={coverImageId === it.id}
+                            onChange={() => setCoverImageId(it.id)}
+                          />
+                          <span>Use as cover image</span>
+                        </label>
+                        {coverImageId === it.id && (
+                          <span className="rounded-full bg-sky-50 px-2 py-[2px] text-[10px] font-semibold text-sky-700">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <input
                       className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
                       placeholder="Caption…"
@@ -344,6 +368,7 @@ export default function ProjectEditorCard({
                         Delete
                       </GhostButton>
                       <Button
+                        type="button"
                         onClick={() => onSaveImageCaption(it)}
                         disabled={
                           it._saving || it._localCaption === it.caption
@@ -364,11 +389,12 @@ export default function ProjectEditorCard({
               Add Images
             </div>
             <div className="mb-2 text-xs text-slate-600">
-              Drag & drop or click; add captions; upload.
+              Drag &amp; drop or click; add captions; upload.
             </div>
             <ImageUploader
               projectId={projectId}
               onUploaded={async () => {
+                // 🔧 Important for image saving UX: refresh parent state
                 if (onAfterUpload) {
                   await onAfterUpload();
                 }

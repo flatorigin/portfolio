@@ -1,6 +1,6 @@
 // =======================================
 // file: frontend/src/components/CreateProjectCard.jsx
-// Collapsible "Create Project" card + image fields + job posting toggle
+// Collapsible "Create Project" card + job posting toggle
 // =======================================
 import { useState } from "react";
 import { Card, Input, Textarea, Button, Badge } from "../ui";
@@ -19,7 +19,7 @@ export default function CreateProjectCard({
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
-  // Local images (preview only for now)
+  // Local images (preview only, not yet uploaded)
   const [images, setImages] = useState([]);
 
   const toggleOpen = () => setIsOpen((v) => !v);
@@ -86,7 +86,7 @@ export default function CreateProjectCard({
 
       {isOpen && (
         <>
-          {/* 🔹 Job Posting banner at the very top (same idea as editor card) */}
+          {/* Job Posting banner at the very top */}
           <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
@@ -107,7 +107,17 @@ export default function CreateProjectCard({
               </button>
             </div>
             <p className="mt-1 text-[11px] text-sky-800">
-              Mark this project as a job opportunity clients can respond to.
+              {jobOn ? (
+                <>
+                  This project is marked as a job posting and will appear on the
+                  public <span className="font-semibold">&quot;Find local work&quot;</span> page.
+                </>
+              ) : (
+                <>
+                  Turn this on to mark the project as a job posting clients can
+                  respond to.
+                </>
+              )}
             </p>
           </div>
 
@@ -218,7 +228,7 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {/* Material / tool link + label – same as editor card */}
+            {/* Material / tool link + label */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -252,26 +262,8 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {/* Cover upload + public toggle – same layout */}
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div className="flex-1">
-                <label className="mb-1 block text-sm text-slate-600">
-                  Cover (optional)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    setCover(e.target.files?.[0] || null)
-                  }
-                  className="block w-full text-sm"
-                />
-                {cover && (
-                  <div className="mt-1 truncate text-xs text-slate-500">
-                    {cover.name}
-                  </div>
-                )}
-              </div>
+            {/* Public toggle */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
@@ -288,7 +280,7 @@ export default function CreateProjectCard({
               </label>
             </div>
 
-            {/* Images list – same structure, just local preview */}
+            {/* Images list – preview only */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-700">
@@ -326,7 +318,6 @@ export default function CreateProjectCard({
                           }
                         />
                         <div className="flex gap-2">
-                          {/* Just a UI button here – no API yet, so keep it non-submitting */}
                           <Button
                             type="button"
                             variant="outline"
@@ -351,7 +342,7 @@ export default function CreateProjectCard({
               )}
             </div>
 
-            {/* Add images – drag & drop area (same placement as editor card’s uploader) */}
+            {/* Add images – drag & drop area */}
             <div className="space-y-2">
               <div className="text-sm font-medium text-slate-700">
                 Add Images
@@ -384,7 +375,7 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {/* 🔻 FINAL FOOTER: messages + primary action at the very bottom */}
+            {/* Footer: messages + primary action */}
             <div className="space-y-2">
               {error && (
                 <div className="text-sm text-red-700">

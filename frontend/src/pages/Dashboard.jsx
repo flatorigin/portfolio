@@ -206,6 +206,7 @@ export default function Dashboard() {
     summary: "",
     category: "",
     is_public: true,
+    is_job_posting: false,
     location: "",
     budget: "",
     sqf: "",
@@ -286,6 +287,7 @@ export default function Dashboard() {
         summary: meta?.summary || "",
         category: meta?.category || "",
         is_public: !!meta?.is_public,
+        is_job_posting: !!meta?.is_job_posting,
         location: meta?.location || "",
         budget: meta?.budget ?? "",
         sqf: meta?.sqf ?? "",
@@ -325,67 +327,72 @@ export default function Dashboard() {
     tryScroll();
   }, [editingId]);
 
-  async function createProject(e) {
-    e.preventDefault();
-    setCreateErr("");
-    setCreateOk(false);
-    setBusy(true);
-    try {
-      const token = localStorage.getItem("access");
-      if (!token) {
-        setCreateErr("You must be logged in to create a project.");
-        return;
-      }
-
-      if (!form.title.trim()) {
-        setCreateErr("Title is required.");
-        return;
-      }
-
-      const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => {
-        if (k === "is_public" || k === "is_job_posting") {
-          fd.append(k, v ? "true" : "false");
-        } else {
-          fd.append(k, v ?? "");
-        }
-      });
-      if (cover) fd.append("cover_image", cover);
-
-      const { data } = await api.post("/projects/", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setProjects((prev) => [data, ...prev]);
-      await refreshProjects();
-      setForm({
-        title: "",
-        summary: "",
-        category: "",
-        is_public: true,
-        location: "",
-        budget: "",
-        sqf: "",
-        highlights: "",
-        material_url: "",
-        material_label: "",
-        is_job_posting: false, // NEW
-      });
-      setCover(null);
-      setCreateOk(true);
-      if (data?.id) await loadEditor(data.id);
-    } catch (err) {
-      const msg = err?.response?.data
-        ? typeof err.response.data === "string"
-          ? err.response.data
-          : JSON.stringify(err.response.data)
-        : err?.message || String(err);
-      setCreateErr(msg);
-      console.error("[createProject] failed:", err);
-    } finally {
-      setBusy(false);
+async function createProject(e) {
+  e.preventDefault();
+  setCreateErr("");
+  setCreateOk(false);
+  setBusy(true);
+  try {
+    const token = localStorage.getItem("access");
+    if (!token) {
+      setCreateErr("You must be logged in to create a project.");
+      return;
     }
+
+    if (!form.title.trim()) {
+      setCreateErr("Title is required.");
+      return;
+    }
+
+    const fd = new FormData();
+    Object.entries(form).forEach(([k, v]) => {
+      // ensure booleans are serialized clearly
+      if (k === "is_public" || k === "is_job_posting") {
+        fd.append(k, v ? "true" : "false");
+      } else {
+        fd.append(k, v ?? "");
+      }
+    });
+    if (cover) fd.append("cover_image", cover);
+
+    const { data } = await api.post("/projects/", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    setProjects((prev) => [data, ...prev]);
+    await refreshProjects();
+
+    // 🔹 reset form including the job flag
+    setForm({
+      title: "",
+      summary: "",
+      category: "",
+      is_public: true,
+      is_job_posting: false,
+      location: "",
+      budget: "",
+      sqf: "",
+      highlights: "",
+      material_url: "",
+      material_label: "",
+    });
+    setCover(null);
+    setCreateOk(true);
+
+    if (data?.id) await loadEditor(data.id);
+  } catch (err) {
+    const msg = err?.response?.data
+      ? typeof err.response.data === "string"
+        ? err.response.data
+        : JSON.stringify(err.response.data)
+      : err?.message || String(err);
+    setCreateErr(msg);
+    console.error("[createProject] failed:", err);
+  } finally {
+    setBusy(false);
   }
+}
+
 
   async function saveProjectInfo(e) {
     e?.preventDefault?.();
