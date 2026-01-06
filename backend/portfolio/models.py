@@ -35,7 +35,13 @@ def project_image_upload_path(instance, filename):
 
 
 class Project(models.Model):
-    cover_image = models.ImageField(upload_to="project_covers/", blank=True, null=True)
+    cover_image = models.ForeignKey(
+        "ProjectImage",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="cover_for_projects",
+    )   
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects")
 
     title = models.CharField(max_length=255)

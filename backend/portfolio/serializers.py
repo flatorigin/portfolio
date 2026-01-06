@@ -35,7 +35,6 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
             "is_owner",
             "text",
             "created_at",
-            "is_job_posting",
         ]
         read_only_fields = [
             "id",
@@ -56,12 +55,12 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="owner.username", read_only=True)
-    is_job_posting = serializers.BooleanField(required=False)
     images = ProjectImageSerializer(many=True, read_only=True)
+    cover_image_url = serializers.SerializerMethodField()  # ✅ add this
 
     class Meta:
         model = Project
-        fields = (
+        fields = [
             "id",
             "owner",
             "owner_username",
@@ -80,18 +79,28 @@ class ProjectSerializer(serializers.ModelSerializer):
             "images",
             "material_url",
             "material_label",
-            "extra_links",  # 🔹 NEW
-            "is_job_posting",
-
-        )
-        read_only_fields = (
+            "extra_links",
+            "cover_image_url",  # ✅ keep this
+        ]
+        read_only_fields = [
             "id",
             "owner",
             "owner_username",
             "created_at",
             "updated_at",
             "images",
-        )
+            "cover_image_url",
+        ]
+
+    def get_cover_image_url(self, obj):
+        # cover is the first image by order (unique order=0 after the view patch)
+        cover = obj.images.order_by("order", "id").first()
+        if cover and cover.image:
+            request = self.context.get("request")
+            url = cover.image.url
+            return request.build_absolute_uri(url) if request else url
+        return None
+
 
 # ADD THIS NEW SERIALIZER NEAR YOUR OTHER MODEL SERIALIZERS
 class ProjectFavoriteSerializer(serializers.ModelSerializer):

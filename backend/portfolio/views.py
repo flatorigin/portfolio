@@ -1,4 +1,5 @@
 # file: backend/portfolio/views.py
+from django.db import models, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -104,6 +105,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         # Prevent owner from being changed via API
         serializer.save(owner=self.request.user)
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["request"] = self.request
+        return ctx
+
     @action(detail=True, methods=["get", "post"], url_path="images")
     def images(self, request, pk=None):
         """
@@ -146,8 +152,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch", "delete"], url_path="images/(?P<img_id>[^/.]+)")
     def image_detail(self, request, pk=None, img_id=None):
         """
-        PATCH /projects/:id/images/:img_id/   → update caption/alt/order
-        DELETE /projects/:id/images/:img_id/  → delete image
+        PATCH /api/projects/:id/images/:img_id/   → update caption/alt/order (+ cover intent)
+        DELETE /api/projects/:id/images/:img_id/  → delete image
         """
         project = self.get_object()
         try:
@@ -162,53 +168,93 @@ class ProjectViewSet(viewsets.ModelViewSet):
             img.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-        # PATCH
+        # ---- 1) Detect cover intent BEFORE serializer validation
+        cover_keys = ("is_cover", "is_cover_image", "is_cover_photo")
+        wants_cover_flag = any(
+            str(request.data.get(k, "")).lower() in ("1", "true", "yes", "on")
+            for k in cover_keys
+        )
+
+        # ---- 2) Make serializer-friendly mutable data (strip cover flags)
+        data = request.data.copy()
+        for k in cover_keys:
+            if k in data:
+                data.pop(k)
+
         ser = ProjectImageSerializer(
             img,
-            data=request.data,
+            data=data,
             partial=True,
             context={"request": request},
         )
         ser.is_valid(raise_exception=True)
+
+        new_order = ser.validated_data.get("order", None)
+
+        # ---- 3) Plan A: any cover intent OR order=0 means "make this the cover"
+        if wants_cover_flag or new_order == 0:
+            with transaction.atomic():
+                ProjectImage.objects.filter(project=project).exclude(id=img.id).update(
+                    order=models.F("order") + 1
+                )
+                ser.save(order=0)
+
+            # Optional normalize (recommended)
+            with transaction.atomic():
+                qs = list(ProjectImage.objects.filter(project=project).order_by("order", "id"))
+                for idx, row in enumerate(qs):
+                    if row.order != idx:
+                        row.order = idx
+                ProjectImage.objects.bulk_update(qs, ["order"])
+
+            updated = ProjectImage.objects.get(id=img.id)
+            return Response(
+                ProjectImageSerializer(updated, context={"request": request}).data,
+                status=status.HTTP_200_OK
+            )
+
+
+        # normal patch
         ser.save()
         return Response(ser.data, status=status.HTTP_200_OK)
 
-    @action(
-        detail=True,
-        methods=["get", "post", "delete"],
-        permission_classes=[permissions.IsAuthenticated],
-        url_path="favorite",
-    )
-    def favorite(self, request, pk=None):
-        """
-        Favorites for a single project.
 
-        GET    /api/projects/<id>/favorite/   -> {"is_favorited": bool}
-        POST   /api/projects/<id>/favorite/   -> mark as favorite
-        DELETE /api/projects/<id>/favorite/   -> remove favorite
-        """
-        project = self.get_object()
-        user = request.user
+        @action(
+            detail=True,
+            methods=["get", "post", "delete"],
+            permission_classes=[permissions.IsAuthenticated],
+            url_path="favorite",
+        )
+        def favorite(self, request, pk=None):
+            """
+            Favorites for a single project.
 
-        if request.method == "GET":
-            is_favorited = ProjectFavorite.objects.filter(
-                user=user, project=project
-            ).exists()
-            return Response({"is_favorited": is_favorited})
+            GET    /api/projects/<id>/favorite/   -> {"is_favorited": bool}
+            POST   /api/projects/<id>/favorite/   -> mark as favorite
+            DELETE /api/projects/<id>/favorite/   -> remove favorite
+            """
+            project = self.get_object()
+            user = request.user
 
-        if request.method == "POST":
-            favorite, created = ProjectFavorite.objects.get_or_create(
-                user=user,
-                project=project,
-            )
-            return Response(
-                {"is_favorited": True},
-                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-            )
+            if request.method == "GET":
+                is_favorited = ProjectFavorite.objects.filter(
+                    user=user, project=project
+                ).exists()
+                return Response({"is_favorited": is_favorited})
 
-        # DELETE
-        ProjectFavorite.objects.filter(user=user, project=project).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+            if request.method == "POST":
+                favorite, created = ProjectFavorite.objects.get_or_create(
+                    user=user,
+                    project=project,
+                )
+                return Response(
+                    {"is_favorited": True},
+                    status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+                )
+
+            # DELETE
+            ProjectFavorite.objects.filter(user=user, project=project).delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
 class FavoriteProjectListView(generics.ListAPIView):
     """

@@ -1,6 +1,6 @@
 // =======================================
 // file: frontend/src/components/ProjectEditorCard.jsx
-// Standalone card for creating/editing a project + images
+// Standalone card for creating/editing a project + images + job posting + cover selection
 // =======================================
 import ImageUploader from "./ImageUploader";
 import {
@@ -17,8 +17,8 @@ export default function ProjectEditorCard({
   projectId,                     // id when editing, optional for create
   form,                          // { title, summary, category, ... }
   setForm,                       // setForm(prev => ({...prev, field }))
-  coverFile,                     // (kept in signature but unused after cover refactor)
-  setCoverFile,                  // (kept for backwards compatibility; not used)
+  coverFile,                     // kept for backwards compat (no longer used in UI)
+  setCoverFile,                  // kept for backwards compat (no longer used in UI)
   busy = false,
   images = [],                   // [{ id, url, caption, _localCaption, _saving }]
   setImages,                     // setImages(prev => [...])
@@ -28,10 +28,8 @@ export default function ProjectEditorCard({
   onClose,                       // () => void
   onView,                        // () => void (open public project page)
   onAfterUpload,                 // async () => { refresh images + projects }
-
-  // 🔹 NEW: cover image selection (id from images[])
-  coverImageId,
-  setCoverImageId,
+  coverImageId,                  // selected cover image id (from parent)
+  setCoverImageId,               // (id|null) => void
 }) {
   const headerTitle =
     mode === "edit"
@@ -43,16 +41,32 @@ export default function ProjectEditorCard({
   const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
   const isJobPosting = !!form.is_job_posting;
 
-  const handleSubmit = (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (onSubmit) onSubmit(e);
-  };
+  const currentCoverId =
+    coverImageId != null ? coverImageId : form?.cover_image_id ?? null;
 
-  const handleToggleJob = () =>
+  const handleToggleJobPosting = () => {
     setForm((prev) => ({
       ...prev,
       is_job_posting: !prev.is_job_posting,
     }));
+  };
+
+  const handleSelectCover = (imgId) => {
+    const normalized = imgId == null ? null : Number(imgId);
+
+    // Always keep form in sync (some parents read/save from form)
+    setForm((prev) => ({
+      ...prev,
+      cover_image_id: normalized,
+    }));
+
+    // Also keep dedicated cover state in sync (if parent uses it)
+    if (setCoverImageId) {
+      setCoverImageId(normalized);
+    }
+  };
+
+
 
   return (
     <Card className="p-5">
@@ -74,12 +88,19 @@ export default function ProjectEditorCard({
       </div>
 
       {/* Job Posting toggle – TOP of card */}
-      <div className="mb-4 flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+      <div
+        className={
+          "mb-4 flex items-center justify-between rounded-lg border px-3 py-2 " +
+          (isJobPosting
+            ? "border-sky-300 bg-sky-50"
+            : "border-slate-200 bg-slate-50/70")
+        }
+      >
         <div className="flex items-center gap-3">
           {/* Switch */}
           <button
             type="button"
-            onClick={handleToggleJob}
+            onClick={handleToggleJobPosting}
             aria-pressed={isJobPosting}
             className={
               "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
@@ -87,8 +108,6 @@ export default function ProjectEditorCard({
                 ? "bg-sky-500 border-sky-500"
                 : "bg-slate-200 border-slate-300")
             }
-            role="switch"
-            aria-checked={isJobPosting}
           >
             <span
               className={
@@ -99,21 +118,13 @@ export default function ProjectEditorCard({
           </button>
 
           <div className="text-xs">
-            <div className="font-semibold text-sky-900">
+            <div className="font-semibold text-slate-900">
               Job Posting
             </div>
-            <div className="text-[11px] text-sky-700/90">
-              {isJobPosting ? (
-                <>
-                  This project is marked as a job posting and will appear on
-                  the public <span className="font-semibold">&quot;Find local work&quot;</span> page.
-                </>
-              ) : (
-                <>
-                  Turn this on to mark the project as a job posting clients can
-                  respond to.
-                </>
-              )}
+            <div className="text-[11px] text-slate-700/90">
+              {isJobPosting
+                ? "This project is marked as a job posting and will appear on the public 'Find local work' page."
+                : "Mark this project as a job opportunity clients can respond to."}
             </div>
           </div>
         </div>
@@ -137,7 +148,11 @@ export default function ProjectEditorCard({
       </div>
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => {
+          // still support Enter-to-submit
+          e.preventDefault();
+          if (onSubmit) onSubmit(e);
+        }}
         className="grid grid-cols-1 gap-3 md:grid-cols-2"
       >
         <div>
@@ -286,7 +301,7 @@ export default function ProjectEditorCard({
           </label>
         </div>
 
-        {/* Hidden submit so Enter works; main button is at bottom */}
+        {/* Hidden submit so Enter works, but visible button is at bottom of card */}
         <div className="md:col-span-2">
           <button type="submit" className="hidden">
             {submitLabel}
@@ -318,27 +333,6 @@ export default function ProjectEditorCard({
                       alt=""
                       className="mb-2 h-36 w-full rounded-md object-cover"
                     />
-
-                    {/* Cover selector */}
-                    {setCoverImageId && (
-                      <div className="mb-2 flex items-center justify-between text-xs">
-                        <label className="flex items-center gap-1 text-slate-700">
-                          <input
-                            type="radio"
-                            name={`cover-image-${projectId}`}
-                            checked={coverImageId === it.id}
-                            onChange={() => setCoverImageId(it.id)}
-                          />
-                          <span>Use as cover image</span>
-                        </label>
-                        {coverImageId === it.id && (
-                          <span className="rounded-full bg-sky-50 px-2 py-[2px] text-[10px] font-semibold text-sky-700">
-                            Selected
-                          </span>
-                        )}
-                      </div>
-                    )}
-
                     <input
                       className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
                       placeholder="Caption…"
@@ -353,29 +347,48 @@ export default function ProjectEditorCard({
                         )
                       }
                     />
-                    <div className="mt-2 flex items-center justify-between">
-                      <GhostButton
-                        onClick={() => {
-                          if (it.id) onDeleteImage(it);
-                        }}
-                        disabled={!it.id || busy}
-                        title={
-                          it.id
-                            ? "Delete this image"
-                            : "This API response has no image id — delete is disabled"
-                        }
-                      >
-                        Delete
-                      </GhostButton>
-                      <Button
-                        type="button"
-                        onClick={() => onSaveImageCaption(it)}
-                        disabled={
-                          it._saving || it._localCaption === it.caption
-                        }
-                      >
-                        {it._saving ? "Saving…" : "Save caption"}
-                      </Button>
+
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      {/* Cover selector */}
+                      <label className="flex items-center gap-1 text-[11px] text-slate-600">
+                        <input
+                          type="radio"
+                          name="cover-image"
+                          className="h-3 w-3"
+                          checked={String(currentCoverId ?? "") === String(it.id ?? "")}
+                          onChange={() => handleSelectCover(it.id)}
+                        />
+                        <span>
+                          {String(currentCoverId ?? "") === String(it.id ?? "")
+                            ? "Cover image"
+                            : "Make cover"}
+                        </span>
+                      </label>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        <GhostButton
+                          onClick={() => {
+                            if (it.id) onDeleteImage(it);
+                          }}
+                          disabled={!it.id || busy}
+                          title={
+                            it.id
+                              ? "Delete this image"
+                              : "This API response has no image id — delete is disabled"
+                          }
+                        >
+                          Delete
+                        </GhostButton>
+                        <Button
+                          onClick={() => onSaveImageCaption(it)}
+                          disabled={
+                            it._saving || it._localCaption === it.caption
+                          }
+                        >
+                          {it._saving ? "Saving…" : "Save caption"}
+                        </Button>
+                      </div>
                     </div>
                   </figure>
                 ))}
@@ -389,12 +402,11 @@ export default function ProjectEditorCard({
               Add Images
             </div>
             <div className="mb-2 text-xs text-slate-600">
-              Drag &amp; drop or click; add captions; upload.
+              Drag & drop or click; add captions; upload.
             </div>
             <ImageUploader
               projectId={projectId}
               onUploaded={async () => {
-                // 🔧 Important for image saving UX: refresh parent state
                 if (onAfterUpload) {
                   await onAfterUpload();
                 }

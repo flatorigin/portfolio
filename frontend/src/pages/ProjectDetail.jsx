@@ -43,12 +43,17 @@ export default function ProjectDetail() {
     highlights: "",
     material_url: "",
     material_label: "",
+    // safe extra (used elsewhere)
+    cover_image_id: null,
   });
-  const [editCoverFile, setEditCoverFile] = useState(null); // kept for backwards-compatibility (not used in UI)
+
+  const [editCoverFile, setEditCoverFile] = useState(null); // kept for backwards-compatibility
   const [editImages, setEditImages] = useState([]); // [{id,url,caption,_localCaption,_saving}]
-  const [editCoverImageId, setEditCoverImageId] = useState(null); // cover image selected from images list
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
+
+  // cover image selected from images list
+  const [editCoverImageId, setEditCoverImageId] = useState(null);
 
   // current user
   const [meUser, setMeUser] = useState(null);
@@ -108,52 +113,117 @@ export default function ProjectDetail() {
   const myUsername = meUser?.username || null;
 
   // ─────────────────────────────
+  // COVER SETTER (backend-friendly)
+  // Tries multiple common field names on the image endpoint.
+  // ─────────────────────────────
+  async function setCoverOnBackend(projectId, imgId) {
+    const normalized = imgId == null ? null : Number(imgId);
+    if (!projectId || normalized == null) return;
+
+    const attempts = [
+      { is_cover: true },
+      { is_cover_image: true },
+      { is_cover_photo: true },
+    ];
+
+    for (const body of attempts) {
+      try {
+        await api.patch(`/projects/${projectId}/images/${normalized}/`, body);
+        return;
+      } catch {
+        // try next
+      }
+    }
+
+    // fallback: some APIs use order=0 as "cover"
+    try {
+      await api.patch(`/projects/${projectId}/images/${normalized}/`, {
+        order: 0,
+      });
+      return;
+    } catch (e) {
+      const data = e?.response?.data;
+      const msg =
+        data?.detail ||
+        data?.message ||
+        data?.non_field_errors ||
+        (typeof data === "string" ? data : null) ||
+        e?.message ||
+        "Failed to set cover image.";
+      throw new Error(
+        typeof msg === "string" ? msg : JSON.stringify(msg, null, 2)
+      );
+    }
+  }
+
+  // ─────────────────────────────
   // IMAGES (for both public view + editor card)
   // ─────────────────────────────
   const refreshImages = useCallback(async () => {
     if (!id) return;
+
     try {
       const { data } = await api.get(`/projects/${id}/images/`);
       const raw = Array.isArray(data) ? data : [];
 
       const publicImages = raw
         .map((x) => ({
-          id: x.id,
           url: toUrl(x.url || x.image || x.src || x.file),
           caption: x.caption || "",
         }))
         .filter((x) => !!x.url);
 
       const editableImages = raw
-        .map((x) => ({
-          id: x.id,
-          url: toUrl(x.url || x.image || x.src || x.file),
-          caption: x.caption || "",
-          _localCaption: x.caption || "",
-          _saving: false,
-        }))
+        .map((x) => {
+          const imgId = x.id ?? x.pk ?? x.image_id ?? null;
+          return {
+            id: imgId,
+            url: toUrl(x.url || x.image || x.src || x.file),
+            caption: x.caption || "",
+            _localCaption: x.caption || "",
+            _saving: false,
+          };
+        })
         .filter((x) => !!x.url);
 
       setImages(publicImages);
       setEditImages(editableImages);
 
-      // if we already know cover_image_id from project, keep it;
-      // otherwise, if server sent "cover" flag in image rows, you can set here.
-      if (project?.cover_image_id) {
-        setEditCoverImageId(project.cover_image_id);
+      // Determine backend-selected cover id (if any)
+      const flagged = raw.find(
+        (img) => img?.is_cover || img?.is_cover_image || img?.is_cover_photo
+      );
+
+      const flaggedIdRaw =
+        flagged?.id ?? flagged?.pk ?? flagged?.image_id ?? null;
+
+      const flaggedId = flaggedIdRaw == null ? null : Number(flaggedIdRaw);
+
+      // Only apply backend cover if user hasn't chosen one in this session
+      if (flaggedId != null) {
+        const exists = editableImages.some((it) => Number(it.id) === flaggedId);
+        if (exists) {
+          setEditCoverImageId((prev) => (prev == null ? flaggedId : prev));
+          setEditForm((prev) => ({
+            ...prev,
+            cover_image_id:
+              prev?.cover_image_id == null ? flaggedId : prev.cover_image_id,
+          }));
+        }
       }
     } catch (err) {
       console.error("[ProjectDetail] refreshImages failed:", err);
       setImages([]);
       setEditImages([]);
     }
-  }, [id, project?.cover_image_id]);
+  }, [id]);
 
   // ─────────────────────────────
   // LOAD PROJECT + COMMENTS (+ IMAGES via refreshImages)
   // ─────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!id) return;
+
     try {
       const [{ data: meta }, { data: cmts }] = await Promise.all([
         api.get(`/projects/${id}/`),
@@ -164,6 +234,15 @@ export default function ProjectDetail() {
       setComments(Array.isArray(cmts) ? cmts : []);
 
       if (meta) {
+        const coverFromMetaRaw =
+          meta.cover_image_id ??
+          (meta.cover_image && meta.cover_image.id) ??
+          meta.cover_image_pk ??
+          null;
+
+        const coverFromMeta =
+          coverFromMetaRaw == null ? null : Number(coverFromMetaRaw);
+
         setEditForm({
           title: meta.title || "",
           summary: meta.summary || "",
@@ -176,9 +255,11 @@ export default function ProjectDetail() {
           highlights: meta.highlights || "",
           material_url: meta.material_url || "",
           material_label: meta.material_label || "",
+          cover_image_id: coverFromMeta,
         });
+
         setEditCoverFile(null);
-        setEditCoverImageId(meta.cover_image_id ?? null);
+        setEditCoverImageId(coverFromMeta);
       } else {
         setEditForm({
           title: "",
@@ -192,7 +273,9 @@ export default function ProjectDetail() {
           highlights: "",
           material_url: "",
           material_label: "",
+          cover_image_id: null,
         });
+
         setEditCoverFile(null);
         setEditCoverImageId(null);
       }
@@ -256,7 +339,6 @@ export default function ProjectDetail() {
     };
   }, [authed, project, meUser]);
 
-  // save handler – Save button in the header
   async function toggleSave() {
     if (!authed || !project || saveBusy || isOwnerUser) return;
 
@@ -269,10 +351,7 @@ export default function ProjectDetail() {
       setIsSaved(true);
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
-      console.error(
-        "[ProjectDetail] save favorite failed",
-        err?.response || err
-      );
+      console.error("[ProjectDetail] save favorite failed", err?.response || err);
       const data = err?.response?.data;
       const msg =
         data?.detail ||
@@ -316,10 +395,7 @@ export default function ProjectDetail() {
   // ─────────────────────────────
   // COMMENTS HELPERS
   // ─────────────────────────────
-  const roots = useMemo(
-    () => comments.filter((c) => !c.in_reply_to),
-    [comments]
-  );
+  const roots = useMemo(() => comments.filter((c) => !c.in_reply_to), [comments]);
 
   const repliesByParent = useMemo(
     () =>
@@ -352,9 +428,7 @@ export default function ProjectDetail() {
 
     try {
       const payload = { text: trimmed };
-      if (replyingTo && isOwnerUser) {
-        payload.in_reply_to = replyingTo.id;
-      }
+      if (replyingTo && isOwnerUser) payload.in_reply_to = replyingTo.id;
 
       await api.post(`/projects/${id}/comments/`, payload);
       const { data: fresh } = await api.get(`/projects/${id}/comments/`);
@@ -427,9 +501,7 @@ export default function ProjectDetail() {
     try {
       await api.delete(`/projects/${id}/comments/${comment.id}/`);
       setComments((prev) =>
-        prev.filter(
-          (c) => c.id !== comment.id && c.in_reply_to !== comment.id
-        )
+        prev.filter((c) => c.id !== comment.id && c.in_reply_to !== comment.id)
       );
     } catch (err) {
       console.error("delete comment error:", err?.response || err);
@@ -451,6 +523,11 @@ export default function ProjectDetail() {
       const projectId = project.id;
       if (!projectId) throw new Error("Missing project id");
 
+      // Normalize cover id from state OR form
+      const normalizedCoverId =
+        editCoverImageId ?? editForm.cover_image_id ?? null;
+
+      // Do NOT send cover_* fields to project endpoint (your backend 400s on that).
       const payload = {
         title: editForm.title || "",
         summary: editForm.summary || "",
@@ -463,17 +540,17 @@ export default function ProjectDetail() {
         highlights: editForm.highlights || "",
         material_url: editForm.material_url || "",
         material_label: editForm.material_label || "",
-        cover_image_id: editCoverImageId || null,
       };
 
       let data;
-      // Cover file branch kept just in case, but normally cover is chosen via cover_image_id
+
       if (editCoverFile) {
         const fd = new FormData();
         Object.entries(payload).forEach(([k, v]) =>
-          fd.append(k, v == null ? "" : v)
+          fd.append(k, v == null ? "" : String(v))
         );
         fd.append("cover_image", editCoverFile);
+
         const resp = await api.patch(`/projects/${projectId}/`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -483,22 +560,41 @@ export default function ProjectDetail() {
         data = resp.data;
       }
 
+      // After project saves, set cover via image endpoint
+      if (normalizedCoverId != null) {
+        try {
+          await setCoverOnBackend(projectId, normalizedCoverId);
+        } catch (coverErr) {
+          console.warn("[cover] failed to set cover:", coverErr);
+          alert(`Cover update failed: ${coverErr?.message || coverErr}`);
+        }
+      }
+
       setProject(data);
-      setEditForm({
-        title: data.title || "",
-        summary: data.summary || "",
-        category: data.category || "",
-        is_public: data.is_public ?? true,
-        is_job_posting: !!data.is_job_posting,
-        location: data.location || "",
-        budget: data.budget ?? "",
-        sqf: data.sqf ?? "",
-        highlights: data.highlights || "",
-        material_url: data.material_url || "",
-        material_label: data.material_label || "",
-      });
+
+      // Keep form stable; preserve selected cover id
+      setEditForm((prev) => ({
+        ...prev,
+        title: data?.title ?? prev.title,
+        summary: data?.summary ?? prev.summary,
+        category: data?.category ?? prev.category,
+        is_public: data?.is_public ?? prev.is_public,
+        is_job_posting: !!(data?.is_job_posting ?? prev.is_job_posting),
+        location: data?.location ?? prev.location,
+        budget: data?.budget ?? prev.budget,
+        sqf: data?.sqf ?? prev.sqf,
+        highlights: data?.highlights ?? prev.highlights,
+        material_url: data?.material_url ?? prev.material_url,
+        material_label: data?.material_label ?? prev.material_label,
+        cover_image_id:
+          normalizedCoverId != null ? Number(normalizedCoverId) : prev.cover_image_id,
+      }));
+
       setEditCoverFile(null);
-      setEditCoverImageId(data.cover_image_id ?? null);
+
+      if (normalizedCoverId != null) {
+        setEditCoverImageId(Number(normalizedCoverId));
+      }
 
       await refreshImages();
       setIsEditing(false);
@@ -516,9 +612,7 @@ export default function ProjectDetail() {
         data ||
         "Could not save changes. Please try again.";
 
-      if (typeof msg !== "string") {
-        msg = JSON.stringify(msg, null, 2);
-      }
+      if (typeof msg !== "string") msg = JSON.stringify(msg, null, 2);
 
       const full = `Save failed${status ? ` (status ${status})` : ""}: ${msg}`;
       setEditError(full);
@@ -539,9 +633,7 @@ export default function ProjectDetail() {
       });
       await refreshImages();
     } catch (e) {
-      alert(
-        e?.response?.data ? JSON.stringify(e.response.data) : String(e)
-      );
+      alert(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
       setEditImages((prev) =>
         prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x))
       );
@@ -566,6 +658,21 @@ export default function ProjectDetail() {
     images.length && activeImageIdx >= 0
       ? images[Math.min(activeImageIdx, images.length - 1)]
       : null;
+
+  // Cover URL used for the banner on the project card
+  const coverUrl = useMemo(() => {
+    const selectedId = editCoverImageId ?? editForm.cover_image_id ?? null;
+
+    if (selectedId != null) {
+      const match = editImages.find(
+        (im) => Number(im.id) === Number(selectedId)
+      );
+      if (match?.url) return match.url;
+    }
+
+    // fallback: first image
+    return images?.[0]?.url || null;
+  }, [editCoverImageId, editForm.cover_image_id, editImages, images]);
 
   // ─────────────────────────────
   // RENDER
@@ -605,9 +712,7 @@ export default function ProjectDetail() {
               </span>
             )}
           </div>
-          <span>
-            {c.created_at ? new Date(c.created_at).toLocaleString() : ""}
-          </span>
+          <span>{c.created_at ? new Date(c.created_at).toLocaleString() : ""}</span>
         </div>
 
         {isEditingComment ? (
@@ -690,16 +795,21 @@ export default function ProjectDetail() {
             <span className="text-slate-700">Project</span>
           </div>
         </div>
-        <Link
-          to="/"
-          className="text-sm text-slate-600 hover:text-slate-900"
-        >
+        <Link to="/" className="text-sm text-slate-600 hover:text-slate-900">
           ← Back
         </Link>
       </div>
 
       {/* Main project card */}
       <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
+        {/* Cover banner */}
+        {coverUrl && (
+          <div className="relative h-[200px] w-full bg-slate-200">
+            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+          </div>
+        )}
+
         {/* header */}
         <div
           className={
@@ -777,7 +887,7 @@ export default function ProjectDetail() {
             </p>
           )}
 
-          {/* OWNER-ONLY PROJECT EDIT CARD (same style/content as ProjectEditorCard) */}
+          {/* OWNER-ONLY PROJECT EDIT CARD */}
           {isOwnerUser && isEditing && project && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0">
               <ProjectEditorCard
@@ -798,13 +908,21 @@ export default function ProjectDetail() {
                 onAfterUpload={async () => {
                   await refreshImages();
                 }}
+                // Keep cover selection in sync so banner updates immediately
                 coverImageId={editCoverImageId}
-                setCoverImageId={setEditCoverImageId}
+                onCoverImageChange={(val) => {
+                  const normalized = val == null ? null : Number(val);
+                  setEditCoverImageId(normalized);
+                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
+                }}
+                setCoverImageId={(val) => {
+                  const normalized = val == null ? null : Number(val);
+                  setEditCoverImageId(normalized);
+                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
+                }}
               />
               {editError && (
-                <p className="px-5 pb-3 pt-1 text-xs text-red-600">
-                  {editError}
-                </p>
+                <p className="px-5 pb-3 pt-1 text-xs text-red-600">{editError}</p>
               )}
             </div>
           )}
@@ -824,9 +942,7 @@ export default function ProjectDetail() {
                     <div className="text-xs font-medium uppercase text-slate-500">
                       Location
                     </div>
-                    <div className="text-lg font-semibold">
-                      {project.location}
-                    </div>
+                    <div className="text-lg font-semibold">{project.location}</div>
                   </div>
                 )}
 
@@ -835,9 +951,7 @@ export default function ProjectDetail() {
                     <div className="text-xs font-medium uppercase text-slate-500">
                       Budget
                     </div>
-                    <div className="text-lg font-semibold">
-                      {project.budget}
-                    </div>
+                    <div className="text-lg font-semibold">{project.budget}</div>
                   </div>
                 )}
 
@@ -846,9 +960,7 @@ export default function ProjectDetail() {
                     <div className="text-xs font-semibold uppercase text-slate-500">
                       Sq Ft
                     </div>
-                    <div className="text-lg font-semibold">
-                      {project.sqf}
-                    </div>
+                    <div className="text-lg font-semibold">{project.sqf}</div>
                   </div>
                 )}
 
@@ -876,7 +988,6 @@ export default function ProjectDetail() {
                 Materials &amp; tools used
               </div>
 
-              {/* main / primary link + label */}
               {(project?.material_label || project?.material_url) && (
                 <div className="flex items-center gap-3">
                   {project?.material_url && (
@@ -889,7 +1000,7 @@ export default function ProjectDetail() {
                               .slice(0, 2)
                               .toUpperCase();
                           } catch {
-                            return "Lk";
+                            return "LK";
                           }
                         })()}
                       </span>
@@ -916,7 +1027,6 @@ export default function ProjectDetail() {
                 </div>
               )}
 
-              {/* extra links added via +, shown UNDER the main one */}
               {Array.isArray(project?.extra_links) &&
                 project.extra_links.length > 0 && (
                   <div className="mt-3 space-y-2">
@@ -930,7 +1040,7 @@ export default function ProjectDetail() {
                           key={`${url || label || index}`}
                           className="flex items-start gap-2"
                         >
-                          <div className="mt-[3px] flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-slate-500 border border-slate-200">
+                          <div className="mt-[3px] flex h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500">
                             +
                           </div>
                           <div className="min-w-0">
@@ -957,13 +1067,13 @@ export default function ProjectDetail() {
                 )}
 
               <p className="mt-2 text-[11px] text-slate-500">
-                These links point to products or materials used in this project
-                (for example, tools, finishes, or suppliers).
+                These links point to products or materials used in this project (for
+                example, tools, finishes, or suppliers).
               </p>
             </div>
           )}
 
-          {/* Project media – BLOCK CARD layout (no full-width stretching) */}
+          {/* Project media – BLOCK CARD layout */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1017,8 +1127,7 @@ export default function ProjectDetail() {
                 </div>
                 {project?.location && (
                   <div className="text-[11px] text-slate-500">
-                    Centered on:{" "}
-                    <span className="font-medium">{project.location}</span>
+                    Centered on: <span className="font-medium">{project.location}</span>
                   </div>
                 )}
               </div>
@@ -1134,8 +1243,7 @@ export default function ProjectDetail() {
                     {project?.title || `Project #${id}`}
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {comments.length || 0} comment
-                    {comments.length === 1 ? "" : "s"}
+                    {comments.length || 0} comment{comments.length === 1 ? "" : "s"}
                   </div>
                 </div>
                 <button
@@ -1185,9 +1293,7 @@ export default function ProjectDetail() {
                       className="min-h-[60px]"
                     />
                     {commentError && (
-                      <p className="text-[11px] text-red-600">
-                        {commentError}
-                      </p>
+                      <p className="text-[11px] text-red-600">{commentError}</p>
                     )}
                     <div className="flex justify-end">
                       <Button
@@ -1200,8 +1306,7 @@ export default function ProjectDetail() {
                   </form>
                 ) : (
                   <p className="text-xs text-slate-600">
-                    <span className="font-medium">Login</span> to add a
-                    comment.
+                    <span className="font-medium">Login</span> to add a comment.
                   </p>
                 )}
               </div>
