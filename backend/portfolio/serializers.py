@@ -56,7 +56,9 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="owner.username", read_only=True)
     images = ProjectImageSerializer(many=True, read_only=True)
-    cover_image_url = serializers.SerializerMethodField()  # ✅ add this
+    cover_image_url = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
+
 
     class Meta:
         model = Project
@@ -64,6 +66,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "id",
             "owner",
             "owner_username",
+            "is_owner",
             "title",
             "summary",
             "category",
@@ -102,24 +105,55 @@ class ProjectSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url) if request else url
         return None
 
+    def get_is_owner(self, obj):
+            request = self.context.get("request")
+            return bool(request and request.user.is_authenticated and obj.owner_id == request.user.id)
+
 
 # ADD THIS NEW SERIALIZER NEAR YOUR OTHER MODEL SERIALIZERS
 class ProjectFavoriteSerializer(serializers.ModelSerializer):
-    """
-    Favorite entry + nested project.
-    Response example:
-    {
-      "id": 5,
-      "created_at": "...",
-      "project": { ... ProjectSerializer fields ... }
-    }
-    """
-    project = ProjectSerializer(read_only=True)
+    project_id = serializers.IntegerField(source="project.id", read_only=True)
+    project_title = serializers.CharField(source="project.title", read_only=True)
+    project_summary = serializers.CharField(source="project.summary", read_only=True)
+    project_category = serializers.CharField(source="project.category", read_only=True)
+    project_owner_username = serializers.CharField(source="project.owner.username", read_only=True)
+    project_location = serializers.CharField(source="project.location", read_only=True)
+    project_budget = serializers.CharField(source="project.budget", read_only=True)
+    project_sqf = serializers.CharField(source="project.sqf", read_only=True)
+    project_highlights = serializers.CharField(source="project.highlights", read_only=True)
+    project_cover_image = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectFavorite
-        fields = ["id", "project", "created_at"]
+        fields = (
+            "id",
+            "created_at",
+            "project_id",
+            "project_title",
+            "project_summary",
+            "project_category",
+            "project_owner_username",
+            "project_location",
+            "project_budget",
+            "project_sqf",
+            "project_highlights",
+            "project_cover_image",
+        )
 
+    def get_project_cover_image(self, obj):
+        # Prefer first ordered image if exists, else fall back to project.cover_image
+        cover = obj.project.images.order_by("order", "id").first()
+        if cover and cover.image:
+            request = self.context.get("request")
+            url = cover.image.url
+            return request.build_absolute_uri(url) if request else url
+
+        if obj.project.cover_image:
+            request = self.context.get("request")
+            url = obj.project.cover_image.url
+            return request.build_absolute_uri(url) if request else url
+
+        return None
 
 class PrivateMessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.ReadOnlyField(source="sender.username")

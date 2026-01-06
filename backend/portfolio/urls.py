@@ -18,6 +18,13 @@ router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
 
 urlpatterns = [
+    path("api/", include(router.urls)),
+
+    path(
+        "api/favorites/projects/",
+        FavoriteProjectListView.as_view(),
+        name="favorite-projects",
+    ),
     # All /api/projects/ routes from ProjectViewSet
     path("", include(router.urls)),
 

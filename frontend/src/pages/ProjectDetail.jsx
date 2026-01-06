@@ -8,6 +8,10 @@ import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 
+// ❌ REMOVED: invalid hooks at module scope
+// const [isSaved, setIsSaved] = useState(false);
+// const [saving, setSaving] = useState(false);
+
 function toUrl(raw) {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
@@ -318,8 +322,15 @@ export default function ProjectDetail() {
     (async () => {
       try {
         const { data } = await api.get(`/projects/${project.id}/favorite/`);
-        const favored = data?.is_favorited ?? data?.favorited ?? true;
-        if (!cancelled) setIsSaved(!!favored);
+        // ✅ IMPORTANT: default should be FALSE (not true)
+        const favored = !!(
+          data?.is_favorited ??
+          data?.favorited ??
+          data?.saved ??
+          data?.is_saved ??
+          false
+        );
+        if (!cancelled) setIsSaved(favored);
       } catch (err) {
         if (cancelled) return;
         if (err?.response?.status === 404) {
@@ -339,6 +350,7 @@ export default function ProjectDetail() {
     };
   }, [authed, project, meUser]);
 
+  // ✅ FIXED: toggle save/unsave + handle 404 gracefully
   async function toggleSave() {
     if (!authed || !project || saveBusy || isOwnerUser) return;
 
@@ -347,17 +359,40 @@ export default function ProjectDetail() {
 
     setSaveBusy(true);
     try {
-      await api.post(`/projects/${projectId}/favorite/`);
-      setIsSaved(true);
+      if (isSaved) {
+        // unsave
+        try {
+          await api.delete(`/projects/${projectId}/favorite/`);
+        } catch (err) {
+          // if backend returns 404 here, treat as already unsaved
+          if (err?.response?.status !== 404) throw err;
+        }
+        setIsSaved(false);
+      } else {
+        // save
+        try {
+          await api.post(`/projects/${projectId}/favorite/`);
+          setIsSaved(true);
+        } catch (err) {
+          // if backend returns 404/409/400 for "already saved", treat as saved
+          const status = err?.response?.status;
+          if (status === 404 || status === 409 || status === 400) {
+            setIsSaved(true);
+          } else {
+            throw err;
+          }
+        }
+      }
+
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
-      console.error("[ProjectDetail] save favorite failed", err?.response || err);
+      console.error("[ProjectDetail] toggle favorite failed", err?.response || err);
       const data = err?.response?.data;
       const msg =
         data?.detail ||
         data?.message ||
         err?.message ||
-        "Failed to save project. Please try again.";
+        "Failed to update saved state. Please try again.";
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSaveBusy(false);
@@ -587,7 +622,9 @@ export default function ProjectDetail() {
         material_url: data?.material_url ?? prev.material_url,
         material_label: data?.material_label ?? prev.material_label,
         cover_image_id:
-          normalizedCoverId != null ? Number(normalizedCoverId) : prev.cover_image_id,
+          normalizedCoverId != null
+            ? Number(normalizedCoverId)
+            : prev.cover_image_id,
       }));
 
       setEditCoverFile(null);
@@ -712,7 +749,9 @@ export default function ProjectDetail() {
               </span>
             )}
           </div>
-          <span>{c.created_at ? new Date(c.created_at).toLocaleString() : ""}</span>
+          <span>
+            {c.created_at ? new Date(c.created_at).toLocaleString() : ""}
+          </span>
         </div>
 
         {isEditingComment ? (
@@ -847,29 +886,18 @@ export default function ProjectDetail() {
 
             {/* RIGHT: owner edit button OR Save button */}
             <div className="flex items-start gap-2">
-              {authed && project && isOwnerUser && (
+              {authed && project && !isOwnerUser && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsEditing((prev) => !prev)}
-                  className="border-white/70 bg-white/10 text-white hover:bg-white/20"
-                >
-                  {isEditing ? "Close edit" : "Edit project"}
-                </Button>
-              )}
-
-              {authed && project && !isOwnerUser && (
-                <Button
-                  type="button"
-                  variant={isSaved ? "outline" : "default"}
                   onClick={toggleSave}
-                  disabled={saveBusy || isSaved}
+                  disabled={saveBusy}
                   className={
-                    "text-sm " +
-                    (isSaved
-                      ? "bg-white text-[#0A3443] hover:bg-white"
-                      : "bg-white text-[#0A3443] hover:bg-sky-50")
+                    "min-w-[110px] justify-center rounded-full border border-white/40 " +
+                    "bg-white/10 px-6 text-sm font-semibold text-white shadow-sm " +
+                    "backdrop-blur-md hover:bg-white/20 active:scale-[0.99] " +
+                    (isSaved ? "opacity-95" : "")
                   }
                 >
                   {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
@@ -913,16 +941,24 @@ export default function ProjectDetail() {
                 onCoverImageChange={(val) => {
                   const normalized = val == null ? null : Number(val);
                   setEditCoverImageId(normalized);
-                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
+                  setEditForm((prev) => ({
+                    ...prev,
+                    cover_image_id: normalized,
+                  }));
                 }}
                 setCoverImageId={(val) => {
                   const normalized = val == null ? null : Number(val);
                   setEditCoverImageId(normalized);
-                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
+                  setEditForm((prev) => ({
+                    ...prev,
+                    cover_image_id: normalized,
+                  }));
                 }}
               />
               {editError && (
-                <p className="px-5 pb-3 pt-1 text-xs text-red-600">{editError}</p>
+                <p className="px-5 pb-3 pt-1 text-xs text-red-600">
+                  {editError}
+                </p>
               )}
             </div>
           )}
@@ -942,7 +978,9 @@ export default function ProjectDetail() {
                     <div className="text-xs font-medium uppercase text-slate-500">
                       Location
                     </div>
-                    <div className="text-lg font-semibold">{project.location}</div>
+                    <div className="text-lg font-semibold">
+                      {project.location}
+                    </div>
                   </div>
                 )}
 
@@ -1067,8 +1105,8 @@ export default function ProjectDetail() {
                 )}
 
               <p className="mt-2 text-[11px] text-slate-500">
-                These links point to products or materials used in this project (for
-                example, tools, finishes, or suppliers).
+                These links point to products or materials used in this project
+                (for example, tools, finishes, or suppliers).
               </p>
             </div>
           )}
@@ -1127,7 +1165,8 @@ export default function ProjectDetail() {
                 </div>
                 {project?.location && (
                   <div className="text-[11px] text-slate-500">
-                    Centered on: <span className="font-medium">{project.location}</span>
+                    Centered on:{" "}
+                    <span className="font-medium">{project.location}</span>
                   </div>
                 )}
               </div>
@@ -1243,7 +1282,8 @@ export default function ProjectDetail() {
                     {project?.title || `Project #${id}`}
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {comments.length || 0} comment{comments.length === 1 ? "" : "s"}
+                    {comments.length || 0} comment
+                    {comments.length === 1 ? "" : "s"}
                   </div>
                 </div>
                 <button

@@ -243,25 +243,25 @@ export default function Dashboard() {
   const [createOk, setCreateOk] = useState(false);
 
   const refreshProjects = useCallback(async () => {
-    const { data } = await api.get("/projects/");
-    setProjects(Array.isArray(data) ? data : []);
+    try {
+      const { data } = await api.get("/projects/");
+      const mine = Array.isArray(data)
+        ? data.filter((p) => (p.owner_username || "").toLowerCase() === (meUser.username || "").toLowerCase())
+        : [];
+      setProjects(mine);
+
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn("[Dashboard] failed to load my projects", err);
+      setProjects([]);
+    }
   }, []);
 
   useEffect(() => {
     refreshProjects();
   }, [refreshProjects]);
 
-  const owned = useMemo(() => {
-    const ls = (localStorage.getItem("username") || "").toLowerCase();
-    const me = (meUser.username || "").toLowerCase();
-    return (projects || []).filter((p) => {
-      if (typeof p.is_owner === "boolean" && p.is_owner) return true;
-      const owner = (p.owner_username || "").toLowerCase();
-      return owner && (owner === me || owner === ls);
-    });
-  }, [projects, meUser.username]);
-
-  const list = owned.length ? owned : projects;
+  const list = projects;
 
   const refreshImages = useCallback(async (pid) => {
     const { data } = await api.get(`/projects/${pid}/images/`);
@@ -401,7 +401,13 @@ async function createProject(e) {
     try {
       if (editCover) {
         const fd = new FormData();
-        Object.entries(editForm).forEach(([k, v]) => fd.append(k, v ?? ""));
+        Object.entries(editForm).forEach(([k, v]) => {
+          if (k === "is_public" || k === "is_job_posting") {
+            fd.append(k, v ? "true" : "false");
+          } else {
+            fd.append(k, v ?? "");
+          }
+        });
         fd.append("cover_image", editCover);
         await api.patch(`/projects/${editingId}/`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -528,9 +534,7 @@ async function createProject(e) {
       {/* SAVED PROJECTS (favorites) */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800">
-            Saved projects
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-800">Saved projects</h2>
           <span className="text-[11px] text-slate-500">
             {savedProjects.length} saved
           </span>
@@ -538,25 +542,25 @@ async function createProject(e) {
 
         {savedProjects.length === 0 ? (
           <p className="text-xs text-slate-500">
-            You haven’t saved any projects yet. Hit “Save” on any
-            interesting project to keep it here.
+            You haven’t saved any projects yet. Hit “Save” on any interesting project
+            to keep it here.
           </p>
         ) : (
           <>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-              {(showAllSaved
-                ? savedProjects
-                : savedProjects.slice(0, 3)
-              ).map((fav) => {
-                const coverSrc = toUrl(
-                  fav.project_cover_image ||
-                    fav.project_cover ||
-                    (fav.project &&
-                      (fav.project.cover_image || fav.project.cover)) ||
-                    ""
-                );
-
+              {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map((fav) => {
                 const projectId = extractProjectId(fav);
+
+                const coverSrcRaw =
+                  fav.project_cover_image_url ||
+                  fav.project_cover_image ||
+                  fav.project_cover ||
+                  fav.project?.cover_image_url ||
+                  fav.project?.cover_image ||
+                  fav.project?.cover ||
+                  "";
+
+                const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
 
                 const title =
                   fav.project_title ||
@@ -564,32 +568,26 @@ async function createProject(e) {
                   (projectId ? `Project #${projectId}` : "Project");
 
                 const owner =
-                  fav.project_owner_username ||
-                  fav.project?.owner_username;
+                  fav.project_owner_username || fav.project?.owner_username;
 
-                const category =
-                  fav.project_category || fav.project?.category;
+                const category = fav.project_category || fav.project?.category;
 
-                const summary =
-                  fav.project_summary || fav.project?.summary;
+                const summary = fav.project_summary || fav.project?.summary;
 
-                const location =
-                  fav.project_location || fav.project?.location;
+                const location = fav.project_location || fav.project?.location;
 
-                const budget =
-                  fav.project_budget || fav.project?.budget;
+                const budget = fav.project_budget || fav.project?.budget;
 
                 const sqf = fav.project_sqf || fav.project?.sqf;
 
                 const highlights =
-                  fav.project_highlights ||
-                  fav.project?.highlights;
+                  fav.project_highlights || fav.project?.highlights;
 
                 const removing = removingFavoriteId === projectId;
 
                 return (
                   <Card
-                    key={fav.id ?? `p-${projectId}`}
+                    key={fav.id ?? `p-${projectId ?? "unknown"}`}
                     className="overflow-hidden"
                   >
                     {coverSrc ? (
@@ -607,9 +605,7 @@ async function createProject(e) {
                     <div className="p-4">
                       <div className="mb-1 flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate font-semibold">
-                            {title}
-                          </div>
+                          <div className="truncate font-semibold">{title}</div>
                           {owner && (
                             <div className="text-[11px] text-slate-500">
                               by {owner}
@@ -620,39 +616,28 @@ async function createProject(e) {
                       </div>
 
                       <div className="line-clamp-2 text-sm text-slate-700">
-                        {summary || (
-                          <span className="opacity-60">No summary</span>
-                        )}
+                        {summary || <span className="opacity-60">No summary</span>}
                       </div>
 
                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
                         {location && (
                           <div>
-                            <span className="opacity-60">
-                              Location:
-                            </span>{" "}
-                            {location}
+                            <span className="opacity-60">Location:</span> {location}
                           </div>
                         )}
                         {budget && (
                           <div>
-                            <span className="opacity-60">
-                              Budget:
-                            </span>{" "}
-                            {budget}
+                            <span className="opacity-60">Budget:</span> {budget}
                           </div>
                         )}
                         {sqf && (
                           <div>
-                            <span className="opacity-60">Sq Ft:</span>{" "}
-                            {sqf}
+                            <span className="opacity-60">Sq Ft:</span> {sqf}
                           </div>
                         )}
                         {highlights && (
                           <div className="col-span-2 truncate">
-                            <span className="opacity-60">
-                              Highlights:
-                            </span>{" "}
+                            <span className="opacity-60">Highlights:</span>{" "}
                             {highlights}
                           </div>
                         )}
@@ -660,16 +645,12 @@ async function createProject(e) {
 
                       <div className="mt-3 flex items-center gap-2">
                         <GhostButton
-                          onClick={() =>
-                            window.open(
-                              `/projects/${projectId}`,
-                              "_self"
-                            )
-                          }
+                          onClick={() => window.open(`/projects/${projectId}`, "_self")}
                           disabled={!projectId || removing}
                         >
                           Open
                         </GhostButton>
+
                         <Button
                           type="button"
                           variant="outline"
@@ -693,9 +674,7 @@ async function createProject(e) {
                   size="sm"
                   onClick={() => setShowAllSaved((v) => !v)}
                 >
-                  {showAllSaved
-                    ? "Show fewer"
-                    : `Show all ${savedProjects.length}`}
+                  {showAllSaved ? "Show fewer" : `Show all ${savedProjects.length}`}
                 </Button>
               </div>
             )}
@@ -703,9 +682,10 @@ async function createProject(e) {
         )}
       </Card>
 
+
       {/* 1) CREATE PROJECT — now collapsible reusable card */}
       <CreateProjectCard
-        ownedCount={owned.length}
+        ownedCount={projects.length}
         form={form}
         setForm={setForm}
         cover={cover}
@@ -999,6 +979,22 @@ async function createProject(e) {
                     }
                   />
                   Public
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="mr-2 align-middle"
+                    checked={!!editForm.is_job_posting}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        is_job_posting: e.target.checked,
+                      })
+                    }
+                  />
+                  Job posting
                 </label>
               </div>
 

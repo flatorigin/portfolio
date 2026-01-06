@@ -1,8 +1,9 @@
 // =======================================
 // file: frontend/src/pages/Explore.jsx
 // Uses ProjectImage.order to choose the cover (order=0)
+// + Favorites (Save button) for other users' projects
 // =======================================
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { SectionTitle, Badge, Card, Button, Input, GhostButton } from "../ui";
@@ -40,6 +41,11 @@ export default function Explore() {
   const [thumbs, setThumbs] = useState({});
   const [loading, setLoading] = useState(true);
 
+  // ✅ favorites state
+  // favMap[projectId] = true/false
+  const [favMap, setFavMap] = useState({});
+  const [favBusyId, setFavBusyId] = useState(null);
+
   // 🔍 filter state
   const [filters, setFilters] = useState({
     name: "",
@@ -57,6 +63,50 @@ export default function Explore() {
   const isOwner = (p) =>
     typeof p.is_owner === "boolean" ? p.is_owner : (p.owner_username || "") === me;
 
+  // ✅ toggle favorite (save/unsave)
+  const toggleFavorite = useCallback(
+    async (e, p) => {
+      // stop Link navigation + bubbling
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!authed || !p?.id) return;
+      if (isOwner(p)) return;
+
+      if (favBusyId === p.id) return;
+
+      const currently = !!favMap[p.id];
+
+      setFavBusyId(p.id);
+      // optimistic update
+      setFavMap((prev) => ({ ...prev, [p.id]: !currently }));
+
+      try {
+        if (currently) {
+          await api.delete(`/projects/${p.id}/favorite/`);
+        } else {
+          await api.post(`/projects/${p.id}/favorite/`);
+        }
+        window.dispatchEvent(new CustomEvent("favorites:changed"));
+      } catch (err) {
+        console.error("[Explore] toggleFavorite failed", err?.response || err);
+        // rollback
+        setFavMap((prev) => ({ ...prev, [p.id]: currently }));
+
+        const data = err?.response?.data;
+        const msg =
+          data?.detail ||
+          data?.message ||
+          err?.message ||
+          "Could not update saved state. Please try again.";
+        alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+      } finally {
+        setFavBusyId(null);
+      }
+    },
+    [authed, favBusyId, favMap, isOwner]
+  );
+
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -69,6 +119,7 @@ export default function Explore() {
         const arr = Array.isArray(data) ? data : [];
         setProjects(arr);
 
+        // ✅ load thumbs + initial favorite state (if authed)
         const entries = await Promise.all(
           arr.map(async (p) => {
             try {
@@ -101,6 +152,34 @@ export default function Explore() {
         );
 
         if (alive) setThumbs(Object.fromEntries(entries));
+
+        // ✅ favorites (only for authed users, and only for non-owners)
+        if (authed) {
+          const favPairs = await Promise.all(
+            arr.map(async (p) => {
+              if (!p?.id) return [null, null];
+              if (isOwner(p)) return [p.id, false];
+              try {
+                const { data: fav } = await api.get(`/projects/${p.id}/favorite/`);
+                const isFav = !!(fav?.is_favorited ?? fav?.favorited);
+                return [p.id, isFav];
+              } catch (e) {
+                // 404 means not saved, anything else treat as not saved
+                return [p.id, false];
+              }
+            })
+          );
+
+          if (alive) {
+            const next = {};
+            for (const [pid, val] of favPairs) {
+              if (pid != null) next[pid] = !!val;
+            }
+            setFavMap(next);
+          }
+        } else {
+          if (alive) setFavMap({});
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -109,7 +188,7 @@ export default function Explore() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [authed]); // keep as-is; simple reload on auth change
 
   // 🔍 filter logic
   const filteredProjects = useMemo(() => {
@@ -240,6 +319,9 @@ export default function Explore() {
           const pack = thumbs[p.id] || { cover: null, thumbs: [] };
           const coverUrl = pack.cover;
 
+          const saved = !!favMap[p.id];
+          const canSave = authed && !isOwner(p);
+
           const card = (
             <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
               {/* Cover banner */}
@@ -249,18 +331,20 @@ export default function Explore() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
                 </div>
               ) : pack.thumbs.length ? (
-                <div
-                  className="grid gap-1 bg-slate-50 p-1"
-                  style={{
-                    gridTemplateColumns: `repeat(${Math.min(3, pack.thumbs.length)}, 1fr)`,
-                  }}
-                >
-                  {pack.thumbs.map((src, i) => (
-                    <img key={src + i} src={src} alt="" className="h-24 w-full rounded-md object-cover" />
-                  ))}
+                <div className="relative">
+                  <div
+                    className="grid gap-1 bg-slate-50 p-1"
+                    style={{
+                      gridTemplateColumns: `repeat(${Math.min(3, pack.thumbs.length)}, 1fr)`,
+                    }}
+                  >
+                    {pack.thumbs.map((src, i) => (
+                      <img key={src + i} src={src} alt="" className="h-24 w-full rounded-md object-cover" />
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <div className="flex h-44 w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
+                <div className="relative flex h-44 w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
                   No media
                 </div>
               )}
@@ -274,18 +358,32 @@ export default function Explore() {
                   {p.summary || <span className="opacity-60">No summary</span>}
                 </div>
                 <div className="mt-2 text-xs text-slate-500">by {p.owner_username}</div>
-                {authed && isOwner(p) && (
+
+                {/* ✅ Bottom button row (consistent placement/style) */}
+                {authed && isOwner(p) ? (
                   <div className="mt-3">
                     <GhostButton
+                      className="w-full justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
                       onClick={(e) => {
                         e.preventDefault();
+                        e.stopPropagation();
                         navigate(`/dashboard?edit=${p.id}`);
                       }}
                     >
                       Edit in Dashboard
                     </GhostButton>
                   </div>
-                )}
+                ) : canSave ? (
+                  <div className="mt-3">
+                    <GhostButton
+                      className="w-full justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                      onClick={(e) => toggleFavorite(e, p)}
+                      disabled={favBusyId === p.id}
+                    >
+                      {favBusyId === p.id ? "Saving…" : saved ? "Saved" : "Save"}
+                    </GhostButton>
+                  </div>
+                ) : null}
               </div>
             </Card>
           );

@@ -4,6 +4,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from rest_framework.generics import ListAPIView
 from rest_framework import viewsets, permissions, status, generics
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -85,6 +86,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated], url_path="mine")
+    def mine(self, request):
+        """
+        GET /api/projects/mine/
+        Returns ONLY projects owned by the current user.
+        """
+        qs = Project.objects.select_related("owner").filter(owner=request.user).order_by("-updated_at")
+        ser = self.get_serializer(qs, many=True, context={"request": request})
+        return Response(ser.data)
 
     def get_queryset(self):
         qs = Project.objects.select_related("owner").all()
@@ -219,42 +230,33 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(ser.data, status=status.HTTP_200_OK)
 
 
-        @action(
-            detail=True,
-            methods=["get", "post", "delete"],
-            permission_classes=[permissions.IsAuthenticated],
-            url_path="favorite",
-        )
-        def favorite(self, request, pk=None):
-            """
-            Favorites for a single project.
+    @action(
+        detail=True,
+        methods=["get", "post", "delete"],
+        permission_classes=[IsAuthenticated],
+        url_path="favorite",
+    )
+    def favorite(self, request, pk=None):
+        """
+        GET:    {"is_favorited": bool}
+        POST:   idempotent add -> {"is_favorited": true}
+        DELETE: idempotent remove -> {"is_favorited": false}
+        """
+        project = self.get_object()
+        user = request.user
 
-            GET    /api/projects/<id>/favorite/   -> {"is_favorited": bool}
-            POST   /api/projects/<id>/favorite/   -> mark as favorite
-            DELETE /api/projects/<id>/favorite/   -> remove favorite
-            """
-            project = self.get_object()
-            user = request.user
+        qs = ProjectFavorite.objects.filter(user=user, project=project)
 
-            if request.method == "GET":
-                is_favorited = ProjectFavorite.objects.filter(
-                    user=user, project=project
-                ).exists()
-                return Response({"is_favorited": is_favorited})
+        if request.method == "GET":
+            return Response({"is_favorited": qs.exists()}, status=status.HTTP_200_OK)
 
-            if request.method == "POST":
-                favorite, created = ProjectFavorite.objects.get_or_create(
-                    user=user,
-                    project=project,
-                )
-                return Response(
-                    {"is_favorited": True},
-                    status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-                )
+        if request.method == "POST":
+            ProjectFavorite.objects.get_or_create(user=user, project=project)
+            return Response({"is_favorited": True}, status=status.HTTP_200_OK)
 
-            # DELETE
-            ProjectFavorite.objects.filter(user=user, project=project).delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        # DELETE
+        qs.delete()
+        return Response({"is_favorited": False}, status=status.HTTP_200_OK)
 
 class FavoriteProjectListView(generics.ListAPIView):
     """
@@ -262,15 +264,15 @@ class FavoriteProjectListView(generics.ListAPIView):
     Returns favorites for the current user, newest first.
     """
     serializer_class = ProjectFavoriteSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
+        # newest first
         return (
             ProjectFavorite.objects
-            .filter(user=user)
+            .filter(user=self.request.user)
             .select_related("project", "project__owner")
-            .order_by("-created_at")
+            .order_by("-created_at", "-id")
         )
 # ---------------------------------------------------
 # Private messaging
