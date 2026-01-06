@@ -69,6 +69,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "category",
             "cover_image",
             "is_public",
+            "is_job_posting",
             "tech_stack",
             "location",
             "budget",
