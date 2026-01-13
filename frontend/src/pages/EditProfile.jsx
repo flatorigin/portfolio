@@ -339,7 +339,7 @@ export default function EditProfile() {
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Service ZIP code
+                    Location(city, state) or ZIP code
                   </label>
                   <Input
                     type="text"
