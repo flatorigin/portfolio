@@ -8,9 +8,12 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 
+// single source of truth for url normalization (supports blob/data previews)
 function toUrl(raw) {
   if (!raw) return "";
+  if (/^(data:|blob:)/i.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
+
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
@@ -29,7 +32,7 @@ export default function EditProfile() {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
 
-  // NEW: hero/banner state
+  // Hero/banner state
   const [bannerPreview, setBannerPreview] = useState(null);
   const [bannerFile, setBannerFile] = useState(null);
 
@@ -37,18 +40,6 @@ export default function EditProfile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-
-  function toUrl(raw) {
-    if (!raw) return "";
-    // ✅ allow preview URLs
-    if (/^(data:|blob:)/i.test(raw)) return raw;
-
-    if (/^https?:\/\//i.test(raw)) return raw;
-    const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
-    const origin = base.replace(/\/api\/?$/, "");
-    return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
-  }
-
 
   // ----------------------------
   // Load current profile: /api/users/me/
@@ -77,11 +68,11 @@ export default function EditProfile() {
           bio: data.bio || "",
         });
 
-        // existing logo/avatar preview
-        setAvatarPreview(toUrl(data.avatar_url || data.logo || null));
+        // ✅ logo preview (use what you actually PATCH: `logo`)
+        setAvatarPreview(toUrl(data.logo || data.logo_url || data.avatar_url || "") || null);
 
-        // NEW: banner preview (what PublicProfile uses)
-        setBannerPreview((data.banner_url || data.banner || null));
+        // ✅ banner preview
+        setBannerPreview(toUrl(data.banner_url || data.banner || "") || null);
       })
       .catch((err) => {
         console.error("[EditProfile] load error", err?.response || err);
@@ -107,15 +98,16 @@ export default function EditProfile() {
   const handleLogoChange = (e) => {
     const file = e.target.files?.[0] || null;
     setLogoFile(file);
+
     if (file) {
       const reader = new FileReader();
       reader.onload = () => setAvatarPreview(reader.result);
       reader.readAsDataURL(file);
     }
+
     e.target.value = "";
   };
 
-  // NEW: banner uploader
   const handleBannerChange = (e) => {
     const file = e.target.files?.[0] || null;
     setBannerFile(file);
@@ -132,7 +124,6 @@ export default function EditProfile() {
       return;
     }
 
-    // Preview immediately
     const reader = new FileReader();
     reader.onload = () => setBannerPreview(reader.result);
     reader.readAsDataURL(file);
@@ -143,8 +134,6 @@ export default function EditProfile() {
   const clearBanner = () => {
     setBannerFile(null);
     setBannerPreview(null);
-    // also clear on server by sending empty string
-    // (handled in submit: we send banner_clear when preview is null & no file)
   };
 
   // ----------------------------
@@ -171,15 +160,11 @@ export default function EditProfile() {
         data.append("logo", logoFile);
       }
 
-      // NEW: include banner file if selected
-      // IMPORTANT: field name must match your backend model/serializer.
-      // Try "banner" first (most common). If your backend expects "banner_image" or "banner_file", rename here.
       if (bannerFile) {
         data.append("banner", bannerFile);
       }
 
-      // If user removed banner (no file + no preview), send empty banner_url/banner to clear.
-      // This works only if your backend allows blank string. If not, remove these two lines.
+      // clear banner on server if removed
       if (!bannerFile && !bannerPreview) {
         data.append("banner_url", "");
         data.append("banner", "");
@@ -192,7 +177,6 @@ export default function EditProfile() {
       const updated = resp.data || {};
       setMessage("Profile updated.");
 
-      // keep form in sync with backend response
       setForm((prev) => ({
         ...prev,
         display_name: updated.display_name ?? prev.display_name,
@@ -207,16 +191,14 @@ export default function EditProfile() {
         bio: updated.bio ?? prev.bio,
       }));
 
-      if (updated.avatar_url || updated.logo) {
-        setAvatarPreview(toUrl(updated.avatar_url || updated.logo));
+      // ✅ refresh previews
+      if (updated.logo || updated.logo_url || updated.avatar_url) {
+        setAvatarPreview(toUrl(updated.logo || updated.logo_url || updated.avatar_url) || null);
       }
-
-      // NEW: update banner preview from response
       if (updated.banner_url || updated.banner) {
-        setBannerPreview(toUrl(updated.banner_url || updated.banner));
+        setBannerPreview(toUrl(updated.banner_url || updated.banner) || null);
       }
 
-      // reset files after save
       setLogoFile(null);
       setBannerFile(null);
     } catch (err) {
@@ -226,9 +208,7 @@ export default function EditProfile() {
         err?.response?.data?.non_field_errors ||
         err?.response?.data ||
         "Could not save your profile.";
-      setError(
-        typeof detail === "string" ? detail : JSON.stringify(detail, null, 2)
-      );
+      setError(typeof detail === "string" ? detail : JSON.stringify(detail, null, 2));
     } finally {
       setSaving(false);
     }
@@ -239,9 +219,7 @@ export default function EditProfile() {
   // ----------------------------
   const mapSrc =
     form.service_location.trim() !== ""
-      ? `https://www.google.com/maps?q=${encodeURIComponent(
-          form.service_location
-        )}&output=embed`
+      ? `https://www.google.com/maps?q=${encodeURIComponent(form.service_location)}&output=embed`
       : null;
 
   const bannerPreviewSafe = useMemo(() => toUrl(bannerPreview), [bannerPreview]);
@@ -257,7 +235,7 @@ export default function EditProfile() {
           {/* LEFT: form */}
           <Card className="space-y-4 p-4">
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* NEW: Hero / banner uploader */}
+              {/* Hero / banner uploader */}
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -270,7 +248,7 @@ export default function EditProfile() {
                     </p>
                   </div>
 
-                  <label className="inline-flex cursor-pointer items-center w-fit whitespace-nowrap rounded-lg border border-slate-300 px-4 py-1 text-xs font-medium text-slate-700 hover:bg-slate-10">
+                  <label className="inline-flex w-fit cursor-pointer items-center whitespace-nowrap rounded-lg border border-slate-300 px-4 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
                     <input
                       type="file"
                       accept="image/*"
@@ -312,11 +290,11 @@ export default function EditProfile() {
                 ) : null}
               </div>
 
-              {/* 🔹 Logo / profile image at the top */}
+              {/* Logo */}
               <div className="flex items-center gap-3">
                 {avatarPreview ? (
                   <img
-                    src={avatarPreview}
+                    src={toUrl(avatarPreview)}
                     alt="Current logo"
                     className="h-16 w-16 rounded-full border border-slate-200 object-cover"
                   />
@@ -430,15 +408,10 @@ export default function EditProfile() {
                 />
               </div>
 
-              {/* Messages */}
               {error && (
-                <p className="whitespace-pre-wrap text-xs text-red-600">
-                  {error}
-                </p>
+                <p className="whitespace-pre-wrap text-xs text-red-600">{error}</p>
               )}
-              {message && (
-                <p className="text-xs text-emerald-600">{message}</p>
-              )}
+              {message && <p className="text-xs text-emerald-600">{message}</p>}
 
               <Button type="submit" disabled={saving} className="mt-2">
                 {saving ? "Saving…" : "Save changes"}
@@ -446,7 +419,7 @@ export default function EditProfile() {
             </form>
           </Card>
 
-          {/* RIGHT: service-area map preview */}
+          {/* RIGHT: map preview */}
           <Card className="space-y-3 p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Service area preview
