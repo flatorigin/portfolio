@@ -1,7 +1,7 @@
 // ============================================================================
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 
@@ -120,7 +120,6 @@ export default function Dashboard() {
     refreshSaved();
   }, [refreshSaved]);
 
-  // React to saves/removes from project detail page
   useEffect(() => {
     const handler = () => refreshSaved();
     window.addEventListener("favorites:changed", handler);
@@ -141,13 +140,10 @@ export default function Dashboard() {
 
     setRemovingFavoriteId(projectId);
     try {
-      // Backend contract: DELETE /api/projects/<pk>/favorite/
       await api.delete(`/projects/${projectId}/favorite/`);
-
       setSavedProjects((prev) =>
         prev.filter((f) => extractProjectId(f) !== projectId)
       );
-
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
       console.error("[Dashboard] failed to remove favorite", err?.response || err);
@@ -179,7 +175,7 @@ export default function Dashboard() {
     highlights: "",
     material_url: "",
     material_label: "",
-    is_job_posting: false, // NEW
+    is_job_posting: false,
   });
   const [cover, setCover] = useState(null);
 
@@ -202,14 +198,18 @@ export default function Dashboard() {
   const [editImgs, setEditImgs] = useState([]);
   const editorRef = useRef(null);
 
+  // ✅ feedback + collapse control
+  const [saveToast, setSaveToast] = useState("");
+  const saveToastTimerRef = useRef(null);
+  const collapseTimerRef = useRef(null);
+
   // current user (ownership)
   const [meUser, setMeUser] = useState({
     username: localStorage.getItem("username") || "",
   });
 
-  // ✅ cover preview for "Your Projects" cards
-  const [myThumbs, setMyThumbs] = useState({});
   // myThumbs[projectId] = { cover: string|null }
+  const [myThumbs, setMyThumbs] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -230,6 +230,7 @@ export default function Dashboard() {
   const [createErr, setCreateErr] = useState("");
   const [createOk, setCreateOk] = useState(false);
 
+  // ✅ define refreshMyThumbs BEFORE refreshProjects (avoids TDZ crash)
   const refreshMyThumbs = useCallback(async (projList) => {
     const list = Array.isArray(projList) ? projList : [];
 
@@ -248,12 +249,12 @@ export default function Dashboard() {
             }))
             .filter((x) => !!x.url);
 
-          const coverUrl =
+          const cover =
             mapped.find((x) => Number(x.order) === 0)?.url ||
             mapped[0]?.url ||
             null;
 
-          return [p.id, { cover: coverUrl }];
+          return [p.id, { cover }];
         } catch {
           return [p.id, { cover: null }];
         }
@@ -289,6 +290,7 @@ export default function Dashboard() {
 
   const list = projects;
 
+  // ✅ Stable refreshImages (preserve UI order; do not allow backend ordering to reshuffle)
   const refreshImages = useCallback(async (pid) => {
     const { data } = await api.get(`/projects/${pid}/images/`);
 
@@ -297,25 +299,21 @@ export default function Dashboard() {
         id: x.id,
         url: x.url || x.image || x.src || x.file,
         caption: x.caption || "",
-        order: x.order ?? x.sort_order ?? null, // keep for "cover" check only
+        order: x.order ?? x.sort_order ?? null, // used for cover radio only
         _localCaption: x.caption || "",
         _saving: false,
       }))
       .filter((x) => !!x.url);
 
-    // ✅ Preserve current UI order; just update fields from server
     setEditImgs((prev) => {
-      // map incoming by id
       const byId = new Map(incoming.map((it) => [String(it.id), it]));
-
-      // keep previous ordering for anything that already exists
       const mergedInPrevOrder = prev
         .filter((p) => byId.has(String(p.id)))
         .map((p) => {
           const next = byId.get(String(p.id));
-          // preserve local typing state if user is editing caption right now
-          const localCaption =
-            p._saving ? p._localCaption : (next?._localCaption ?? next?.caption ?? "");
+          const localCaption = p._saving
+            ? p._localCaption
+            : next?._localCaption ?? next?.caption ?? "";
           return {
             ...p,
             ...next,
@@ -324,55 +322,12 @@ export default function Dashboard() {
           };
         });
 
-      // append any new images not seen before (at the end)
       const prevIds = new Set(prev.map((p) => String(p.id)));
       const newOnes = incoming.filter((it) => !prevIds.has(String(it.id)));
 
       return [...mergedInPrevOrder, ...newOnes];
     });
   }, []);
-
-  async function makeCoverImage(imageId) {
-    if (!editingId || !imageId) return;
-
-    const currentCover = editImgs.find((img) => Number(img.order) === 0);
-
-    // ✅ only update the "active cover" state (order values) - DO NOT reorder the array
-    setEditImgs((prev) =>
-      prev.map((img) => {
-        if (img.id === imageId) return { ...img, order: 0 };
-        if (img.id === currentCover?.id && currentCover.id !== imageId)
-          return { ...img, order: 1 };
-        return img;
-      })
-    );
-
-    try {
-      if (currentCover?.id && currentCover.id !== imageId) {
-        await api.patch(`/projects/${editingId}/images/${currentCover.id}/`, {
-          order: 1,
-        });
-      }
-      await api.patch(`/projects/${editingId}/images/${imageId}/`, { order: 0 });
-
-      // refresh state from server (still no sorting)
-      await refreshImages(editingId);
-
-      // ✅ also refresh projects so the "Your Projects" preview can update
-      await refreshProjects();
-    } catch (err) {
-      console.error("[Dashboard] makeCoverImage failed", err?.response || err);
-      await refreshImages(editingId);
-      const data = err?.response?.data;
-      alert(
-        data?.detail ||
-          data?.message ||
-          (data ? JSON.stringify(data) : "") ||
-          err?.message ||
-          "Failed to set cover image."
-      );
-    }
-  }
 
   const loadEditor = useCallback(
     async (id) => {
@@ -402,10 +357,7 @@ export default function Dashboard() {
       await refreshImages(pid);
 
       setTimeout(() => {
-        editorRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
+        editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 150);
     },
     [refreshImages]
@@ -428,6 +380,46 @@ export default function Dashboard() {
     }
     tryScroll();
   }, [editingId]);
+
+  // ✅ cover = order 0 (backend). UI does NOT reorder due to refreshImages merge.
+  async function makeCoverImage(imageId) {
+    if (!editingId || !imageId) return;
+
+    const currentCover = editImgs.find((img) => Number(img.order) === 0);
+
+    // update "active cover" locally, but DO NOT reorder the array
+    setEditImgs((prev) =>
+      prev.map((img) => {
+        if (img.id === imageId) return { ...img, order: 0 };
+        if (img.id === currentCover?.id && currentCover.id !== imageId)
+          return { ...img, order: 1 };
+        return img;
+      })
+    );
+
+    try {
+      if (currentCover?.id && currentCover.id !== imageId) {
+        await api.patch(`/projects/${editingId}/images/${currentCover.id}/`, {
+          order: 1,
+        });
+      }
+      await api.patch(`/projects/${editingId}/images/${imageId}/`, { order: 0 });
+
+      await refreshImages(editingId);
+      await refreshProjects();
+    } catch (err) {
+      console.error("[Dashboard] makeCoverImage failed", err?.response || err);
+      await refreshImages(editingId);
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to set cover image."
+      );
+    }
+  }
 
   async function createProject(e) {
     e.preventDefault();
@@ -460,8 +452,6 @@ export default function Dashboard() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // keep behavior: prepend locally + refresh server truth
-      setProjects((prev) => [data, ...prev]);
       await refreshProjects();
 
       setForm({
@@ -495,36 +485,41 @@ export default function Dashboard() {
   }
 
   async function saveProjectInfo(e) {
-    console.log("[Dashboard] saveProjectInfo called", editingId, editForm);
-
     e?.preventDefault?.();
     if (!editingId) return;
-
-    console.log("[Dashboard] PATCH start", editingId, editForm);
 
     setBusy(true);
     try {
       const payload = { ...editForm };
-
-      // normalize booleans
       payload.is_public = !!payload.is_public;
       payload.is_job_posting = !!payload.is_job_posting;
 
-      // keep cover_image_id as number (DO NOT send cover_image; it's a file field)
+      // cover image selection is handled via image order=0 (not cover_image file upload)
       if (payload.cover_image_id == null || payload.cover_image_id === "") {
         delete payload.cover_image_id;
       } else {
         payload.cover_image_id = Number(payload.cover_image_id);
       }
 
-      const res = await api.patch(`/projects/${editingId}/`, payload);
-
-      console.log("[Dashboard] PATCH ok", res?.status, res?.data);
+      await api.patch(`/projects/${editingId}/`, payload);
 
       await refreshProjects();
-      await loadEditor(editingId); // reload meta so UI matches backend
+
+      // ✅ CREATIVE FEEDBACK + AUTO COLLAPSE
+      const title = (payload.title || "").trim();
+      setSaveToast(title ? `Saved ✓  “${title}”` : "Saved ✓  Your changes are live");
+
+      if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+      if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+
+      saveToastTimerRef.current = setTimeout(() => setSaveToast(""), 1600);
+
+      // collapse editor back to previous state
+      collapseTimerRef.current = setTimeout(() => {
+        setEditingId("");
+      }, 550);
     } catch (err) {
-      console.error("[Dashboard] PATCH failed", err?.response || err);
+      console.error("[Dashboard] save failed", err?.response || err);
       const data = err?.response?.data;
       alert(
         data?.detail ||
@@ -541,9 +536,11 @@ export default function Dashboard() {
   async function saveImageCaption(img) {
     if (!editingId || !img?.id) return;
     if (img._localCaption === img.caption) return;
+
     setEditImgs((prev) =>
       prev.map((x) => (x.id === img.id ? { ...x, _saving: true } : x))
     );
+
     try {
       await api.patch(`/projects/${editingId}/images/${img.id}/`, {
         caption: img._localCaption,
@@ -564,18 +561,24 @@ export default function Dashboard() {
     try {
       await api.delete(`/projects/${editingId}/images/${img.id}/`);
       await refreshImages(editingId);
+      await refreshProjects();
     } finally {
       setBusy(false);
     }
   }
 
   const handleEditorSubmit = useCallback(
-    (e) => {
-      console.log("[Dashboard] Save Changes clicked", { editingId, editForm });
-      return saveProjectInfo(e);
-    },
-    [editingId, editForm]
+    (e) => saveProjectInfo(e),
+    [editingId, editForm] // keep aligned with your current flow
   );
+
+  // cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+      if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+    };
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -588,7 +591,6 @@ export default function Dashboard() {
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            {/* Logo/avatar */}
             <div className="relative h-10 w-10 flex-shrink-0">
               {logoUrl ? (
                 <img
@@ -689,6 +691,7 @@ export default function Dashboard() {
 
                   const owner =
                     fav.project_owner_username || fav.project?.owner_username;
+
                   const category = fav.project_category || fav.project?.category;
                   const summary = fav.project_summary || fav.project?.summary;
                   const location = fav.project_location || fav.project?.location;
@@ -763,7 +766,6 @@ export default function Dashboard() {
                           )}
                         </div>
 
-                        {/* Actions: inline, never wrap, each takes half width */}
                         <div className="mt-3 flex w-full flex-nowrap gap-2">
                           <GhostButton
                             className="w-1/2 min-w-0"
@@ -800,9 +802,7 @@ export default function Dashboard() {
                   size="sm"
                   onClick={() => setShowAllSaved((v) => !v)}
                 >
-                  {showAllSaved
-                    ? "Show fewer"
-                    : `Show all ${savedProjects.length}`}
+                  {showAllSaved ? "Show fewer" : `Show all ${savedProjects.length}`}
                 </Button>
               </div>
             )}
@@ -837,14 +837,14 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
             {list.map((p) => {
-              const coverUrl =
-                myThumbs[p.id]?.cover || (p.cover_image ? toUrl(p.cover_image) : "");
+              const coverFromImgs = myThumbs?.[p.id]?.cover || "";
+              const coverSrc = coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
 
               return (
                 <Card key={p.id} className="overflow-hidden">
-                  {coverUrl ? (
+                  {coverSrc ? (
                     <img
-                      src={coverUrl}
+                      src={coverSrc}
                       alt=""
                       className="block h-36 w-full object-cover"
                     />
@@ -855,7 +855,6 @@ export default function Dashboard() {
                   )}
 
                   <div className="p-4">
-                    {/* Header aligned like the previous card */}
                     <div className="mb-1 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate font-semibold">{p.title}</div>
@@ -873,8 +872,7 @@ export default function Dashboard() {
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
                       {p.location ? (
                         <div>
-                          <span className="opacity-60">Location:</span>{" "}
-                          {p.location}
+                          <span className="opacity-60">Location:</span> {p.location}
                         </div>
                       ) : null}
 
@@ -898,7 +896,6 @@ export default function Dashboard() {
                       ) : null}
                     </div>
 
-                    {/* Actions: inline, never wrap, each takes half width */}
                     <div className="mt-3 flex w-full flex-nowrap gap-2">
                       <GhostButton
                         className="w-1/2 min-w-0"
@@ -922,7 +919,24 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* 3) EDITOR — replaced with ProjectEditorCard */}
+      {/* ✅ Save feedback (creative) */}
+      {saveToast ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
+              ✓
+            </span>
+            <div className="min-w-0">
+              <div className="font-semibold truncate">{saveToast}</div>
+              <div className="text-[11px] text-emerald-800/80">
+                Nice — updates are saved and live on your project card.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 3) EDITOR — ProjectEditorCard */}
       {editingId && (
         <div ref={editorRef}>
           <ProjectEditorCard
