@@ -1,20 +1,13 @@
 // ============================================================================
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
-import ImageUploader from "../components/ImageUploader";
+
 import CreateProjectCard from "../components/CreateProjectCard";
-import {
-  SectionTitle,
-  Card,
-  Input,
-  Textarea,
-  Button,
-  GhostButton,
-  Badge,
-} from "../ui";
+import ProjectEditorCard from "../components/ProjectEditorCard";
+import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
 
 // normalize media
 function toUrl(raw) {
@@ -59,10 +52,7 @@ export default function Dashboard() {
           bio: data?.bio || "",
         };
         setMeLite(next);
-        localStorage.setItem(
-          "profile_display_name",
-          next.display_name || ""
-        );
+        localStorage.setItem("profile_display_name", next.display_name || "");
         localStorage.setItem("profile_logo", next.logo || "");
       } catch {
         /* non-blocking */
@@ -84,9 +74,7 @@ export default function Dashboard() {
       ) {
         setMeLite((prev) => ({
           ...prev,
-          ...(d.display_name !== undefined
-            ? { display_name: d.display_name }
-            : {}),
+          ...(d.display_name !== undefined ? { display_name: d.display_name } : {}),
           ...(d.logo !== undefined ? { logo: d.logo } : {}),
           ...(d.service_location !== undefined
             ? { service_location: d.service_location }
@@ -118,8 +106,7 @@ export default function Dashboard() {
       const { data } = await api.get("/favorites/projects/");
       const sorted = Array.isArray(data)
         ? [...data].sort(
-            (a, b) =>
-              new Date(b.created_at || 0) - new Date(a.created_at || 0)
+            (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
           )
         : [];
       setSavedProjects(sorted);
@@ -163,10 +150,7 @@ export default function Dashboard() {
 
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
-      console.error(
-        "[Dashboard] failed to remove favorite",
-        err?.response || err
-      );
+      console.error("[Dashboard] failed to remove favorite", err?.response || err);
       const data = err?.response?.data;
       const msg =
         data?.detail ||
@@ -213,8 +197,8 @@ export default function Dashboard() {
     highlights: "",
     material_url: "",
     material_label: "",
+    cover_image_id: null,
   });
-  const [editCover, setEditCover] = useState(null);
   const [editImgs, setEditImgs] = useState([]);
   const editorRef = useRef(null);
 
@@ -222,6 +206,10 @@ export default function Dashboard() {
   const [meUser, setMeUser] = useState({
     username: localStorage.getItem("username") || "",
   });
+
+  // ✅ cover preview for "Your Projects" cards
+  const [myThumbs, setMyThumbs] = useState({});
+  // myThumbs[projectId] = { cover: string|null }
 
   useEffect(() => {
     (async () => {
@@ -242,20 +230,58 @@ export default function Dashboard() {
   const [createErr, setCreateErr] = useState("");
   const [createOk, setCreateOk] = useState(false);
 
+  const refreshMyThumbs = useCallback(async (projList) => {
+    const list = Array.isArray(projList) ? projList : [];
+
+    const entries = await Promise.all(
+      list.map(async (p) => {
+        try {
+          const { data } = await api
+            .get(`/projects/${p.id}/images/`)
+            .catch(() => ({ data: [] }));
+          const imgs = Array.isArray(data) ? data : [];
+
+          const mapped = imgs
+            .map((it) => ({
+              url: toUrl(it.url || it.image || it.src || it.file || ""),
+              order: it.order ?? it.sort_order ?? null,
+            }))
+            .filter((x) => !!x.url);
+
+          const coverUrl =
+            mapped.find((x) => Number(x.order) === 0)?.url ||
+            mapped[0]?.url ||
+            null;
+
+          return [p.id, { cover: coverUrl }];
+        } catch {
+          return [p.id, { cover: null }];
+        }
+      })
+    );
+
+    setMyThumbs(Object.fromEntries(entries));
+  }, []);
+
   const refreshProjects = useCallback(async () => {
     try {
       const { data } = await api.get("/projects/");
       const mine = Array.isArray(data)
-        ? data.filter((p) => (p.owner_username || "").toLowerCase() === (meUser.username || "").toLowerCase())
+        ? data.filter(
+            (p) =>
+              (p.owner_username || "").toLowerCase() ===
+              (meUser.username || "").toLowerCase()
+          )
         : [];
-      setProjects(mine);
 
-      setProjects(Array.isArray(data) ? data : []);
+      setProjects(mine);
+      await refreshMyThumbs(mine);
     } catch (err) {
       console.warn("[Dashboard] failed to load my projects", err);
       setProjects([]);
+      setMyThumbs({});
     }
-  }, []);
+  }, [meUser.username, refreshMyThumbs]);
 
   useEffect(() => {
     refreshProjects();
@@ -265,22 +291,94 @@ export default function Dashboard() {
 
   const refreshImages = useCallback(async (pid) => {
     const { data } = await api.get(`/projects/${pid}/images/`);
-    const arr = (data || [])
+
+    const incoming = (Array.isArray(data) ? data : [])
       .map((x) => ({
         id: x.id,
         url: x.url || x.image || x.src || x.file,
         caption: x.caption || "",
+        order: x.order ?? x.sort_order ?? null, // keep for "cover" check only
         _localCaption: x.caption || "",
         _saving: false,
       }))
       .filter((x) => !!x.url);
-    setEditImgs(arr);
+
+    // ✅ Preserve current UI order; just update fields from server
+    setEditImgs((prev) => {
+      // map incoming by id
+      const byId = new Map(incoming.map((it) => [String(it.id), it]));
+
+      // keep previous ordering for anything that already exists
+      const mergedInPrevOrder = prev
+        .filter((p) => byId.has(String(p.id)))
+        .map((p) => {
+          const next = byId.get(String(p.id));
+          // preserve local typing state if user is editing caption right now
+          const localCaption =
+            p._saving ? p._localCaption : (next?._localCaption ?? next?.caption ?? "");
+          return {
+            ...p,
+            ...next,
+            _localCaption: localCaption,
+            _saving: !!p._saving && next?.caption !== p._localCaption,
+          };
+        });
+
+      // append any new images not seen before (at the end)
+      const prevIds = new Set(prev.map((p) => String(p.id)));
+      const newOnes = incoming.filter((it) => !prevIds.has(String(it.id)));
+
+      return [...mergedInPrevOrder, ...newOnes];
+    });
   }, []);
+
+  async function makeCoverImage(imageId) {
+    if (!editingId || !imageId) return;
+
+    const currentCover = editImgs.find((img) => Number(img.order) === 0);
+
+    // ✅ only update the "active cover" state (order values) - DO NOT reorder the array
+    setEditImgs((prev) =>
+      prev.map((img) => {
+        if (img.id === imageId) return { ...img, order: 0 };
+        if (img.id === currentCover?.id && currentCover.id !== imageId)
+          return { ...img, order: 1 };
+        return img;
+      })
+    );
+
+    try {
+      if (currentCover?.id && currentCover.id !== imageId) {
+        await api.patch(`/projects/${editingId}/images/${currentCover.id}/`, {
+          order: 1,
+        });
+      }
+      await api.patch(`/projects/${editingId}/images/${imageId}/`, { order: 0 });
+
+      // refresh state from server (still no sorting)
+      await refreshImages(editingId);
+
+      // ✅ also refresh projects so the "Your Projects" preview can update
+      await refreshProjects();
+    } catch (err) {
+      console.error("[Dashboard] makeCoverImage failed", err?.response || err);
+      await refreshImages(editingId);
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to set cover image."
+      );
+    }
+  }
 
   const loadEditor = useCallback(
     async (id) => {
       const pid = String(id);
       setEditingId(pid);
+
       const { data: meta } = await api.get(`/projects/${pid}/`);
       setEditForm({
         title: meta?.title || "",
@@ -294,9 +392,15 @@ export default function Dashboard() {
         highlights: meta?.highlights || "",
         material_url: meta?.material_url || "",
         material_label: meta?.material_label || "",
+        cover_image_id:
+          meta?.cover_image_id ??
+          meta?.cover_image?.id ??
+          meta?.cover_image ??
+          null,
       });
-      setEditCover(null);
+
       await refreshImages(pid);
+
       setTimeout(() => {
         editorRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -313,9 +417,7 @@ export default function Dashboard() {
     function tryScroll() {
       if (editorRef.current) {
         const top =
-          editorRef.current.getBoundingClientRect().top +
-          window.scrollY -
-          80;
+          editorRef.current.getBoundingClientRect().top + window.scrollY - 80;
         window.scrollTo({ top, behavior: "smooth" });
         return;
       }
@@ -327,95 +429,110 @@ export default function Dashboard() {
     tryScroll();
   }, [editingId]);
 
-async function createProject(e) {
-  e.preventDefault();
-  setCreateErr("");
-  setCreateOk(false);
-  setBusy(true);
-  try {
-    const token = localStorage.getItem("access");
-    if (!token) {
-      setCreateErr("You must be logged in to create a project.");
-      return;
-    }
-
-    if (!form.title.trim()) {
-      setCreateErr("Title is required.");
-      return;
-    }
-
-    const fd = new FormData();
-    Object.entries(form).forEach(([k, v]) => {
-      // ensure booleans are serialized clearly
-      if (k === "is_public" || k === "is_job_posting") {
-        fd.append(k, v ? "true" : "false");
-      } else {
-        fd.append(k, v ?? "");
-      }
-    });
-    if (cover) fd.append("cover_image", cover);
-
-    const { data } = await api.post("/projects/", fd, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-
-    setProjects((prev) => [data, ...prev]);
-    await refreshProjects();
-
-    // 🔹 reset form including the job flag
-    setForm({
-      title: "",
-      summary: "",
-      category: "",
-      is_public: true,
-      is_job_posting: false,
-      location: "",
-      budget: "",
-      sqf: "",
-      highlights: "",
-      material_url: "",
-      material_label: "",
-    });
-    setCover(null);
-    setCreateOk(true);
-
-    if (data?.id) await loadEditor(data.id);
-  } catch (err) {
-    const msg = err?.response?.data
-      ? typeof err.response.data === "string"
-        ? err.response.data
-        : JSON.stringify(err.response.data)
-      : err?.message || String(err);
-    setCreateErr(msg);
-    console.error("[createProject] failed:", err);
-  } finally {
-    setBusy(false);
-  }
-}
-
-
-  async function saveProjectInfo(e) {
-    e?.preventDefault?.();
-    if (!editingId) return;
+  async function createProject(e) {
+    e.preventDefault();
+    setCreateErr("");
+    setCreateOk(false);
     setBusy(true);
     try {
-      if (editCover) {
-        const fd = new FormData();
-        Object.entries(editForm).forEach(([k, v]) => {
-          if (k === "is_public" || k === "is_job_posting") {
-            fd.append(k, v ? "true" : "false");
-          } else {
-            fd.append(k, v ?? "");
-          }
-        });
-        fd.append("cover_image", editCover);
-        await api.patch(`/projects/${editingId}/`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-      } else {
-        await api.patch(`/projects/${editingId}/`, editForm);
+      const token = localStorage.getItem("access");
+      if (!token) {
+        setCreateErr("You must be logged in to create a project.");
+        return;
       }
+
+      if (!form.title.trim()) {
+        setCreateErr("Title is required.");
+        return;
+      }
+
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => {
+        if (k === "is_public" || k === "is_job_posting") {
+          fd.append(k, v ? "true" : "false");
+        } else {
+          fd.append(k, v ?? "");
+        }
+      });
+      if (cover) fd.append("cover_image", cover);
+
+      const { data } = await api.post("/projects/", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // keep behavior: prepend locally + refresh server truth
+      setProjects((prev) => [data, ...prev]);
       await refreshProjects();
+
+      setForm({
+        title: "",
+        summary: "",
+        category: "",
+        is_public: true,
+        is_job_posting: false,
+        location: "",
+        budget: "",
+        sqf: "",
+        highlights: "",
+        material_url: "",
+        material_label: "",
+      });
+      setCover(null);
+      setCreateOk(true);
+
+      if (data?.id) await loadEditor(data.id);
+    } catch (err) {
+      const msg = err?.response?.data
+        ? typeof err.response.data === "string"
+          ? err.response.data
+          : JSON.stringify(err.response.data)
+        : err?.message || String(err);
+      setCreateErr(msg);
+      console.error("[createProject] failed:", err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveProjectInfo(e) {
+    console.log("[Dashboard] saveProjectInfo called", editingId, editForm);
+
+    e?.preventDefault?.();
+    if (!editingId) return;
+
+    console.log("[Dashboard] PATCH start", editingId, editForm);
+
+    setBusy(true);
+    try {
+      const payload = { ...editForm };
+
+      // normalize booleans
+      payload.is_public = !!payload.is_public;
+      payload.is_job_posting = !!payload.is_job_posting;
+
+      // keep cover_image_id as number (DO NOT send cover_image; it's a file field)
+      if (payload.cover_image_id == null || payload.cover_image_id === "") {
+        delete payload.cover_image_id;
+      } else {
+        payload.cover_image_id = Number(payload.cover_image_id);
+      }
+
+      const res = await api.patch(`/projects/${editingId}/`, payload);
+
+      console.log("[Dashboard] PATCH ok", res?.status, res?.data);
+
+      await refreshProjects();
+      await loadEditor(editingId); // reload meta so UI matches backend
+    } catch (err) {
+      console.error("[Dashboard] PATCH failed", err?.response || err);
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Save failed"
+      );
     } finally {
       setBusy(false);
     }
@@ -433,9 +550,7 @@ async function createProject(e) {
       });
       await refreshImages(editingId);
     } catch (e) {
-      alert(
-        e?.response?.data ? JSON.stringify(e.response.data) : String(e)
-      );
+      alert(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
       setEditImgs((prev) =>
         prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x))
       );
@@ -453,6 +568,14 @@ async function createProject(e) {
       setBusy(false);
     }
   }
+
+  const handleEditorSubmit = useCallback(
+    (e) => {
+      console.log("[Dashboard] Save Changes clicked", { editingId, editForm });
+      return saveProjectInfo(e);
+    },
+    [editingId, editForm]
+  );
 
   return (
     <div className="space-y-8">
@@ -498,8 +621,7 @@ async function createProject(e) {
                 {meLite.display_name || "Add your name in Edit Profile"}
               </div>
 
-              {(meLite.service_location ||
-                meLite.coverage_radius_miles) && (
+              {(meLite.service_location || meLite.coverage_radius_miles) && (
                 <div className="mt-1 text-xs text-slate-600">
                   {meLite.service_location || "Location not set"}
                   {meLite.coverage_radius_miles !== "" && (
@@ -509,15 +631,12 @@ async function createProject(e) {
               )}
 
               {meLite.bio && (
-                <p className="mt-2 text-xs text-slate-600">
-                  {meLite.bio}
-                </p>
+                <p className="mt-2 text-xs text-slate-600">{meLite.bio}</p>
               )}
 
               {!meLite.service_location && !meLite.bio && (
                 <p className="mt-2 text-xs text-slate-500">
-                  Add your service area and a short bio so clients know
-                  who you are.
+                  Add your service area and a short bio so clients know who you are.
                 </p>
               )}
             </div>
@@ -548,122 +667,129 @@ async function createProject(e) {
         ) : (
           <>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-              {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map((fav) => {
-                const projectId = extractProjectId(fav);
+              {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map(
+                (fav) => {
+                  const projectId = extractProjectId(fav);
 
-                const coverSrcRaw =
-                  fav.project_cover_image_url ||
-                  fav.project_cover_image ||
-                  fav.project_cover ||
-                  fav.project?.cover_image_url ||
-                  fav.project?.cover_image ||
-                  fav.project?.cover ||
-                  "";
+                  const coverSrcRaw =
+                    fav.project_cover_image_url ||
+                    fav.project_cover_image ||
+                    fav.project_cover ||
+                    fav.project?.cover_image_url ||
+                    fav.project?.cover_image ||
+                    fav.project?.cover ||
+                    "";
 
-                const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
+                  const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
 
-                const title =
-                  fav.project_title ||
-                  fav.project?.title ||
-                  (projectId ? `Project #${projectId}` : "Project");
+                  const title =
+                    fav.project_title ||
+                    fav.project?.title ||
+                    (projectId ? `Project #${projectId}` : "Project");
 
-                const owner =
-                  fav.project_owner_username || fav.project?.owner_username;
+                  const owner =
+                    fav.project_owner_username || fav.project?.owner_username;
+                  const category = fav.project_category || fav.project?.category;
+                  const summary = fav.project_summary || fav.project?.summary;
+                  const location = fav.project_location || fav.project?.location;
+                  const budget = fav.project_budget || fav.project?.budget;
+                  const sqf = fav.project_sqf || fav.project?.sqf;
+                  const highlights =
+                    fav.project_highlights || fav.project?.highlights;
 
-                const category = fav.project_category || fav.project?.category;
+                  const removing = removingFavoriteId === projectId;
 
-                const summary = fav.project_summary || fav.project?.summary;
+                  return (
+                    <Card
+                      key={fav.id ?? `p-${projectId ?? "unknown"}`}
+                      className="overflow-hidden"
+                    >
+                      {coverSrc ? (
+                        <img
+                          src={coverSrc}
+                          alt=""
+                          className="block h-36 w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                          No cover
+                        </div>
+                      )}
 
-                const location = fav.project_location || fav.project?.location;
+                      <div className="p-4">
+                        <div className="mb-1 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold">{title}</div>
+                            {owner && (
+                              <div className="text-[11px] text-slate-500">
+                                by {owner}
+                              </div>
+                            )}
+                          </div>
 
-                const budget = fav.project_budget || fav.project?.budget;
+                          {category && (
+                            <Badge className="shrink-0">{category}</Badge>
+                          )}
+                        </div>
 
-                const sqf = fav.project_sqf || fav.project?.sqf;
+                        <div className="line-clamp-2 text-sm text-slate-700">
+                          {summary || (
+                            <span className="opacity-60">No summary</span>
+                          )}
+                        </div>
 
-                const highlights =
-                  fav.project_highlights || fav.project?.highlights;
-
-                const removing = removingFavoriteId === projectId;
-
-                return (
-                  <Card
-                    key={fav.id ?? `p-${projectId ?? "unknown"}`}
-                    className="overflow-hidden"
-                  >
-                    {coverSrc ? (
-                      <img
-                        src={coverSrc}
-                        alt=""
-                        className="block h-36 w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
-                        No cover
-                      </div>
-                    )}
-
-                    <div className="p-4">
-                      <div className="mb-1 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold">{title}</div>
-                          {owner && (
-                            <div className="text-[11px] text-slate-500">
-                              by {owner}
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                          {location && (
+                            <div>
+                              <span className="opacity-60">Location:</span>{" "}
+                              {location}
+                            </div>
+                          )}
+                          {budget && (
+                            <div>
+                              <span className="opacity-60">Budget:</span> {budget}
+                            </div>
+                          )}
+                          {sqf && (
+                            <div>
+                              <span className="opacity-60">Sq Ft:</span> {sqf}
+                            </div>
+                          )}
+                          {highlights && (
+                            <div className="col-span-2 truncate">
+                              <span className="opacity-60">Highlights:</span>{" "}
+                              {highlights}
                             </div>
                           )}
                         </div>
-                        {category && <Badge>{category}</Badge>}
-                      </div>
 
-                      <div className="line-clamp-2 text-sm text-slate-700">
-                        {summary || <span className="opacity-60">No summary</span>}
-                      </div>
+                        {/* Actions: inline, never wrap, each takes half width */}
+                        <div className="mt-3 flex w-full flex-nowrap gap-2">
+                          <GhostButton
+                            className="w-1/2 min-w-0"
+                            onClick={() =>
+                              window.open(`/projects/${projectId}`, "_self")
+                            }
+                            disabled={!projectId || removing}
+                          >
+                            Open
+                          </GhostButton>
 
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                        {location && (
-                          <div>
-                            <span className="opacity-60">Location:</span> {location}
-                          </div>
-                        )}
-                        {budget && (
-                          <div>
-                            <span className="opacity-60">Budget:</span> {budget}
-                          </div>
-                        )}
-                        {sqf && (
-                          <div>
-                            <span className="opacity-60">Sq Ft:</span> {sqf}
-                          </div>
-                        )}
-                        {highlights && (
-                          <div className="col-span-2 truncate">
-                            <span className="opacity-60">Highlights:</span>{" "}
-                            {highlights}
-                          </div>
-                        )}
+                          <Button
+                            className="w-1/2 min-w-0"
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleRemoveFavorite(fav)}
+                            disabled={removing}
+                          >
+                            {removing ? "Removing…" : "Remove"}
+                          </Button>
+                        </div>
                       </div>
-
-                      <div className="mt-3 flex items-center gap-2">
-                        <GhostButton
-                          onClick={() => window.open(`/projects/${projectId}`, "_self")}
-                          disabled={!projectId || removing}
-                        >
-                          Open
-                        </GhostButton>
-
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => handleRemoveFavorite(fav)}
-                          disabled={removing}
-                        >
-                          {removing ? "Removing…" : "Remove"}
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
+                    </Card>
+                  );
+                }
+              )}
             </div>
 
             {savedProjects.length > 3 && (
@@ -674,14 +800,15 @@ async function createProject(e) {
                   size="sm"
                   onClick={() => setShowAllSaved((v) => !v)}
                 >
-                  {showAllSaved ? "Show fewer" : `Show all ${savedProjects.length}`}
+                  {showAllSaved
+                    ? "Show fewer"
+                    : `Show all ${savedProjects.length}`}
                 </Button>
               </div>
             )}
           </>
         )}
       </Card>
-
 
       {/* 1) CREATE PROJECT — now collapsible reusable card */}
       <CreateProjectCard
@@ -699,9 +826,7 @@ async function createProject(e) {
       {/* 2) YOUR PROJECTS */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-800">
-            Your Projects
-          </div>
+          <div className="text-sm font-semibold text-slate-800">Your Projects</div>
           <Badge>{list.length} shown</Badge>
         </div>
 
@@ -711,384 +836,114 @@ async function createProject(e) {
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-            {list.map((p) => (
-              <Card key={p.id} className="overflow-hidden">
-                {p.cover_image ? (
-                  <img
-                    src={toUrl(p.cover_image)}
-                    alt=""
-                    className="block h-36 w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
-                    No cover
-                  </div>
-                )}
+            {list.map((p) => {
+              const coverUrl =
+                myThumbs[p.id]?.cover || (p.cover_image ? toUrl(p.cover_image) : "");
 
-                <div className="p-4">
-                  <div className="mb-1 flex items-center justify-between gap-3">
-                    <div className="truncate font-semibold">
-                      {p.title}
+              return (
+                <Card key={p.id} className="overflow-hidden">
+                  {coverUrl ? (
+                    <img
+                      src={coverUrl}
+                      alt=""
+                      className="block h-36 w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                      No cover
                     </div>
-                    {p.category ? <Badge>{p.category}</Badge> : null}
-                  </div>
-                  <div className="line-clamp-2 text-sm text-slate-700">
-                    {p.summary || (
-                      <span className="opacity-60">No summary</span>
-                    )}
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                    {p.location ? (
-                      <div>
-                        <span className="opacity-60">Location:</span>{" "}
-                        {p.location}
+                  )}
+
+                  <div className="p-4">
+                    {/* Header aligned like the previous card */}
+                    <div className="mb-1 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">{p.title}</div>
                       </div>
-                    ) : null}
-                    {p.budget ? (
-                      <div>
-                        <span className="opacity-60">Budget:</span>{" "}
-                        {p.budget}
-                      </div>
-                    ) : null}
-                    {p.sqf ? (
-                      <div>
-                        <span className="opacity-60">Sq Ft:</span>{" "}
-                        {p.sqf}
-                      </div>
-                    ) : null}
-                    {p.highlights ? (
-                      <div className="col-span-2 truncate">
-                        <span className="opacity-60">
-                          Highlights:
-                        </span>{" "}
-                        {p.highlights}
-                      </div>
-                    ) : null}
+
+                      {p.category ? (
+                        <Badge className="shrink-0">{p.category}</Badge>
+                      ) : null}
+                    </div>
+
+                    <div className="line-clamp-2 text-sm text-slate-700">
+                      {p.summary || <span className="opacity-60">No summary</span>}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      {p.location ? (
+                        <div>
+                          <span className="opacity-60">Location:</span>{" "}
+                          {p.location}
+                        </div>
+                      ) : null}
+
+                      {p.budget ? (
+                        <div>
+                          <span className="opacity-60">Budget:</span> {p.budget}
+                        </div>
+                      ) : null}
+
+                      {p.sqf ? (
+                        <div>
+                          <span className="opacity-60">Sq Ft:</span> {p.sqf}
+                        </div>
+                      ) : null}
+
+                      {p.highlights ? (
+                        <div className="col-span-2 truncate">
+                          <span className="opacity-60">Highlights:</span>{" "}
+                          {p.highlights}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Actions: inline, never wrap, each takes half width */}
+                    <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <GhostButton
+                        className="w-1/2 min-w-0"
+                        onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                      >
+                        Open
+                      </GhostButton>
+
+                      <Button
+                        className="w-1/2 min-w-0"
+                        onClick={() => loadEditor(p.id)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <GhostButton
-                      onClick={() =>
-                        window.open(`/projects/${p.id}`, "_self")
-                      }
-                    >
-                      Open
-                    </GhostButton>
-                    <Button onClick={() => loadEditor(p.id)}>Edit</Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </Card>
 
-      {/* 3) EDITOR */}
+      {/* 3) EDITOR — replaced with ProjectEditorCard */}
       {editingId && (
         <div ref={editorRef}>
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-800">
-                Editing Project #{editingId}
-              </div>
-              <div className="flex items-center gap-2">
-                <GhostButton
-                  onClick={() =>
-                    window.open(`/projects/${editingId}`, "_self")
-                  }
-                >
-                  View
-                </GhostButton>
-                <GhostButton onClick={() => setEditingId("")}>
-                  Close
-                </GhostButton>
-              </div>
-            </div>
-
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Project Info (Draft)
-            </div>
-
-            <form
-              onSubmit={saveProjectInfo}
-              className="grid grid-cols-1 gap-3 md:grid-cols-2"
-            >
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Project Name
-                </label>
-                <Input
-                  value={editForm.title}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, title: e.target.value })
-                  }
-                  placeholder="Project name"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Category
-                </label>
-                <Input
-                  value={editForm.category}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      category: e.target.value,
-                    })
-                  }
-                  placeholder="Category"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm text-slate-600">
-                  Summary
-                </label>
-                <Textarea
-                  value={editForm.summary}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      summary: e.target.value,
-                    })
-                  }
-                  placeholder="Short description..."
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Location (not address)
-                </label>
-                <Input
-                  value={editForm.location}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      location: e.target.value,
-                    })
-                  }
-                  placeholder="City, State"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Budget
-                </label>
-                <Input
-                  value={editForm.budget}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      budget: e.target.value,
-                    })
-                  }
-                  inputMode="numeric"
-                  placeholder="e.g. 250000"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Square Feet
-                </label>
-                <Input
-                  value={editForm.sqf}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      sqf: e.target.value,
-                    })
-                  }
-                  inputMode="numeric"
-                  placeholder="e.g. 1800"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Highlights (tags / text)
-                </label>
-                <Input
-                  value={editForm.highlights}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      highlights: e.target.value,
-                    })
-                  }
-                  placeholder="comma-separated tags"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Material / tool link (optional)
-                </label>
-                <Input
-                  value={editForm.material_url}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      material_url: e.target.value,
-                    })
-                  }
-                  placeholder="https://www.example.com/product/123"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Material label (title + price)
-                </label>
-                <Input
-                  value={editForm.material_label}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      material_label: e.target.value,
-                    })
-                  }
-                  placeholder="e.g. Bosch SDS Hammer Drill – $129"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Cover (replace)
-                </label>
-                <input
-                  type="file"
-                  onChange={(e) =>
-                    setEditCover(e.target.files?.[0] || null)
-                  }
-                />
-                {editCover && (
-                  <div className="mt-1 truncate text-xs text-slate-500">
-                    {editCover.name}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mr-2 align-middle"
-                    checked={!!editForm.is_public}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        is_public: e.target.checked,
-                      })
-                    }
-                  />
-                  Public
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="mr-2 align-middle"
-                    checked={!!editForm.is_job_posting}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        is_job_posting: e.target.checked,
-                      })
-                    }
-                  />
-                  Job posting
-                </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <Button disabled={busy}>Save Changes</Button>
-              </div>
-            </form>
-
-            {/* Images */}
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm text-slate-600">Images</div>
-                <Badge>{editImgs.length} total</Badge>
-              </div>
-              {editImgs.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  No images yet.
-                </div>
-              ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-                  {editImgs.map((it) => (
-                    <figure
-                      key={it.id ?? it.url}
-                      className="rounded-xl border border-slate-200 bg-white p-3"
-                    >
-                      <img
-                        src={it.url}
-                        alt=""
-                        className="mb-2 h-36 w-full rounded-md object-cover"
-                      />
-                      <input
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="Caption…"
-                        value={it._localCaption}
-                        onChange={(e) =>
-                          setEditImgs((prev) =>
-                            prev.map((x) =>
-                              x.id === it.id
-                                ? {
-                                    ...x,
-                                    _localCaption: e.target.value,
-                                  }
-                                : x
-                            )
-                          )
-                        }
-                      />
-                      <div className="mt-2 flex items-center justify-between">
-                        <GhostButton
-                          onClick={() => {
-                            if (it.id) deleteImage(it);
-                          }}
-                          disabled={!it.id || busy}
-                          title={
-                            it.id
-                              ? "Delete this image"
-                              : "This API response has no image id — delete is disabled"
-                          }
-                        >
-                          Delete
-                        </GhostButton>
-                        <Button
-                          onClick={() => saveImageCaption(it)}
-                          disabled={
-                            it._saving ||
-                            it._localCaption === it.caption
-                          }
-                        >
-                          {it._saving ? "Saving…" : "Save caption"}
-                        </Button>
-                      </div>
-                    </figure>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Uploader */}
-            <div className="mt-6">
-              <div className="mb-2 text-sm font-semibold text-slate-800">
-                Add Images
-              </div>
-              <div className="mb-2 text-xs text-slate-600">
-                Drag & drop or click; add captions; upload.
-              </div>
-              <ImageUploader
-                projectId={editingId}
-                onUploaded={async () => {
-                  await refreshImages(editingId);
-                  await refreshProjects();
-                }}
-              />
-            </div>
-          </Card>
+          <ProjectEditorCard
+            mode="edit"
+            projectId={editingId}
+            form={editForm}
+            setForm={setEditForm}
+            busy={busy}
+            images={editImgs}
+            setImages={setEditImgs}
+            onMakeCover={makeCoverImage}
+            onSaveImageCaption={saveImageCaption}
+            onDeleteImage={deleteImage}
+            onSubmit={handleEditorSubmit}
+            onClose={() => setEditingId("")}
+            onView={() => window.open(`/projects/${editingId}`, "_self")}
+            onAfterUpload={async () => {
+              await refreshImages(editingId);
+              await refreshProjects();
+            }}
+          />
         </div>
       )}
     </div>

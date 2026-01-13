@@ -270,7 +270,7 @@ export default function EditProfile() {
                     </p>
                   </div>
 
-                  <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                  <label className="inline-flex cursor-pointer items-center w-fit whitespace-nowrap rounded-lg border border-slate-300 px-4 py-1 text-xs font-medium text-slate-700 hover:bg-slate-10">
                     <input
                       type="file"
                       accept="image/*"

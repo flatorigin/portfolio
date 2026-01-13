@@ -3,33 +3,27 @@
 // Standalone card for creating/editing a project + images + job posting + cover selection
 // =======================================
 import ImageUploader from "./ImageUploader";
-import {
-  Card,
-  Input,
-  Textarea,
-  Button,
-  GhostButton,
-  Badge,
-} from "../ui";
+import { Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
 
 export default function ProjectEditorCard({
-  mode = "edit",                 // "edit" | "create"
-  projectId,                     // id when editing, optional for create
-  form,                          // { title, summary, category, ... }
-  setForm,                       // setForm(prev => ({...prev, field }))
-  coverFile,                     // kept for backwards compat (no longer used in UI)
-  setCoverFile,                  // kept for backwards compat (no longer used in UI)
+  mode = "edit", // "edit" | "create"
+  projectId, // id when editing, optional for create
+  form, // { title, summary, category, ... }
+  setForm, // setForm(prev => ({...prev, field }))
+  coverFile, // kept for backwards compat (no longer used in UI)
+  setCoverFile, // kept for backwards compat (no longer used in UI)
   busy = false,
-  images = [],                   // [{ id, url, caption, _localCaption, _saving }]
-  setImages,                     // setImages(prev => [...])
-  onSaveImageCaption,            // (image) => void
-  onDeleteImage,                 // (image) => void
-  onSubmit,                      // () => void or (event) => void
-  onClose,                       // () => void
-  onView,                        // () => void (open public project page)
-  onAfterUpload,                 // async () => { refresh images + projects }
-  coverImageId,                  // selected cover image id (from parent)
-  setCoverImageId,               // (id|null) => void
+  images = [], // [{ id, url, caption, _localCaption, _saving }]
+  setImages, // setImages(prev => [...])
+  onSaveImageCaption, // (image) => void
+  onDeleteImage, // (image) => void
+  onSubmit, // () => void or (event) => void
+  onClose, // () => void
+  onView, // () => void (open public project page)
+  onAfterUpload, // async () => { refresh images + projects }
+  coverImageId, // selected cover image id (from parent)  (kept for backwards compat)
+  setCoverImageId, // (id|null) => void (kept for backwards compat)
+  onMakeCover, // (imageId) => void
 }) {
   const headerTitle =
     mode === "edit"
@@ -41,8 +35,10 @@ export default function ProjectEditorCard({
   const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
   const isJobPosting = !!form.is_job_posting;
 
+  // ✅ Single source of truth so the radio always "sticks"
   const currentCoverId =
-    coverImageId != null ? coverImageId : form?.cover_image_id ?? null;
+    images.find((img) => Number(img.order) === 0)?.id ?? null;
+
 
   const handleToggleJobPosting = () => {
     setForm((prev) => ({
@@ -54,31 +50,25 @@ export default function ProjectEditorCard({
   const handleSelectCover = (imgId) => {
     const normalized = imgId == null ? null : Number(imgId);
 
-    // Always keep form in sync (some parents read/save from form)
+    // Always keep form in sync (parent saves from form)
     setForm((prev) => ({
       ...prev,
       cover_image_id: normalized,
     }));
 
-    // Also keep dedicated cover state in sync (if parent uses it)
+    // kept for backwards compat (won't affect UI now)
     if (setCoverImageId) {
       setCoverImageId(normalized);
     }
   };
 
-
-
   return (
     <Card className="p-5">
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-800">
-          {headerTitle}
-        </div>
+        <div className="text-sm font-semibold text-slate-800">{headerTitle}</div>
         <div className="flex items-center gap-2">
-          {onView && projectId && (
-            <GhostButton onClick={onView}>View</GhostButton>
-          )}
+          {onView && projectId && <GhostButton onClick={onView}>View</GhostButton>}
           {onClose && (
             <GhostButton onClick={onClose}>
               {mode === "edit" ? "Close" : "Cancel"}
@@ -118,9 +108,7 @@ export default function ProjectEditorCard({
           </button>
 
           <div className="text-xs">
-            <div className="font-semibold text-slate-900">
-              Job Posting
-            </div>
+            <div className="font-semibold text-slate-900">Job Posting</div>
             <div className="text-[11px] text-slate-700/90">
               {isJobPosting
                 ? "This project is marked as a job posting and will appear on the public 'Find local work' page."
@@ -132,9 +120,7 @@ export default function ProjectEditorCard({
         <div className="hidden sm:block">
           <Badge
             className={
-              isJobPosting
-                ? "bg-sky-600 text-white"
-                : "bg-slate-200 text-slate-700"
+              isJobPosting ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-700"
             }
           >
             {isJobPosting ? "On" : "Off"}
@@ -148,30 +134,24 @@ export default function ProjectEditorCard({
       </div>
 
       <form
+        id="project-editor-form"
         onSubmit={(e) => {
-          // still support Enter-to-submit
           e.preventDefault();
           if (onSubmit) onSubmit(e);
         }}
         className="grid grid-cols-1 gap-3 md:grid-cols-2"
       >
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Project Name
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Project Name</label>
           <Input
             value={form.title}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, title: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
             placeholder="Project name"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Category
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Category</label>
           <Input
             value={form.category}
             onChange={(e) =>
@@ -182,9 +162,7 @@ export default function ProjectEditorCard({
         </div>
 
         <div className="md:col-span-2">
-          <label className="mb-1 block text-sm text-slate-600">
-            Summary
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Summary</label>
           <Textarea
             value={form.summary}
             onChange={(e) =>
@@ -208,9 +186,7 @@ export default function ProjectEditorCard({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Budget
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Budget</label>
           <Input
             value={form.budget}
             onChange={(e) =>
@@ -222,14 +198,10 @@ export default function ProjectEditorCard({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Square Feet
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
           <Input
             value={form.sqf}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, sqf: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, sqf: e.target.value }))}
             inputMode="numeric"
             placeholder="e.g. 1800"
           />
@@ -242,10 +214,7 @@ export default function ProjectEditorCard({
           <Input
             value={form.highlights}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                highlights: e.target.value,
-              }))
+              setForm((prev) => ({ ...prev, highlights: e.target.value }))
             }
             placeholder="comma-separated tags"
           />
@@ -258,10 +227,7 @@ export default function ProjectEditorCard({
           <Input
             value={form.material_url}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                material_url: e.target.value,
-              }))
+              setForm((prev) => ({ ...prev, material_url: e.target.value }))
             }
             placeholder="https://www.example.com/product/123"
           />
@@ -274,10 +240,7 @@ export default function ProjectEditorCard({
           <Input
             value={form.material_label}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                material_label: e.target.value,
-              }))
+              setForm((prev) => ({ ...prev, material_label: e.target.value }))
             }
             placeholder="e.g. Bosch SDS Hammer Drill – $129"
           />
@@ -291,10 +254,7 @@ export default function ProjectEditorCard({
               className="mr-2 align-middle"
               checked={!!form.is_public}
               onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  is_public: e.target.checked,
-                }))
+                setForm((prev) => ({ ...prev, is_public: e.target.checked }))
               }
             />
             Public
@@ -317,6 +277,7 @@ export default function ProjectEditorCard({
               <div className="text-sm text-slate-600">Images</div>
               <Badge>{images.length} total</Badge>
             </div>
+
             {images.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 No images yet.
@@ -333,6 +294,7 @@ export default function ProjectEditorCard({
                       alt=""
                       className="mb-2 h-36 w-full rounded-md object-cover"
                     />
+
                     <input
                       className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
                       placeholder="Caption…"
@@ -348,15 +310,20 @@ export default function ProjectEditorCard({
                       }
                     />
 
-                    <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="mt-2 flex items-center justify-between gap-2">
                       {/* Cover selector */}
                       <label className="flex items-center gap-1 text-[11px] text-slate-600">
                         <input
                           type="radio"
                           name="cover-image"
                           className="h-3 w-3"
-                          checked={String(currentCoverId ?? "") === String(it.id ?? "")}
-                          onChange={() => handleSelectCover(it.id)}
+                          checked={
+                            String(currentCoverId ?? "") === String(it.id ?? "")
+                          }
+                          onChange={() => {
+                            handleSelectCover(it.id);      // keeps UI state
+                            onMakeCover?.(it.id);          // persists by setting order=0
+                          }}
                         />
                         <span>
                           {String(currentCoverId ?? "") === String(it.id ?? "")
@@ -382,9 +349,7 @@ export default function ProjectEditorCard({
                         </GhostButton>
                         <Button
                           onClick={() => onSaveImageCaption(it)}
-                          disabled={
-                            it._saving || it._localCaption === it.caption
-                          }
+                          disabled={it._saving || it._localCaption === it.caption}
                         >
                           {it._saving ? "Saving…" : "Save caption"}
                         </Button>
@@ -418,13 +383,7 @@ export default function ProjectEditorCard({
 
       {/* PRIMARY SUBMIT BUTTON – BOTTOM of card */}
       <div className="mt-6 flex justify-end">
-        <Button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            if (onSubmit) onSubmit();
-          }}
-        >
+        <Button type="submit" disabled={busy} form="project-editor-form">
           {submitLabel}
         </Button>
       </div>
