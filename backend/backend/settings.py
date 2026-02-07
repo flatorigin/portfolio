@@ -65,7 +65,13 @@ DATABASES = {
 FRONTEND_URL = "http://localhost:5173"
 # Dev email backend (prints emails to console)
 # EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+FRONTEND_DIR = BASE_DIR.parent / "frontend" / "dist"
 
+TEMPLATES[0]["DIRS"] = [FRONTEND_DIR]
+
+STATICFILES_DIRS = [
+    FRONTEND_DIR / "assets",
+]
 # If you want real email later:
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
