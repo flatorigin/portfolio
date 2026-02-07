@@ -1,11 +1,10 @@
 # file: backend/urls.py  (top-level, for clarity)
 from django.contrib import admin
 from django.urls import path, include, re_path
-from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import View
-from django.http import FileResponse
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
+from django.conf import settings
 import os
 
 class ReactAppView(View):
@@ -21,6 +20,7 @@ class ReactAppView(View):
             return HttpResponse(f"React build NOT found at: {index_path}")
 
         return FileResponse(open(index_path, "rb"))
+
 
 urlpatterns = [
     re_path(r"^(?!api|admin).*", TemplateView.as_view(template_name="index.html")),    path("admin/", admin.site.urls),
