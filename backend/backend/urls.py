@@ -14,7 +14,11 @@ urlpatterns = [
 
 class ReactAppView(View):
     def get(self, request):
-        index_path = os.path.join(settings.BASE_DIR, "../frontend/dist/index.html")
+        index_path = os.path.join(settings.BASE_DIR, "../../frontend/dist/index.html")
+        
+        if not os.path.exists(index_path):
+            return HttpResponse("React build not found", status=500)
+
         return FileResponse(open(index_path, "rb"))
 
 
