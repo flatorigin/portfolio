@@ -13,7 +13,7 @@ class ReactAppView(View):
         return HttpResponse(f"BASE_DIR = {settings.BASE_DIR}")
 
 urlpatterns = [
-    re_path(r"^(?!api|admin).*", TemplateView.as_view(template_name="index.html")),
+    re_path(r"^(?!api|admin).*", TemplateView.as_view(template_name="index.html")),    path("admin/", admin.site.urls),
     path("admin/", admin.site.urls),
     path("api/auth/", include("djoser.urls")),
     path("api/auth/", include("djoser.urls.jwt")),
