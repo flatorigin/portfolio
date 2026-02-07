@@ -2,7 +2,7 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf.urls.static import static
-from django.views.generic import View
+from django.views.generic import View, TemplateView
 from django.http import FileResponse, HttpResponse
 from django.conf import settings
 import os
