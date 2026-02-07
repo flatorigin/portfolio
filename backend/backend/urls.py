@@ -10,7 +10,17 @@ import os
 
 class ReactAppView(View):
     def get(self, request):
-        return HttpResponse(f"BASE_DIR = {settings.BASE_DIR}")
+        index_path = os.path.join(
+            settings.BASE_DIR.parent,
+            "frontend",
+            "dist",
+            "index.html"
+        )
+
+        if not os.path.exists(index_path):
+            return HttpResponse(f"React build NOT found at: {index_path}")
+
+        return FileResponse(open(index_path, "rb"))
 
 urlpatterns = [
     re_path(r"^(?!api|admin).*", TemplateView.as_view(template_name="index.html")),    path("admin/", admin.site.urls),
