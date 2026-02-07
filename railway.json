@@ -1,0 +1,9 @@
+{
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "cd backend && pip install --no-cache-dir -r requirements.txt && cd ../frontend && npm install && npm run build && cd ../backend && python manage.py collectstatic --noinput && python manage.py migrate"
+  },
+  "deploy": {
+    "startCommand": "gunicorn backend.wsgi:application --chdir backend --bind 0.0.0.0:$PORT"
+  }
+}
