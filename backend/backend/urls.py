@@ -26,16 +26,12 @@ def serve_react_asset(request, path):
 
 
 urlpatterns = [
-    # Admin + API first
     path("admin/", admin.site.urls),
     path("api/auth/", include("djoser.urls")),
     path("api/auth/", include("djoser.urls.jwt")),
     path("api/", include("accounts.urls")),
     path("api/", include("portfolio.urls")),
 
-    # Serve Vite assets
-    re_path(r"^static/(?P<path>.*)$", serve_static),
-
-    # React fallback LAST
+    re_path(r"^assets/(?P<path>.*)$", serve_static),
     re_path(r"^.*$", ReactAppView.as_view()),
 ]
