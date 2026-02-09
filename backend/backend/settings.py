@@ -70,7 +70,7 @@ FRONTEND_DIR = BASE_DIR.parent / "frontend" / "dist"
 TEMPLATES[0]["DIRS"] = [FRONTEND_DIR]
 
 STATICFILES_DIRS = [
-    BASE_DIR / "../frontend/dist/assets",
+    os.path.join(BASE_DIR.parent, "frontend", "dist")
 ]
 # If you want real email later:
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
