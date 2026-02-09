@@ -103,8 +103,10 @@ REST_FRAMEWORK = {
     ),
 }
 
-CORS_ALLOW_ALL_ORIGINS = True  # Dev only
-
+CORS_ALLOWED_ORIGINS = [
+    "https://portfolio-production-861a.up.railway.app",
+]
+CORS_ALLOW_CREDENTIALS = True
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "AUTH_HEADER_TYPES": ("Bearer", "JWT"),
