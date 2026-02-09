@@ -6,11 +6,7 @@ from django.conf import settings
 import os
 
 
-FRONTEND_DIST = os.path.join(
-    settings.BASE_DIR.parent,
-    "frontend",
-    "dist"
-)
+FRONTEND_DIST = os.path.join(settings.BASE_DIR.parent, "frontend", "dist")
 
 
 class ReactAppView(View):
@@ -20,7 +16,7 @@ class ReactAppView(View):
 
 
 def serve_react_asset(request, path):
-    file_path = os.path.join(FRONTEND_DIST, "assets", path)
+    file_path = os.path.join(FRONTEND_DIST, path)
 
     if os.path.exists(file_path):
         return FileResponse(open(file_path, "rb"))
@@ -39,7 +35,7 @@ urlpatterns = [
     path("api/", include("portfolio.urls")),
 
     # React assets
-    re_path(r"^assets/(?P<path>.*)$", serve_react_asset),
+    re_path(r"^(?P<path>.*\.(js|css|png|jpg|jpeg|svg|ico))$", serve_react_asset),
 
     # React fallback
     re_path(r"^.*$", ReactAppView.as_view()),
