@@ -26,7 +26,6 @@ def serve_react_asset(request, path):
 
 urlpatterns = [
 
-    # Django routes
     path("admin/", admin.site.urls),
 
     path("api/auth/", include("djoser.urls")),
@@ -34,9 +33,9 @@ urlpatterns = [
     path("api/", include("accounts.urls")),
     path("api/", include("portfolio.urls")),
 
-    # React assets
-    re_path(r"^(?P<path>.*\.(js|css|png|jpg|jpeg|svg|ico))$", serve_react_asset),
+    # Serve Vite static files
+    re_path(r"^static/(?P<path>.*)$", serve_static),
 
-    # React fallback
+    # React fallback (MUST be last)
     re_path(r"^.*$", ReactAppView.as_view()),
 ]

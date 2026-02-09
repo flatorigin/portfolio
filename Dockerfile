@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 RUN cd frontend && npm install && npm run build
 
 # collectstatic is fine at build-time
+RUN cp -r frontend/dist/* backend/staticfiles/
 RUN cd backend && python manage.py collectstatic --noinput
 
 RUN chmod +x /app/start.sh
