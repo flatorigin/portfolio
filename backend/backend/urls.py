@@ -5,6 +5,7 @@ from django.conf.urls.static import static
 from django.views.generic import View, TemplateView
 from django.http import FileResponse, HttpResponse
 from django.conf import settings
+from django.contrib.staticfiles.views import serve as serve_static
 import os
 
 class ReactAppView(View):
@@ -15,15 +16,15 @@ class ReactAppView(View):
             "dist",
             "index.html"
         )
-
-        if not os.path.exists(index_path):
-            return HttpResponse(f"React build NOT found at: {index_path}")
-
         return FileResponse(open(index_path, "rb"))
 
 
 urlpatterns = [
-    re_path(r"^(?!api|admin).*", TemplateView.as_view(template_name="index.html")),    path("admin/", admin.site.urls),
+    # Serve Vite assets
+    re_path(r"^assets/(?P<path>.*)$", serve_static),
+
+    # React fallback
+    re_path(r"^.*$", ReactAppView.as_view()),
     path("admin/", admin.site.urls),
     path("api/auth/", include("djoser.urls")),
     path("api/auth/", include("djoser.urls.jwt")),
