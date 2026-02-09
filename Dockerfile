@@ -7,6 +7,10 @@ RUN apt-get update && apt-get install -y nodejs npm && rm -rf /var/lib/apt/lists
 COPY . .
 
 RUN pip install --no-cache-dir -r backend/requirements.txt
+
+ARG VITE_API_BASE
+ENV VITE_API_BASE=$VITE_API_BASE
+
 RUN cd frontend && npm install && npm run build
 
 # collectstatic is fine at build-time
