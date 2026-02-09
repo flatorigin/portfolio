@@ -32,6 +32,6 @@ urlpatterns = [
     path("api/", include("accounts.urls")),
     path("api/", include("portfolio.urls")),
 
-    re_path(r"^assets/(?P<path>.*)$", serve_static),
+    # re_path(r"^assets/(?P<path>.*)$", serve_static),
     re_path(r"^.*$", ReactAppView.as_view()),
 ]
