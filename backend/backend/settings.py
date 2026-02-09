@@ -105,8 +105,16 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = [
     "https://portfolio-production-861a.up.railway.app",
+    "https://portfolio-production-1b31.up.railway.app",
 ]
+
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://portfolio-production-861a.up.railway.app",
+    "https://portfolio-production-1b31.up.railway.app",
+]
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "AUTH_HEADER_TYPES": ("Bearer", "JWT"),
