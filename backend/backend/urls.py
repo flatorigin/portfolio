@@ -3,6 +3,7 @@ from django.urls import path, include, re_path
 from django.views import View
 from django.http import FileResponse
 from django.conf import settings
+from django.contrib.staticfiles.views import serve as serve_static
 import os
 
 
@@ -25,17 +26,16 @@ def serve_react_asset(request, path):
 
 
 urlpatterns = [
-
+    # Admin + API first
     path("admin/", admin.site.urls),
-
     path("api/auth/", include("djoser.urls")),
     path("api/auth/", include("djoser.urls.jwt")),
     path("api/", include("accounts.urls")),
     path("api/", include("portfolio.urls")),
 
-    # Serve Vite static files
+    # Serve Vite assets
     re_path(r"^static/(?P<path>.*)$", serve_static),
 
-    # React fallback (MUST be last)
+    # React fallback LAST
     re_path(r"^.*$", ReactAppView.as_view()),
 ]
