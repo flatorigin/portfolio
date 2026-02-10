@@ -449,21 +449,24 @@ export default function Dashboard() {
       if (cover) fd.append("cover_image", cover);
 
       const { data } = await api.post("/projects/", fd, {
-        if (Array.isArray(images) && data?.id) {
-          for (let i = 0; i < images.length; i++) {
-            const img = images[i];
-            if (!img?._file) continue;
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
-            const imgFd = new FormData();
-            imgFd.append("image", img._file);
-            imgFd.append("caption", img.caption || "");
-            imgFd.append("order", String(i));
+      if (Array.isArray(images) && data?.id) {
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          if (!img?._file) continue;
 
-            await api.post(`/projects/${data.id}/images/`, imgFd, {
-              headers: { "Content-Type": "multipart/form-data" },
-            });
-          }
+          const imgFd = new FormData();
+          imgFd.append("image", img._file);
+          imgFd.append("caption", img.caption || "");
+          imgFd.append("order", String(i));
+
+          await api.post(`/projects/${data.id}/images/`, imgFd, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
         }
+      }
 
       await refreshProjects();
 
