@@ -4,12 +4,11 @@ from pathlib import Path
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "fallback-secret")
 DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
-ALLOWED_HOSTS = os.environ.get(
-    "DJANGO_ALLOWED_HOSTS", "*"
-).split(",")
+ALLOWED_HOSTS = ["*"]   # or your domain
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -106,14 +105,12 @@ REST_FRAMEWORK = {
 CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
-    "https://portfolio-production-861a.up.railway.app",
     "https://portfolio-production-1b31.up.railway.app",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://portfolio-production-861a.up.railway.app",
     "https://portfolio-production-1b31.up.railway.app",
 ]
 
