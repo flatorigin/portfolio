@@ -2,8 +2,9 @@
 // file: frontend/src/pages/Explore.jsx
 // Uses ProjectImage.order to choose the cover (order=0)
 // + Favorites (Save button) for other users' projects
+// Favorites reactive; projects stable.
 // =======================================
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { SectionTitle, Badge, Card, Button, Input, GhostButton } from "../ui";
@@ -35,7 +36,20 @@ function extractOrder(it) {
   return raw == null ? null : Number(raw);
 }
 
+// --- auth bridge ---
+// Explore must re-render when auth changes (localStorage does not trigger React renders).
+// We listen to both:
+// 1) real "storage" events (other tabs)
+// 2) a custom event your app can dispatch after login/logout
+function readAuthSnapshot() {
+  const access = localStorage.getItem("access") || "";
+  const username = localStorage.getItem("username") || "";
+  return { authed: !!access, username };
+}
+
 export default function Explore() {
+  const navigate = useNavigate();
+
   const [projects, setProjects] = useState([]);
   // thumbs[projectId] = { cover: string|null, thumbs: string[] }
   const [thumbs, setThumbs] = useState({});
@@ -56,21 +70,51 @@ export default function Explore() {
     maxBudget: "",
   });
 
-  const navigate = useNavigate();
+  // ✅ reactive auth snapshot
+  const [{ authed, username: me }, setAuthSnap] = useState(readAuthSnapshot);
 
-  const authed = !!localStorage.getItem("access");
-  const me = localStorage.getItem("username") || "";
-  const isOwner = (p) =>
-    typeof p.is_owner === "boolean" ? p.is_owner : (p.owner_username || "") === me;
+  // Keep a ref so async callbacks can read latest values without re-binding everything
+  const authRef = useRef({ authed, me });
+  useEffect(() => {
+    authRef.current = { authed, me };
+  }, [authed, me]);
+
+  // Listen for auth changes (same tab and other tabs)
+  useEffect(() => {
+    const sync = () => setAuthSnap(readAuthSnapshot());
+
+    // other tabs
+    window.addEventListener("storage", sync);
+
+    // same tab: your app can dispatch this after login/logout
+    window.addEventListener("auth:changed", sync);
+
+    // You already dispatch favorites:changed; keep it, but also resync auth snapshot if needed
+    // (harmless; some flows might update username/access together)
+    window.addEventListener("favorites:changed", sync);
+
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("auth:changed", sync);
+      window.removeEventListener("favorites:changed", sync);
+    };
+  }, []);
+
+  const isOwner = useCallback(
+    (p) =>
+      typeof p?.is_owner === "boolean"
+        ? p.is_owner
+        : (p?.owner_username || "") === (me || ""),
+    [me]
+  );
 
   // ✅ toggle favorite (save/unsave)
   const toggleFavorite = useCallback(
     async (e, p) => {
-      // stop Link navigation + bubbling
       e.preventDefault();
       e.stopPropagation();
 
-      if (!authed || !p?.id) return;
+      if (!authRef.current.authed || !p?.id) return;
       if (isOwner(p)) return;
 
       if (favBusyId === p.id) return;
@@ -104,9 +148,10 @@ export default function Explore() {
         setFavBusyId(null);
       }
     },
-    [authed, favBusyId, favMap, isOwner]
+    [favBusyId, favMap, isOwner]
   );
 
+  // 1) Load projects once (stable)
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -118,9 +163,9 @@ export default function Explore() {
 
         const arr = Array.isArray(data) ? data : [];
         setProjects(arr);
-
       } catch (e) {
-        console.error("Projects fetch failed", e);
+        console.error("[Explore] projects fetch failed", e?.response || e);
+        if (alive) setProjects([]);
       } finally {
         if (alive) setLoading(false);
       }
@@ -131,18 +176,25 @@ export default function Explore() {
     };
   }, []);
 
+  // 2) Load thumbs when projects change
   useEffect(() => {
     let alive = true;
 
-    if (!projects.length) return;
+    if (!projects.length) {
+      // if projects cleared, clear thumbs too
+      setThumbs({});
+      return;
+    }
 
     (async () => {
       const entries = await Promise.all(
         projects.map(async (p) => {
           try {
-            const { data: imgs } = await api.get(`/projects/${p.id}/images/`);
-            const list = Array.isArray(imgs) ? imgs : [];
+            const { data: imgs } = await api
+              .get(`/projects/${p.id}/images/`)
+              .catch(() => ({ data: [] }));
 
+            const list = Array.isArray(imgs) ? imgs : [];
             const mapped = list
               .map((it) => ({
                 id: extractImageId(it),
@@ -156,9 +208,9 @@ export default function Explore() {
               mapped[0]?.url ||
               null;
 
-            const thumbs = mapped.slice(0, 3).map((x) => x.url);
+            const thumbUrls = mapped.slice(0, 3).map((x) => x.url);
 
-            return [p.id, { cover, thumbs }];
+            return [p.id, { cover, thumbs: thumbUrls }];
           } catch {
             return [p.id, { cover: null, thumbs: [] }];
           }
@@ -173,13 +225,17 @@ export default function Explore() {
     };
   }, [projects]);
 
+  // 3) Favorites reactive: update when authed changes (and when projects list changes)
   useEffect(() => {
     let alive = true;
 
-    if (!projects.length) return;
+    if (!projects.length) {
+      setFavMap({});
+      return;
+    }
 
-    // 🚨 If logged out, instantly clear favorites
     if (!authed) {
+      // logged out => clear favorites immediately
       setFavMap({});
       return;
     }
@@ -188,10 +244,12 @@ export default function Explore() {
       const favPairs = await Promise.all(
         projects.map(async (p) => {
           if (!p?.id) return [null, false];
+          if (isOwner(p)) return [p.id, false];
 
           try {
-            const { data } = await api.get(`/projects/${p.id}/favorite/`);
-            return [p.id, !!data?.is_favorited];
+            const { data: fav } = await api.get(`/projects/${p.id}/favorite/`);
+            const isFav = !!(fav?.is_favorited ?? fav?.favorited);
+            return [p.id, isFav];
           } catch {
             return [p.id, false];
           }
@@ -202,16 +260,15 @@ export default function Explore() {
 
       const next = {};
       for (const [pid, val] of favPairs) {
-        if (pid != null) next[pid] = val;
+        if (pid != null) next[pid] = !!val;
       }
-
       setFavMap(next);
     })();
 
     return () => {
       alive = false;
     };
-  }, [authed, projects]);
+  }, [authed, projects, isOwner]);
 
   // 🔍 filter logic
   const filteredProjects = useMemo(() => {
@@ -224,7 +281,10 @@ export default function Explore() {
       if (filters.name.trim() && !name.includes(filters.name.toLowerCase().trim()))
         return false;
 
-      if (filters.location.trim() && !loc.includes(filters.location.toLowerCase().trim()))
+      if (
+        filters.location.trim() &&
+        !loc.includes(filters.location.toLowerCase().trim())
+      )
         return false;
 
       if (filters.minSqf !== "" && sqf < Number(filters.minSqf)) return false;
@@ -289,27 +349,61 @@ export default function Explore() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[160px]">
             <div className="mb-1 text-xs font-medium text-slate-500">Project name</div>
-            <Input value={filters.name} onChange={updateFilter("name")} placeholder="e.g. Kitchen remodel" />
+            <Input
+              value={filters.name}
+              onChange={updateFilter("name")}
+              placeholder="e.g. Kitchen remodel"
+            />
           </div>
 
           <div className="flex-1 min-w-[160px]">
             <div className="mb-1 text-xs font-medium text-slate-500">Location</div>
-            <Input value={filters.location} onChange={updateFilter("location")} placeholder="City, area, etc." />
+            <Input
+              value={filters.location}
+              onChange={updateFilter("location")}
+              placeholder="City, area, etc."
+            />
           </div>
 
           <div className="flex-1 min-w-[160px]">
             <div className="mb-1 text-xs font-medium text-slate-500">Sqf (min / max)</div>
             <div className="flex gap-2">
-              <Input type="number" inputMode="numeric" value={filters.minSqf} onChange={updateFilter("minSqf")} placeholder="Min" />
-              <Input type="number" inputMode="numeric" value={filters.maxSqf} onChange={updateFilter("maxSqf")} placeholder="Max" />
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.minSqf}
+                onChange={updateFilter("minSqf")}
+                placeholder="Min"
+              />
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.maxSqf}
+                onChange={updateFilter("maxSqf")}
+                placeholder="Max"
+              />
             </div>
           </div>
 
           <div className="flex-1 min-w-[160px]">
-            <div className="mb-1 text-xs font-medium text-slate-500">Budget (min / max)</div>
+            <div className="mb-1 text-xs font-medium text-slate-500">
+              Budget (min / max)
+            </div>
             <div className="flex gap-2">
-              <Input type="number" inputMode="numeric" value={filters.minBudget} onChange={updateFilter("minBudget")} placeholder="Min" />
-              <Input type="number" inputMode="numeric" value={filters.maxBudget} onChange={updateFilter("maxBudget")} placeholder="Max" />
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.minBudget}
+                onChange={updateFilter("minBudget")}
+                placeholder="Min"
+              />
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={filters.maxBudget}
+                onChange={updateFilter("maxBudget")}
+                placeholder="Max"
+              />
             </div>
           </div>
 
@@ -350,7 +444,11 @@ export default function Explore() {
               {/* Cover banner */}
               {coverUrl ? (
                 <div className="relative h-44 w-full bg-slate-200">
-                  <img src={coverUrl} alt={p.title || "project cover"} className="block h-full w-full object-cover" />
+                  <img
+                    src={coverUrl}
+                    alt={p.title || "project cover"}
+                    className="block h-full w-full object-cover"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
                 </div>
               ) : pack.thumbs.length ? (
@@ -358,11 +456,19 @@ export default function Explore() {
                   <div
                     className="grid gap-1 bg-slate-50 p-1"
                     style={{
-                      gridTemplateColumns: `repeat(${Math.min(3, pack.thumbs.length)}, 1fr)`,
+                      gridTemplateColumns: `repeat(${Math.min(
+                        3,
+                        pack.thumbs.length
+                      )}, 1fr)`,
                     }}
                   >
                     {pack.thumbs.map((src, i) => (
-                      <img key={src + i} src={src} alt="" className="h-24 w-full rounded-md object-cover" />
+                      <img
+                        key={src + i}
+                        src={src}
+                        alt=""
+                        className="h-24 w-full rounded-md object-cover"
+                      />
                     ))}
                   </div>
                 </div>
@@ -377,9 +483,11 @@ export default function Explore() {
                   <div className="truncate text-base font-semibold">{p.title}</div>
                   {p.category ? <Badge>{p.category}</Badge> : null}
                 </div>
+
                 <div className="line-clamp-2 text-sm text-slate-700">
                   {p.summary || <span className="opacity-60">No summary</span>}
                 </div>
+
                 <div className="mt-2 text-xs text-slate-500">by {p.owner_username}</div>
 
                 {/* ✅ Bottom button row (consistent placement/style) */}
