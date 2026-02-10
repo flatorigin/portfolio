@@ -119,67 +119,8 @@ export default function Explore() {
         const arr = Array.isArray(data) ? data : [];
         setProjects(arr);
 
-        // ✅ load thumbs + initial favorite state (if authed)
-        const entries = await Promise.all(
-          arr.map(async (p) => {
-            try {
-              const { data: imgs } = await api
-                .get(`/projects/${p.id}/images/`)
-                .catch(() => ({ data: [] }));
-
-              const list = Array.isArray(imgs) ? imgs : [];
-              const mapped = list
-                .map((it) => ({
-                  id: extractImageId(it),
-                  url: extractImageUrl(it),
-                  order: extractOrder(it),
-                }))
-                .filter((x) => !!x.url);
-
-              // ✅ cover = image with order===0, else first
-              const cover =
-                mapped.find((x) => Number(x.order) === 0)?.url ||
-                mapped[0]?.url ||
-                null;
-
-              const thumbUrls = mapped.slice(0, 3).map((x) => x.url);
-
-              return [p.id, { cover, thumbs: thumbUrls }];
-            } catch {
-              return [p.id, { cover: null, thumbs: [] }];
-            }
-          })
-        );
-
-        if (alive) setThumbs(Object.fromEntries(entries));
-
-        // ✅ favorites (only for authed users, and only for non-owners)
-        if (authed) {
-          const favPairs = await Promise.all(
-            arr.map(async (p) => {
-              if (!p?.id) return [null, null];
-              if (isOwner(p)) return [p.id, false];
-              try {
-                const { data: fav } = await api.get(`/projects/${p.id}/favorite/`);
-                const isFav = !!(fav?.is_favorited ?? fav?.favorited);
-                return [p.id, isFav];
-              } catch (e) {
-                // 404 means not saved, anything else treat as not saved
-                return [p.id, false];
-              }
-            })
-          );
-
-          if (alive) {
-            const next = {};
-            for (const [pid, val] of favPairs) {
-              if (pid != null) next[pid] = !!val;
-            }
-            setFavMap(next);
-          }
-        } else {
-          if (alive) setFavMap({});
-        }
+      } catch (e) {
+        console.error("Projects fetch failed", e);
       } finally {
         if (alive) setLoading(false);
       }
@@ -188,7 +129,89 @@ export default function Explore() {
     return () => {
       alive = false;
     };
-  }, [authed]); // keep as-is; simple reload on auth change
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    if (!projects.length) return;
+
+    (async () => {
+      const entries = await Promise.all(
+        projects.map(async (p) => {
+          try {
+            const { data: imgs } = await api.get(`/projects/${p.id}/images/`);
+            const list = Array.isArray(imgs) ? imgs : [];
+
+            const mapped = list
+              .map((it) => ({
+                id: extractImageId(it),
+                url: extractImageUrl(it),
+                order: extractOrder(it),
+              }))
+              .filter((x) => !!x.url);
+
+            const cover =
+              mapped.find((x) => Number(x.order) === 0)?.url ||
+              mapped[0]?.url ||
+              null;
+
+            const thumbs = mapped.slice(0, 3).map((x) => x.url);
+
+            return [p.id, { cover, thumbs }];
+          } catch {
+            return [p.id, { cover: null, thumbs: [] }];
+          }
+        })
+      );
+
+      if (alive) setThumbs(Object.fromEntries(entries));
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [projects]);
+
+  useEffect(() => {
+    let alive = true;
+
+    if (!projects.length) return;
+
+    // 🚨 If logged out, instantly clear favorites
+    if (!authed) {
+      setFavMap({});
+      return;
+    }
+
+    (async () => {
+      const favPairs = await Promise.all(
+        projects.map(async (p) => {
+          if (!p?.id) return [null, false];
+
+          try {
+            const { data } = await api.get(`/projects/${p.id}/favorite/`);
+            return [p.id, !!data?.is_favorited];
+          } catch {
+            return [p.id, false];
+          }
+        })
+      );
+
+      if (!alive) return;
+
+      const next = {};
+      for (const [pid, val] of favPairs) {
+        if (pid != null) next[pid] = val;
+      }
+
+      setFavMap(next);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [authed, projects]);
 
   // 🔍 filter logic
   const filteredProjects = useMemo(() => {
