@@ -421,7 +421,7 @@ export default function Dashboard() {
     }
   }
 
-  async function createProject(e) {
+  async function createProject(e, images = []) {
     e.preventDefault();
     setCreateErr("");
     setCreateOk(false);
@@ -449,8 +449,21 @@ export default function Dashboard() {
       if (cover) fd.append("cover_image", cover);
 
       const { data } = await api.post("/projects/", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+        if (Array.isArray(images) && data?.id) {
+          for (let i = 0; i < images.length; i++) {
+            const img = images[i];
+            if (!img?._file) continue;
+
+            const imgFd = new FormData();
+            imgFd.append("image", img._file);
+            imgFd.append("caption", img.caption || "");
+            imgFd.append("order", String(i));
+
+            await api.post(`/projects/${data.id}/images/`, imgFd, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+          }
+        }
 
       await refreshProjects();
 

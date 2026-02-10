@@ -126,7 +126,10 @@ export default function CreateProjectCard({
             Project Info (Draft)
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-6">
+          <form
+            onSubmit={(e) => onSubmit(e, images)}
+            className="space-y-6"
+          >
             {/* Project basics (same fields & order) */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
