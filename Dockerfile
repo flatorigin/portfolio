@@ -21,4 +21,4 @@ RUN chmod +x /app/start.sh
 
 EXPOSE 8080
 
-CMD ["/bin/bash", "/app/start.sh"]
+CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:$PORT", "--access-logfile", "-", "--error-logfile", "-"]
