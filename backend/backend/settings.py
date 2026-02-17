@@ -1,3 +1,5 @@
+# backend/backend/settings.py
+
 import os
 import dj_database_url
 from pathlib import Path
@@ -21,7 +23,7 @@ INSTALLED_APPS = [
     "djoser",
     "portfolio",
     "corsheaders",
-    "accounts.apps.AccountsConfig", 
+    "accounts.apps.AccountsConfig",
 ]
 
 MIDDLEWARE = [
@@ -61,7 +63,7 @@ DATABASES = {
 }
 
 # Where the React app lives (for the reset form route)
-FRONTEND_URL = "http://localhost:5173"
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 # Dev email backend (prints emails to console)
 # EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 FRONTEND_DIR = BASE_DIR.parent / "frontend" / "dist"
@@ -71,13 +73,12 @@ TEMPLATES[0]["DIRS"] = [FRONTEND_DIR]
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR.parent, "frontend", "dist")
 ]
+
 # If you want real email later:
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
     "django.core.mail.backends.smtp.EmailBackend",
 )
-
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@portfolio.local")
 
 # Only required if using SMTP backend
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
@@ -85,7 +86,12 @@ EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = "babak@flatorigin.com"
+
+# ✅ FIX: do not override DEFAULT_FROM_EMAIL after reading env
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    EMAIL_HOST_USER or "babak@flatorigin.com",
+)
 
 AUTH_PASSWORD_VALIDATORS = []
 
@@ -127,4 +133,3 @@ SIMPLE_JWT = {
 }
 
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-
