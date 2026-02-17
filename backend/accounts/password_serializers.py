@@ -1,9 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.utils.encoding import force_str, force_bytes
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.core.mail import send_mail
 from django.conf import settings
+from django.utils.encoding import force_str, force_bytes
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import serializers
 
 User = get_user_model()
@@ -14,41 +14,48 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     """
     Takes an email, and if a user with that email exists,
     sends a reset link to that email.
+
+    Important:
+    - Does not leak whether the email exists (always behaves the same to caller)
+    - Handles duplicate emails safely (email is not unique by default in Django)
     """
     email = serializers.EmailField()
 
     def validate_email(self, value):
-        # Don't leak whether the email exists or not
         return value
 
     def save(self, **kwargs):
-        email = self.validated_data["email"]
+        email = self.validated_data["email"].strip()
 
-        try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
-            # Silently do nothing; we still return 200 in the view
+        users = User.objects.filter(email__iexact=email, is_active=True)
+
+        # Silently do nothing; we still return 200 in the view
+        if not users.exists():
             return
 
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        token = token_generator.make_token(user)
-
-        # FRONTEND_URL should be in your settings.py
-        reset_link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
+        base_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
 
         subject = "Reset your password"
-        message = (
-            "You requested a password reset.\n\n"
-            f"Click the link below to set a new password:\n{reset_link}\n\n"
-            "If you didn't request this, you can ignore this email."
-        )
 
-        send_mail(
-            subject,
-            message,
-            getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"),
-            [email],
-        )
+        for user in users:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = token_generator.make_token(user)
+
+            reset_link = f"{base_url}/reset-password?uid={uid}&token={token}"
+            message = (
+                "You requested a password reset.\n\n"
+                f"Click the link below to set a new password:\n{reset_link}\n\n"
+                "If you didn't request this, you can ignore this email."
+            )
+
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=from_email,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
