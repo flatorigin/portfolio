@@ -1,8 +1,10 @@
+# backend/accounts/password_serializers.py
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.core.mail import send_mail
-from django.conf import settings
-from django.utils.encoding import force_str, force_bytes
+from django.core.mail import get_connection, send_mail
+from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import serializers
 
@@ -15,10 +17,10 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     Takes an email, and if a user with that email exists,
     sends a reset link to that email.
 
-    Important:
-    - Does not leak whether the email exists (always behaves the same to caller)
-    - Handles duplicate emails safely (email is not unique by default in Django)
+    - Does not leak whether the email exists
+    - Handles duplicate emails safely
     """
+
     email = serializers.EmailField()
 
     def validate_email(self, value):
@@ -28,13 +30,13 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         email = self.validated_data["email"].strip()
 
         users = User.objects.filter(email__iexact=email, is_active=True)
-
-        # Silently do nothing; we still return 200 in the view
         if not users.exists():
             return
 
         base_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+        timeout = int(getattr(settings, "EMAIL_TIMEOUT", 10))
+        connection = get_connection(timeout=timeout)
 
         subject = "Reset your password"
 
@@ -55,6 +57,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
                 from_email=from_email,
                 recipient_list=[user.email],
                 fail_silently=False,
+                connection=connection,
             )
 
 
@@ -63,6 +66,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     Takes uid + token + new_password and sets the user's password
     if the token is valid.
     """
+
     uid = serializers.CharField()
     token = serializers.CharField()
     new_password = serializers.CharField(min_length=8)

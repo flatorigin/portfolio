@@ -28,7 +28,7 @@ export default function ResetPassword() {
     }
 
     try {
-      await api.post("/api/auth/password-reset-confirm/", {
+      await api.post("/auth/password-reset/confirm/", {
         uid,
         token,
         new_password: password,
@@ -58,10 +58,10 @@ export default function ResetPassword() {
     <div className="flex min-h-[60vh] items-center justify-center">
       <Card className="w-full max-w-md p-6">
         <h1 className="mb-2 text-xl font-semibold">Set a new password</h1>
+
         {done ? (
           <p className="text-sm text-slate-700">
-            Your password has been reset. You can now log in with your new
-            password.
+            Your password has been reset. You can now log in with your new password.
           </p>
         ) : (
           <form onSubmit={onSubmit} className="space-y-3">
@@ -76,6 +76,7 @@ export default function ResetPassword() {
                 required
               />
             </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
                 Confirm password
@@ -87,7 +88,9 @@ export default function ResetPassword() {
                 required
               />
             </div>
+
             {error && <p className="text-xs text-red-600">{error}</p>}
+
             <Button type="submit" className="w-full">
               Save new password
             </Button>

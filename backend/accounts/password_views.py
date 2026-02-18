@@ -1,18 +1,18 @@
 # backend/accounts/password_views.py
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .password_serializers import (
-    PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
 )
 
 
 class PasswordResetRequestView(APIView):
-    authentication_classes = []  # public, no auth
-    permission_classes = []      # public
+    authentication_classes = []
+    permission_classes = []
 
     def post(self, request, *args, **kwargs):
         serializer = PasswordResetRequestSerializer(
@@ -28,8 +28,8 @@ class PasswordResetRequestView(APIView):
 
 
 class PasswordResetConfirmView(APIView):
-    authentication_classes = []  # public, no auth
-    permission_classes = []      # public
+    authentication_classes = []
+    permission_classes = []
 
     def post(self, request, *args, **kwargs):
         serializer = PasswordResetConfirmSerializer(
