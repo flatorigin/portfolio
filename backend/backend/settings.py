@@ -20,7 +20,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "rest_framework",
     "djoser",
     "portfolio",
     "corsheaders",
@@ -110,15 +109,6 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
-    "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.AllowAny",
-    ),
-}
-
 CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
@@ -161,7 +151,6 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import get_connection, send_mail
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from rest_framework import serializers
 
 token_generator = PasswordResetTokenGenerator()
 
@@ -249,40 +238,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 # backend/accounts/password_views.py
 
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-
 from .password_serializers import PasswordResetRequestSerializer, PasswordResetConfirmSerializer
-
-
-class PasswordResetRequestView(APIView):
-    """
-    POST { "email": "user@example.com" }
-    Always returns 200 to avoid account enumeration.
-    """
-    authentication_classes = []
-    permission_classes = []
-
-    def post(self, request):
-        serializer = PasswordResetRequestSerializer(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({"detail": "If that email exists, a reset link was sent."}, status=status.HTTP_200_OK)
-
-
-class PasswordResetConfirmView(APIView):
-    """
-    POST { "uid": "...", "token": "...", "new_password": "..." }
-    """
-    authentication_classes = []
-    permission_classes = []
-
-    def post(self, request):
-        serializer = PasswordResetConfirmSerializer(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({"detail": "Password has been reset."}, status=status.HTTP_200_OK)
 
 
 # backend/accounts/urls.py
