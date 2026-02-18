@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 cd /app/backend
 
-echo "DATABASE_URL is: ${DATABASE_URL}"
+echo "DATABASE_URL is: ${DATABASE_URL:-<missing>}"
 
 python manage.py migrate --noinput
+python manage.py collectstatic --noinput
 
-exec gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT}
+exec gunicorn backend.wsgi:application \
+  --bind 0.0.0.0:${PORT:-8080} \
+  --access-logfile - \
+  --error-logfile - \
+  --capture-output \
+  --timeout 120

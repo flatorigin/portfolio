@@ -157,14 +157,12 @@ LOGGING = {
 # backend/accounts/password_serializers.py
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import get_connection, send_mail
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import serializers
 
-User = get_user_model()
 token_generator = PasswordResetTokenGenerator()
 
 
