@@ -17,13 +17,18 @@ export default function ResetPassword() {
     e.preventDefault();
     setError("");
 
+    if (!uid || !token) {
+      setError("Invalid reset link. Please request a new one.");
+      return;
+    }
+
     if (password !== password2) {
       setError("Passwords do not match.");
       return;
     }
 
     try {
-      await api.post("/auth/password-reset-confirm/", {
+      await api.post("/api/auth/password-reset-confirm/", {
         uid,
         token,
         new_password: password,
