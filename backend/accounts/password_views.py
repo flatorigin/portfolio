@@ -1,5 +1,7 @@
 # backend/accounts/password_views.py
 
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,9 +12,10 @@ from .password_serializers import (
 )
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class PasswordResetRequestView(APIView):
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = []  # public
+    permission_classes = []      # public
 
     def post(self, request, *args, **kwargs):
         serializer = PasswordResetRequestSerializer(
@@ -27,9 +30,10 @@ class PasswordResetRequestView(APIView):
         )
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class PasswordResetConfirmView(APIView):
-    authentication_classes = []
-    permission_classes = []
+    authentication_classes = []  # public
+    permission_classes = []      # public
 
     def post(self, request, *args, **kwargs):
         serializer = PasswordResetConfirmSerializer(
