@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "portfolio",
     "corsheaders",
     "accounts.apps.AccountsConfig",
+    "anymail",
 ]
 
 MIDDLEWARE = [
@@ -86,6 +87,14 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
+
+ANYMAIL = {
+    "RESEND_API_KEY": os.environ.get("ANYMAIL_RESEND_API_KEY", ""),
+}
+
+# If Resend key is present, force Resend backend. Otherwise keep whatever you configured.
+if ANYMAIL["RESEND_API_KEY"]:
+    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
 
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
