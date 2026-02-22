@@ -8,7 +8,7 @@ import api from "../api";
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
-
+import TopNav from "../components/TopNav";
 // normalize media
 function toUrl(raw) {
   if (!raw) return "";
@@ -24,6 +24,18 @@ function extractProjectId(fav) {
     fav?.project?.id ??
     fav?.project_id ??
     (typeof fav?.project === "number" ? fav.project : null)
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <TopNav />
+
+      <main className="mx-auto w-full px-3 py-4 md:max-w-6xl md:px-6 md:py-6">
+        {/* Your existing dashboard content */}
+      </main>
+    </div>
   );
 }
 
