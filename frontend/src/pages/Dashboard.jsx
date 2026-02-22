@@ -8,7 +8,7 @@ import api from "../api";
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
-import TopNav from "../components/TopNav";
+
 // normalize media
 function toUrl(raw) {
   if (!raw) return "";
