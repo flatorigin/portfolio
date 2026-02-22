@@ -9,7 +9,6 @@ import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
 import TopNav from "../components/TopNav";
-
 // normalize media
 function toUrl(raw) {
   if (!raw) return "";
@@ -142,7 +141,9 @@ export default function Dashboard() {
     setRemovingFavoriteId(projectId);
     try {
       await api.delete(`/projects/${projectId}/favorite/`);
-      setSavedProjects((prev) => prev.filter((f) => extractProjectId(f) !== projectId));
+      setSavedProjects((prev) =>
+        prev.filter((f) => extractProjectId(f) !== projectId)
+      );
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
       console.error("[Dashboard] failed to remove favorite", err?.response || err);
@@ -236,7 +237,9 @@ export default function Dashboard() {
     const entries = await Promise.all(
       list.map(async (p) => {
         try {
-          const { data } = await api.get(`/projects/${p.id}/images/`).catch(() => ({ data: [] }));
+          const { data } = await api
+            .get(`/projects/${p.id}/images/`)
+            .catch(() => ({ data: [] }));
           const imgs = Array.isArray(data) ? data : [];
 
           const mapped = imgs
@@ -247,7 +250,9 @@ export default function Dashboard() {
             .filter((x) => !!x.url);
 
           const cover =
-            mapped.find((x) => Number(x.order) === 0)?.url || mapped[0]?.url || null;
+            mapped.find((x) => Number(x.order) === 0)?.url ||
+            mapped[0]?.url ||
+            null;
 
           return [p.id, { cover }];
         } catch {
@@ -363,7 +368,8 @@ export default function Dashboard() {
     let attempts = 0;
     function tryScroll() {
       if (editorRef.current) {
-        const top = editorRef.current.getBoundingClientRect().top + window.scrollY - 80;
+        const top =
+          editorRef.current.getBoundingClientRect().top + window.scrollY - 80;
         window.scrollTo({ top, behavior: "smooth" });
         return;
       }
@@ -385,14 +391,17 @@ export default function Dashboard() {
     setEditImgs((prev) =>
       prev.map((img) => {
         if (img.id === imageId) return { ...img, order: 0 };
-        if (img.id === currentCover?.id && currentCover.id !== imageId) return { ...img, order: 1 };
+        if (img.id === currentCover?.id && currentCover.id !== imageId)
+          return { ...img, order: 1 };
         return img;
       })
     );
 
     try {
       if (currentCover?.id && currentCover.id !== imageId) {
-        await api.patch(`/projects/${editingId}/images/${currentCover.id}/`, { order: 1 });
+        await api.patch(`/projects/${editingId}/images/${currentCover.id}/`, {
+          order: 1,
+        });
       }
       await api.patch(`/projects/${editingId}/images/${imageId}/`, { order: 0 });
 
@@ -544,7 +553,9 @@ export default function Dashboard() {
     if (!editingId || !img?.id) return;
     if (img._localCaption === img.caption) return;
 
-    setEditImgs((prev) => prev.map((x) => (x.id === img.id ? { ...x, _saving: true } : x)));
+    setEditImgs((prev) =>
+      prev.map((x) => (x.id === img.id ? { ...x, _saving: true } : x))
+    );
 
     try {
       await api.patch(`/projects/${editingId}/images/${img.id}/`, {
@@ -553,7 +564,9 @@ export default function Dashboard() {
       await refreshImages(editingId);
     } catch (e) {
       alert(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
-      setEditImgs((prev) => prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x)));
+      setEditImgs((prev) =>
+        prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x))
+      );
     }
   }
 
@@ -570,7 +583,10 @@ export default function Dashboard() {
     }
   }
 
-  const handleEditorSubmit = useCallback((e) => saveProjectInfo(e), [editingId, editForm]);
+  const handleEditorSubmit = useCallback(
+    (e) => saveProjectInfo(e),
+    [editingId, editForm] // keep aligned with your current flow
+  );
 
   // cleanup timers on unmount
   useEffect(() => {
@@ -581,248 +597,138 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <TopNav />
+    <div className="space-y-8">
+      {/* Simple header: Dashboard only */}
+      <header className="mb-1">
+        <SectionTitle>Dashboard</SectionTitle>
+      </header>
 
-      {/* Full width on mobile, constrained on md+ */}
-      <main className="mx-auto w-full px-3 py-4 md:max-w-6xl md:px-6 md:py-6">
-        <div className="space-y-8">
-          {/* Simple header: Dashboard only */}
-          <header className="mb-1">
-            <SectionTitle>Dashboard</SectionTitle>
-          </header>
-
-          {/* Profile summary card with logo inside */}
-          <Card className="p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="relative h-10 w-10 flex-shrink-0">
-                  {logoUrl ? (
-                    <img
-                      src={toUrl(localStorage.getItem("profile_logo"))}
-                      alt="Logo"
-                      className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
-                      {meLite.display_name ? meLite.display_name.slice(0, 1).toUpperCase() : "•"}
-                    </div>
-                  )}
-                  {profileSaving && (
-                    <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-                    </div>
-                  )}
+      {/* Profile summary card with logo inside */}
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="relative h-10 w-10 flex-shrink-0">
+              {logoUrl ? (
+                <img
+                  src={toUrl(localStorage.getItem("profile_logo"))}
+                  alt="Logo"
+                  className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
+                  {meLite.display_name
+                    ? meLite.display_name.slice(0, 1).toUpperCase()
+                    : "•"}
                 </div>
-
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Profile
-                  </div>
-                  <div className="text-sm font-semibold text-slate-800">
-                    {meLite.display_name || "Add your name in Edit Profile"}
-                  </div>
-
-                  {(meLite.service_location || meLite.coverage_radius_miles) && (
-                    <div className="mt-1 text-xs text-slate-600">
-                      {meLite.service_location || "Location not set"}
-                      {meLite.coverage_radius_miles !== "" && (
-                        <> · {meLite.coverage_radius_miles} mile radius</>
-                      )}
-                    </div>
-                  )}
-
-                  {meLite.bio && <p className="mt-2 text-xs text-slate-600">{meLite.bio}</p>}
-
-                  {!meLite.service_location && !meLite.bio && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Add your service area and a short bio so clients know who you are.
-                    </p>
-                  )}
+              )}
+              {profileSaving && (
+                <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
                 </div>
-              </div>
-
-              <div className="flex w-full max-w-[140px] flex-col items-end gap-2">
-                <Button type="button" onClick={() => navigate("/profile/edit")}>
-                  Edit Profile
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          {/* SAVED PROJECTS (favorites) */}
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-800">Saved projects</h2>
-              <span className="text-[11px] text-slate-500">{savedProjects.length} saved</span>
+              )}
             </div>
 
-            {savedProjects.length === 0 ? (
-              <p className="text-xs text-slate-500">
-                You haven’t saved any projects yet. Hit “Save” on any interesting project to keep
-                it here.
-              </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-                  {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map((fav) => {
-                    const projectId = extractProjectId(fav);
-
-                    const coverSrcRaw =
-                      fav.project_cover_image_url ||
-                      fav.project_cover_image ||
-                      fav.project_cover ||
-                      fav.project?.cover_image_url ||
-                      fav.project?.cover_image ||
-                      fav.project?.cover ||
-                      "";
-
-                    const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
-
-                    const title =
-                      fav.project_title ||
-                      fav.project?.title ||
-                      (projectId ? `Project #${projectId}` : "Project");
-
-                    const owner = fav.project_owner_username || fav.project?.owner_username;
-
-                    const category = fav.project_category || fav.project?.category;
-                    const summary = fav.project_summary || fav.project?.summary;
-                    const location = fav.project_location || fav.project?.location;
-                    const budget = fav.project_budget || fav.project?.budget;
-                    const sqf = fav.project_sqf || fav.project?.sqf;
-                    const highlights = fav.project_highlights || fav.project?.highlights;
-
-                    const removing = removingFavoriteId === projectId;
-
-                    return (
-                      <Card
-                        key={fav.id ?? `p-${projectId ?? "unknown"}`}
-                        className="overflow-hidden"
-                      >
-                        {coverSrc ? (
-                          <img src={coverSrc} alt="" className="block h-36 w-full object-cover" />
-                        ) : (
-                          <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
-                            No cover
-                          </div>
-                        )}
-
-                        <div className="p-4">
-                          <div className="mb-1 flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate font-semibold">{title}</div>
-                              {owner && <div className="text-[11px] text-slate-500">by {owner}</div>}
-                            </div>
-
-                            {category && <Badge className="shrink-0">{category}</Badge>}
-                          </div>
-
-                          <div className="line-clamp-2 text-sm text-slate-700">
-                            {summary || <span className="opacity-60">No summary</span>}
-                          </div>
-
-                          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                            {location && (
-                              <div>
-                                <span className="opacity-60">Location:</span> {location}
-                              </div>
-                            )}
-                            {budget && (
-                              <div>
-                                <span className="opacity-60">Budget:</span> {budget}
-                              </div>
-                            )}
-                            {sqf && (
-                              <div>
-                                <span className="opacity-60">Sq Ft:</span> {sqf}
-                              </div>
-                            )}
-                            {highlights && (
-                              <div className="col-span-2 truncate">
-                                <span className="opacity-60">Highlights:</span> {highlights}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="mt-3 flex w-full flex-nowrap gap-2">
-                            <GhostButton
-                              className="w-1/2 min-w-0"
-                              onClick={() => window.open(`/projects/${projectId}`, "_self")}
-                              disabled={!projectId || removing}
-                            >
-                              Open
-                            </GhostButton>
-
-                            <Button
-                              className="w-1/2 min-w-0"
-                              type="button"
-                              variant="outline"
-                              onClick={() => handleRemoveFavorite(fav)}
-                              disabled={removing}
-                            >
-                              {removing ? "Removing…" : "Remove"}
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-
-                {savedProjects.length > 3 && (
-                  <div className="mt-3 flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowAllSaved((v) => !v)}
-                    >
-                      {showAllSaved ? "Show fewer" : `Show all ${savedProjects.length}`}
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
-
-          {/* 1) CREATE PROJECT — now collapsible reusable card */}
-          <CreateProjectCard
-            ownedCount={projects.length}
-            form={form}
-            setForm={setForm}
-            cover={cover}
-            setCover={setCover}
-            busy={busy}
-            error={createErr}
-            success={createOk}
-            onSubmit={createProject}
-          />
-
-          {/* 2) YOUR PROJECTS */}
-          <Card className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-800">Your Projects</div>
-              <Badge>{list.length} shown</Badge>
-            </div>
-
-            {list.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                You don’t have any projects yet.
+            <div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Profile
               </div>
-            ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-                {list.map((p) => {
-                  const coverFromImgs = myThumbs?.[p.id]?.cover || "";
-                  const coverSrc = coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
+              <div className="text-sm font-semibold text-slate-800">
+                {meLite.display_name || "Add your name in Edit Profile"}
+              </div>
+
+              {(meLite.service_location || meLite.coverage_radius_miles) && (
+                <div className="mt-1 text-xs text-slate-600">
+                  {meLite.service_location || "Location not set"}
+                  {meLite.coverage_radius_miles !== "" && (
+                    <> · {meLite.coverage_radius_miles} mile radius</>
+                  )}
+                </div>
+              )}
+
+              {meLite.bio && (
+                <p className="mt-2 text-xs text-slate-600">{meLite.bio}</p>
+              )}
+
+              {!meLite.service_location && !meLite.bio && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Add your service area and a short bio so clients know who you are.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex w-full max-w-[140px] flex-col items-end gap-2">
+            <Button type="button" onClick={() => navigate("/profile/edit")}>
+              Edit Profile
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* SAVED PROJECTS (favorites) */}
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-800">Saved projects</h2>
+          <span className="text-[11px] text-slate-500">
+            {savedProjects.length} saved
+          </span>
+        </div>
+
+        {savedProjects.length === 0 ? (
+          <p className="text-xs text-slate-500">
+            You haven’t saved any projects yet. Hit “Save” on any interesting project
+            to keep it here.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+              {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map(
+                (fav) => {
+                  const projectId = extractProjectId(fav);
+
+                  const coverSrcRaw =
+                    fav.project_cover_image_url ||
+                    fav.project_cover_image ||
+                    fav.project_cover ||
+                    fav.project?.cover_image_url ||
+                    fav.project?.cover_image ||
+                    fav.project?.cover ||
+                    "";
+
+                  const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
+
+                  const title =
+                    fav.project_title ||
+                    fav.project?.title ||
+                    (projectId ? `Project #${projectId}` : "Project");
+
+                  const owner =
+                    fav.project_owner_username || fav.project?.owner_username;
+
+                  const category = fav.project_category || fav.project?.category;
+                  const summary = fav.project_summary || fav.project?.summary;
+                  const location = fav.project_location || fav.project?.location;
+                  const budget = fav.project_budget || fav.project?.budget;
+                  const sqf = fav.project_sqf || fav.project?.sqf;
+                  const highlights =
+                    fav.project_highlights || fav.project?.highlights;
+
+                  const removing = removingFavoriteId === projectId;
 
                   return (
-                    <Card key={p.id} className="overflow-hidden">
+                    <Card
+                      key={fav.id ?? `p-${projectId ?? "unknown"}`}
+                      className="overflow-hidden"
+                    >
                       {coverSrc ? (
-                        <img src={coverSrc} alt="" className="block h-36 w-full object-cover" />
+                        <img
+                          src={coverSrc}
+                          alt=""
+                          className="block h-36 w-full object-cover"
+                        />
                       ) : (
                         <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
                           No cover
@@ -832,105 +738,244 @@ export default function Dashboard() {
                       <div className="p-4">
                         <div className="mb-1 flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="truncate font-semibold">{p.title}</div>
+                            <div className="truncate font-semibold">{title}</div>
+                            {owner && (
+                              <div className="text-[11px] text-slate-500">
+                                by {owner}
+                              </div>
+                            )}
                           </div>
 
-                          {p.category ? <Badge className="shrink-0">{p.category}</Badge> : null}
+                          {category && (
+                            <Badge className="shrink-0">{category}</Badge>
+                          )}
                         </div>
 
                         <div className="line-clamp-2 text-sm text-slate-700">
-                          {p.summary || <span className="opacity-60">No summary</span>}
+                          {summary || (
+                            <span className="opacity-60">No summary</span>
+                          )}
                         </div>
 
                         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                          {p.location ? (
+                          {location && (
                             <div>
-                              <span className="opacity-60">Location:</span> {p.location}
+                              <span className="opacity-60">Location:</span>{" "}
+                              {location}
                             </div>
-                          ) : null}
-
-                          {p.budget ? (
+                          )}
+                          {budget && (
                             <div>
-                              <span className="opacity-60">Budget:</span> {p.budget}
+                              <span className="opacity-60">Budget:</span> {budget}
                             </div>
-                          ) : null}
-
-                          {p.sqf ? (
+                          )}
+                          {sqf && (
                             <div>
-                              <span className="opacity-60">Sq Ft:</span> {p.sqf}
+                              <span className="opacity-60">Sq Ft:</span> {sqf}
                             </div>
-                          ) : null}
-
-                          {p.highlights ? (
+                          )}
+                          {highlights && (
                             <div className="col-span-2 truncate">
-                              <span className="opacity-60">Highlights:</span> {p.highlights}
+                              <span className="opacity-60">Highlights:</span>{" "}
+                              {highlights}
                             </div>
-                          ) : null}
+                          )}
                         </div>
 
                         <div className="mt-3 flex w-full flex-nowrap gap-2">
                           <GhostButton
                             className="w-1/2 min-w-0"
-                            onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                            onClick={() =>
+                              window.open(`/projects/${projectId}`, "_self")
+                            }
+                            disabled={!projectId || removing}
                           >
                             Open
                           </GhostButton>
 
-                          <Button className="w-1/2 min-w-0" onClick={() => loadEditor(p.id)}>
-                            Edit
+                          <Button
+                            className="w-1/2 min-w-0"
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleRemoveFavorite(fav)}
+                            disabled={removing}
+                          >
+                            {removing ? "Removing…" : "Remove"}
                           </Button>
                         </div>
                       </div>
                     </Card>
                   );
-                })}
+                }
+              )}
+            </div>
+
+            {savedProjects.length > 3 && (
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllSaved((v) => !v)}
+                >
+                  {showAllSaved ? "Show fewer" : `Show all ${savedProjects.length}`}
+                </Button>
               </div>
             )}
-          </Card>
+          </>
+        )}
+      </Card>
 
-          {/* ✅ Save feedback (creative) */}
-          {saveToast ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
-                  ✓
-                </span>
-                <div className="min-w-0">
-                  <div className="font-semibold truncate">{saveToast}</div>
-                  <div className="text-[11px] text-emerald-800/80">
-                    Nice — updates are saved and live on your project card.
+      {/* 1) CREATE PROJECT — now collapsible reusable card */}
+      <CreateProjectCard
+        ownedCount={projects.length}
+        form={form}
+        setForm={setForm}
+        cover={cover}
+        setCover={setCover}
+        busy={busy}
+        error={createErr}
+        success={createOk}
+        onSubmit={createProject}
+      />
+
+      {/* 2) YOUR PROJECTS */}
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-semibold text-slate-800">Your Projects</div>
+          <Badge>{list.length} shown</Badge>
+        </div>
+
+        {list.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            You don’t have any projects yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+            {list.map((p) => {
+              const coverFromImgs = myThumbs?.[p.id]?.cover || "";
+              const coverSrc = coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
+
+              return (
+                <Card key={p.id} className="overflow-hidden">
+                  {coverSrc ? (
+                    <img
+                      src={coverSrc}
+                      alt=""
+                      className="block h-36 w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                      No cover
+                    </div>
+                  )}
+
+                  <div className="p-4">
+                    <div className="mb-1 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">{p.title}</div>
+                      </div>
+
+                      {p.category ? (
+                        <Badge className="shrink-0">{p.category}</Badge>
+                      ) : null}
+                    </div>
+
+                    <div className="line-clamp-2 text-sm text-slate-700">
+                      {p.summary || <span className="opacity-60">No summary</span>}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      {p.location ? (
+                        <div>
+                          <span className="opacity-60">Location:</span> {p.location}
+                        </div>
+                      ) : null}
+
+                      {p.budget ? (
+                        <div>
+                          <span className="opacity-60">Budget:</span> {p.budget}
+                        </div>
+                      ) : null}
+
+                      {p.sqf ? (
+                        <div>
+                          <span className="opacity-60">Sq Ft:</span> {p.sqf}
+                        </div>
+                      ) : null}
+
+                      {p.highlights ? (
+                        <div className="col-span-2 truncate">
+                          <span className="opacity-60">Highlights:</span>{" "}
+                          {p.highlights}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <GhostButton
+                        className="w-1/2 min-w-0"
+                        onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                      >
+                        Open
+                      </GhostButton>
+
+                      <Button
+                        className="w-1/2 min-w-0"
+                        onClick={() => loadEditor(p.id)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* ✅ Save feedback (creative) */}
+      {saveToast ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white">
+              ✓
+            </span>
+            <div className="min-w-0">
+              <div className="font-semibold truncate">{saveToast}</div>
+              <div className="text-[11px] text-emerald-800/80">
+                Nice — updates are saved and live on your project card.
               </div>
             </div>
-          ) : null}
-
-          {/* 3) EDITOR — ProjectEditorCard */}
-          {editingId && (
-            <div ref={editorRef}>
-              <ProjectEditorCard
-                mode="edit"
-                projectId={editingId}
-                form={editForm}
-                setForm={setEditForm}
-                busy={busy}
-                images={editImgs}
-                setImages={setEditImgs}
-                onMakeCover={makeCoverImage}
-                onSaveImageCaption={saveImageCaption}
-                onDeleteImage={deleteImage}
-                onSubmit={handleEditorSubmit}
-                onClose={() => setEditingId("")}
-                onView={() => window.open(`/projects/${editingId}`, "_self")}
-                onAfterUpload={async () => {
-                  await refreshImages(editingId);
-                  await refreshProjects();
-                }}
-              />
-            </div>
-          )}
+          </div>
         </div>
-      </main>
+      ) : null}
+
+      {/* 3) EDITOR — ProjectEditorCard */}
+      {editingId && (
+        <div ref={editorRef}>
+          <ProjectEditorCard
+            mode="edit"
+            projectId={editingId}
+            form={editForm}
+            setForm={setEditForm}
+            busy={busy}
+            images={editImgs}
+            setImages={setEditImgs}
+            onMakeCover={makeCoverImage}
+            onSaveImageCaption={saveImageCaption}
+            onDeleteImage={deleteImage}
+            onSubmit={handleEditorSubmit}
+            onClose={() => setEditingId("")}
+            onView={() => window.open(`/projects/${editingId}`, "_self")}
+            onAfterUpload={async () => {
+              await refreshImages(editingId);
+              await refreshProjects();
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
