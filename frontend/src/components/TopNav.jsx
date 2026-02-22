@@ -1,16 +1,8 @@
-// frontend/src/components/TopNav.tsx
+// frontend/src/components/TopNav.jsx
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-function NavLink({
-  to,
-  label,
-  onClick,
-}: {
-  to: string;
-  label: string;
-  onClick?: () => void;
-}) {
+function NavLink({ to, label, onClick }) {
   const { pathname } = useLocation();
   const active = pathname === to;
 
@@ -41,11 +33,11 @@ export default function TopNav() {
         {/* Desktop menu */}
         <nav className="hidden items-center gap-2 md:flex">
           <NavLink to="/explore" label="Explore" />
-          <NavLink to="/edit-profile" label="Edit Profile" />
+          <NavLink to="/profile/edit" label="Edit Profile" />
           <NavLink to="/dashboard" label="Dashboard" />
         </nav>
 
-        {/* Right-side actions (keep your avatar/inbox/etc.) */}
+        {/* Right-side actions (desktop) */}
         <div className="hidden items-center gap-2 md:flex">
           <Link
             to="/inbox"
@@ -53,8 +45,8 @@ export default function TopNav() {
           >
             Inbox
           </Link>
-          {/* TODO: your avatar/menu component */}
-          <div className="h-9 w-9 rounded-full bg-slate-900 text-white grid place-items-center">
+          {/* Replace with your real avatar/menu */}
+          <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-900 text-white">
             M
           </div>
         </div>
@@ -67,7 +59,6 @@ export default function TopNav() {
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
-          {/* simple hamburger icon */}
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path
               d="M4 7h16M4 12h16M4 17h16"
@@ -84,7 +75,7 @@ export default function TopNav() {
         <div className="border-t bg-white md:hidden">
           <div className="flex flex-col gap-1 px-4 py-3">
             <NavLink to="/explore" label="Explore" onClick={() => setOpen(false)} />
-            <NavLink to="/edit-profile" label="Edit Profile" onClick={() => setOpen(false)} />
+            <NavLink to="/profile/edit" label="Edit Profile" onClick={() => setOpen(false)} />
             <NavLink to="/dashboard" label="Dashboard" onClick={() => setOpen(false)} />
             <div className="my-2 h-px bg-slate-100" />
             <NavLink to="/inbox" label="Inbox" onClick={() => setOpen(false)} />
