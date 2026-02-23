@@ -24,3 +24,5 @@ exec gunicorn backend.wsgi:application \
   --error-logfile - \
   --capture-output \
   --timeout 120
+
+python manage.py cleanup_media --dry-run --subdir project_images
