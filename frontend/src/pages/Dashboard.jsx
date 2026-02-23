@@ -613,9 +613,6 @@ export default function Dashboard() {
                   src={toUrl(localStorage.getItem("profile_logo"))}
                   alt="Logo"
                   className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
-                  onError={(e) => {
-                      e.currentTarget.src = "/placeholder.png"; // or hide it
-                  }}
                 />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
@@ -728,6 +725,9 @@ export default function Dashboard() {
                           src={coverSrc}
                           alt=""
                           className="block h-36 w-full object-cover"
+                          onError={(e) => {
+                              e.currentTarget.src = "/placeholder.png"; // or hide it
+                          }}
                         />
                       ) : (
                         <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
@@ -863,6 +863,9 @@ export default function Dashboard() {
                       src={coverSrc}
                       alt=""
                       className="block h-36 w-full object-cover"
+                      onError={(e) => {
+                          e.currentTarget.src = "/placeholder.png"; // or hide it
+                      }}
                     />
                   ) : (
                     <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
