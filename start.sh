@@ -26,3 +26,4 @@ exec gunicorn backend.wsgi:application \
   --timeout 120
 
 python manage.py cleanup_media --dry-run --subdir project_images
+python manage.py cleanup_media --subdir project_images
