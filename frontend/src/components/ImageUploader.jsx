@@ -74,6 +74,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
                   className="mb-2 h-36 w-full rounded-md object-cover"
                   onError={(e) => {
                       e.currentTarget.src = "/placeholder.png"; // or hide it
+                  }}
                  />
                 <input
                   className="w-full rounded-lg border border-slate-300 px-2 py-1"

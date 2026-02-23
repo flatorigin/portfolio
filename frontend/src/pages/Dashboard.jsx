@@ -614,7 +614,7 @@ export default function Dashboard() {
                   alt="Logo"
                   className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
                   onError={(e) => {
-                    e.currentTarget.style.display = "none";
+                      e.currentTarget.src = "/placeholder.png"; // or hide it
                   }}
                 />
               ) : (
