@@ -293,6 +293,8 @@ export default function ProjectEditorCard({
                       src={it.url}
                       alt=""
                       className="mb-2 h-36 w-full rounded-md object-cover"
+                      onError={(e) => {
+                          e.currentTarget.src = "/placeholder.png"; // or hide it
                     />
 
                     <input

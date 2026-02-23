@@ -308,6 +308,8 @@ export default function CreateProjectCard({
                           src={image.url}
                           alt={image.caption || "Project image"}
                           className="h-full w-full object-cover"
+                          onError={(e) => {
+                              e.currentTarget.src = "/placeholder.png"; // or hide it
                         />
                       </div>
                       <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center">

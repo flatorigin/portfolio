@@ -68,7 +68,13 @@ export default function ImageUploader({ projectId, onUploaded }) {
           <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
             {files.map((it, i) => (
               <div key={i} className="rounded-xl border border-slate-200 bg-white p-3">
-                <img src={it.url} alt="" className="mb-2 h-36 w-full rounded-md object-cover" />
+                <img 
+                  src={it.url} 
+                  alt="" 
+                  className="mb-2 h-36 w-full rounded-md object-cover"
+                  onError={(e) => {
+                      e.currentTarget.src = "/placeholder.png"; // or hide it
+                 />
                 <input
                   className="w-full rounded-lg border border-slate-300 px-2 py-1"
                   placeholder="Caption…"
