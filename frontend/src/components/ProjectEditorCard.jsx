@@ -24,7 +24,7 @@ export default function ProjectEditorCard({
   coverImageId, // selected cover image id (from parent)  (kept for backwards compat)
   setCoverImageId, // (id|null) => void (kept for backwards compat)
   onMakeCover, // (imageId) => void
-  onDeleteProject={() => deleteProject(editingId)}
+  onDeleteProject, // () => void
 }) {
   const headerTitle =
     mode === "edit"
@@ -36,10 +36,7 @@ export default function ProjectEditorCard({
   const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
   const isJobPosting = !!form.is_job_posting;
 
-  // ✅ Single source of truth so the radio always "sticks"
-  const currentCoverId =
-    images.find((img) => Number(img.order) === 0)?.id ?? null;
-
+  const currentCoverId = images.find((img) => Number(img.order) === 0)?.id ?? null;
 
   const handleToggleJobPosting = () => {
     setForm((prev) => ({
@@ -51,13 +48,11 @@ export default function ProjectEditorCard({
   const handleSelectCover = (imgId) => {
     const normalized = imgId == null ? null : Number(imgId);
 
-    // Always keep form in sync (parent saves from form)
     setForm((prev) => ({
       ...prev,
       cover_image_id: normalized,
     }));
 
-    // kept for backwards compat (won't affect UI now)
     if (setCoverImageId) {
       setCoverImageId(normalized);
     }
@@ -68,13 +63,27 @@ export default function ProjectEditorCard({
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-semibold text-slate-800">{headerTitle}</div>
+
         <div className="flex items-center gap-2">
-          {onView && projectId && <GhostButton onClick={onView}>View</GhostButton>}
-          {onClose && (
-            <GhostButton onClick={onClose}>
-              {mode === "edit" ? "Close" : "Cancel"}
-            </GhostButton>
-          )}
+          {onView && projectId ? <GhostButton onClick={onView}>View</GhostButton> : null}
+
+          {/* ✅ Delete project (edit mode only) */}
+          {mode === "edit" && projectId ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-300 text-red-700 hover:bg-red-50"
+              onClick={() => onDeleteProject?.()}
+              disabled={busy}
+              title="Delete this project permanently"
+            >
+              Delete
+            </Button>
+          ) : null}
+
+          {onClose ? (
+            <GhostButton onClick={onClose}>{mode === "edit" ? "Close" : "Cancel"}</GhostButton>
+          ) : null}
         </div>
       </div>
 
@@ -88,16 +97,13 @@ export default function ProjectEditorCard({
         }
       >
         <div className="flex items-center gap-3">
-          {/* Switch */}
           <button
             type="button"
             onClick={handleToggleJobPosting}
             aria-pressed={isJobPosting}
             className={
               "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
-              (isJobPosting
-                ? "bg-sky-500 border-sky-500"
-                : "bg-slate-200 border-slate-300")
+              (isJobPosting ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
             }
           >
             <span
@@ -119,11 +125,7 @@ export default function ProjectEditorCard({
         </div>
 
         <div className="hidden sm:block">
-          <Badge
-            className={
-              isJobPosting ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-700"
-            }
-          >
+          <Badge className={isJobPosting ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-700"}>
             {isJobPosting ? "On" : "Off"}
           </Badge>
         </div>
@@ -138,7 +140,7 @@ export default function ProjectEditorCard({
         id="project-editor-form"
         onSubmit={(e) => {
           e.preventDefault();
-          if (onSubmit) onSubmit(e);
+          onSubmit?.(e);
         }}
         className="grid grid-cols-1 gap-3 md:grid-cols-2"
       >
@@ -155,9 +157,7 @@ export default function ProjectEditorCard({
           <label className="mb-1 block text-sm text-slate-600">Category</label>
           <Input
             value={form.category}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, category: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
             placeholder="Category"
           />
         </div>
@@ -166,22 +166,16 @@ export default function ProjectEditorCard({
           <label className="mb-1 block text-sm text-slate-600">Summary</label>
           <Textarea
             value={form.summary}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, summary: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, summary: e.target.value }))}
             placeholder="Short description..."
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Location (not address)
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
           <Input
             value={form.location}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, location: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
             placeholder="City, State"
           />
         </div>
@@ -190,9 +184,7 @@ export default function ProjectEditorCard({
           <label className="mb-1 block text-sm text-slate-600">Budget</label>
           <Input
             value={form.budget}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, budget: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, budget: e.target.value }))}
             inputMode="numeric"
             placeholder="e.g. 250000"
           />
@@ -209,60 +201,44 @@ export default function ProjectEditorCard({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Highlights (tags / text)
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
           <Input
             value={form.highlights}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, highlights: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, highlights: e.target.value }))}
             placeholder="comma-separated tags"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Material / tool link (optional)
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Material / tool link (optional)</label>
           <Input
             value={form.material_url}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, material_url: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, material_url: e.target.value }))}
             placeholder="https://www.example.com/product/123"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm text-slate-600">
-            Material label (title + price)
-          </label>
+          <label className="mb-1 block text-sm text-slate-600">Material label (title + price)</label>
           <Input
             value={form.material_label}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, material_label: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, material_label: e.target.value }))}
             placeholder="e.g. Bosch SDS Hammer Drill – $129"
           />
         </div>
 
-        {/* Public checkbox */}
         <div className="flex items-center gap-2">
           <label className="text-sm text-slate-600">
             <input
               type="checkbox"
               className="mr-2 align-middle"
               checked={!!form.is_public}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, is_public: e.target.checked }))
-              }
+              onChange={(e) => setForm((prev) => ({ ...prev, is_public: e.target.checked }))}
             />
             Public
           </label>
         </div>
 
-        {/* Hidden submit so Enter works, but visible button is at bottom of card */}
         <div className="md:col-span-2">
           <button type="submit" className="hidden">
             {submitLabel}
@@ -270,18 +246,8 @@ export default function ProjectEditorCard({
         </div>
       </form>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="border-red-300 text-red-700 hover:bg-red-50"
-        onClick={onDeleteProject}
-        disabled={busy}
-      >
-        Delete project
-      </Button>
-
       {/* Images section (edit mode only) */}
-      {mode === "edit" && projectId && (
+      {mode === "edit" && projectId ? (
         <>
           <div className="mt-6">
             <div className="mb-2 flex items-center justify-between">
@@ -304,8 +270,19 @@ export default function ProjectEditorCard({
                       src={it.url}
                       alt=""
                       className="mb-2 h-36 w-full rounded-md object-cover"
+                      loading="lazy"
                       onError={(e) => {
-                          e.currentTarget.src = "/placeholder.png"; // or hide it
+                        // Hide broken image and show a simple fallback block (no external file needed)
+                        e.currentTarget.style.display = "none";
+                        const parent = e.currentTarget.parentElement;
+                        if (parent && !parent.querySelector("[data-img-fallback]")) {
+                          const fb = document.createElement("div");
+                          fb.setAttribute("data-img-fallback", "1");
+                          fb.className =
+                            "mb-2 flex h-36 w-full items-center justify-center rounded-md bg-slate-100 text-sm text-slate-500";
+                          fb.textContent = "Image missing";
+                          parent.insertBefore(fb, parent.firstChild);
+                        }
                       }}
                     />
 
@@ -316,27 +293,22 @@ export default function ProjectEditorCard({
                       onChange={(e) =>
                         setImages((prev) =>
                           prev.map((x) =>
-                            x.id === it.id
-                              ? { ...x, _localCaption: e.target.value }
-                              : x
+                            x.id === it.id ? { ...x, _localCaption: e.target.value } : x
                           )
                         )
                       }
                     />
 
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      {/* Cover selector */}
                       <label className="flex items-center gap-1 text-[11px] text-slate-600">
                         <input
                           type="radio"
                           name="cover-image"
                           className="h-3 w-3"
-                          checked={
-                            String(currentCoverId ?? "") === String(it.id ?? "")
-                          }
+                          checked={String(currentCoverId ?? "") === String(it.id ?? "")}
                           onChange={() => {
-                            handleSelectCover(it.id);      // keeps UI state
-                            onMakeCover?.(it.id);          // persists by setting order=0
+                            handleSelectCover(it.id);
+                            onMakeCover?.(it.id);
                           }}
                         />
                         <span>
@@ -346,23 +318,16 @@ export default function ProjectEditorCard({
                         </span>
                       </label>
 
-                      {/* Actions */}
                       <div className="flex items-center gap-2">
                         <GhostButton
-                          onClick={() => {
-                            if (it.id) onDeleteImage(it);
-                          }}
+                          onClick={() => it.id && onDeleteImage?.(it)}
                           disabled={!it.id || busy}
-                          title={
-                            it.id
-                              ? "Delete this image"
-                              : "This API response has no image id — delete is disabled"
-                          }
+                          title={it.id ? "Delete this image" : "Missing image id"}
                         >
                           Delete
                         </GhostButton>
                         <Button
-                          onClick={() => onSaveImageCaption(it)}
+                          onClick={() => onSaveImageCaption?.(it)}
                           disabled={it._saving || it._localCaption === it.caption}
                         >
                           {it._saving ? "Saving…" : "Save caption"}
@@ -375,27 +340,19 @@ export default function ProjectEditorCard({
             )}
           </div>
 
-          {/* Uploader */}
           <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-slate-800">
-              Add Images
-            </div>
-            <div className="mb-2 text-xs text-slate-600">
-              Drag & drop or click; add captions; upload.
-            </div>
+            <div className="mb-2 text-sm font-semibold text-slate-800">Add Images</div>
+            <div className="mb-2 text-xs text-slate-600">Drag & drop or click; add captions; upload.</div>
             <ImageUploader
               projectId={projectId}
               onUploaded={async () => {
-                if (onAfterUpload) {
-                  await onAfterUpload();
-                }
+                await onAfterUpload?.();
               }}
             />
           </div>
         </>
-      )}
+      ) : null}
 
-      {/* PRIMARY SUBMIT BUTTON – BOTTOM of card */}
       <div className="mt-6 flex justify-end">
         <Button type="submit" disabled={busy} form="project-editor-form">
           {submitLabel}
