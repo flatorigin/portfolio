@@ -45,6 +45,17 @@ export default function ProjectEditorCard({
     }));
   };
 
+  const handleDeleteProject = () => {
+    if (!onDeleteProject || !projectId) return;
+
+    const ok = window.confirm(
+      "Are you sure?\n\nBy removing the project all the images and info about the project will be lost and the process is not retriveable."
+    );
+
+    if (!ok) return;
+    onDeleteProject();
+  };
+  
   const handleSelectCover = (imgId) => {
     const normalized = imgId == null ? null : Number(imgId);
 
@@ -71,13 +82,12 @@ export default function ProjectEditorCard({
           {mode === "edit" && projectId ? (
             <Button
               type="button"
-              variant="outline"
-              className="border-red-300 text-red-700 hover:bg-red-50"
-              onClick={() => onDeleteProject?.()}
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={handleDeleteProject}
               disabled={busy}
               title="Delete this project permanently"
             >
-              Delete
+              Delete project
             </Button>
           ) : null}
 
