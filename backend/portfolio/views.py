@@ -119,11 +119,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer.save(owner=self.request.user)
 
     def destroy(self, request, *args, **kwargs):
-        """
-        DELETE /api/projects/<id>/
-        Deletes the project and removes related data (images, comments, favorites, message threads).
-        Owner-only.
-        """
         project = self.get_object()
         if project.owner != request.user:
             raise PermissionDenied("You do not have permission to delete this project.")
@@ -139,17 +134,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     pass
             imgs.delete()
 
-            # Delete comments
+            # Delete comments + favorites
             ProjectComment.objects.filter(project=project).delete()
-
-            # Delete favorites (for all users)
             ProjectFavorite.objects.filter(project=project).delete()
 
-            # Delete message threads started from this project (if you have origin_project FK)
-            # If your model uses a different field name, change it here.
-            MessageThread.objects.filter(origin_project=project).delete()
+            # ✅ Correct field name for your MessageThread model
+            MessageThread.objects.filter(project=project).delete()
 
-            # Finally delete project
             project.delete()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
