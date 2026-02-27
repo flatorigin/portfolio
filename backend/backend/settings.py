@@ -24,7 +24,6 @@ INSTALLED_APPS = [
     "portfolio.apps.PortfolioConfig",
     "rest_framework",
     "djoser",
-    "portfolio",
     "corsheaders",
     "accounts.apps.AccountsConfig",
     "anymail",
