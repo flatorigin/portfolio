@@ -9,6 +9,8 @@ import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
 
+
+
 // normalize media
 function toUrl(raw) {
   if (!raw) return "";
@@ -100,6 +102,7 @@ export default function Dashboard() {
   const [savedProjects, setSavedProjects] = useState([]);
   const [showAllSaved, setShowAllSaved] = useState(false);
   const [removingFavoriteId, setRemovingFavoriteId] = useState(null);
+  const [createCloseSignal, setCreateCloseSignal] = useState(0);
 
   const refreshSaved = useCallback(async () => {
     try {
@@ -521,7 +524,7 @@ export default function Dashboard() {
       setCover(null);
       setCreateOk(true);
 
-      if (data?.id) await loadEditor(data.id);
+      setCreateCloseSignal((n) => n + 1);
     } catch (err) {
       const msg = err?.response?.data
         ? typeof err.response.data === "string"
@@ -866,6 +869,7 @@ export default function Dashboard() {
         error={createErr}
         success={createOk}
         onSubmit={createProject}
+        closeSignal={createCloseSignal}
       />
 
       {/* 2) YOUR PROJECTS */}
