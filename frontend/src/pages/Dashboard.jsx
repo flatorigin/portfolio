@@ -998,6 +998,7 @@ export default function Dashboard() {
             onSaveImageCaption={saveImageCaption}
             onDeleteImage={deleteImage}
             onSubmit={handleEditorSubmit}
+            onDeleteProject={() => deleteProject(editingId)}
             onClose={() => setEditingId("")}
             onView={() => window.open(`/projects/${editingId}`, "_self")}
             onAfterUpload={async () => {
