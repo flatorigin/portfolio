@@ -11,6 +11,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+
 
 from .models import (
     Project,
@@ -115,6 +117,42 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         # Prevent owner from being changed via API
         serializer.save(owner=self.request.user)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        DELETE /api/projects/<id>/
+        Deletes the project and removes related data (images, comments, favorites, message threads).
+        Owner-only.
+        """
+        project = self.get_object()
+        if project.owner != request.user:
+            raise PermissionDenied("You do not have permission to delete this project.")
+
+        with transaction.atomic():
+            # Delete image files + rows
+            imgs = ProjectImage.objects.filter(project=project)
+            for img in imgs:
+                try:
+                    if img.image:
+                        img.image.delete(save=False)
+                except Exception:
+                    pass
+            imgs.delete()
+
+            # Delete comments
+            ProjectComment.objects.filter(project=project).delete()
+
+            # Delete favorites (for all users)
+            ProjectFavorite.objects.filter(project=project).delete()
+
+            # Delete message threads started from this project (if you have origin_project FK)
+            # If your model uses a different field name, change it here.
+            MessageThread.objects.filter(origin_project=project).delete()
+
+            # Finally delete project
+            project.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -434,6 +472,9 @@ class ThreadActionView(APIView):
         ser = MessageThreadSerializer(thread, context={"request": request})
         return Response(ser.data)
 
+# ---------------------------------------------------
+# BlockListView
+# ---------------------------------------------------
 
 class BlockListView(generics.ListAPIView):
     """

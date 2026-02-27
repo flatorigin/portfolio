@@ -24,6 +24,7 @@ export default function ProjectEditorCard({
   coverImageId, // selected cover image id (from parent)  (kept for backwards compat)
   setCoverImageId, // (id|null) => void (kept for backwards compat)
   onMakeCover, // (imageId) => void
+  onDeleteProject={() => deleteProject(editingId)}
 }) {
   const headerTitle =
     mode === "edit"
@@ -268,6 +269,16 @@ export default function ProjectEditorCard({
           </button>
         </div>
       </form>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="border-red-300 text-red-700 hover:bg-red-50"
+        onClick={onDeleteProject}
+        disabled={busy}
+      >
+        Delete project
+      </Button>
 
       {/* Images section (edit mode only) */}
       {mode === "edit" && projectId && (

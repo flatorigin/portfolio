@@ -159,6 +159,34 @@ export default function Dashboard() {
     }
   }
 
+  async function deleteProject(projectId) {
+    if (!projectId) return;
+
+    const ok = window.confirm(
+      "Delete this project permanently? This will remove images, favorites, comments, and messages tied to it. This cannot be undone."
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    try {
+      await api.delete(`/projects/${projectId}/`);
+      setEditingId("");
+      await refreshProjects();
+      setSaveToast("Deleted ✓  Project removed");
+    } catch (err) {
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to delete project."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // ---- Projects & editor ----
   const [projects, setProjects] = useState([]);
   const [busy, setBusy] = useState(false);
