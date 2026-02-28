@@ -342,12 +342,14 @@ export default function EditProfile() {
                     Location(city, state) or ZIP code
                   </label>
                   <Input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d{5}"
                     value={form.service_location}
-                    onChange={updateField("service_location")}
-                    placeholder="e.g. 19063"
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, service_location: e.target.value }))
+                    }
+                    placeholder="City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
+                    pattern="^\s*(\d{5}(-\d{4})?|[A-Za-z][A-Za-z .'-]*,\s*[A-Za-z]{2})\s*$"
+                    title="Enter City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
+                    required
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
                     Enter your primary ZIP code. We’ll use this to show your
