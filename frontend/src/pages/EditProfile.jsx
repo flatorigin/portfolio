@@ -2,7 +2,7 @@
 // file: frontend/src/pages/EditProfile.jsx
 // Loads / updates /api/users/me/
 // Shows contact info + service-area Google Map with radius circle
-// + Banner/Hero upload (for PublicProfile hero)
+// Map updates ONLY after successful Save (not while typing)
 // =======================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
@@ -19,7 +19,6 @@ function toUrl(raw) {
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
-// ✅ ZIP helpers (so ZIP geocodes consistently)
 function isUsZip(raw) {
   return /^\s*\d{5}(-\d{4})?\s*$/.test(raw || "");
 }
@@ -28,7 +27,7 @@ function normalizeLocationForGeocode(raw) {
   const s = (raw || "").trim();
   if (!s) return "";
   if (isUsZip(s)) {
-    // Adding country hint removes ambiguity so ZIP centers correctly.
+    // ZIP hint makes results consistent
     return `${s.replace(/\s+/g, "")}, USA`;
   }
   return s;
@@ -57,7 +56,6 @@ function loadGoogleMaps(apiKey) {
     s.dataset.cc = "google-maps-js";
     s.async = true;
     s.defer = true;
-    // No need for "places" library if we're only doing Geocoder + Circle.
     s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
     s.onload = () => resolve(window.google.maps);
     s.onerror = () => reject(new Error("Failed to load Google Maps script"));
@@ -87,13 +85,29 @@ export default function EditProfile() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // --- Map state/refs ---
+  // ✅ Map model updates only after load/save
+  const [mapModel, setMapModel] = useState({
+    service_location: "",
+    coverage_radius_miles: "",
+  });
+
+  // --- Map refs/state ---
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const circleRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapErr, setMapErr] = useState("");
+
+  // ✅ Debug info so ZIP issues aren’t silent
+  const [geoDebug, setGeoDebug] = useState({
+    status: "",
+    formattedAddress: "",
+    query: "",
+  });
+
+  const MIN_ZOOM = 8;
+  const MAX_ZOOM = 14;
 
   // ----------------------------
   // Load current profile: /api/users/me/
@@ -109,7 +123,7 @@ export default function EditProfile() {
       .then(({ data }) => {
         if (!alive) return;
 
-        setForm({
+        const nextForm = {
           display_name: data.display_name || "",
           service_location: data.service_location || "",
           coverage_radius_miles:
@@ -120,6 +134,14 @@ export default function EditProfile() {
           contact_email: data.contact_email || "",
           contact_phone: data.contact_phone || "",
           bio: data.bio || "",
+        };
+
+        setForm(nextForm);
+
+        // ✅ map updates from loaded values (not from typing)
+        setMapModel({
+          service_location: nextForm.service_location,
+          coverage_radius_miles: nextForm.coverage_radius_miles,
         });
 
         setAvatarPreview(
@@ -142,7 +164,7 @@ export default function EditProfile() {
   }, []);
 
   // ----------------------------
-  // Initialize Google Map once
+  // Init Google Maps once
   // ----------------------------
   useEffect(() => {
     let alive = true;
@@ -154,19 +176,16 @@ export default function EditProfile() {
         if (!alive) return;
         if (!mapDivRef.current) return;
 
-        // Create map once
         if (!mapRef.current) {
           mapRef.current = new maps.Map(mapDivRef.current, {
-            center: { lat: 39.9526, lng: -75.1652 }, // default: Philadelphia-ish
+            center: { lat: 39.9526, lng: -75.1652 },
             zoom: 10,
             mapTypeControl: false,
             streetViewControl: false,
             fullscreenControl: false,
           });
 
-          markerRef.current = new maps.Marker({
-            map: mapRef.current,
-          });
+          markerRef.current = new maps.Marker({ map: mapRef.current });
         }
 
         setMapReady(true);
@@ -187,25 +206,41 @@ export default function EditProfile() {
   }, []);
 
   // ----------------------------
-  // Update map when location/radius changes
+  // Draw/refresh map from mapModel ONLY (after load/save)
   // ----------------------------
   useEffect(() => {
     if (!mapReady) return;
+
     const maps = window.google?.maps;
-    if (!maps) return;
-
     const map = mapRef.current;
-    if (!map) return;
+    if (!maps || !map) return;
 
-    const raw = form.service_location || "";
+    const raw = mapModel.service_location || "";
     const query = normalizeLocationForGeocode(raw);
-    if (!query) return;
 
-    const radiusMeters = milesToMeters(form.coverage_radius_miles);
+    if (!query) {
+      setGeoDebug({ status: "", formattedAddress: "", query: "" });
+      if (circleRef.current) {
+        circleRef.current.setMap(null);
+        circleRef.current = null;
+      }
+      return;
+    }
+
+    const radiusMeters = milesToMeters(mapModel.coverage_radius_miles);
     const geocoder = new maps.Geocoder();
 
+    setGeoDebug((prev) => ({ ...prev, query }));
+
     geocoder.geocode({ address: query, region: "us" }, (results, status) => {
+      setGeoDebug({
+        status: String(status || ""),
+        formattedAddress: results?.[0]?.formatted_address || "",
+        query,
+      });
+
       if (status !== "OK" || !results?.length) {
+        // ✅ This is where ZIP failures usually show: REQUEST_DENIED / ZERO_RESULTS / INVALID_REQUEST
         console.warn("[EditProfile] geocode failed:", status, query);
         return;
       }
@@ -214,14 +249,10 @@ export default function EditProfile() {
       const center = { lat: loc.lat(), lng: loc.lng() };
 
       map.setCenter(center);
-      // zoom a bit closer for ZIPs
       map.setZoom(isUsZip(raw) ? 12 : 11);
 
-      if (markerRef.current) {
-        markerRef.current.setPosition(center);
-      }
+      markerRef.current?.setPosition(center);
 
-      // Circle radius
       if (circleRef.current) {
         circleRef.current.setMap(null);
         circleRef.current = null;
@@ -237,12 +268,19 @@ export default function EditProfile() {
           fillOpacity: 0.12,
         });
 
-        // Fit bounds to circle so it’s visible
         const bounds = circleRef.current.getBounds?.();
         if (bounds) map.fitBounds(bounds);
       }
+
+      // ✅ Clamp zoom (after fitBounds changes it)
+      window.setTimeout(() => {
+        const z = map.getZoom?.();
+        if (typeof z !== "number") return;
+        if (z < MIN_ZOOM) map.setZoom(MIN_ZOOM);
+        if (z > MAX_ZOOM) map.setZoom(MAX_ZOOM);
+      }, 0);
     });
-  }, [mapReady, form.service_location, form.coverage_radius_miles]);
+  }, [mapReady, mapModel.service_location, mapModel.coverage_radius_miles]);
 
   // ----------------------------
   // Form helpers
@@ -295,6 +333,7 @@ export default function EditProfile() {
 
   // ----------------------------
   // Save profile (PATCH /api/users/me/)
+  // ✅ after successful save -> update mapModel so map moves
   // ----------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -316,7 +355,6 @@ export default function EditProfile() {
       if (logoFile) data.append("logo", logoFile);
       if (bannerFile) data.append("banner", bannerFile);
 
-      // clear banner on server if removed
       if (!bannerFile && !bannerPreview) {
         data.append("banner_url", "");
         data.append("banner", "");
@@ -329,19 +367,26 @@ export default function EditProfile() {
       const updated = resp.data || {};
       setMessage("Profile updated.");
 
-      setForm((prev) => ({
-        ...prev,
-        display_name: updated.display_name ?? prev.display_name,
-        service_location: updated.service_location ?? prev.service_location,
+      const next = {
+        display_name: updated.display_name ?? form.display_name,
+        service_location: updated.service_location ?? form.service_location,
         coverage_radius_miles:
           updated.coverage_radius_miles !== null &&
           updated.coverage_radius_miles !== undefined
             ? String(updated.coverage_radius_miles)
-            : prev.coverage_radius_miles,
-        contact_email: updated.contact_email ?? prev.contact_email,
-        contact_phone: updated.contact_phone ?? prev.contact_phone,
-        bio: updated.bio ?? prev.bio,
-      }));
+            : form.coverage_radius_miles,
+        contact_email: updated.contact_email ?? form.contact_email,
+        contact_phone: updated.contact_phone ?? form.contact_phone,
+        bio: updated.bio ?? form.bio,
+      };
+
+      setForm(next);
+
+      // ✅ critical: map updates only after save
+      setMapModel({
+        service_location: next.service_location,
+        coverage_radius_miles: next.coverage_radius_miles,
+      });
 
       if (updated.logo || updated.logo_url || updated.avatar_url) {
         setAvatarPreview(
@@ -368,6 +413,10 @@ export default function EditProfile() {
   };
 
   const bannerPreviewSafe = useMemo(() => toUrl(bannerPreview), [bannerPreview]);
+  const radiusLabel =
+    mapModel.coverage_radius_miles && Number(mapModel.coverage_radius_miles) > 0
+      ? `${mapModel.coverage_radius_miles} mi radius`
+      : "No radius set";
 
   return (
     <div>
@@ -500,7 +549,7 @@ export default function EditProfile() {
                     required
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
-                    ZIP codes are geocoded as “ZIP, USA” so the map centers correctly.
+                    Map updates after Save. ZIP codes geocode as “ZIP, USA”.
                   </p>
                 </div>
                 <div>
@@ -573,22 +622,6 @@ export default function EditProfile() {
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Service area preview
             </div>
-            <p className="text-xs text-slate-600">
-              Map centers on{" "}
-              <span className="font-medium">
-                {form.service_location || "service location"}
-              </span>
-              {form.coverage_radius_miles ? (
-                <>
-                  {" "}
-                  with a{" "}
-                  <span className="font-medium">
-                    {form.coverage_radius_miles}-mile
-                  </span>{" "}
-                  radius.
-                </>
-              ) : null}
-            </p>
 
             {mapErr ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
@@ -596,7 +629,31 @@ export default function EditProfile() {
               </div>
             ) : null}
 
-            <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+            {/* ✅ Debug block to catch ZIP geocode failures */}
+            {geoDebug.query ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700">
+                <div className="font-semibold text-slate-800">Map debug</div>
+                <div className="mt-1">
+                  <span className="opacity-70">Geocode query:</span>{" "}
+                  <span className="font-mono">{geoDebug.query}</span>
+                </div>
+                <div>
+                  <span className="opacity-70">Status:</span>{" "}
+                  <span className="font-mono">{geoDebug.status || "-"}</span>
+                </div>
+                <div>
+                  <span className="opacity-70">Result:</span>{" "}
+                  <span className="font-mono">{geoDebug.formattedAddress || "-"}</span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="relative mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+              {/* Tooltip */}
+              <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-800 shadow-sm">
+                {radiusLabel}
+              </div>
+
               <div ref={mapDivRef} className="h-64 w-full" />
             </div>
 
@@ -606,6 +663,10 @@ export default function EditProfile() {
                 Add it to Railway Variables and redeploy.
               </p>
             ) : null}
+
+            <p className="text-[11px] text-slate-500">
+              Map updates only after Save. (This prevents jumping while typing.)
+            </p>
           </Card>
         </div>
       )}
