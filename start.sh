@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ------------------------------------------------------------------------------
+# Runtime-inject Vite env vars into the built frontend (Railway Docker builds
+# don't reliably support build args in the UI).
+# ------------------------------------------------------------------------------
+FRONTEND_INDEX="/app/frontend/dist/index.html"
+
+if [ -f "$FRONTEND_INDEX" ]; then
+  if [ -n "${VITE_GOOGLE_MAPS_API_KEY:-}" ]; then
+    echo "Injecting VITE_GOOGLE_MAPS_API_KEY into frontend build..."
+    sed -i "s|__VITE_GOOGLE_MAPS_API_KEY__|${VITE_GOOGLE_MAPS_API_KEY}|g" "$FRONTEND_INDEX" || true
+  else
+    echo "WARNING: VITE_GOOGLE_MAPS_API_KEY is missing at runtime"
+  fi
+else
+  echo "WARNING: Frontend dist not found at $FRONTEND_INDEX (skipping env injection)"
+fi
+
 cd /app/backend
 
 # Provide safe defaults so staging doesn't crash if vars aren't set yet
