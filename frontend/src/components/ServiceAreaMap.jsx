@@ -1,34 +1,23 @@
 // ============================================================================
 // file: frontend/src/components/ServiceAreaMap.jsx
-// Async Google Maps loader + geocoding (ZIP or City, ST) + radius circle
-// Supports Railway runtime env injection via window.__ENV
+// Google Maps (js-api-loader v2) + geocoding (ZIP or City, ST) + radius circle
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader } from "@googlemaps/js-api-loader";
+import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 
 const DEFAULT_CENTER = { lat: 39.9526, lng: -75.1652 }; // Philadelphia fallback
 const MILES_TO_METERS = 1609.344;
 
-function getMapsKey() {
-  // ✅ Railway runtime-injected key (from index.html placeholder -> start.sh sed)
-  const runtimeKey =
-    typeof window !== "undefined" ? window.__ENV?.VITE_GOOGLE_MAPS_API_KEY : "";
-
-  // ✅ Local dev key (Vite build-time)
-  const buildKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
-  return runtimeKey || buildKey || "";
-}
-
-function isZip(raw) {
-  return /^\d{5}(-\d{4})?$/.test((raw || "").trim());
-}
-
 function normalizeQuery(raw) {
   const v = (raw || "").trim();
   if (!v) return "";
-  // If it's a ZIP, don't add commas that confuse some geocodes; we’ll restrict country in request
-  return v;
+
+  // If it's ZIP (or ZIP+4), add USA for better geocoding
+  const zip = /^\d{5}(-\d{4})?$/.test(v);
+  if (zip) return `${v}, USA`;
+
+  // If they typed City, ST keep it; otherwise append USA
+  return v.includes(",") ? v : `${v}, USA`;
 }
 
 function milesToMeters(miles) {
@@ -46,9 +35,10 @@ export default function ServiceAreaMap({
   savedLocationQuery,
   savedRadiusMiles,
 }) {
-  const apiKey = getMapsKey();
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   const containerRef = useRef(null);
+
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const circleRef = useRef(null);
@@ -59,17 +49,10 @@ export default function ServiceAreaMap({
   const effectiveQuery = deferUpdatesUntilSave ? savedLocationQuery : locationQuery;
   const effectiveRadius = deferUpdatesUntilSave ? savedRadiusMiles : radiusMiles;
 
-  const normalizedQuery = useMemo(
-    () => normalizeQuery(effectiveQuery),
-    [effectiveQuery]
-  );
+  const normalizedQuery = useMemo(() => normalizeQuery(effectiveQuery), [effectiveQuery]);
+  const radiusMeters = useMemo(() => milesToMeters(effectiveRadius), [effectiveRadius]);
 
-  const radiusMeters = useMemo(
-    () => milesToMeters(effectiveRadius),
-    [effectiveRadius]
-  );
-
-  // Init map once
+  // --- Init map once ---
   useEffect(() => {
     let cancelled = false;
 
@@ -78,7 +61,7 @@ export default function ServiceAreaMap({
         setStatus({
           kind: "error",
           message:
-            "Missing Google Maps key. Set VITE_GOOGLE_MAPS_API_KEY in Railway Variables and redeploy.",
+            "Missing VITE_GOOGLE_MAPS_API_KEY. Add it to Railway Variables and redeploy (it must exist at build time for Vite).",
         });
         return;
       }
@@ -86,18 +69,21 @@ export default function ServiceAreaMap({
       try {
         setStatus({ kind: "loading", message: "Loading Google Maps…" });
 
-        const loader = new Loader({
-          apiKey,
-          version: "weekly",
-          // libraries optional; keep empty unless you need Places Autocomplete
-          // libraries: ["places"],
+        // IMPORTANT: v2 loader API
+        setOptions({
+          key: apiKey,
+          v: "weekly",
+          libraries: ["places"],
         });
 
-        const google = await loader.load();
+        const { Map } = await importLibrary("maps");
+        const { Geocoder } = await importLibrary("geocoding");
+        await importLibrary("marker"); // ensures marker classes available consistently
+
         if (cancelled) return;
         if (!containerRef.current) return;
 
-        mapRef.current = new google.maps.Map(containerRef.current, {
+        const map = new Map(containerRef.current, {
           center: DEFAULT_CENTER,
           zoom: 10,
           mapTypeControl: false,
@@ -105,15 +91,16 @@ export default function ServiceAreaMap({
           fullscreenControl: false,
         });
 
-        geocoderRef.current = new google.maps.Geocoder();
+        mapRef.current = map;
+        geocoderRef.current = new Geocoder();
 
         markerRef.current = new google.maps.Marker({
-          map: mapRef.current,
+          map,
           position: DEFAULT_CENTER,
         });
 
         circleRef.current = new google.maps.Circle({
-          map: mapRef.current,
+          map,
           center: DEFAULT_CENTER,
           radius: radiusMeters || 0,
           strokeOpacity: 0.8,
@@ -129,7 +116,7 @@ export default function ServiceAreaMap({
           kind: "error",
           message:
             err?.message ||
-            "Maps failed to load. Check API key restrictions and billing.",
+            "Maps failed to load. Check API key restrictions + billing + enabled APIs (Maps JavaScript API + Geocoding API).",
         });
       }
     }
@@ -138,38 +125,33 @@ export default function ServiceAreaMap({
     return () => {
       cancelled = true;
     };
-  }, [apiKey]); // re-init only if key changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey]); // init once per key
 
-  // Geocode on query/radius change
+  // --- Geocode & update circle whenever query/radius changes ---
   useEffect(() => {
-    async function geocodeAndUpdate() {
-      if (!mapRef.current || !markerRef.current || !circleRef.current || !geocoderRef.current) {
-        return;
-      }
+    let cancelled = false;
 
-      // Always update circle radius even if query empty
+    async function geocodeAndUpdate() {
+      if (!mapRef.current || !markerRef.current || !circleRef.current || !geocoderRef.current) return;
+
+      // Always update radius
       circleRef.current.setRadius(radiusMeters || 0);
 
+      // If no query, just keep default center
       if (!normalizedQuery) {
-        setStatus((s) => (s.kind === "error" ? s : { kind: "ready", message: "" }));
+        if (!cancelled) setStatus((s) => (s.kind === "error" ? s : { kind: "ready", message: "" }));
         return;
       }
 
       try {
-        setStatus({ kind: "geocoding", message: "Finding location…" });
+        if (!cancelled) setStatus({ kind: "geocoding", message: "Finding location…" });
 
-        const zipMode = isZip(normalizedQuery);
+        const resp = await geocoderRef.current.geocode({ address: normalizedQuery });
+        const first = resp?.results?.[0];
 
-        // ✅ Stronger ZIP behavior: restrict to US
-        const request = zipMode
-          ? { address: normalizedQuery, componentRestrictions: { country: "us" } }
-          : { address: normalizedQuery };
-
-        const { results } = await geocoderRef.current.geocode(request);
-
-        const first = results?.[0];
         if (!first) {
-          setStatus({ kind: "error", message: "No results for that location/ZIP." });
+          if (!cancelled) setStatus({ kind: "error", message: "No results for that location/ZIP." });
           return;
         }
 
@@ -180,10 +162,10 @@ export default function ServiceAreaMap({
         circleRef.current.setCenter(center);
 
         if (radiusMeters && radiusMeters > 0) {
-          const bounds = circleRef.current.getBounds?.();
+          const bounds = circleRef.current.getBounds();
           if (bounds) mapRef.current.fitBounds(bounds);
 
-          // Prevent over-zoom for small radii
+          // prevent over-zoom for small radii
           const z = mapRef.current.getZoom?.();
           if (typeof z === "number" && z > 15) mapRef.current.setZoom(15);
         } else {
@@ -191,19 +173,24 @@ export default function ServiceAreaMap({
           mapRef.current.setZoom(12);
         }
 
-        setStatus({ kind: "ready", message: "" });
+        if (!cancelled) setStatus({ kind: "ready", message: "" });
       } catch (err) {
         console.error("[ServiceAreaMap] geocode failed", err);
-        setStatus({
-          kind: "error",
-          message:
-            err?.message ||
-            "Geocoding failed. Ensure Geocoding API is enabled + billing is on.",
-        });
+        if (!cancelled) {
+          setStatus({
+            kind: "error",
+            message:
+              err?.message ||
+              "Geocoding failed. Ensure Geocoding API is enabled + billing is on.",
+          });
+        }
       }
     }
 
     geocodeAndUpdate();
+    return () => {
+      cancelled = true;
+    };
   }, [normalizedQuery, radiusMeters]);
 
   const banner =
@@ -220,13 +207,11 @@ export default function ServiceAreaMap({
   return (
     <div className={className}>
       {banner}
-      <div
-        className={`mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${heightClassName}`}
-      >
+      <div className={`mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${heightClassName}`}>
         <div ref={containerRef} className="h-full w-full" />
       </div>
       <div className="mt-2 text-[11px] text-slate-500">
-        ZIP support requires <span className="font-medium">Geocoding API</span> enabled + billing + correct HTTP referrer restrictions.
+        ZIP geocoding requires <span className="font-medium">Geocoding API</span> + billing + correct HTTP referrer restrictions.
       </div>
     </div>
   );

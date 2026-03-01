@@ -4,11 +4,10 @@
 // Shows contact info + service-area Google Map with radius circle
 // Map updates ONLY after successful Save (not while typing)
 // =======================================
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 import ServiceAreaMap from "../components/ServiceAreaMap";
-
 
 // single source of truth for url normalization (supports blob/data previews)
 function toUrl(raw) {
@@ -19,50 +18,6 @@ function toUrl(raw) {
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
-}
-
-function isUsZip(raw) {
-  return /^\s*\d{5}(-\d{4})?\s*$/.test(raw || "");
-}
-
-function normalizeLocationForGeocode(raw) {
-  const s = (raw || "").trim();
-  if (!s) return "";
-  if (isUsZip(s)) {
-    // ZIP hint makes results consistent
-    return `${s.replace(/\s+/g, "")}, USA`;
-  }
-  return s;
-}
-
-function milesToMeters(miles) {
-  const n = Number(miles);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return n * 1609.344;
-}
-
-function loadGoogleMaps(apiKey) {
-  if (!apiKey) return Promise.reject(new Error("Missing VITE_GOOGLE_MAPS_API_KEY"));
-  if (window.google?.maps) return Promise.resolve(window.google.maps);
-
-  const existing = document.querySelector('script[data-cc="google-maps-js"]');
-  if (existing) {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener("load", () => resolve(window.google.maps));
-      existing.addEventListener("error", () => reject(new Error("Failed to load Google Maps script")));
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.dataset.cc = "google-maps-js";
-    s.async = true;
-    s.defer = true;
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
-    s.onload = () => resolve(window.google.maps);
-    s.onerror = () => reject(new Error("Failed to load Google Maps script"));
-    document.head.appendChild(s);
-  });
 }
 
 export default function EditProfile() {
@@ -87,29 +42,11 @@ export default function EditProfile() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // ✅ Map model updates only after load/save
-  const [mapModel, setMapModel] = useState({
+  // ✅ Map updates only after load/save
+  const [savedMapModel, setSavedMapModel] = useState({
     service_location: "",
     coverage_radius_miles: "",
   });
-
-  // --- Map refs/state ---
-  const mapDivRef = useRef(null);
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
-  const circleRef = useRef(null);
-  const [mapReady, setMapReady] = useState(false);
-  const [mapErr, setMapErr] = useState("");
-
-  // ✅ Debug info so ZIP issues aren’t silent
-  const [geoDebug, setGeoDebug] = useState({
-    status: "",
-    formattedAddress: "",
-    query: "",
-  });
-
-  const MIN_ZOOM = 8;
-  const MAX_ZOOM = 14;
 
   // ----------------------------
   // Load current profile: /api/users/me/
@@ -140,16 +77,16 @@ export default function EditProfile() {
 
         setForm(nextForm);
 
-        // ✅ map updates from loaded values (not from typing)
-        setMapModel({
+        // ✅ map uses saved values (not typing)
+        setSavedMapModel({
           service_location: nextForm.service_location,
           coverage_radius_miles: nextForm.coverage_radius_miles,
         });
 
-        setAvatarPreview(
-          toUrl(data.logo || data.logo_url || data.avatar_url || "") || null
-        );
+        // ✅ logo preview
+        setAvatarPreview(toUrl(data.logo || data.logo_url || data.avatar_url || "") || null);
 
+        // ✅ banner preview
         setBannerPreview(toUrl(data.banner_url || data.banner || "") || null);
       })
       .catch((err) => {
@@ -164,125 +101,6 @@ export default function EditProfile() {
       alive = false;
     };
   }, []);
-
-  // ----------------------------
-  // Init Google Maps once
-  // ----------------------------
-  useEffect(() => {
-    let alive = true;
-
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
-    loadGoogleMaps(apiKey)
-      .then((maps) => {
-        if (!alive) return;
-        if (!mapDivRef.current) return;
-
-        if (!mapRef.current) {
-          mapRef.current = new maps.Map(mapDivRef.current, {
-            center: { lat: 39.9526, lng: -75.1652 },
-            zoom: 10,
-            mapTypeControl: false,
-            streetViewControl: false,
-            fullscreenControl: false,
-          });
-
-          markerRef.current = new maps.Marker({ map: mapRef.current });
-        }
-
-        setMapReady(true);
-        setMapErr("");
-      })
-      .catch((e) => {
-        console.error("[EditProfile] Maps load failed:", e);
-        if (!alive) return;
-        setMapErr(
-          e?.message ||
-            "Could not load Google Maps. Check VITE_GOOGLE_MAPS_API_KEY and domain restrictions."
-        );
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // ----------------------------
-  // Draw/refresh map from mapModel ONLY (after load/save)
-  // ----------------------------
-  useEffect(() => {
-    if (!mapReady) return;
-
-    const maps = window.google?.maps;
-    const map = mapRef.current;
-    if (!maps || !map) return;
-
-    const raw = mapModel.service_location || "";
-    const query = normalizeLocationForGeocode(raw);
-
-    if (!query) {
-      setGeoDebug({ status: "", formattedAddress: "", query: "" });
-      if (circleRef.current) {
-        circleRef.current.setMap(null);
-        circleRef.current = null;
-      }
-      return;
-    }
-
-    const radiusMeters = milesToMeters(mapModel.coverage_radius_miles);
-    const geocoder = new maps.Geocoder();
-
-    setGeoDebug((prev) => ({ ...prev, query }));
-
-    geocoder.geocode({ address: query, region: "us" }, (results, status) => {
-      setGeoDebug({
-        status: String(status || ""),
-        formattedAddress: results?.[0]?.formatted_address || "",
-        query,
-      });
-
-      if (status !== "OK" || !results?.length) {
-        // ✅ This is where ZIP failures usually show: REQUEST_DENIED / ZERO_RESULTS / INVALID_REQUEST
-        console.warn("[EditProfile] geocode failed:", status, query);
-        return;
-      }
-
-      const loc = results[0].geometry.location;
-      const center = { lat: loc.lat(), lng: loc.lng() };
-
-      map.setCenter(center);
-      map.setZoom(isUsZip(raw) ? 12 : 11);
-
-      markerRef.current?.setPosition(center);
-
-      if (circleRef.current) {
-        circleRef.current.setMap(null);
-        circleRef.current = null;
-      }
-
-      if (radiusMeters > 0) {
-        circleRef.current = new maps.Circle({
-          map,
-          center,
-          radius: radiusMeters,
-          strokeOpacity: 0.7,
-          strokeWeight: 2,
-          fillOpacity: 0.12,
-        });
-
-        const bounds = circleRef.current.getBounds?.();
-        if (bounds) map.fitBounds(bounds);
-      }
-
-      // ✅ Clamp zoom (after fitBounds changes it)
-      window.setTimeout(() => {
-        const z = map.getZoom?.();
-        if (typeof z !== "number") return;
-        if (z < MIN_ZOOM) map.setZoom(MIN_ZOOM);
-        if (z > MAX_ZOOM) map.setZoom(MAX_ZOOM);
-      }, 0);
-    });
-  }, [mapReady, mapModel.service_location, mapModel.coverage_radius_miles]);
 
   // ----------------------------
   // Form helpers
@@ -335,7 +153,7 @@ export default function EditProfile() {
 
   // ----------------------------
   // Save profile (PATCH /api/users/me/)
-  // ✅ after successful save -> update mapModel so map moves
+  // ✅ after successful save -> update savedMapModel so map moves
   // ----------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -357,6 +175,7 @@ export default function EditProfile() {
       if (logoFile) data.append("logo", logoFile);
       if (bannerFile) data.append("banner", bannerFile);
 
+      // clear banner on server if removed
       if (!bannerFile && !bannerPreview) {
         data.append("banner_url", "");
         data.append("banner", "");
@@ -384,16 +203,15 @@ export default function EditProfile() {
 
       setForm(next);
 
-      // ✅ critical: map updates only after save
-      setMapModel({
+      // ✅ map moves only after save
+      setSavedMapModel({
         service_location: next.service_location,
         coverage_radius_miles: next.coverage_radius_miles,
       });
 
+      // ✅ refresh previews
       if (updated.logo || updated.logo_url || updated.avatar_url) {
-        setAvatarPreview(
-          toUrl(updated.logo || updated.logo_url || updated.avatar_url) || null
-        );
+        setAvatarPreview(toUrl(updated.logo || updated.logo_url || updated.avatar_url) || null);
       }
       if (updated.banner_url || updated.banner) {
         setBannerPreview(toUrl(updated.banner_url || updated.banner) || null);
@@ -415,10 +233,6 @@ export default function EditProfile() {
   };
 
   const bannerPreviewSafe = useMemo(() => toUrl(bannerPreview), [bannerPreview]);
-  const radiusLabel =
-    mapModel.coverage_radius_miles && Number(mapModel.coverage_radius_miles) > 0
-      ? `${mapModel.coverage_radius_miles} mi radius`
-      : "No radius set";
 
   return (
     <div>
@@ -540,10 +354,7 @@ export default function EditProfile() {
                   <Input
                     value={form.service_location}
                     onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        service_location: e.target.value,
-                      }))
+                      setForm((prev) => ({ ...prev, service_location: e.target.value }))
                     }
                     placeholder="City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
                     pattern="^\s*(\d{5}(-\d{4})?|[A-Za-z][A-Za-z .'-]*,\s*[A-Za-z]{2})\s*$"
@@ -551,7 +362,7 @@ export default function EditProfile() {
                     required
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Map updates after Save. ZIP codes geocode as “ZIP, USA”.
+                    Map updates only after Save. ZIP codes geocode as “ZIP, USA”.
                   </p>
                 </div>
                 <div>
@@ -620,11 +431,23 @@ export default function EditProfile() {
           </Card>
 
           {/* RIGHT: map preview */}
-          <ServiceAreaMap
-            locationQuery={form.service_location}
-            radiusMiles={form.coverage_radius_miles}
-            heightClassName="h-64"
-          />
+          <Card className="space-y-3 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Service area preview
+            </div>
+            <p className="text-xs text-slate-600">
+              Map updates only after Save (prevents jumping while typing).
+            </p>
+
+            <ServiceAreaMap
+              deferUpdatesUntilSave={true}
+              locationQuery={form.service_location}
+              radiusMiles={form.coverage_radius_miles}
+              savedLocationQuery={savedMapModel.service_location}
+              savedRadiusMiles={savedMapModel.coverage_radius_miles}
+              heightClassName="h-64"
+            />
+          </Card>
         </div>
       )}
     </div>
