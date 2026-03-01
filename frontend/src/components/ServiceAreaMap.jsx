@@ -1,6 +1,7 @@
 // ============================================================================
 // file: frontend/src/components/ServiceAreaMap.jsx
 // Async Google Maps loader + geocoding (ZIP or City, ST) + radius circle
+// Supports Railway runtime env injection via window.__ENV
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader } from "@googlemaps/js-api-loader";
@@ -8,16 +9,26 @@ import { Loader } from "@googlemaps/js-api-loader";
 const DEFAULT_CENTER = { lat: 39.9526, lng: -75.1652 }; // Philadelphia fallback
 const MILES_TO_METERS = 1609.344;
 
+function getMapsKey() {
+  // ✅ Railway runtime-injected key (from index.html placeholder -> start.sh sed)
+  const runtimeKey =
+    typeof window !== "undefined" ? window.__ENV?.VITE_GOOGLE_MAPS_API_KEY : "";
+
+  // ✅ Local dev key (Vite build-time)
+  const buildKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+  return runtimeKey || buildKey || "";
+}
+
+function isZip(raw) {
+  return /^\d{5}(-\d{4})?$/.test((raw || "").trim());
+}
+
 function normalizeQuery(raw) {
   const v = (raw || "").trim();
   if (!v) return "";
-
-  // If it's a ZIP, add country to improve accuracy
-  const zip5 = /^\d{5}(-\d{4})?$/.test(v);
-  if (zip5) return `${v}, USA`;
-
-  // If it's "City, ST" already, keep it; otherwise append USA for better geocode
-  return v.includes(",") ? v : `${v}, USA`;
+  // If it's a ZIP, don't add commas that confuse some geocodes; we’ll restrict country in request
+  return v;
 }
 
 function milesToMeters(miles) {
@@ -31,11 +42,11 @@ export default function ServiceAreaMap({
   radiusMiles,
   heightClassName = "h-64",
   className = "",
-  deferUpdatesUntilSave = false, // if you later want “only update after Save”
-  savedLocationQuery, // optional: pass the saved value when deferUpdatesUntilSave=true
-  savedRadiusMiles, // optional
+  deferUpdatesUntilSave = false,
+  savedLocationQuery,
+  savedRadiusMiles,
 }) {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const apiKey = getMapsKey();
 
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -58,6 +69,7 @@ export default function ServiceAreaMap({
     [effectiveRadius]
   );
 
+  // Init map once
   useEffect(() => {
     let cancelled = false;
 
@@ -65,7 +77,8 @@ export default function ServiceAreaMap({
       if (!apiKey) {
         setStatus({
           kind: "error",
-          message: "Missing VITE_GOOGLE_MAPS_API_KEY. Add it in Railway Variables and redeploy.",
+          message:
+            "Missing Google Maps key. Set VITE_GOOGLE_MAPS_API_KEY in Railway Variables and redeploy.",
         });
         return;
       }
@@ -76,12 +89,12 @@ export default function ServiceAreaMap({
         const loader = new Loader({
           apiKey,
           version: "weekly",
-          libraries: ["places"], // optional; harmless if you later add autocomplete
+          // libraries optional; keep empty unless you need Places Autocomplete
+          // libraries: ["places"],
         });
 
         const google = await loader.load();
         if (cancelled) return;
-
         if (!containerRef.current) return;
 
         mapRef.current = new google.maps.Map(containerRef.current, {
@@ -125,11 +138,14 @@ export default function ServiceAreaMap({
     return () => {
       cancelled = true;
     };
-  }, [apiKey]); // init once per key
+  }, [apiKey]); // re-init only if key changes
 
+  // Geocode on query/radius change
   useEffect(() => {
     async function geocodeAndUpdate() {
-      if (!mapRef.current || !markerRef.current || !circleRef.current || !geocoderRef.current) return;
+      if (!mapRef.current || !markerRef.current || !circleRef.current || !geocoderRef.current) {
+        return;
+      }
 
       // Always update circle radius even if query empty
       circleRef.current.setRadius(radiusMeters || 0);
@@ -142,9 +158,14 @@ export default function ServiceAreaMap({
       try {
         setStatus({ kind: "geocoding", message: "Finding location…" });
 
-        const { results } = await geocoderRef.current.geocode({
-          address: normalizedQuery,
-        });
+        const zipMode = isZip(normalizedQuery);
+
+        // ✅ Stronger ZIP behavior: restrict to US
+        const request = zipMode
+          ? { address: normalizedQuery, componentRestrictions: { country: "us" } }
+          : { address: normalizedQuery };
+
+        const { results } = await geocoderRef.current.geocode(request);
 
         const first = results?.[0];
         if (!first) {
@@ -158,10 +179,10 @@ export default function ServiceAreaMap({
         markerRef.current.setPosition(center);
         circleRef.current.setCenter(center);
 
-        // Fit bounds to show circle if radius exists, else just center/zoom
         if (radiusMeters && radiusMeters > 0) {
-          const bounds = circleRef.current.getBounds();
+          const bounds = circleRef.current.getBounds?.();
           if (bounds) mapRef.current.fitBounds(bounds);
+
           // Prevent over-zoom for small radii
           const z = mapRef.current.getZoom?.();
           if (typeof z === "number" && z > 15) mapRef.current.setZoom(15);
@@ -199,34 +220,14 @@ export default function ServiceAreaMap({
   return (
     <div className={className}>
       {banner}
-      <div className={`mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${heightClassName}`}>
+      <div
+        className={`mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${heightClassName}`}
+      >
         <div ref={containerRef} className="h-full w-full" />
       </div>
       <div className="mt-2 text-[11px] text-slate-500">
-        Tip: ZIP support requires <span className="font-medium">Geocoding API</span> enabled + billing + correct referrer restrictions.
+        ZIP support requires <span className="font-medium">Geocoding API</span> enabled + billing + correct HTTP referrer restrictions.
       </div>
     </div>
   );
 }
-
-
-// ============================================================================
-// file: frontend/src/pages/EditProfile.jsx
-// Replace the iframe map section with <ServiceAreaMap />
-// (Only showing the relevant replacement chunk)
-// ============================================================================
-/*
-1) Add this import near the top:
-import ServiceAreaMap from "../components/ServiceAreaMap";
-
-2) Replace your RIGHT-side map preview <iframe ...> block with:
-
-<ServiceAreaMap
-  locationQuery={form.service_location}
-  radiusMiles={form.coverage_radius_miles}
-  heightClassName="h-64"
-/>
-
-3) Install dependency (in frontend/):
-npm i @googlemaps/js-api-loader
-*/

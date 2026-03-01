@@ -7,6 +7,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
+import ServiceAreaMap from "../components/ServiceAreaMap";
+
 
 // single source of truth for url normalization (supports blob/data previews)
 function toUrl(raw) {
@@ -618,56 +620,11 @@ export default function EditProfile() {
           </Card>
 
           {/* RIGHT: map preview */}
-          <Card className="space-y-3 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Service area preview
-            </div>
-
-            {mapErr ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                {mapErr}
-              </div>
-            ) : null}
-
-            {/* ✅ Debug block to catch ZIP geocode failures */}
-            {geoDebug.query ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700">
-                <div className="font-semibold text-slate-800">Map debug</div>
-                <div className="mt-1">
-                  <span className="opacity-70">Geocode query:</span>{" "}
-                  <span className="font-mono">{geoDebug.query}</span>
-                </div>
-                <div>
-                  <span className="opacity-70">Status:</span>{" "}
-                  <span className="font-mono">{geoDebug.status || "-"}</span>
-                </div>
-                <div>
-                  <span className="opacity-70">Result:</span>{" "}
-                  <span className="font-mono">{geoDebug.formattedAddress || "-"}</span>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="relative mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-              {/* Tooltip */}
-              <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-800 shadow-sm">
-                {radiusLabel}
-              </div>
-
-              <div ref={mapDivRef} className="h-64 w-full" />
-            </div>
-
-            {!import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? (
-              <p className="text-[11px] text-slate-500">
-                Missing <span className="font-mono">VITE_GOOGLE_MAPS_API_KEY</span>.
-                Add it to Railway Variables and redeploy.
-              </p>
-            ) : null}
-
-            <p className="text-[11px] text-slate-500">
-              Map updates only after Save. (This prevents jumping while typing.)
-            </p>
-          </Card>
+          <ServiceAreaMap
+            locationQuery={form.service_location}
+            radiusMiles={form.coverage_radius_miles}
+            heightClassName="h-64"
+          />
         </div>
       )}
     </div>
