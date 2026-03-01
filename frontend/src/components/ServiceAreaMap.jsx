@@ -103,8 +103,9 @@ export default function ServiceAreaMap({
           map,
           center: DEFAULT_CENTER,
           radius: radiusMeters || 0,
-          strokeOpacity: 0.8,
+          strokeOpacity: 0.4,
           strokeWeight: 2,
+          fillColor: "#93C5FD",
           fillOpacity: 0.12,
           clickable: false,
         });
