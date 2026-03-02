@@ -131,14 +131,6 @@ export default function PublicProfile() {
     };
   }, [bannerUrl]);
 
-  const mapSrc = useMemo(() => {
-    return buildMapSrc(profile?.service_location || "");
-  }, [profile?.service_location]);
-
-  if (loading && !profile) {
-    return <div className="text-sm text-slate-500">Loading profile…</div>;
-  }
-
   if (!profile) {
     return (
       <div className="text-sm text-slate-600">
@@ -269,11 +261,13 @@ export default function PublicProfile() {
           </Card>
         </div>
 
-        <ServiceAreaMap
-          locationQuery={profile?.service_location || ""}
-          radiusMiles={profile?.coverage_radius_miles || ""}
-          heightClassName="h-64"
-        />
+        <div className="mt-6">
+          <ServiceAreaMap
+            locationQuery={profile?.service_location || ""}
+            radiusMiles={profile?.coverage_radius_miles || ""}
+            heightClassName="h-64"
+          />
+        </div>
 
         <div className="mt-10">
           <div className="mb-3 flex items-end justify-between gap-3">
