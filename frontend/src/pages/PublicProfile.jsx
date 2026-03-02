@@ -261,7 +261,7 @@ export default function PublicProfile() {
           </Card>
         </div>
 
-        <div className="mx-auto max-w-6xl px-4 pb-12 pt-12">
+        <div className="mt-6">
           <ServiceAreaMap
             locationQuery={profile?.service_location || ""}
             radiusMiles={profile?.coverage_radius_miles || ""}
