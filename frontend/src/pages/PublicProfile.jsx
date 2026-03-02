@@ -7,6 +7,7 @@ import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
+import ServiceAreaMap from "../components/ServiceAreaMap";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -268,26 +269,11 @@ export default function PublicProfile() {
           </Card>
         </div>
 
-        {mapSrc && (
-          <div className="mt-8">
-            <Card className="rounded-2xl border border-slate-200 shadow-sm">
-              <div className="p-6">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Service area map
-                </div>
-                <div className="mt-4 aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
-                  <iframe
-                    src={mapSrc}
-                    title="Service area map"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    className="h-full w-full border-0"
-                  />
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
+        <ServiceAreaMap
+          locationQuery={profile?.service_location || ""}
+          radiusMiles={profile?.coverage_radius_miles || ""}
+          heightClassName="h-64"
+        />
 
         <div className="mt-10">
           <div className="mb-3 flex items-end justify-between gap-3">
