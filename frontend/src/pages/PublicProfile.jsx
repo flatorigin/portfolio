@@ -66,6 +66,7 @@ export default function PublicProfile() {
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [coversByProject, setCoversByProject] = useState({});
 
   // ─────────────────────────────
   // Load profile + projects
@@ -93,6 +94,9 @@ export default function PublicProfile() {
 
         setProfile(prof);
         setProjects(visibleProjects);
+        setProfile(prof);
+        setProjects(visibleProjects);
+        hydrateCovers(visibleProjects);
       } catch (err) {
         console.error("[PublicProfile] failed to load", err);
         if (!alive) return;
@@ -107,6 +111,33 @@ export default function PublicProfile() {
       alive = false;
     };
   }, [username]);
+
+  async function hydrateCovers(list) {
+    const entries = await Promise.all(
+      (Array.isArray(list) ? list : []).map(async (p) => {
+        try {
+          const { data } = await api.get(`/projects/${p.id}/images/`);
+          const imgs = Array.isArray(data) ? data : [];
+
+          const mapped = imgs
+            .map((it) => ({
+              url: toUrl(it.url || it.image || it.src || it.file || ""),
+              order: it.order ?? it.sort_order ?? null,
+            }))
+            .filter((x) => !!x.url);
+
+          const cover =
+            mapped.find((x) => Number(x.order) === 0)?.url || mapped[0]?.url || null;
+
+          return [p.id, cover];
+        } catch {
+          return [p.id, null];
+        }
+      })
+    );
+
+    setCoversByProject(Object.fromEntries(entries));
+  }
 
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
@@ -294,11 +325,16 @@ export default function PublicProfile() {
                   className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
                 >
                   <div className="h-44 bg-slate-100">
-                    {p.cover_image ? (
+                    const coverSrc = coversByProject[p.id] || (p.cover_image ? toUrl(p.cover_image) : "");
+
+                    {coverSrc ? (
                       <img
-                        src={toUrl(p.cover_image)}
+                        src={coverSrc}
                         alt={p.title || "project cover"}
                         className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder.png";
+                        }}
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-xs text-slate-500">
