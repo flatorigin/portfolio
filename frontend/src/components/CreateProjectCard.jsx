@@ -1,30 +1,84 @@
 // =======================================
 // file: frontend/src/components/CreateProjectCard.jsx
 // Collapsible "Create Project" card + job posting toggle
+// - Clears local preview images on close + on open
+// - Supports Dashboard "closeSignal" to auto-close after successful create
 // =======================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, Input, Textarea, Button, Badge } from "../ui";
 
 export default function CreateProjectCard({
   ownedCount = 0,
   form,
   setForm,
-  cover,
+  cover, // kept for backward compat (not used here)
   setCover,
   busy = false,
   error,
   success,
-  onSubmit,          // (event) => void  — same createProject handler
+  onSubmit, // (event, images) => void
   defaultOpen = false,
+  closeSignal = 0, // when this changes, close + clear images
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  // Local images (preview only, not yet uploaded)
-  const [images, setImages] = useState([]);
-
-  const toggleOpen = () => setIsOpen((v) => !v);
+  const [images, setImages] = useState([]); // [{id,url,caption,_file}]
 
   const jobOn = !!form.is_job_posting;
+
+  const revokeBlobUrls = (imgs) => {
+    (imgs || []).forEach((img) => {
+      try {
+        if (img?.url?.startsWith("blob:")) URL.revokeObjectURL(img.url);
+      } catch {
+        // ignore
+      }
+    });
+  };
+
+  const clearLocalImages = () => {
+    setImages((prev) => {
+      revokeBlobUrls(prev);
+      return [];
+    });
+  };
+
+  // Close signal from Dashboard (after successful create)
+  useEffect(() => {
+    if (!closeSignal) return;
+    setIsOpen(false);
+    setCover?.(null);
+    clearLocalImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeSignal]);
+
+  // Always clear local images whenever the panel closes
+  useEffect(() => {
+    if (isOpen) return;
+    clearLocalImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      revokeBlobUrls(images);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleOpen = () => {
+    setIsOpen((v) => {
+      const next = !v;
+
+      // On open, start clean (prevents stale previews)
+      if (next) {
+        setCover?.(null);
+        clearLocalImages();
+      }
+
+      return next;
+    });
+  };
 
   const toggleJobPosting = () =>
     setForm((prev) => ({
@@ -49,8 +103,7 @@ export default function CreateProjectCard({
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const files = e.dataTransfer?.files;
-    handleAddImages(files);
+    handleAddImages(e.dataTransfer?.files);
   };
 
   const handleDragOver = (e) => {
@@ -65,16 +118,22 @@ export default function CreateProjectCard({
   };
 
   const handleDeleteImage = (image) => {
-    setImages((prev) => prev.filter((img) => img.id !== image.id));
+    setImages((prev) => {
+      const next = prev.filter((img) => img.id !== image.id);
+      try {
+        if (image?.url?.startsWith("blob:")) URL.revokeObjectURL(image.url);
+      } catch {
+        // ignore
+      }
+      return next;
+    });
   };
 
   return (
     <Card className="p-5">
-      {/* Collapsible header (matches Dashboard style) */}
+      {/* Collapsible header */}
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-800">
-          Create Project
-        </div>
+        <div className="text-sm font-semibold text-slate-800">Create Project</div>
         <div className="flex items-center gap-2">
           <Badge>{ownedCount} owned</Badge>
         </div>
@@ -86,7 +145,7 @@ export default function CreateProjectCard({
 
       {isOpen && (
         <>
-          {/* Job Posting banner at the very top */}
+          {/* Job Posting banner */}
           <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
@@ -95,14 +154,16 @@ export default function CreateProjectCard({
               <button
                 type="button"
                 onClick={toggleJobPosting}
-                className={`relative inline-flex h-7 w-12 items-center rounded-full transition 
-                  ${jobOn ? "bg-sky-500 shadow-sm" : "bg-sky-200"}`}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
+                  jobOn ? "bg-sky-500 shadow-sm" : "bg-sky-200"
+                }`}
                 role="switch"
                 aria-checked={jobOn}
               >
                 <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition
-                    ${jobOn ? "translate-x-6" : "translate-x-1"}`}
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                    jobOn ? "translate-x-6" : "translate-x-1"
+                  }`}
                 />
               </button>
             </div>
@@ -110,7 +171,11 @@ export default function CreateProjectCard({
               {jobOn ? (
                 <>
                   This project is marked as a job posting and will appear on the
-                  public <span className="font-semibold">&quot;Find local work&quot;</span> page.
+                  public{" "}
+                  <span className="font-semibold">
+                    &quot;Find local work&quot;
+                  </span>{" "}
+                  page.
                 </>
               ) : (
                 <>
@@ -121,16 +186,13 @@ export default function CreateProjectCard({
             </p>
           </div>
 
-          {/* Section label – same as ProjectEditorCard */}
+          {/* Section label */}
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Project Info (Draft)
           </div>
 
-          <form
-            onSubmit={(e) => onSubmit(e, images)}
-            className="space-y-6"
-          >
-            {/* Project basics (same fields & order) */}
+          <form onSubmit={(e) => onSubmit(e, images)} className="space-y-6">
+            {/* Project basics */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -159,9 +221,7 @@ export default function CreateProjectCard({
             </div>
 
             <div>
-              <label className="mb-1 block text-sm text-slate-600">
-                Summary
-              </label>
+              <label className="mb-1 block text-sm text-slate-600">Summary</label>
               <Textarea
                 placeholder="One or two sentences…"
                 value={form.summary}
@@ -171,7 +231,7 @@ export default function CreateProjectCard({
               />
             </div>
 
-            {/* Location / Budget / Sq Ft / Highlights – same order */}
+            {/* Location / Budget */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -186,9 +246,7 @@ export default function CreateProjectCard({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm text-slate-600">
-                  Budget
-                </label>
+                <label className="mb-1 block text-sm text-slate-600">Budget</label>
                 <Input
                   placeholder="e.g. 250000"
                   inputMode="numeric"
@@ -200,6 +258,7 @@ export default function CreateProjectCard({
               </div>
             </div>
 
+            {/* Sq Ft / Highlights */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -222,16 +281,13 @@ export default function CreateProjectCard({
                   placeholder="comma-separated: cedar, cable-rail"
                   value={form.highlights}
                   onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      highlights: e.target.value,
-                    }))
+                    setForm((prev) => ({ ...prev, highlights: e.target.value }))
                   }
                 />
               </div>
             </div>
 
-            {/* Material / tool link + label */}
+            {/* Material / label */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">
@@ -241,10 +297,7 @@ export default function CreateProjectCard({
                   placeholder="https://www.example.com/product/123"
                   value={form.material_url}
                   onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      material_url: e.target.value,
-                    }))
+                    setForm((prev) => ({ ...prev, material_url: e.target.value }))
                   }
                 />
               </div>
@@ -283,12 +336,10 @@ export default function CreateProjectCard({
               </label>
             </div>
 
-            {/* Images list – preview only */}
+            {/* Images preview */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-700">
-                  Images
-                </span>
+                <span className="text-sm font-medium text-slate-700">Images</span>
                 {images.length > 0 && (
                   <span className="text-xs text-slate-500">
                     {images.length} total
@@ -309,10 +360,11 @@ export default function CreateProjectCard({
                           alt={image.caption || "Project image"}
                           className="h-full w-full object-cover"
                           onError={(e) => {
-                              e.currentTarget.src = "/placeholder.png"; // or hide it
+                            e.currentTarget.style.display = "none";
                           }}
                         />
                       </div>
+
                       <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center">
                         <input
                           type="text"
@@ -324,13 +376,6 @@ export default function CreateProjectCard({
                           }
                         />
                         <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {}}
-                          >
-                            Save caption
-                          </Button>
                           <Button
                             type="button"
                             variant="ghost"
@@ -348,14 +393,13 @@ export default function CreateProjectCard({
               )}
             </div>
 
-            {/* Add images – drag & drop area */}
+            {/* Add images dropzone */}
             <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700">
-                Add Images
-              </div>
+              <div className="text-sm font-medium text-slate-700">Add Images</div>
               <div className="text-xs text-slate-500">
                 Drag &amp; drop or click; add captions; upload.
               </div>
+
               <div
                 className="mt-1 flex min-h-[120px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 text-center text-sm text-slate-500"
                 onDrop={handleDrop}
@@ -374,24 +418,16 @@ export default function CreateProjectCard({
                   className="cursor-pointer"
                 >
                   <div>Drag &amp; drop images here</div>
-                  <div className="mt-1 text-xs text-slate-400">
-                    or click to browse
-                  </div>
+                  <div className="mt-1 text-xs text-slate-400">or click to browse</div>
                 </label>
               </div>
             </div>
 
-            {/* Footer: messages + primary action */}
+            {/* Footer */}
             <div className="space-y-2">
-              {error && (
-                <div className="text-sm text-red-700">
-                  {error}
-                </div>
-              )}
+              {error && <div className="text-sm text-red-700">{error}</div>}
               {success && !error && (
-                <div className="text-sm text-green-700">
-                  Project created.
-                </div>
+                <div className="text-sm text-green-700">Project created.</div>
               )}
               <Button disabled={busy}>Create Project</Button>
             </div>

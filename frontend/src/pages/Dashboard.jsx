@@ -9,6 +9,8 @@ import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
 
+
+
 // normalize media
 function toUrl(raw) {
   if (!raw) return "";
@@ -100,6 +102,7 @@ export default function Dashboard() {
   const [savedProjects, setSavedProjects] = useState([]);
   const [showAllSaved, setShowAllSaved] = useState(false);
   const [removingFavoriteId, setRemovingFavoriteId] = useState(null);
+  const [createCloseSignal, setCreateCloseSignal] = useState(0);
 
   const refreshSaved = useCallback(async () => {
     try {
@@ -156,6 +159,52 @@ export default function Dashboard() {
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setRemovingFavoriteId(null);
+    }
+  }
+
+  // ✅ Standardized: same contract as editor uploader -> "images" + "captions[]"
+  async function uploadProjectImages(projectId, images) {
+    const list = Array.isArray(images) ? images : [];
+    const files = list.filter((img) => img?._file);
+
+    if (!projectId || files.length === 0) return;
+
+    const fd = new FormData();
+    for (const img of files) {
+      fd.append("images", img._file);
+      fd.append("captions[]", img.caption || "");
+    }
+
+    await api.post(`/projects/${projectId}/images/`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  }
+
+  async function deleteProject(projectId) {
+    if (!projectId) return;
+
+    const ok = window.confirm(
+      "Delete this project permanently? This will remove images, favorites, comments, and messages tied to it. This cannot be undone."
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    try {
+      await api.delete(`/projects/${projectId}/`);
+      setEditingId("");
+      await refreshProjects();
+      setSaveToast("Deleted ✓  Project removed");
+    } catch (err) {
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to delete project."
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -452,20 +501,9 @@ export default function Dashboard() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      if (Array.isArray(images) && data?.id) {
-        for (let i = 0; i < images.length; i++) {
-          const img = images[i];
-          if (!img?._file) continue;
-
-          const imgFd = new FormData();
-          imgFd.append("image", img._file);
-          imgFd.append("caption", img.caption || "");
-          imgFd.append("order", String(i));
-
-          await api.post(`/projects/${data.id}/images/`, imgFd, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-        }
+      // ✅ NEW: upload images using the SAME payload as editor uploader
+      if (data?.id) {
+        await uploadProjectImages(data.id, images);
       }
 
       await refreshProjects();
@@ -486,7 +524,7 @@ export default function Dashboard() {
       setCover(null);
       setCreateOk(true);
 
-      if (data?.id) await loadEditor(data.id);
+      setCreateCloseSignal((n) => n + 1);
     } catch (err) {
       const msg = err?.response?.data
         ? typeof err.response.data === "string"
@@ -585,7 +623,7 @@ export default function Dashboard() {
 
   const handleEditorSubmit = useCallback(
     (e) => saveProjectInfo(e),
-    [editingId, editForm] // keep aligned with your current flow
+    [editingId, editForm]
   );
 
   // cleanup timers on unmount
@@ -676,8 +714,8 @@ export default function Dashboard() {
 
         {savedProjects.length === 0 ? (
           <p className="text-xs text-slate-500">
-            You haven’t saved any projects yet. Hit “Save” on any interesting project
-            to keep it here.
+            You haven’t saved any projects yet. Hit “Save” on any interesting
+            project to keep it here.
           </p>
         ) : (
           <>
@@ -726,7 +764,7 @@ export default function Dashboard() {
                           alt=""
                           className="block h-36 w-full object-cover"
                           onError={(e) => {
-                              e.currentTarget.src = "/placeholder.png"; // or hide it
+                            e.currentTarget.style.display = "none";
                           }}
                         />
                       ) : (
@@ -752,16 +790,13 @@ export default function Dashboard() {
                         </div>
 
                         <div className="line-clamp-2 text-sm text-slate-700">
-                          {summary || (
-                            <span className="opacity-60">No summary</span>
-                          )}
+                          {summary || <span className="opacity-60">No summary</span>}
                         </div>
 
                         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
                           {location && (
                             <div>
-                              <span className="opacity-60">Location:</span>{" "}
-                              {location}
+                              <span className="opacity-60">Location:</span> {location}
                             </div>
                           )}
                           {budget && (
@@ -776,8 +811,7 @@ export default function Dashboard() {
                           )}
                           {highlights && (
                             <div className="col-span-2 truncate">
-                              <span className="opacity-60">Highlights:</span>{" "}
-                              {highlights}
+                              <span className="opacity-60">Highlights:</span> {highlights}
                             </div>
                           )}
                         </div>
@@ -785,9 +819,7 @@ export default function Dashboard() {
                         <div className="mt-3 flex w-full flex-nowrap gap-2">
                           <GhostButton
                             className="w-1/2 min-w-0"
-                            onClick={() =>
-                              window.open(`/projects/${projectId}`, "_self")
-                            }
+                            onClick={() => window.open(`/projects/${projectId}`, "_self")}
                             disabled={!projectId || removing}
                           >
                             Open
@@ -837,6 +869,7 @@ export default function Dashboard() {
         error={createErr}
         success={createOk}
         onSubmit={createProject}
+        closeSignal={createCloseSignal}
       />
 
       {/* 2) YOUR PROJECTS */}
@@ -854,7 +887,8 @@ export default function Dashboard() {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
             {list.map((p) => {
               const coverFromImgs = myThumbs?.[p.id]?.cover || "";
-              const coverSrc = coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
+              const coverSrc =
+                coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
 
               return (
                 <Card key={p.id} className="overflow-hidden">
@@ -864,7 +898,7 @@ export default function Dashboard() {
                       alt=""
                       className="block h-36 w-full object-cover"
                       onError={(e) => {
-                          e.currentTarget.src = "/placeholder.png"; // or hide it
+                        e.currentTarget.style.display = "none";
                       }}
                     />
                   ) : (
@@ -879,9 +913,7 @@ export default function Dashboard() {
                         <div className="truncate font-semibold">{p.title}</div>
                       </div>
 
-                      {p.category ? (
-                        <Badge className="shrink-0">{p.category}</Badge>
-                      ) : null}
+                      {p.category ? <Badge className="shrink-0">{p.category}</Badge> : null}
                     </div>
 
                     <div className="line-clamp-2 text-sm text-slate-700">
@@ -909,8 +941,7 @@ export default function Dashboard() {
 
                       {p.highlights ? (
                         <div className="col-span-2 truncate">
-                          <span className="opacity-60">Highlights:</span>{" "}
-                          {p.highlights}
+                          <span className="opacity-60">Highlights:</span> {p.highlights}
                         </div>
                       ) : null}
                     </div>
@@ -923,10 +954,7 @@ export default function Dashboard() {
                         Open
                       </GhostButton>
 
-                      <Button
-                        className="w-1/2 min-w-0"
-                        onClick={() => loadEditor(p.id)}
-                      >
+                      <Button className="w-1/2 min-w-0" onClick={() => loadEditor(p.id)}>
                         Edit
                       </Button>
                     </div>
@@ -970,6 +998,7 @@ export default function Dashboard() {
             onSaveImageCaption={saveImageCaption}
             onDeleteImage={deleteImage}
             onSubmit={handleEditorSubmit}
+            onDeleteProject={() => deleteProject(editingId)}
             onClose={() => setEditingId("")}
             onView={() => window.open(`/projects/${editingId}`, "_self")}
             onAfterUpload={async () => {

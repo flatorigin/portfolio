@@ -7,6 +7,7 @@ import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
+import ServiceAreaMap from "../components/ServiceAreaMap";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -53,18 +54,42 @@ function extractHeroFromProfile(profile) {
   return "";
 }
 
-function buildMapSrc(location) {
-  if (!location) return null;
-  const q = encodeURIComponent(location);
-  return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
-}
-
 export default function PublicProfile() {
   const { username } = useParams();
 
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [coversByProject, setCoversByProject] = useState({});
+
+  async function hydrateCovers(list) {
+    const entries = await Promise.all(
+      (Array.isArray(list) ? list : []).map(async (p) => {
+        try {
+          const { data } = await api.get(`/projects/${p.id}/images/`);
+          const imgs = Array.isArray(data) ? data : [];
+
+          const mapped = imgs
+            .map((it) => ({
+              url: toUrl(it.url || it.image || it.src || it.file || ""),
+              order: it.order ?? it.sort_order ?? null,
+            }))
+            .filter((x) => !!x.url);
+
+          const cover =
+            mapped.find((x) => Number(x.order) === 0)?.url ||
+            mapped[0]?.url ||
+            null;
+
+          return [p.id, cover];
+        } catch {
+          return [p.id, null];
+        }
+      })
+    );
+
+    setCoversByProject(Object.fromEntries(entries));
+  }
 
   // ─────────────────────────────
   // Load profile + projects
@@ -92,11 +117,15 @@ export default function PublicProfile() {
 
         setProfile(prof);
         setProjects(visibleProjects);
+
+        // ✅ pull cover images from /projects/:id/images/
+        hydrateCovers(visibleProjects);
       } catch (err) {
         console.error("[PublicProfile] failed to load", err);
         if (!alive) return;
         setProfile(null);
         setProjects([]);
+        setCoversByProject({});
       } finally {
         if (alive) setLoading(false);
       }
@@ -117,8 +146,7 @@ export default function PublicProfile() {
 
   const bannerUrl = useMemo(() => {
     const raw = extractHeroFromProfile(profile);
-    const finalUrl = toUrl(raw || "");
-    return finalUrl;
+    return toUrl(raw || "");
   }, [profile]);
 
   const bannerStyle = useMemo(() => {
@@ -129,10 +157,6 @@ export default function PublicProfile() {
       backgroundPosition: "center",
     };
   }, [bannerUrl]);
-
-  const mapSrc = useMemo(() => {
-    return buildMapSrc(profile?.service_location || "");
-  }, [profile?.service_location]);
 
   if (loading && !profile) {
     return <div className="text-sm text-slate-500">Loading profile…</div>;
@@ -268,26 +292,13 @@ export default function PublicProfile() {
           </Card>
         </div>
 
-        {mapSrc && (
-          <div className="mt-8">
-            <Card className="rounded-2xl border border-slate-200 shadow-sm">
-              <div className="p-6">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Service area map
-                </div>
-                <div className="mt-4 aspect-[4/3] overflow-hidden rounded-xl border border-slate-200">
-                  <iframe
-                    src={mapSrc}
-                    title="Service area map"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    className="h-full w-full border-0"
-                  />
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
+        <div className="mt-6">
+          <ServiceAreaMap
+            locationQuery={profile?.service_location || ""}
+            radiusMiles={profile?.coverage_radius_miles || ""}
+            heightClassName="h-64"
+          />
+        </div>
 
         <div className="mt-10">
           <div className="mb-3 flex items-end justify-between gap-3">
@@ -307,41 +318,50 @@ export default function PublicProfile() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {projects.map((p) => (
-                <Link
-                  key={p.id}
-                  to={`/projects/${p.id}`}
-                  className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
-                >
-                  <div className="h-44 bg-slate-100">
-                    {p.cover_image ? (
-                      <img
-                        src={toUrl(p.cover_image)}
-                        alt={p.title || "project cover"}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-xs text-slate-500">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <div className="truncate text-sm font-semibold text-slate-900">
-                      {p.title || `Project #${p.id}`}
+              {projects.map((p) => {
+                const coverSrc =
+                  coversByProject[p.id] ||
+                  (p.cover_image ? toUrl(p.cover_image) : "");
+
+                return (
+                  <Link
+                    key={p.id}
+                    to={`/projects/${p.id}`}
+                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="h-44 bg-slate-100">
+                      {coverSrc ? (
+                        <img
+                          src={coverSrc}
+                          alt={p.title || "project cover"}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                          onError={(e) => {
+                            e.currentTarget.src = "/placeholder.png";
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                          No image
+                        </div>
+                      )}
                     </div>
-                    {p.summary ? (
-                      <div className="mt-1 line-clamp-2 text-xs text-slate-600">
-                        {p.summary}
+                    <div className="p-4">
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {p.title || `Project #${p.id}`}
                       </div>
-                    ) : (
-                      <div className="mt-1 text-xs text-slate-500">
-                        View details →
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
+                      {p.summary ? (
+                        <div className="mt-1 line-clamp-2 text-xs text-slate-600">
+                          {p.summary}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-slate-500">
+                          View details →
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

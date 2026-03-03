@@ -1,12 +1,13 @@
 // =======================================
-// EditProfile.jsx
+// file: frontend/src/pages/EditProfile.jsx
 // Loads / updates /api/users/me/
-// Shows contact info + simple service-area map
-// + Banner/Hero upload (for PublicProfile hero)
+// Shows contact info + service-area Google Map with radius circle
+// Map updates ONLY after successful Save (not while typing)
 // =======================================
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
+import ServiceAreaMap from "../components/ServiceAreaMap";
 
 // single source of truth for url normalization (supports blob/data previews)
 function toUrl(raw) {
@@ -41,6 +42,12 @@ export default function EditProfile() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  // ✅ Map updates only after load/save
+  const [savedMapModel, setSavedMapModel] = useState({
+    service_location: "",
+    coverage_radius_miles: "",
+  });
+
   // ----------------------------
   // Load current profile: /api/users/me/
   // ----------------------------
@@ -55,7 +62,7 @@ export default function EditProfile() {
       .then(({ data }) => {
         if (!alive) return;
 
-        setForm({
+        const nextForm = {
           display_name: data.display_name || "",
           service_location: data.service_location || "",
           coverage_radius_miles:
@@ -66,9 +73,17 @@ export default function EditProfile() {
           contact_email: data.contact_email || "",
           contact_phone: data.contact_phone || "",
           bio: data.bio || "",
+        };
+
+        setForm(nextForm);
+
+        // ✅ map uses saved values (not typing)
+        setSavedMapModel({
+          service_location: nextForm.service_location,
+          coverage_radius_miles: nextForm.coverage_radius_miles,
         });
 
-        // ✅ logo preview (use what you actually PATCH: `logo`)
+        // ✅ logo preview
         setAvatarPreview(toUrl(data.logo || data.logo_url || data.avatar_url || "") || null);
 
         // ✅ banner preview
@@ -138,6 +153,7 @@ export default function EditProfile() {
 
   // ----------------------------
   // Save profile (PATCH /api/users/me/)
+  // ✅ after successful save -> update savedMapModel so map moves
   // ----------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -156,13 +172,8 @@ export default function EditProfile() {
       data.append("contact_phone", form.contact_phone || "");
       data.append("bio", form.bio || "");
 
-      if (logoFile) {
-        data.append("logo", logoFile);
-      }
-
-      if (bannerFile) {
-        data.append("banner", bannerFile);
-      }
+      if (logoFile) data.append("logo", logoFile);
+      if (bannerFile) data.append("banner", bannerFile);
 
       // clear banner on server if removed
       if (!bannerFile && !bannerPreview) {
@@ -177,19 +188,26 @@ export default function EditProfile() {
       const updated = resp.data || {};
       setMessage("Profile updated.");
 
-      setForm((prev) => ({
-        ...prev,
-        display_name: updated.display_name ?? prev.display_name,
-        service_location: updated.service_location ?? prev.service_location,
+      const next = {
+        display_name: updated.display_name ?? form.display_name,
+        service_location: updated.service_location ?? form.service_location,
         coverage_radius_miles:
           updated.coverage_radius_miles !== null &&
           updated.coverage_radius_miles !== undefined
             ? String(updated.coverage_radius_miles)
-            : prev.coverage_radius_miles,
-        contact_email: updated.contact_email ?? prev.contact_email,
-        contact_phone: updated.contact_phone ?? prev.contact_phone,
-        bio: updated.bio ?? prev.bio,
-      }));
+            : form.coverage_radius_miles,
+        contact_email: updated.contact_email ?? form.contact_email,
+        contact_phone: updated.contact_phone ?? form.contact_phone,
+        bio: updated.bio ?? form.bio,
+      };
+
+      setForm(next);
+
+      // ✅ map moves only after save
+      setSavedMapModel({
+        service_location: next.service_location,
+        coverage_radius_miles: next.coverage_radius_miles,
+      });
 
       // ✅ refresh previews
       if (updated.logo || updated.logo_url || updated.avatar_url) {
@@ -213,14 +231,6 @@ export default function EditProfile() {
       setSaving(false);
     }
   };
-
-  // ----------------------------
-  // Simple service-area map
-  // ----------------------------
-  const mapSrc =
-    form.service_location.trim() !== ""
-      ? `https://www.google.com/maps?q=${encodeURIComponent(form.service_location)}&output=embed`
-      : null;
 
   const bannerPreviewSafe = useMemo(() => toUrl(bannerPreview), [bannerPreview]);
 
@@ -342,16 +352,17 @@ export default function EditProfile() {
                     Location(city, state) or ZIP code
                   </label>
                   <Input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d{5}"
                     value={form.service_location}
-                    onChange={updateField("service_location")}
-                    placeholder="e.g. 19063"
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, service_location: e.target.value }))
+                    }
+                    placeholder="City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
+                    pattern="^\s*(\d{5}(-\d{4})?|[A-Za-z][A-Za-z .'-]*,\s*[A-Za-z]{2})\s*$"
+                    title="Enter City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
+                    required
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Enter your primary ZIP code. We’ll use this to show your
-                    service area on the map.
+                    Map updates only after Save. ZIP codes geocode as “ZIP, USA”.
                   </p>
                 </div>
                 <div>
@@ -425,36 +436,17 @@ export default function EditProfile() {
               Service area preview
             </div>
             <p className="text-xs text-slate-600">
-              This is a simple map preview of your{" "}
-              <span className="font-medium">
-                {form.service_location || "service location"}
-              </span>{" "}
-              {form.coverage_radius_miles && (
-                <>
-                  with approximately{" "}
-                  <span className="font-medium">
-                    {form.coverage_radius_miles}-mile
-                  </span>{" "}
-                  radius.
-                </>
-              )}
+              Map updates only after Save (prevents jumping while typing).
             </p>
 
-            <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-              {mapSrc ? (
-                <iframe
-                  title="Service area map"
-                  src={mapSrc}
-                  className="h-64 w-full border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              ) : (
-                <div className="flex h-64 items-center justify-center text-xs text-slate-500">
-                  Enter a service location to see it on the map.
-                </div>
-              )}
-            </div>
+            <ServiceAreaMap
+              deferUpdatesUntilSave={true}
+              locationQuery={form.service_location}
+              radiusMiles={form.coverage_radius_miles}
+              savedLocationQuery={savedMapModel.service_location}
+              savedRadiusMiles={savedMapModel.coverage_radius_miles}
+              heightClassName="h-64"
+            />
           </Card>
         </div>
       )}
