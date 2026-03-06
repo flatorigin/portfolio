@@ -225,6 +225,17 @@ export default function Dashboard() {
     material_url: "",
     material_label: "",
     is_job_posting: false,
+    job_summary: "",
+    service_categories: [], // array of strings
+    part_of_larger_project: false,
+    larger_project_details: "",
+    required_expertise: "", // "licensed_pro" | "handyman" | ""
+    permit_required: false,
+    permit_responsible_party: "", // "homeowner" | "contractor" | ""
+    compliance_confirmed: false,
+    post_privacy: "public", // "public" | "private"
+    private_contractor_username: "",
+    notify_by_email: false,
   });
   const [cover, setCover] = useState(null);
 
@@ -243,6 +254,17 @@ export default function Dashboard() {
     material_url: "",
     material_label: "",
     cover_image_id: null,
+    job_summary: "",
+    service_categories: [],
+    part_of_larger_project: false,
+    larger_project_details: "",
+    required_expertise: "",
+    permit_required: false,
+    permit_responsible_party: "",
+    compliance_confirmed: false,
+    post_privacy: "public",
+    private_contractor_username: "",
+    notify_by_email: false,
   });
   const [editImgs, setEditImgs] = useState([]);
   const editorRef = useRef(null);
@@ -401,6 +423,17 @@ export default function Dashboard() {
           meta?.cover_image?.id ??
           meta?.cover_image ??
           null,
+        job_summary: meta?.job_summary || "",
+        service_categories: Array.isArray(meta?.service_categories) ? meta.service_categories : [],
+        part_of_larger_project: !!meta?.part_of_larger_project,
+        larger_project_details: meta?.larger_project_details || "",
+        required_expertise: meta?.required_expertise || "",
+        permit_required: !!meta?.permit_required,
+        permit_responsible_party: meta?.permit_responsible_party || "",
+        compliance_confirmed: !!meta?.compliance_confirmed,
+        post_privacy: meta?.post_privacy || "public",
+        private_contractor_username: meta?.private_contractor_username || "",
+        notify_by_email: !!meta?.notify_by_email,
       });
 
       await refreshImages(pid);
@@ -520,6 +553,17 @@ export default function Dashboard() {
         highlights: "",
         material_url: "",
         material_label: "",
+        job_summary: "",
+        service_categories: [],
+        part_of_larger_project: false,
+        larger_project_details: "",
+        required_expertise: "",
+        permit_required: false,
+        permit_responsible_party: "",
+        compliance_confirmed: false,
+        post_privacy: "public",
+        private_contractor_username: "",
+        notify_by_email: false,
       });
       setCover(null);
       setCreateOk(true);
