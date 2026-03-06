@@ -1,5 +1,16 @@
+# =============================================================================
+# file: backend/portfolio/serializers.py
+# =============================================================================
 from rest_framework import serializers
-from .models import ProjectComment, Project, ProjectImage, MessageThread, PrivateMessage, ProjectFavorite
+
+from .models import (
+    ProjectComment,
+    Project,
+    ProjectImage,
+    MessageThread,
+    PrivateMessage,
+    ProjectFavorite,
+)
 from accounts.serializers import ProfileSerializer
 
 
@@ -46,19 +57,22 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
 
     def get_is_owner(self, obj):
         request = self.context.get("request")
-        return bool(
-            request
-            and request.user.is_authenticated
-            and request.user == obj.author
-        )
+        return bool(request and request.user.is_authenticated and request.user == obj.author)
 
 
 class ProjectSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="owner.username", read_only=True)
     images = ProjectImageSerializer(many=True, read_only=True)
+
     cover_image_url = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
 
+    cover_image_ref = serializers.PrimaryKeyRelatedField(
+        queryset=ProjectImage.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    cover_image_file = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Project
@@ -70,7 +84,6 @@ class ProjectSerializer(serializers.ModelSerializer):
             "title",
             "summary",
             "category",
-            "cover_image",
             "is_public",
             "is_job_posting",
             "tech_stack",
@@ -84,7 +97,26 @@ class ProjectSerializer(serializers.ModelSerializer):
             "material_url",
             "material_label",
             "extra_links",
-            "cover_image_url",  # ✅ keep this
+
+            # job-posting extensions
+            "job_summary",
+            "service_categories",
+            "part_of_larger_project",
+            "larger_project_details",
+            "required_expertise",
+            "permit_required",
+            "permit_responsible_party",
+            "compliance_confirmed",
+            "post_privacy",
+            "private_contractor_username",
+            "notify_by_email",
+
+            # cover fields
+            "cover_image_ref",
+            "cover_image_file",
+
+            # derived
+            "cover_image_url",
         ]
         read_only_fields = [
             "id",
@@ -96,21 +128,73 @@ class ProjectSerializer(serializers.ModelSerializer):
             "cover_image_url",
         ]
 
+    def validate_service_categories(self, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("service_categories must be a list.")
+        cleaned = []
+        for item in value:
+            if isinstance(item, str) and item.strip():
+                cleaned.append(item.strip())
+        return cleaned
+
+    def validate(self, attrs):
+        """
+        ✅ Auto-copy summary -> job_summary when job posting is on,
+        but only if job_summary isn't explicitly provided.
+        Works for both create and update.
+        """
+        # Determine effective job flag (attrs may omit it on PATCH)
+        instance = getattr(self, "instance", None)
+        is_job_posting = attrs.get(
+            "is_job_posting",
+            getattr(instance, "is_job_posting", False) if instance else False,
+        )
+
+        # If job posting is on, and job_summary not provided, use summary if provided
+        if is_job_posting:
+            incoming_job_summary = attrs.get("job_summary", None)
+            incoming_summary = attrs.get("summary", None)
+
+            if (incoming_job_summary is None or str(incoming_job_summary).strip() == "") and (
+                incoming_summary is not None and str(incoming_summary).strip() != ""
+            ):
+                attrs["job_summary"] = incoming_summary
+
+            # Also: ensure JSON list default if omitted
+            if "service_categories" in attrs and attrs["service_categories"] is None:
+                attrs["service_categories"] = []
+
+        return attrs
+
     def get_cover_image_url(self, obj):
-        # cover is the first image by order (unique order=0 after the view patch)
+        """
+        Cover priority:
+        1) first ProjectImage by order (your convention)
+        2) cover_image_file if set
+        """
+        request = self.context.get("request")
+
         cover = obj.images.order_by("order", "id").first()
-        if cover and cover.image:
-            request = self.context.get("request")
+        if cover and cover.image and hasattr(cover.image, "url"):
             url = cover.image.url
             return request.build_absolute_uri(url) if request else url
+
+        file_field = getattr(obj, "cover_image_file", None)
+        if file_field and hasattr(file_field, "url"):
+            url = file_field.url
+            return request.build_absolute_uri(url) if request else url
+
         return None
 
     def get_is_owner(self, obj):
-            request = self.context.get("request")
-            return bool(request and request.user.is_authenticated and obj.owner_id == request.user.id)
+        request = self.context.get("request")
+        return bool(
+            request and request.user.is_authenticated and obj.owner_id == request.user.id
+        )
 
 
-# ADD THIS NEW SERIALIZER NEAR YOUR OTHER MODEL SERIALIZERS
 class ProjectFavoriteSerializer(serializers.ModelSerializer):
     project_id = serializers.IntegerField(source="project.id", read_only=True)
     project_title = serializers.CharField(source="project.title", read_only=True)
@@ -141,19 +225,20 @@ class ProjectFavoriteSerializer(serializers.ModelSerializer):
         )
 
     def get_project_cover_image(self, obj):
-        # Prefer first ordered image if exists, else fall back to project.cover_image
+        request = self.context.get("request")
+
         cover = obj.project.images.order_by("order", "id").first()
-        if cover and cover.image:
-            request = self.context.get("request")
+        if cover and cover.image and hasattr(cover.image, "url"):
             url = cover.image.url
             return request.build_absolute_uri(url) if request else url
 
-        if obj.project.cover_image:
-            request = self.context.get("request")
-            url = obj.project.cover_image.url
+        file_field = getattr(obj.project, "cover_image_file", None)
+        if file_field and hasattr(file_field, "url"):
+            url = file_field.url
             return request.build_absolute_uri(url) if request else url
 
         return None
+
 
 class PrivateMessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.ReadOnlyField(source="sender.username")
@@ -190,7 +275,6 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, attrs):
-        # Important: we use initial_data here to access the raw file
         attachment = self.initial_data.get("attachment")
         text = attrs.get("text", "").strip()
 
@@ -211,7 +295,6 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
             if ext in allowed_doc_ext and attachment.size > 5 * 1024 * 1024:
                 raise serializers.ValidationError("Documents cannot exceed 5MB.")
 
-            # Set attachment type hints
             attrs["attachment_name"] = attachment.name
             attrs["attachment_type"] = "image" if ext in allowed_image_ext else "document"
 
@@ -238,7 +321,6 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "client",
             "client_username",
             "client_profile",
-            # 🔹 flags needed for Accept / Block buttons
             "owner_has_accepted",
             "client_has_accepted",
             "owner_archived",
@@ -249,113 +331,10 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "updated_at",
             "latest_message",
         ]
-        read_only_fields = [
-            "id",
-            "project",
-            "owner",
-            "owner_username",
-            "owner_profile",
-            "client",
-            "client_username",
-            "client_profile",
-            "owner_has_accepted",
-            "client_has_accepted",
-            "owner_archived",
-            "client_archived",
-            "owner_blocked_client",
-            "client_blocked_owner",
-            "created_at",
-            "updated_at",
-            "latest_message",
-        ]
+        read_only_fields = fields
 
     def get_latest_message(self, obj):
         msg = obj.messages.order_by("-created_at").first()
         if not msg:
             return None
         return PrivateMessageSerializer(msg, context=self.context).data
-
-
-    def get_unread_count(self, obj):
-        """
-        Stub for now: always 0.
-        If you later add per-user read tracking on messages, compute it here.
-
-        Example (if you add a method on the model):
-            user = self.context["request"].user
-            return obj.unread_count_for(user)
-        """
-        return 0
-
-    def get_is_request(self, obj):
-        """
-        True if, for the current user, this thread is still a "message request"
-        (i.e. they haven't accepted it yet).
-        Requires the model to have `owner_has_accepted` and `client_has_accepted`.
-        """
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False  # inbox is auth-only, but be safe
-
-        user = request.user
-        uid = user.id
-
-        # If model doesn't yet have these flags, default to False
-        owner_accepted = getattr(obj, "owner_has_accepted", True)
-        client_accepted = getattr(obj, "client_has_accepted", True)
-
-        if uid == obj.owner_id:
-            return not bool(owner_accepted)
-        if uid == obj.client_id:
-            return not bool(client_accepted)
-        # non-participant: treat as not a request
-        return False
-
-    def get_counterpart(self, obj):
-        """
-        Return a compact representation of the *other* user in this thread,
-        with fields tuned for the GlobalInbox UI:
-
-        {
-            "username": "...",
-            "display_name": "...",
-            "avatar_url": "..."
-        }
-        """
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-
-        if not user or not user.is_authenticated:
-            # default to owner as counterpart if anonymous (should not happen)
-            other = obj.client
-        else:
-            if user.id == obj.owner_id:
-                other = obj.client
-            elif user.id == obj.client_id:
-                other = obj.owner
-            else:
-                # not a participant; default to owner
-                other = obj.owner
-
-        prof = getattr(other, "profile", None)
-        # We rely on ProfileSerializer to expose avatar/urls, but we keep this simple
-        avatar_url = None
-        display_name = None
-
-        if prof is not None:
-            # ProfileSerializer usually exposes display_name and avatar_url;
-            # but to avoid an extra serializer call, we read from model directly.
-            display_name = getattr(prof, "display_name", "") or other.username
-            # Try both logo and avatar (depends on your ProfileSerializer)
-            if getattr(prof, "logo", None) and hasattr(prof.logo, "url"):
-                avatar_url = prof.logo.url
-            elif getattr(prof, "avatar", None) and hasattr(prof.avatar, "url"):
-                avatar_url = prof.avatar.url
-        else:
-            display_name = other.username
-
-        return {
-            "username": other.username,
-            "display_name": display_name,
-            "avatar_url": avatar_url,
-        }
