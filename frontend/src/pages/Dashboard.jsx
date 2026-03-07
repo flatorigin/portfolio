@@ -1304,41 +1304,38 @@ export default function Dashboard() {
             }}
           />
         </div>
-        )
-        {/* Unpublish modal */}
-        {unpublishModal.open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-              <div className="text-sm font-semibold text-slate-900">
-                Unpublish this post to enable editing
-              </div>
-              <div className="mt-2 text-sm text-slate-700">
-                Warning: Current post data may be lost. You can re-publish after editing.
-              </div>
+      )}
 
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setUnpublishModal({ open: false, project: null })}
-                  disabled={busy}
-                >
-                  Keep it published
-                </Button>
+      {/* Unpublish modal */}
+      {unpublishModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="text-sm font-semibold text-slate-900">
+              Unpublish this post to enable editing
+            </div>
+            <div className="mt-2 text-sm text-slate-700">
+              Warning: Current post data may be lost. You can re-publish after editing.
+            </div>
 
-                <Button
-                  type="button"
-                  className="bg-red-600 text-white hover:bg-red-700"
-                  onClick={unpublishAndEdit}
-                  disabled={busy}
-                >
-                  {busy ? "Unpublishing…" : "Unpublish & Edit"}
-                </Button>
-              </div>
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setUnpublishModal({ open: false, project: null })}
+                disabled={busy}
+              >
+                Keep it published
+              </Button>
+
+              <Button
+                type="button"
+                className="bg-red-600 text-white hover:bg-red-700"
+                onClick={unpublishAndEdit}
+                disabled={busy}
+              >
+                {busy ? "Unpublishing…" : "Unpublish & Edit"}
+              </Button>
             </div>
           </div>
-        )}
+        </div>
       )}
-    </div>
-  );
-}
