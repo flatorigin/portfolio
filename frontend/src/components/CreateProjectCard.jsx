@@ -280,6 +280,21 @@ export default function CreateProjectCard({
               />
             </div>
 
+            <div>
+              <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
+              <Input
+                value={form.sqf}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    sqf: e.target.value.replace(/[^\d]/g, ""), // digits only
+                  }))
+                }
+                inputMode="numeric"
+                placeholder="e.g. 250"
+              />
+            </div>
+            
             {/* Location / Budget */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>

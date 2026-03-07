@@ -566,21 +566,20 @@ export default function Dashboard() {
 
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
-        if (
-          k === "is_public" ||
-          k === "is_job_posting" ||
-          k === "part_of_larger_project" ||
-          k === "permit_required" ||
-          k === "compliance_confirmed" ||
-          k === "notify_by_email"
-        ) {
+        // booleans
+        if (k === "is_public" || k === "is_job_posting") {
           fd.append(k, v ? "true" : "false");
-        } else if (k === "service_categories") {
-          // JSON list: send as JSON string to be safe with FormData
-          fd.append(k, JSON.stringify(Array.isArray(v) ? v : []));
-        } else {
-          fd.append(k, v ?? "");
+          return;
         }
+
+        // numbers that must not be ""
+        if (k === "sqf") {
+          if (v !== "" && v !== null && v !== undefined) fd.append("sqf", String(v));
+          return;
+        }
+
+        // default
+        fd.append(k, v ?? "");
       });
 
       if (cover) fd.append("cover_image", cover);
