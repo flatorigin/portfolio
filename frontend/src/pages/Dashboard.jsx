@@ -28,6 +28,67 @@ function extractProjectId(fav) {
   );
 }
 
+function buildProjectFormData(form, cover) {
+  const fd = new FormData();
+
+  const BOOL_KEYS = new Set([
+    "is_public",
+    "is_job_posting",
+    "part_of_larger_project",
+    "permit_required",
+    "compliance_confirmed",
+    "notify_by_email",
+  ]);
+
+  const JSON_KEYS = new Set([
+    "service_categories",
+    "tech_stack",
+    "extra_links",
+  ]);
+
+  const INT_KEYS = new Set(["sqf"]);
+  const DECIMAL_KEYS = new Set(["budget"]);
+
+  Object.entries(form || {}).forEach(([k, v]) => {
+    // booleans -> "true"/"false"
+    if (BOOL_KEYS.has(k)) {
+      fd.append(k, v ? "true" : "false");
+      return;
+    }
+
+    // json -> stringify
+    if (JSON_KEYS.has(k)) {
+      const safe =
+        v === null || v === undefined ? (k === "service_categories" ? [] : []) : v;
+      fd.append(k, JSON.stringify(safe));
+      return;
+    }
+
+    // integers -> omit if empty
+    if (INT_KEYS.has(k)) {
+      if (v === "" || v === null || v === undefined) return;
+      const n = Number(String(v));
+      if (Number.isFinite(n)) fd.append(k, String(Math.trunc(n)));
+      return;
+    }
+
+    // decimals -> omit if empty
+    if (DECIMAL_KEYS.has(k)) {
+      if (v === "" || v === null || v === undefined) return;
+      fd.append(k, String(v));
+      return;
+    }
+
+    // default (strings etc.) -> omit ONLY if null/undefined
+    if (v === null || v === undefined) return;
+    fd.append(k, String(v));
+  });
+
+  if (cover) fd.append("cover_image", cover);
+
+  return fd;
+}
+
 // treat "true", "1", 1, true as truthy
 function isJobPostingFlag(value) {
   if (value === true) return true;
@@ -564,25 +625,7 @@ export default function Dashboard() {
         return;
       }
 
-      const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => {
-        // booleans
-        if (k === "is_public" || k === "is_job_posting") {
-          fd.append(k, v ? "true" : "false");
-          return;
-        }
-
-        // numbers that must not be ""
-        if (k === "sqf") {
-          if (v !== "" && v !== null && v !== undefined) fd.append("sqf", String(v));
-          return;
-        }
-
-        // default
-        fd.append(k, v ?? "");
-      });
-
-      if (cover) fd.append("cover_image", cover);
+      const fd = buildProjectFormData(form, cover);
 
       const { data } = await api.post("/projects/", fd, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -595,7 +638,7 @@ export default function Dashboard() {
       await refreshProjects();
       await refreshMyJobPosts();
 
-      // reset create form
+      // reset create form (include ALL fields you use)
       setForm({
         title: "",
         summary: "",
@@ -620,19 +663,23 @@ export default function Dashboard() {
         post_privacy: "public",
         private_contractor_username: "",
         notify_by_email: false,
+
+        tech_stack: null,
+        extra_links: [],
       });
 
       setCover(null);
       setCreateOk(true);
       setCreateCloseSignal((n) => n + 1);
     } catch (err) {
-      const msg = err?.response?.data
-        ? typeof err.response.data === "string"
-          ? err.response.data
-          : JSON.stringify(err.response.data)
-        : err?.message || String(err);
+      const data = err?.response?.data;
+      const msg =
+        data?.detail ||
+        (typeof data === "string" ? data : data ? JSON.stringify(data) : "") ||
+        err?.message ||
+        "Create failed";
       setCreateErr(msg);
-      console.error("[createProject] failed:", err);
+      console.error("[createProject] failed:", err?.response || err);
     } finally {
       setBusy(false);
     }

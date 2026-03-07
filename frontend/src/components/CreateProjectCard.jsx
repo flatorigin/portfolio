@@ -3,7 +3,9 @@
 // Create Project + Job Posting form fields (Public vs Private draft)
 // Action menu: Save Draft / Publish / Send to Contractor (placeholder)
 // ============================================================================
-import { useMemo, useState } from "react";
+
+import { useMemo, useState, useEffect } from "react";
+import { flushSync } from "react-dom";
 import { Card, Input, Textarea, Button, Badge } from "../ui";
 
 function toggleInArray(arr, value) {
@@ -23,6 +25,7 @@ function JobPostingHelp({ text }) {
       >
         ?
       </button>
+
       {open && (
         <div className="absolute right-0 top-7 z-50 w-80 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow-xl">
           <div className="font-semibold text-slate-900">Private posting</div>
@@ -52,8 +55,9 @@ export default function CreateProjectCard({
   error,
   success,
   onSubmit, // (event, images) => void
-  onSendPrivate, // OPTIONAL: (username, payload) => void  (later)
+  onSendPrivate, // OPTIONAL: (username, payload) => void (later)
   defaultOpen = false,
+  closeSignal = 0, // optional: increments when Dashboard wants this card to close + reset
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [images, setImages] = useState([]);
@@ -75,7 +79,9 @@ export default function CreateProjectCard({
     setForm((prev) => ({
       ...prev,
       job_summary: prev.job_summary || "",
-      service_categories: Array.isArray(prev.service_categories) ? prev.service_categories : [],
+      service_categories: Array.isArray(prev.service_categories)
+        ? prev.service_categories
+        : [],
       part_of_larger_project: !!prev.part_of_larger_project,
       larger_project_details: prev.larger_project_details || "",
       required_expertise: prev.required_expertise || "",
@@ -95,9 +101,11 @@ export default function CreateProjectCard({
       return { ok: false, msg: "Please confirm compliance before publishing." };
     }
 
-    // Publish is only for PUBLIC job posts
     if ((form.post_privacy || "public") !== "public") {
-      return { ok: false, msg: "Private posts are not published. Use Send to Contractor." };
+      return {
+        ok: false,
+        msg: "Private posts are not published. Use Send to Contractor.",
+      };
     }
 
     return { ok: true };
@@ -116,25 +124,72 @@ export default function CreateProjectCard({
     return { ok: true, username: u };
   };
 
+  const resetLocalImages = () => {
+    // revoke blob urls to avoid leaks
+    setImages((prev) => {
+      prev.forEach((img) => {
+        if (img?.url && typeof img.url === "string" && img.url.startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(img.url);
+          } catch {
+            // ignore
+          }
+        }
+      });
+      return [];
+    });
+  };
+
+  // Close + reset when Dashboard signals
+  useEffect(() => {
+    if (!closeSignal) return;
+    setIsOpen(false);
+    resetLocalImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeSignal]);
+
   const toggleJobPosting = () => {
-    setForm((prev) => ({ ...prev, is_job_posting: !prev.is_job_posting }));
-    ensureJobDefaults();
+    // single state update to avoid weird batching interactions
+    setForm((prev) => {
+      const next = { ...prev, is_job_posting: !prev.is_job_posting };
+      return {
+        ...next,
+        job_summary: next.job_summary || "",
+        service_categories: Array.isArray(next.service_categories)
+          ? next.service_categories
+          : [],
+        part_of_larger_project: !!next.part_of_larger_project,
+        larger_project_details: next.larger_project_details || "",
+        required_expertise: next.required_expertise || "",
+        permit_required: !!next.permit_required,
+        permit_responsible_party: next.permit_responsible_party || "",
+        compliance_confirmed: !!next.compliance_confirmed,
+        post_privacy: next.post_privacy || "public",
+        private_contractor_username: next.private_contractor_username || "",
+        notify_by_email: !!next.notify_by_email,
+      };
+    });
   };
 
   const toggleOpen = () => {
-    setIsOpen((v) => !v);
-    if (isOpen) setImages([]); // close => reset images
+    setIsOpen((v) => {
+      const next = !v;
+      if (!next) resetLocalImages();
+      return next;
+    });
   };
 
   const handleAddImages = (files) => {
     if (!files || !files.length) return;
     const arr = Array.from(files);
+
     const newImages = arr.map((file) => ({
       id: Math.random().toString(36).slice(2),
       url: URL.createObjectURL(file),
       caption: "",
       _file: file,
     }));
+
     setImages((prev) => [...prev, ...newImages]);
   };
 
@@ -154,41 +209,57 @@ export default function CreateProjectCard({
   };
 
   const handleDeleteImage = (image) => {
+    if (image?.url && typeof image.url === "string" && image.url.startsWith("blob:")) {
+      try {
+        URL.revokeObjectURL(image.url);
+      } catch {
+        // ignore
+      }
+    }
     setImages((prev) => prev.filter((img) => img.id !== image.id));
   };
 
+  // IMPORTANT: we use flushSync so is_public/post_privacy changes are applied
+  // before Dashboard reads `form` to create FormData.
   const saveDraft = (e) => {
     e.preventDefault();
-    ensureJobDefaults();
-    setForm((p) => ({ ...p, is_public: false }));
-    onSubmit(e, images);
+    flushSync(() => {
+      ensureJobDefaults();
+      setForm((p) => ({ ...p, is_public: false }));
+    });
+    onSubmit?.(e, images);
     setIsOpen(false);
-    setImages([]);
+    resetLocalImages();
   };
 
   const publishProject = (e) => {
     e.preventDefault();
-    ensureJobDefaults();
 
     const v = validatePublish();
     if (!v.ok) return alert(v.msg);
 
-    setForm((p) => ({ ...p, is_public: true }));
-    onSubmit(e, images);
+    flushSync(() => {
+      ensureJobDefaults();
+      setForm((p) => ({ ...p, is_public: true, post_privacy: "public" }));
+    });
+
+    onSubmit?.(e, images);
     setIsOpen(false);
-    setImages([]);
+    resetLocalImages();
   };
 
   const sendToContractor = (e) => {
     e.preventDefault();
-    ensureJobDefaults();
 
     const v = validateSendPrivate();
     if (!v.ok) return alert(v.msg);
 
-    // For now: save as draft (private) and call optional hook
-    setForm((p) => ({ ...p, is_public: false, post_privacy: "private" }));
-    onSubmit(e, images);
+    flushSync(() => {
+      ensureJobDefaults();
+      setForm((p) => ({ ...p, is_public: false, post_privacy: "private" }));
+    });
+
+    onSubmit?.(e, images);
 
     if (onSendPrivate) {
       onSendPrivate(v.username, { ...form, is_public: false, post_privacy: "private" });
@@ -199,7 +270,7 @@ export default function CreateProjectCard({
     }
 
     setIsOpen(false);
-    setImages([]);
+    resetLocalImages();
   };
 
   return (
@@ -250,14 +321,14 @@ export default function CreateProjectCard({
             Project Info (Draft)
           </div>
 
-          <form onSubmit={(e) => onSubmit(e, images)} className="space-y-6">
+          <form onSubmit={(e) => onSubmit?.(e, images)} className="space-y-6">
             {/* Basics */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm text-slate-600">Project Name</label>
                 <Input
                   placeholder="e.g. Kitchen remodel"
-                  value={form.title}
+                  value={form.title || ""}
                   onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
                 />
               </div>
@@ -265,7 +336,7 @@ export default function CreateProjectCard({
                 <label className="mb-1 block text-sm text-slate-600">Category</label>
                 <Input
                   placeholder="e.g. Renovation"
-                  value={form.category}
+                  value={form.category || ""}
                   onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
                 />
               </div>
@@ -275,43 +346,44 @@ export default function CreateProjectCard({
               <label className="mb-1 block text-sm text-slate-600">Summary</label>
               <Textarea
                 placeholder="One or two sentences…"
-                value={form.summary}
+                value={form.summary || ""}
                 onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
               />
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
-              <Input
-                value={form.sqf}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    sqf: e.target.value.replace(/[^\d]/g, ""), // digits only
-                  }))
-                }
-                inputMode="numeric"
-                placeholder="e.g. 250"
-              />
-            </div>
-            
-            {/* Location / Budget */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div>
+            {/* Location / Budget / Sq Ft */}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="md:col-span-1">
                 <label className="mb-1 block text-sm text-slate-600">Location</label>
                 <Input
                   placeholder="City, State"
-                  value={form.location}
+                  value={form.location || ""}
                   onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
                 />
               </div>
-              <div>
+
+              <div className="md:col-span-1">
                 <label className="mb-1 block text-sm text-slate-600">Budget</label>
                 <Input
                   placeholder="e.g. 25000"
                   inputMode="numeric"
-                  value={form.budget}
+                  value={form.budget ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
+                />
+              </div>
+
+              <div className="md:col-span-1">
+                <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
+                <Input
+                  placeholder="e.g. 1800"
+                  inputMode="numeric"
+                  value={form.sqf ?? ""}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      sqf: (e.target.value || "").replace(/[^\d]/g, ""),
+                    }))
+                  }
                 />
               </div>
             </div>
@@ -356,7 +428,10 @@ export default function CreateProjectCard({
                         <label key={c} className="flex items-center gap-2">
                           <input
                             type="checkbox"
-                            checked={Array.isArray(form.service_categories) && form.service_categories.includes(c)}
+                            checked={
+                              Array.isArray(form.service_categories) &&
+                              form.service_categories.includes(c)
+                            }
                             onChange={() =>
                               setForm((p) => ({
                                 ...p,
@@ -428,9 +503,7 @@ export default function CreateProjectCard({
                           type="radio"
                           name="expertise"
                           checked={form.required_expertise === "licensed_pro"}
-                          onChange={() =>
-                            setForm((p) => ({ ...p, required_expertise: "licensed_pro" }))
-                          }
+                          onChange={() => setForm((p) => ({ ...p, required_expertise: "licensed_pro" }))}
                         />
                         <span>
                           <span className="font-medium">Licensed Professional</span>{" "}
@@ -448,7 +521,9 @@ export default function CreateProjectCard({
                         />
                         <span>
                           <span className="font-medium">Handyman / Expert Help</span>{" "}
-                          <span className="text-xs text-slate-500">(general labor/skilled assistance)</span>
+                          <span className="text-xs text-slate-500">
+                            (general labor/skilled assistance)
+                          </span>
                         </span>
                       </label>
                     </div>
@@ -480,9 +555,7 @@ export default function CreateProjectCard({
                             type="radio"
                             name="permit_party"
                             checked={form.permit_responsible_party === "contractor"}
-                            onChange={() =>
-                              setForm((p) => ({ ...p, permit_responsible_party: "contractor" }))
-                            }
+                            onChange={() => setForm((p) => ({ ...p, permit_responsible_party: "contractor" }))}
                           />
                           Contractor handles filing
                         </label>
@@ -491,9 +564,7 @@ export default function CreateProjectCard({
                             type="radio"
                             name="permit_party"
                             checked={form.permit_responsible_party === "homeowner"}
-                            onChange={() =>
-                              setForm((p) => ({ ...p, permit_responsible_party: "homeowner" }))
-                            }
+                            onChange={() => setForm((p) => ({ ...p, permit_responsible_party: "homeowner" }))}
                           />
                           Homeowner handles filing
                         </label>
@@ -509,7 +580,8 @@ export default function CreateProjectCard({
                         onChange={(e) => setForm((p) => ({ ...p, compliance_confirmed: e.target.checked }))}
                       />
                       <span>
-                        I confirm this post complies with Portfolio Terms of Service, is not spam, and abides by all State and Federal laws.
+                        I confirm this post complies with Portfolio Terms of Service, is not spam, and abides by all
+                        State and Federal laws.
                       </span>
                     </label>
                   </div>
@@ -529,7 +601,11 @@ export default function CreateProjectCard({
                         name="privacy"
                         checked={(form.post_privacy || "public") === "public"}
                         onChange={() =>
-                          setForm((p) => ({ ...p, post_privacy: "public", private_contractor_username: "" }))
+                          setForm((p) => ({
+                            ...p,
+                            post_privacy: "public",
+                            private_contractor_username: "",
+                          }))
                         }
                       />
                       Public
@@ -601,6 +677,7 @@ export default function CreateProjectCard({
                           }}
                         />
                       </div>
+
                       <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center">
                         <input
                           type="text"
@@ -610,7 +687,11 @@ export default function CreateProjectCard({
                           onChange={(e) => handleImageCaptionChange(image.id, e.target.value)}
                         />
                         <div className="flex gap-2">
-                          <Button type="button" variant="ghost" onClick={() => handleDeleteImage(image)}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => handleDeleteImage(image)}
+                          >
                             Delete
                           </Button>
                         </div>
@@ -626,14 +707,14 @@ export default function CreateProjectCard({
             {/* Add images */}
             <div className="space-y-2">
               <div className="text-sm font-medium text-slate-700">Add Images</div>
-              <div className="text-xs text-slate-500">Drag & drop or click; add captions; upload.</div>
+              <div className="text-xs text-slate-500">
+                Drag &amp; drop or click; add captions; upload.
+              </div>
+
               <div
                 className="mt-1 flex min-h-[120px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 text-center text-sm text-slate-500"
                 onDrop={handleDrop}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
+                onDragOver={handleDragOver}
               >
                 <input
                   type="file"
@@ -644,7 +725,7 @@ export default function CreateProjectCard({
                   onChange={(e) => handleAddImages(e.target.files)}
                 />
                 <label htmlFor="create-project-add-images-input" className="cursor-pointer">
-                  <div>Drag & drop images here</div>
+                  <div>Drag &amp; drop images here</div>
                   <div className="mt-1 text-xs text-slate-400">or click to browse</div>
                 </label>
               </div>
