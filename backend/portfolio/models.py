@@ -68,6 +68,9 @@ class Project(models.Model):
     # --- Job posting extensions (persisted) ---
     job_summary = models.TextField(blank=True, default="")
 
+    # Job posting publish state (draft vs published)
+    job_is_published = models.BooleanField(default=False)
+    
     service_categories = models.JSONField(blank=True, default=list)  # ["Plumbing", "Electrical"]
     part_of_larger_project = models.BooleanField(default=False)
     larger_project_details = models.CharField(max_length=255, blank=True, default="")

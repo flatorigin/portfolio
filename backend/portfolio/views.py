@@ -287,6 +287,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
         qs.delete()
         return Response({"is_favorited": False}, status=status.HTTP_200_OK)
 
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="job-postings",
+        permission_classes=[permissions.AllowAny],
+    )
+    def job_postings(self, request):
+        qs = (
+            Project.objects.select_related("owner")
+            .filter(is_job_posting=True, is_public=True, post_privacy="public")
+            .order_by("-updated_at")
+        )
+        ser = self.get_serializer(qs, many=True, context={"request": request})
+        return Response(ser.data)
+
 class FavoriteProjectListView(generics.ListAPIView):
     """
     GET /api/favorites/projects/

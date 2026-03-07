@@ -12,6 +12,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import PublicProfile from "./pages/PublicProfile";
 import MessagesThread from "./pages/MessagesThread";
+import FindLocalWork from "./pages/FindLocalWork";
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <Explore /> },
+      { path: "work", element: <FindLocalWork /> },
       { path: "profile/edit", element: <ProfileEdit /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "projects/:id", element: <ProjectDetail /> },
@@ -28,7 +30,6 @@ export const router = createBrowserRouter([
       { path: "register", element: <Register /> },
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "reset-password", element: <ResetPassword /> },
-
       { path: "*", element: <NotFound /> },
     ],
   },

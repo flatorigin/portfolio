@@ -1,7 +1,7 @@
 // ============================================================================
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 
@@ -9,11 +9,10 @@ import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
 
-
-
 // normalize media
 function toUrl(raw) {
   if (!raw) return "";
+  if (/^(data:|blob:)/i.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
@@ -27,6 +26,15 @@ function extractProjectId(fav) {
     fav?.project_id ??
     (typeof fav?.project === "number" ? fav.project : null)
   );
+}
+
+// treat "true", "1", 1, true as truthy
+function isJobPostingFlag(value) {
+  if (value === true) return true;
+  if (value === 1) return true;
+  if (value === "1") return true;
+  if (typeof value === "string" && value.toLowerCase() === "true") return true;
+  return false;
 }
 
 export default function Dashboard() {
@@ -184,7 +192,7 @@ export default function Dashboard() {
     if (!projectId) return;
 
     const ok = window.confirm(
-      "Delete this project permanently? This will remove images, favorites, comments, and messages tied to it. This cannot be undone."
+      "Are you sure?\n\nBy removing the project all the images and info about the project will be lost and the process is not retrievable."
     );
     if (!ok) return;
 
@@ -193,6 +201,7 @@ export default function Dashboard() {
       await api.delete(`/projects/${projectId}/`);
       setEditingId("");
       await refreshProjects();
+      await refreshMyJobPosts();
       setSaveToast("Deleted ✓  Project removed");
     } catch (err) {
       const data = err?.response?.data;
@@ -212,7 +221,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  // Create form state
+  // Create form state (includes job-posting fields)
   const [form, setForm] = useState({
     title: "",
     summary: "",
@@ -225,15 +234,17 @@ export default function Dashboard() {
     material_url: "",
     material_label: "",
     is_job_posting: false,
+
+    // job-posting extensions
     job_summary: "",
-    service_categories: [], // array of strings
+    service_categories: [],
     part_of_larger_project: false,
     larger_project_details: "",
-    required_expertise: "", // "licensed_pro" | "handyman" | ""
+    required_expertise: "",
     permit_required: false,
-    permit_responsible_party: "", // "homeowner" | "contractor" | ""
+    permit_responsible_party: "",
     compliance_confirmed: false,
-    post_privacy: "public", // "public" | "private"
+    post_privacy: "public",
     private_contractor_username: "",
     notify_by_email: false,
   });
@@ -254,6 +265,8 @@ export default function Dashboard() {
     material_url: "",
     material_label: "",
     cover_image_id: null,
+
+    // job-posting extensions
     job_summary: "",
     service_categories: [],
     part_of_larger_project: false,
@@ -335,6 +348,27 @@ export default function Dashboard() {
     setMyThumbs(Object.fromEntries(entries));
   }, []);
 
+  // ---- Job posts for current user (job postings only) ----
+  const [myJobPosts, setMyJobPosts] = useState([]);
+
+  const refreshMyJobPosts = useCallback(async () => {
+    try {
+      const { data } = await api.get("/projects/");
+      const mineJobs = Array.isArray(data)
+        ? data.filter(
+            (p) =>
+              (p.owner_username || "").toLowerCase() ===
+                (meUser.username || "").toLowerCase() &&
+              isJobPostingFlag(p.is_job_posting)
+          )
+        : [];
+      setMyJobPosts(mineJobs);
+    } catch {
+      setMyJobPosts([]);
+    }
+  }, [meUser.username]);
+
+  // ---- Refresh my projects (all types) ----
   const refreshProjects = useCallback(async () => {
     try {
       const { data } = await api.get("/projects/");
@@ -359,6 +393,10 @@ export default function Dashboard() {
     refreshProjects();
   }, [refreshProjects]);
 
+  useEffect(() => {
+    refreshMyJobPosts();
+  }, [refreshMyJobPosts]);
+
   const list = projects;
 
   // ✅ Stable refreshImages (preserve UI order; do not allow backend ordering to reshuffle)
@@ -370,7 +408,7 @@ export default function Dashboard() {
         id: x.id,
         url: x.url || x.image || x.src || x.file,
         caption: x.caption || "",
-        order: x.order ?? x.sort_order ?? null, // used for cover radio only
+        order: x.order ?? x.sort_order ?? null,
         _localCaption: x.caption || "",
         _saving: false,
       }))
@@ -423,8 +461,11 @@ export default function Dashboard() {
           meta?.cover_image?.id ??
           meta?.cover_image ??
           null,
+
         job_summary: meta?.job_summary || "",
-        service_categories: Array.isArray(meta?.service_categories) ? meta.service_categories : [],
+        service_categories: Array.isArray(meta?.service_categories)
+          ? meta.service_categories
+          : [],
         part_of_larger_project: !!meta?.part_of_larger_project,
         larger_project_details: meta?.larger_project_details || "",
         required_expertise: meta?.required_expertise || "",
@@ -439,7 +480,10 @@ export default function Dashboard() {
       await refreshImages(pid);
 
       setTimeout(() => {
-        editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        editorRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       }, 150);
     },
     [refreshImages]
@@ -469,7 +513,6 @@ export default function Dashboard() {
 
     const currentCover = editImgs.find((img) => Number(img.order) === 0);
 
-    // update "active cover" locally, but DO NOT reorder the array
     setEditImgs((prev) =>
       prev.map((img) => {
         if (img.id === imageId) return { ...img, order: 0 };
@@ -508,6 +551,7 @@ export default function Dashboard() {
     setCreateErr("");
     setCreateOk(false);
     setBusy(true);
+
     try {
       const token = localStorage.getItem("access");
       if (!token) {
@@ -522,37 +566,50 @@ export default function Dashboard() {
 
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
-        if (k === "is_public" || k === "is_job_posting") {
+        if (
+          k === "is_public" ||
+          k === "is_job_posting" ||
+          k === "part_of_larger_project" ||
+          k === "permit_required" ||
+          k === "compliance_confirmed" ||
+          k === "notify_by_email"
+        ) {
           fd.append(k, v ? "true" : "false");
+        } else if (k === "service_categories") {
+          // JSON list: send as JSON string to be safe with FormData
+          fd.append(k, JSON.stringify(Array.isArray(v) ? v : []));
         } else {
           fd.append(k, v ?? "");
         }
       });
+
       if (cover) fd.append("cover_image", cover);
 
       const { data } = await api.post("/projects/", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // ✅ NEW: upload images using the SAME payload as editor uploader
       if (data?.id) {
         await uploadProjectImages(data.id, images);
       }
 
       await refreshProjects();
+      await refreshMyJobPosts();
 
+      // reset create form
       setForm({
         title: "",
         summary: "",
         category: "",
         is_public: true,
-        is_job_posting: false,
         location: "",
         budget: "",
         sqf: "",
         highlights: "",
         material_url: "",
         material_label: "",
+        is_job_posting: false,
+
         job_summary: "",
         service_categories: [],
         part_of_larger_project: false,
@@ -565,9 +622,9 @@ export default function Dashboard() {
         private_contractor_username: "",
         notify_by_email: false,
       });
+
       setCover(null);
       setCreateOk(true);
-
       setCreateCloseSignal((n) => n + 1);
     } catch (err) {
       const msg = err?.response?.data
@@ -589,10 +646,18 @@ export default function Dashboard() {
     setBusy(true);
     try {
       const payload = { ...editForm };
+
       payload.is_public = !!payload.is_public;
       payload.is_job_posting = !!payload.is_job_posting;
 
-      // cover image selection is handled via image order=0 (not cover_image file upload)
+      // normalize booleans for backend consistency
+      payload.part_of_larger_project = !!payload.part_of_larger_project;
+      payload.permit_required = !!payload.permit_required;
+      payload.compliance_confirmed = !!payload.compliance_confirmed;
+      payload.notify_by_email = !!payload.notify_by_email;
+
+      if (!Array.isArray(payload.service_categories)) payload.service_categories = [];
+
       if (payload.cover_image_id == null || payload.cover_image_id === "") {
         delete payload.cover_image_id;
       } else {
@@ -602,8 +667,8 @@ export default function Dashboard() {
       await api.patch(`/projects/${editingId}/`, payload);
 
       await refreshProjects();
+      await refreshMyJobPosts();
 
-      // ✅ CREATIVE FEEDBACK + AUTO COLLAPSE
       const title = (payload.title || "").trim();
       setSaveToast(title ? `Saved ✓  “${title}”` : "Saved ✓  Your changes are live");
 
@@ -612,7 +677,6 @@ export default function Dashboard() {
 
       saveToastTimerRef.current = setTimeout(() => setSaveToast(""), 1600);
 
-      // collapse editor back to previous state
       collapseTimerRef.current = setTimeout(() => {
         setEditingId("");
       }, 550);
@@ -665,10 +729,7 @@ export default function Dashboard() {
     }
   }
 
-  const handleEditorSubmit = useCallback(
-    (e) => saveProjectInfo(e),
-    [editingId, editForm]
-  );
+  const handleEditorSubmit = useCallback((e) => saveProjectInfo(e), [editingId, editForm]);
 
   // cleanup timers on unmount
   useEffect(() => {
@@ -678,14 +739,21 @@ export default function Dashboard() {
     };
   }, []);
 
+  // helper: show cover for any project (thumbs > cover_image_url > cover_image)
+  function getProjectCover(p) {
+    const fromThumbs = myThumbs?.[p?.id]?.cover || "";
+    const fromUrl = p?.cover_image_url ? toUrl(p.cover_image_url) : "";
+    const fromFile = p?.cover_image ? toUrl(p.cover_image) : "";
+    return fromThumbs || fromUrl || fromFile || "";
+  }
+
   return (
     <div className="space-y-8">
-      {/* Simple header: Dashboard only */}
       <header className="mb-1">
         <SectionTitle>Dashboard</SectionTitle>
       </header>
 
-      {/* Profile summary card with logo inside */}
+      {/* Profile summary */}
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -727,11 +795,9 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {meLite.bio && (
+              {meLite.bio ? (
                 <p className="mt-2 text-xs text-slate-600">{meLite.bio}</p>
-              )}
-
-              {!meLite.service_location && !meLite.bio && (
+              ) : (
                 <p className="mt-2 text-xs text-slate-500">
                   Add your service area and a short bio so clients know who you are.
                 </p>
@@ -747,7 +813,7 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      {/* SAVED PROJECTS (favorites) */}
+      {/* Saved projects */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-800">Saved projects</h2>
@@ -758,132 +824,124 @@ export default function Dashboard() {
 
         {savedProjects.length === 0 ? (
           <p className="text-xs text-slate-500">
-            You haven’t saved any projects yet. Hit “Save” on any interesting
-            project to keep it here.
+            You haven’t saved any projects yet. Hit “Save” on any interesting project
+            to keep it here.
           </p>
         ) : (
           <>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-              {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map(
-                (fav) => {
-                  const projectId = extractProjectId(fav);
+              {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map((fav) => {
+                const projectId = extractProjectId(fav);
 
-                  const coverSrcRaw =
-                    fav.project_cover_image_url ||
-                    fav.project_cover_image ||
-                    fav.project_cover ||
-                    fav.project?.cover_image_url ||
-                    fav.project?.cover_image ||
-                    fav.project?.cover ||
-                    "";
+                const coverSrcRaw =
+                  fav.project_cover_image_url ||
+                  fav.project_cover_image ||
+                  fav.project_cover ||
+                  fav.project?.cover_image_url ||
+                  fav.project?.cover_image ||
+                  fav.project?.cover ||
+                  "";
 
-                  const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
+                const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
 
-                  const title =
-                    fav.project_title ||
-                    fav.project?.title ||
-                    (projectId ? `Project #${projectId}` : "Project");
+                const title =
+                  fav.project_title ||
+                  fav.project?.title ||
+                  (projectId ? `Project #${projectId}` : "Project");
 
-                  const owner =
-                    fav.project_owner_username || fav.project?.owner_username;
+                const owner = fav.project_owner_username || fav.project?.owner_username;
 
-                  const category = fav.project_category || fav.project?.category;
-                  const summary = fav.project_summary || fav.project?.summary;
-                  const location = fav.project_location || fav.project?.location;
-                  const budget = fav.project_budget || fav.project?.budget;
-                  const sqf = fav.project_sqf || fav.project?.sqf;
-                  const highlights =
-                    fav.project_highlights || fav.project?.highlights;
+                const category = fav.project_category || fav.project?.category;
+                const summary = fav.project_summary || fav.project?.summary;
+                const location = fav.project_location || fav.project?.location;
+                const budget = fav.project_budget || fav.project?.budget;
+                const sqf = fav.project_sqf || fav.project?.sqf;
+                const highlights = fav.project_highlights || fav.project?.highlights;
 
-                  const removing = removingFavoriteId === projectId;
+                const removing = removingFavoriteId === projectId;
 
-                  return (
-                    <Card
-                      key={fav.id ?? `p-${projectId ?? "unknown"}`}
-                      className="overflow-hidden"
-                    >
-                      {coverSrc ? (
-                        <img
-                          src={coverSrc}
-                          alt=""
-                          className="block h-36 w-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
-                          No cover
-                        </div>
-                      )}
-
-                      <div className="p-4">
-                        <div className="mb-1 flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate font-semibold">{title}</div>
-                            {owner && (
-                              <div className="text-[11px] text-slate-500">
-                                by {owner}
-                              </div>
-                            )}
-                          </div>
-
-                          {category && (
-                            <Badge className="shrink-0">{category}</Badge>
-                          )}
-                        </div>
-
-                        <div className="line-clamp-2 text-sm text-slate-700">
-                          {summary || <span className="opacity-60">No summary</span>}
-                        </div>
-
-                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                          {location && (
-                            <div>
-                              <span className="opacity-60">Location:</span> {location}
-                            </div>
-                          )}
-                          {budget && (
-                            <div>
-                              <span className="opacity-60">Budget:</span> {budget}
-                            </div>
-                          )}
-                          {sqf && (
-                            <div>
-                              <span className="opacity-60">Sq Ft:</span> {sqf}
-                            </div>
-                          )}
-                          {highlights && (
-                            <div className="col-span-2 truncate">
-                              <span className="opacity-60">Highlights:</span> {highlights}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-3 flex w-full flex-nowrap gap-2">
-                          <GhostButton
-                            className="w-1/2 min-w-0"
-                            onClick={() => window.open(`/projects/${projectId}`, "_self")}
-                            disabled={!projectId || removing}
-                          >
-                            Open
-                          </GhostButton>
-
-                          <Button
-                            className="w-1/2 min-w-0"
-                            type="button"
-                            variant="outline"
-                            onClick={() => handleRemoveFavorite(fav)}
-                            disabled={removing}
-                          >
-                            {removing ? "Removing…" : "Remove"}
-                          </Button>
-                        </div>
+                return (
+                  <Card
+                    key={fav.id ?? `p-${projectId ?? "unknown"}`}
+                    className="overflow-hidden"
+                  >
+                    {coverSrc ? (
+                      <img
+                        src={coverSrc}
+                        alt=""
+                        className="block h-36 w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                        No cover
                       </div>
-                    </Card>
-                  );
-                }
-              )}
+                    )}
+
+                    <div className="p-4">
+                      <div className="mb-1 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold">{title}</div>
+                          {owner && (
+                            <div className="text-[11px] text-slate-500">by {owner}</div>
+                          )}
+                        </div>
+
+                        {category && <Badge className="shrink-0">{category}</Badge>}
+                      </div>
+
+                      <div className="line-clamp-2 text-sm text-slate-700">
+                        {summary || <span className="opacity-60">No summary</span>}
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                        {location && (
+                          <div>
+                            <span className="opacity-60">Location:</span> {location}
+                          </div>
+                        )}
+                        {budget && (
+                          <div>
+                            <span className="opacity-60">Budget:</span> {budget}
+                          </div>
+                        )}
+                        {sqf && (
+                          <div>
+                            <span className="opacity-60">Sq Ft:</span> {sqf}
+                          </div>
+                        )}
+                        {highlights && (
+                          <div className="col-span-2 truncate">
+                            <span className="opacity-60">Highlights:</span> {highlights}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 flex w-full flex-nowrap gap-2">
+                        <GhostButton
+                          className="w-1/2 min-w-0"
+                          onClick={() => window.open(`/projects/${projectId}`, "_self")}
+                          disabled={!projectId || removing}
+                        >
+                          Open
+                        </GhostButton>
+
+                        <Button
+                          className="w-1/2 min-w-0"
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleRemoveFavorite(fav)}
+                          disabled={removing}
+                        >
+                          {removing ? "Removing…" : "Remove"}
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
 
             {savedProjects.length > 3 && (
@@ -902,7 +960,7 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* 1) CREATE PROJECT — now collapsible reusable card */}
+      {/* 1) Create Project */}
       <CreateProjectCard
         ownedCount={projects.length}
         form={form}
@@ -916,7 +974,111 @@ export default function Dashboard() {
         closeSignal={createCloseSignal}
       />
 
-      {/* 2) YOUR PROJECTS */}
+      {/* 2) My Job Postings */}
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-semibold text-slate-800">Your Job Postings</div>
+          <Badge>{myJobPosts.length} shown</Badge>
+        </div>
+
+        {myJobPosts.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            No job postings yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+            {myJobPosts.map((p) => {
+              const coverSrc = getProjectCover(p);
+
+              // rule: unpublished can be edited; published only after unpublishing
+              const isPublic = !!p.is_public;
+              const canEdit = !isPublic;
+
+              return (
+                <Card key={p.id} className="overflow-hidden">
+                  {coverSrc ? (
+                    <img
+                      src={coverSrc}
+                      alt=""
+                      className="block h-36 w-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                      No cover
+                    </div>
+                  )}
+
+                  <div className="p-4">
+                    <div className="mb-1 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">{p.title}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {isPublic ? "Published" : "Draft"}
+                        </div>
+                      </div>
+                      <Badge className="shrink-0">{p.category || "Job"}</Badge>
+                    </div>
+
+                    <div className="line-clamp-2 text-sm text-slate-700">
+                      {p.job_summary || p.summary || (
+                        <span className="opacity-60">No summary</span>
+                      )}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      {p.location ? (
+                        <div>
+                          <span className="opacity-60">Location:</span> {p.location}
+                        </div>
+                      ) : null}
+                      {p.budget ? (
+                        <div>
+                          <span className="opacity-60">Budget:</span> {p.budget}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <GhostButton
+                        className="w-1/2 min-w-0"
+                        onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                      >
+                        Open
+                      </GhostButton>
+
+                      <Button
+                        className="w-1/2 min-w-0"
+                        onClick={() => {
+                          if (!canEdit) {
+                            alert(
+                              "This job is published. To edit it, unpublish it first."
+                            );
+                            return;
+                          }
+                          loadEditor(p.id);
+                        }}
+                        disabled={!canEdit}
+                        title={
+                          canEdit
+                            ? "Edit this draft"
+                            : "Unpublish first to edit"
+                        }
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* 3) Your Projects */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-800">Your Projects</div>
@@ -930,9 +1092,7 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
             {list.map((p) => {
-              const coverFromImgs = myThumbs?.[p.id]?.cover || "";
-              const coverSrc =
-                coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
+              const coverSrc = getProjectCover(p);
 
               return (
                 <Card key={p.id} className="overflow-hidden">
@@ -1010,7 +1170,7 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* ✅ Save feedback (creative) */}
+      {/* ✅ Save feedback */}
       {saveToast ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           <div className="flex items-center gap-2">
@@ -1027,7 +1187,7 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* 3) EDITOR — ProjectEditorCard */}
+      {/* 4) Editor */}
       {editingId && (
         <div ref={editorRef}>
           <ProjectEditorCard
@@ -1048,6 +1208,7 @@ export default function Dashboard() {
             onAfterUpload={async () => {
               await refreshImages(editingId);
               await refreshProjects();
+              await refreshMyJobPosts();
             }}
           />
         </div>

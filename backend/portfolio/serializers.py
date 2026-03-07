@@ -110,6 +110,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "post_privacy",
             "private_contractor_username",
             "notify_by_email",
+            "job_is_published",
 
             # cover fields
             "cover_image_ref",
@@ -140,6 +141,32 @@ class ProjectSerializer(serializers.ModelSerializer):
         return cleaned
 
     def validate(self, attrs):
+        """
+        ✅ Auto-copy summary -> job_summary when job posting is on,
+        but only if job_summary isn't explicitly provided.
+        Works for both create and update.
+        """
+        # Determine effective job flag (attrs may omit it on PATCH)
+        instance = getattr(self, "instance", None)
+        is_job_posting = attrs.get(
+            "is_job_posting",
+            getattr(instance, "is_job_posting", False) if instance else False,
+        )
+
+        # If job posting is on, and job_summary not provided, use summary if provided
+        if is_job_posting:
+            incoming_job_summary = attrs.get("job_summary", None)
+            incoming_summary = attrs.get("summary", None)
+
+            if (incoming_job_summary is None or str(incoming_job_summary).strip() == "") and (
+                incoming_summary is not None and str(incoming_summary).strip() != ""
+            ):
+                attrs["job_summary"] = incoming_summary
+
+            # Also: ensure JSON list default if omitted
+            if "service_categories" in attrs and attrs["service_categories"] is None:
+                attrs["service_categories"] = []
+
         """
         ✅ Auto-copy summary -> job_summary when job posting is on,
         but only if job_summary isn't explicitly provided.
