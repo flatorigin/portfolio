@@ -1118,7 +1118,7 @@ export default function Dashboard() {
                       )}
 
                       <div className="absolute left-3 top-3 flex gap-2">
-                        <Badge className="bg-sky-600 text-white">Job post</Badge>
+                        <Badge className="bg-slate-900 text-white">Job post</Badge>
                         {isPublished ? (
                           <Badge className="bg-slate-900 text-white">Published</Badge>
                         ) : (
