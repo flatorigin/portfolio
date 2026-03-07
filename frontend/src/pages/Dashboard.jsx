@@ -1081,7 +1081,7 @@ export default function Dashboard() {
         </div>
 
         {myJobPosts.length === 0 ? (
-          <div className="rounded-xl border bg-sky-800 p-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-dashed border-sky-200 bg-white p-4 text-sm text-slate-600">
             No job posts yet. Turn on <span className="font-medium">Job Posting</span> when creating a project.
           </div>
         ) : (
@@ -1118,7 +1118,7 @@ export default function Dashboard() {
                       )}
 
                       <div className="absolute left-3 top-3 flex gap-2">
-                        <Badge className="bg-emerald-600 text-white">Job post</Badge>
+                        <Badge className="bg-sky-600 text-white">Job post</Badge>
                         {isPublished ? (
                           <Badge className="bg-slate-900 text-white">Published</Badge>
                         ) : (
