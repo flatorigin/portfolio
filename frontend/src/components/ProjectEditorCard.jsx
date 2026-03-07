@@ -145,13 +145,16 @@ export default function ProjectEditorCard({
         </div>
       </div>
 
-      {/* Job Posting toggle */}
+      {/* Job Posting toggle + Public toggle (right) */}
       <div
         className={
           "mb-4 flex items-center justify-between rounded-lg border px-3 py-2 " +
-          (isJobPosting ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-slate-50/70")
+          (isJobPosting
+            ? "border-sky-300 bg-sky-50"
+            : "border-slate-200 bg-slate-50/70")
         }
       >
+        {/* LEFT: Job Posting switch + label */}
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -159,7 +162,9 @@ export default function ProjectEditorCard({
             aria-pressed={isJobPosting}
             className={
               "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
-              (isJobPosting ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
+              (isJobPosting
+                ? "bg-sky-500 border-sky-500"
+                : "bg-slate-200 border-slate-300")
             }
           >
             <span
@@ -180,9 +185,28 @@ export default function ProjectEditorCard({
           </div>
         </div>
 
-        <Badge className={isJobPosting ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-700"}>
-          {isJobPosting ? "On" : "Off"}
-        </Badge>
+        {/* RIGHT: Public toggle (replaces the On/Off badge) */}
+        <div className="flex items-center gap-2">
+          <div className="text-[11px] font-semibold text-sky-900/80">Public</div>
+          <button
+            type="button"
+            onClick={() => setForm((p) => ({ ...p, is_public: !p.is_public }))}
+            aria-pressed={!!form.is_public}
+            className={
+              "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+              (form.is_public
+                ? "bg-sky-500 border-sky-500"
+                : "bg-slate-200 border-slate-300")
+            }
+          >
+            <span
+              className={
+                "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
+                (form.is_public ? "translate-x-5" : "translate-x-1")
+              }
+            />
+          </button>
+        </div>
       </div>
 
       {/* Basic project fields */}
@@ -242,18 +266,6 @@ export default function ProjectEditorCard({
             inputMode="numeric"
             placeholder="e.g. 250000"
           />
-        </div>
-
-        <div className="flex items-center gap-2 md:col-span-2">
-          <label className="text-sm text-slate-600">
-            <input
-              type="checkbox"
-              className="mr-2 align-middle"
-              checked={!!form.is_public}
-              onChange={(e) => setForm((p) => ({ ...p, is_public: e.target.checked }))}
-            />
-            Public
-          </label>
         </div>
 
         <button type="submit" className="hidden" />
@@ -476,21 +488,6 @@ export default function ProjectEditorCard({
         </div>
       )}
 
-      {/* Editor actions */}
-      {mode === "edit" && projectId && onDeleteProject && (
-        <div className="mt-4">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-red-300 text-red-700 hover:bg-red-50"
-            onClick={onDeleteProject}
-            disabled={busy}
-          >
-            Delete project
-          </Button>
-        </div>
-      )}
-
       {/* Images + uploader (existing) */}
       {mode === "edit" && projectId && (
         <>
@@ -578,6 +575,21 @@ export default function ProjectEditorCard({
       )}
 
       {/* Action Menu */}
+      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          className="border-red-300 text-white bg-red-500 hover:bg-red-700"
+          onClick={onDeleteProject}
+          disabled={busy}
+        >
+          Delete project
+        </Button>
+
+        <Button type="submit" disabled={busy} form="project-editor-form">
+          {submitLabel}
+        </Button>
+      </div>
       <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="outline" disabled={busy} onClick={saveDraft}>
           Save as Draft

@@ -286,35 +286,61 @@ export default function CreateProjectCard({
 
       {isOpen && (
         <>
-          {/* Job Posting banner */}
-          <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
-                Job Posting
-              </div>
-              <button
-                type="button"
-                onClick={toggleJobPosting}
-                className={
-                  "relative inline-flex h-7 w-12 items-center rounded-full transition " +
-                  (jobOn ? "bg-sky-500 shadow-sm" : "bg-sky-200")
-                }
-                role="switch"
-                aria-checked={jobOn}
-              >
-                <span
+          {/* Job Posting header (blue) + Public toggle on right */}
+          <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              {/* LEFT: Job Posting toggle + title */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={toggleJobPosting}
+                  aria-pressed={jobOn}
                   className={
-                    "inline-block h-5 w-5 transform rounded-full bg-white shadow transition " +
-                    (jobOn ? "translate-x-6" : "translate-x-1")
+                    "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+                    (jobOn ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
                   }
-                />
-              </button>
+                >
+                  <span
+                    className={
+                      "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
+                      (jobOn ? "translate-x-5" : "translate-x-1")
+                    }
+                  />
+                </button>
+
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
+                    Job Posting
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-sky-800">
+                    {jobOn
+                      ? "This project will be treated as a job post (homeowners posting jobs for pros)."
+                      : "Turn this on when a homeowner is posting work for contractors."}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: Public toggle */}
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] font-semibold text-sky-900/80">Public</div>
+                <button
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, is_public: !p.is_public }))}
+                  aria-pressed={!!form.is_public}
+                  className={
+                    "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+                    (form.is_public ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
+                  }
+                >
+                  <span
+                    className={
+                      "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
+                      (form.is_public ? "translate-x-5" : "translate-x-1")
+                    }
+                  />
+                </button>
+              </div>
             </div>
-            <p className="mt-1 text-[11px] text-sky-800">
-              {jobOn
-                ? "This project will be treated as a job post (homeowners posting jobs for pros)."
-                : "Turn this on when a homeowner is posting work for contractors."}
-            </p>
           </div>
 
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
