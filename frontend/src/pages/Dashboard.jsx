@@ -132,6 +132,10 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    refreshMyJobPosts();
+  }, [refreshMyJobPosts]);
+
+  useEffect(() => {
     const onUpdating = () => setProfileSaving(true);
     const onUpdated = (e) => {
       const d = e?.detail || {};
@@ -272,6 +276,54 @@ export default function Dashboard() {
           (data ? JSON.stringify(data) : "") ||
           err?.message ||
           "Failed to delete project."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // --- Job post edit gate (published -> require unpublish) ---
+  const [unpublishModal, setUnpublishModal] = useState({
+    open: false,
+    project: null,
+  });
+
+  function requestEditProject(p) {
+    if (!p?.id) return;
+
+    // If it's a published job posting, require unpublish first
+    if (p.is_job_posting && p.is_public) {
+      setUnpublishModal({ open: true, project: p });
+      return;
+    }
+
+    // otherwise edit normally
+    loadEditor(p.id);
+  }
+
+  async function unpublishAndEdit() {
+    const p = unpublishModal.project;
+    if (!p?.id) return;
+
+    setBusy(true);
+    try {
+      await api.patch(`/projects/${p.id}/`, { is_public: false });
+      setUnpublishModal({ open: false, project: null });
+
+      await refreshProjects();
+      await refreshMyJobPosts();
+
+      // Now allow editing
+      await loadEditor(p.id);
+    } catch (err) {
+      console.error("[Dashboard] unpublish failed", err?.response || err);
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to unpublish."
       );
     } finally {
       setBusy(false);
@@ -1020,106 +1072,100 @@ export default function Dashboard() {
         closeSignal={createCloseSignal}
       />
 
-      {/* 2) My Job Postings */}
-      <Card className="p-5">
+      {/* 1.5) YOUR JOB POSTS (distinct) */}
+      <Card className="p-5 border border-sky-200 bg-sky-50/40">
         <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-800">Your Job Postings</div>
-          <Badge>{myJobPosts.length} shown</Badge>
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Your Job Posts</div>
+            <div className="text-xs text-slate-600">
+              Drafts are editable. Published posts require unpublishing to edit.
+            </div>
+          </div>
+          <Badge className="bg-sky-600 text-white">{myJobPosts.length}</Badge>
         </div>
 
         {myJobPosts.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            No job postings yet.
+          <div className="rounded-xl border border-dashed border-sky-200 bg-white p-4 text-sm text-slate-600">
+            No job posts yet. Turn on <span className="font-medium">Job Posting</span> when creating a project.
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
-            {myJobPosts.map((p) => {
-              const coverSrc = getProjectCover(p);
+            {myJobPosts
+              .slice()
+              .sort((a, b) => Number(b.is_public) - Number(a.is_public)) // published first
+              .map((p) => {
+                const coverFromImgs = myThumbs?.[p.id]?.cover || "";
+                const coverSrc =
+                  coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
 
-              // rule: unpublished can be edited; published only after unpublishing
-              const isPublic = !!p.is_public;
-              const canEdit = !isPublic;
+                const isPublished = !!p.is_public;
 
-              return (
-                <Card key={p.id} className="overflow-hidden">
-                  {coverSrc ? (
-                    <img
-                      src={coverSrc}
-                      alt=""
-                      className="block h-36 w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
-                      No cover
-                    </div>
-                  )}
-
-                  <div className="p-4">
-                    <div className="mb-1 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold">{p.title}</div>
-                        <div className="text-[11px] text-slate-500">
-                          {isPublic ? "Published" : "Draft"}
+                return (
+                  <Card
+                    key={`job-${p.id}`}
+                    className="overflow-hidden border border-sky-200 bg-white"
+                  >
+                    <div className="relative">
+                      {coverSrc ? (
+                        <img
+                          src={coverSrc}
+                          alt=""
+                          className="block h-36 w-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                          No cover
                         </div>
-                      </div>
-                      <Badge className="shrink-0">{p.category || "Job"}</Badge>
-                    </div>
-
-                    <div className="line-clamp-2 text-sm text-slate-700">
-                      {p.job_summary || p.summary || (
-                        <span className="opacity-60">No summary</span>
                       )}
+
+                      <div className="absolute left-3 top-3 flex gap-2">
+                        <Badge className="bg-emerald-600 text-white">Job post</Badge>
+                        {isPublished ? (
+                          <Badge className="bg-slate-900 text-white">Published</Badge>
+                        ) : (
+                          <Badge className="bg-slate-200 text-slate-800">Draft</Badge>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                      {p.location ? (
-                        <div>
-                          <span className="opacity-60">Location:</span> {p.location}
+                    <div className="p-4">
+                      <div className="mb-1 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold">{p.title || "Untitled job post"}</div>
+                          {p.location ? (
+                            <div className="text-[11px] text-slate-500">{p.location}</div>
+                          ) : null}
                         </div>
-                      ) : null}
-                      {p.budget ? (
-                        <div>
-                          <span className="opacity-60">Budget:</span> {p.budget}
-                        </div>
-                      ) : null}
-                    </div>
+                        {p.category ? <Badge className="shrink-0">{p.category}</Badge> : null}
+                      </div>
 
-                    <div className="mt-3 flex w-full flex-nowrap gap-2">
-                      <GhostButton
-                        className="w-1/2 min-w-0"
-                        onClick={() => window.open(`/projects/${p.id}`, "_self")}
-                      >
-                        Open
-                      </GhostButton>
+                      <div className="line-clamp-2 text-sm text-slate-700">
+                        {p.job_summary || p.summary || <span className="opacity-60">No summary</span>}
+                      </div>
 
-                      <Button
-                        className="w-1/2 min-w-0"
-                        onClick={() => {
-                          if (!canEdit) {
-                            alert(
-                              "This job is published. To edit it, unpublish it first."
-                            );
-                            return;
-                          }
-                          loadEditor(p.id);
-                        }}
-                        disabled={!canEdit}
-                        title={
-                          canEdit
-                            ? "Edit this draft"
-                            : "Unpublish first to edit"
-                        }
-                      >
-                        Edit
-                      </Button>
+                      <div className="mt-3 flex w-full flex-nowrap gap-2">
+                        <GhostButton
+                          className="w-1/2 min-w-0"
+                          onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                        >
+                          Open
+                        </GhostButton>
+
+                        <Button
+                          className="w-1/2 min-w-0"
+                          type="button"
+                          onClick={() => requestEditProject(p)}
+                        >
+                          Edit
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              );
-            })}
+                  </Card>
+                );
+              })}
           </div>
         )}
       </Card>
@@ -1258,6 +1304,39 @@ export default function Dashboard() {
             }}
           />
         </div>
+        {/* Unpublish modal */}
+        {unpublishModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="text-sm font-semibold text-slate-900">
+                Unpublish this post to enable editing
+              </div>
+              <div className="mt-2 text-sm text-slate-700">
+                Warning: Current post data may be lost. You can re-publish after editing.
+              </div>
+
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setUnpublishModal({ open: false, project: null })}
+                  disabled={busy}
+                >
+                  Keep it published
+                </Button>
+
+                <Button
+                  type="button"
+                  className="bg-red-600 text-white hover:bg-red-700"
+                  onClick={unpublishAndEdit}
+                  disabled={busy}
+                >
+                  {busy ? "Unpublishing…" : "Unpublish & Edit"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       )}
     </div>
   );
