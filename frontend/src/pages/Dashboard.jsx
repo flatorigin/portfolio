@@ -132,10 +132,6 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    refreshMyJobPosts();
-  }, [refreshMyJobPosts]);
-
-  useEffect(() => {
     const onUpdating = () => setProfileSaving(true);
     const onUpdated = (e) => {
       const d = e?.detail || {};
@@ -1270,7 +1266,7 @@ export default function Dashboard() {
               ✓
             </span>
             <div className="min-w-0">
-              <div className="font-semibold truncate">{saveToast}</div>
+              <div className="truncate font-semibold">{saveToast}</div>
               <div className="text-[11px] text-emerald-800/80">
                 Nice — updates are saved and live on your project card.
               </div>
@@ -1280,7 +1276,7 @@ export default function Dashboard() {
       ) : null}
 
       {/* 4) Editor */}
-      {editingId && (
+      {editingId ? (
         <div ref={editorRef}>
           <ProjectEditorCard
             mode="edit"
@@ -1304,10 +1300,10 @@ export default function Dashboard() {
             }}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Unpublish modal */}
-      {unpublishModal.open && (
+      {unpublishModal?.open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="text-sm font-semibold text-slate-900">
@@ -1338,4 +1334,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
+    </div>
+  );
+}
