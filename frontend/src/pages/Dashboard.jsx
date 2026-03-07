@@ -1081,7 +1081,7 @@ export default function Dashboard() {
         </div>
 
         {myJobPosts.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-sky-200 bg-white p-4 text-sm text-slate-600">
+          <div className="rounded-xl border bg-sky-800 p-4 text-sm text-slate-600">
             No job posts yet. Turn on <span className="font-medium">Job Posting</span> when creating a project.
           </div>
         ) : (
