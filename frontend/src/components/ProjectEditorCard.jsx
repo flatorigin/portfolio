@@ -63,6 +63,9 @@ export default function ProjectEditorCard({
 }) {
   const isJobPosting = !!form.is_job_posting;
 
+  // ✅ Fix for your crash: submitLabel is used in JSX, so define it.
+  const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
+
   const privateHelpText = useMemo(
     () =>
       [
@@ -80,7 +83,9 @@ export default function ProjectEditorCard({
     setForm((prev) => ({
       ...prev,
       job_summary: prev.job_summary || "",
-      service_categories: Array.isArray(prev.service_categories) ? prev.service_categories : [],
+      service_categories: Array.isArray(prev.service_categories)
+        ? prev.service_categories
+        : [],
       part_of_larger_project: !!prev.part_of_larger_project,
       larger_project_details: prev.larger_project_details || "",
       required_expertise: prev.required_expertise || "",
@@ -98,6 +103,13 @@ export default function ProjectEditorCard({
     ensureJobDefaults();
   };
 
+  // NOTE: Dashboard saves using state; we set form first, then trigger save.
+  const saveDraft = () => {
+    ensureJobDefaults();
+    setForm((p) => ({ ...p, is_public: false }));
+    setTimeout(() => onSubmit?.(), 0);
+  };
+
   const publishProject = () => {
     ensureJobDefaults();
     if (isJobPosting && !form.compliance_confirmed) {
@@ -109,25 +121,21 @@ export default function ProjectEditorCard({
       return;
     }
     setForm((p) => ({ ...p, is_public: true }));
-    onSubmit?.();
-  };
-
-  const saveDraft = () => {
-    ensureJobDefaults();
-    setForm((p) => ({ ...p, is_public: false }));
-    onSubmit?.();
+    setTimeout(() => onSubmit?.(), 0);
   };
 
   const sendToContractor = () => {
     ensureJobDefaults();
     const u = (form.private_contractor_username || "").trim();
     if (!isJobPosting) return alert("Turn on Job Posting first.");
-    if ((form.post_privacy || "public") !== "private") return alert("Set Post Privacy to Private first.");
+    if ((form.post_privacy || "public") !== "private")
+      return alert("Set Post Privacy to Private first.");
     if (!u) return alert("Enter a contractor username to send this private post.");
-    if (!form.compliance_confirmed) return alert("Please confirm compliance before sending.");
+    if (!form.compliance_confirmed)
+      return alert("Please confirm compliance before sending.");
 
     setForm((p) => ({ ...p, is_public: false, post_privacy: "private" }));
-    onSubmit?.();
+    setTimeout(() => onSubmit?.(), 0);
 
     if (onSendPrivate) onSendPrivate(u, { ...form, is_public: false, post_privacy: "private" });
     else alert("Saved as Private draft. Sending/notification will be implemented next.");
@@ -135,6 +143,7 @@ export default function ProjectEditorCard({
 
   return (
     <Card className="p-5">
+      {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-semibold text-slate-800">
           {mode === "edit" ? `Editing Project #${projectId}` : "Create Project"}
@@ -145,13 +154,11 @@ export default function ProjectEditorCard({
         </div>
       </div>
 
-      {/* Job Posting toggle + Public toggle (right) */}
+      {/* Job Posting toggle + Public toggle */}
       <div
         className={
           "mb-4 flex items-center justify-between rounded-lg border px-3 py-2 " +
-          (isJobPosting
-            ? "border-sky-300 bg-sky-50"
-            : "border-slate-200 bg-slate-50/70")
+          (isJobPosting ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-slate-50/70")
         }
       >
         {/* LEFT: Job Posting switch + label */}
@@ -162,9 +169,7 @@ export default function ProjectEditorCard({
             aria-pressed={isJobPosting}
             className={
               "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
-              (isJobPosting
-                ? "bg-sky-500 border-sky-500"
-                : "bg-slate-200 border-slate-300")
+              (isJobPosting ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
             }
           >
             <span
@@ -185,7 +190,7 @@ export default function ProjectEditorCard({
           </div>
         </div>
 
-        {/* RIGHT: Public toggle (replaces the On/Off badge) */}
+        {/* RIGHT: Public toggle */}
         <div className="flex items-center gap-2">
           <div className="text-[11px] font-semibold text-sky-900/80">Public</div>
           <button
@@ -194,9 +199,7 @@ export default function ProjectEditorCard({
             aria-pressed={!!form.is_public}
             className={
               "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
-              (form.is_public
-                ? "bg-sky-500 border-sky-500"
-                : "bg-slate-200 border-slate-300")
+              (form.is_public ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
             }
           >
             <span
@@ -209,7 +212,7 @@ export default function ProjectEditorCard({
         </div>
       </div>
 
-      {/* Basic project fields */}
+      {/* Basic fields */}
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
         Project Info (Draft)
       </div>
@@ -225,7 +228,7 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Project Name</label>
           <Input
-            value={form.title}
+            value={form.title || ""}
             onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
             placeholder="Project name"
           />
@@ -234,7 +237,7 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Category</label>
           <Input
-            value={form.category}
+            value={form.category || ""}
             onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
             placeholder="Category"
           />
@@ -243,7 +246,7 @@ export default function ProjectEditorCard({
         <div className="md:col-span-2">
           <label className="mb-1 block text-sm text-slate-600">Summary</label>
           <Textarea
-            value={form.summary}
+            value={form.summary || ""}
             onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
             placeholder="Short description..."
           />
@@ -252,7 +255,7 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
           <Input
-            value={form.location}
+            value={form.location || ""}
             onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
             placeholder="City, State"
           />
@@ -261,10 +264,48 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Budget</label>
           <Input
-            value={form.budget}
+            value={form.budget ?? ""}
             onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
             inputMode="numeric"
-            placeholder="e.g. 250000"
+            placeholder="e.g. 25000"
+          />
+        </div>
+
+        {/* ✅ sqf input (prevents "sqf must be integer" complaints) */}
+        <div>
+          <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
+          <Input
+            value={form.sqf ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, sqf: e.target.value }))}
+            inputMode="numeric"
+            placeholder="e.g. 1800"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
+          <Input
+            value={form.highlights || ""}
+            onChange={(e) => setForm((p) => ({ ...p, highlights: e.target.value }))}
+            placeholder="comma-separated tags"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm text-slate-600">Material / tool link (optional)</label>
+          <Input
+            value={form.material_url || ""}
+            onChange={(e) => setForm((p) => ({ ...p, material_url: e.target.value }))}
+            placeholder="https://www.example.com/product/123"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm text-slate-600">Material label (title + price)</label>
+          <Input
+            value={form.material_label || ""}
+            onChange={(e) => setForm((p) => ({ ...p, material_label: e.target.value }))}
+            placeholder="e.g. Bosch SDS Hammer Drill – $129"
           />
         </div>
 
@@ -488,7 +529,7 @@ export default function ProjectEditorCard({
         </div>
       )}
 
-      {/* Images + uploader (existing) */}
+      {/* Images + uploader */}
       {mode === "edit" && projectId && (
         <>
           <div className="mt-6">
@@ -504,10 +545,7 @@ export default function ProjectEditorCard({
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
                 {images.map((it) => (
-                  <figure
-                    key={it.id ?? it.url}
-                    className="rounded-xl border border-slate-200 bg-white p-3"
-                  >
+                  <figure key={it.id ?? it.url} className="rounded-xl border border-slate-200 bg-white p-3">
                     <img
                       src={it.url}
                       alt=""
@@ -523,9 +561,7 @@ export default function ProjectEditorCard({
                       value={it._localCaption}
                       onChange={(e) =>
                         setImages((prev) =>
-                          prev.map((x) =>
-                            x.id === it.id ? { ...x, _localCaption: e.target.value } : x
-                          )
+                          prev.map((x) => (x.id === it.id ? { ...x, _localCaption: e.target.value } : x))
                         )
                       }
                     />
@@ -547,10 +583,16 @@ export default function ProjectEditorCard({
                       </label>
 
                       <div className="flex items-center gap-2">
-                        <GhostButton onClick={() => it.id && onDeleteImage(it)} disabled={!it.id || busy}>
+                        <GhostButton
+                          onClick={() => it.id && onDeleteImage?.(it)}
+                          disabled={!it.id || busy}
+                        >
                           Delete
                         </GhostButton>
-                        <Button onClick={() => onSaveImageCaption(it)} disabled={it._saving || it._localCaption === it.caption}>
+                        <Button
+                          onClick={() => onSaveImageCaption?.(it)}
+                          disabled={it._saving || it._localCaption === it.caption}
+                        >
                           {it._saving ? "Saving…" : "Save caption"}
                         </Button>
                       </div>
@@ -574,34 +616,37 @@ export default function ProjectEditorCard({
         </>
       )}
 
-      {/* Action Menu */}
-      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* Actions */}
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
         <Button
           type="button"
           variant="outline"
-          className="border-red-300 text-white bg-red-500 hover:bg-red-700"
+          className="border-red-300 text-red-700 hover:bg-red-50"
           onClick={onDeleteProject}
           disabled={busy}
         >
           Delete project
         </Button>
 
-        <Button type="submit" disabled={busy} form="project-editor-form">
-          {submitLabel}
-        </Button>
-      </div>
-      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" disabled={busy} onClick={saveDraft}>
-          Save as Draft
-        </Button>
+        {isJobPosting ? (
+          <>
+            <Button type="button" variant="outline" disabled={busy} onClick={saveDraft}>
+              Save as Draft
+            </Button>
 
-        {isJobPosting && form.post_privacy === "private" ? (
-          <Button type="button" disabled={busy} onClick={sendToContractor}>
-            Send to Contractor
-          </Button>
+            {form.post_privacy === "private" ? (
+              <Button type="button" disabled={busy} onClick={sendToContractor}>
+                Send to Contractor
+              </Button>
+            ) : (
+              <Button type="button" disabled={busy} onClick={publishProject}>
+                Publish Project
+              </Button>
+            )}
+          </>
         ) : (
-          <Button type="button" disabled={busy} onClick={publishProject}>
-            Publish Project
+          <Button type="submit" disabled={busy} form="project-editor-form">
+            {submitLabel}
           </Button>
         )}
       </div>
