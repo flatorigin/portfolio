@@ -481,24 +481,29 @@ export default function Dashboard() {
   const refreshProjects = useCallback(async () => {
     try {
       const { data } = await api.get("/projects/");
-      const mine = Array.isArray(data)
-        ? data.filter((p) => {
-            const owner =
-              (p.owner_username || p.owner?.username || "").toLowerCase();
-            const me = (meUser.username || "").toLowerCase();
+      const all = Array.isArray(data) ? data : [];
 
-            // ✅ Your Projects card = NOT job postings
-            const notJobPosting = !p?.is_job_posting;
+      const me = (meUser.username || "").toLowerCase();
 
-            return owner === me && notJobPosting;
-          })
-        : [];
+      // ✅ All owned items (projects + job posts)
+      const mineAll = all.filter((p) => {
+        const owner = (p.owner_username || p.owner?.username || "").toLowerCase();
+        return owner === me;
+      });
 
-      setProjects(mine);
-      await refreshMyThumbs(mine);
+      // ✅ Split for UI
+      const mineProjects = mineAll.filter((p) => !p?.is_job_posting);
+      const mineJobPosts = mineAll.filter((p) => !!p?.is_job_posting);
+
+      setProjects(mineProjects);
+      setMyJobPosts(mineJobPosts);
+
+      // ✅ thumbs for BOTH lists
+      await refreshMyThumbs(mineAll);
     } catch (err) {
       console.warn("[Dashboard] failed to load my projects", err);
       setProjects([]);
+      setMyJobPosts([]);
       setMyThumbs({});
     }
   }, [meUser.username, refreshMyThumbs]);
@@ -941,8 +946,7 @@ export default function Dashboard() {
                   fav.project?.cover ||
                   "";
 
-                const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
-
+                const coverSrc = coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
                 const title =
                   fav.project_title ||
                   fav.project?.title ||
@@ -962,7 +966,7 @@ export default function Dashboard() {
                 return (
                   <Card
                     key={fav.id ?? `p-${projectId ?? "unknown"}`}
-                    className="overflow-hidden"
+                    className="overflow-hidden"+ (p?.is_job_posting ? "border-[#49D7FF]" : "border-slate-200")
                   >
                     {coverSrc ? (
                       <img
