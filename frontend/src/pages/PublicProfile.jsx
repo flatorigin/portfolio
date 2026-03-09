@@ -107,18 +107,28 @@ export default function PublicProfile() {
 
         if (!alive) return;
 
-        const projList = Array.isArray(projData)
+        const rawList = Array.isArray(projData)
           ? projData
           : Array.isArray(projData?.results)
           ? projData.results
           : [];
 
-        const visibleProjects = projList.filter((p) => {
-          const ownerU = (p?.owner_username || "").toLowerCase();
-          const targetU = (username || "").toLowerCase();
+        const uname = String(username || "").toLowerCase();
+
+        const visibleProjects = rawList.filter((p) => {
+          const ownerU =
+            String(p?.owner_username || p?.owner?.username || "").toLowerCase();
+
           const isPublic = p?.is_public === undefined ? true : !!p.is_public;
-          return ownerU === targetU && isPublic;
+
+          return ownerU === uname && isPublic;
         });
+
+        setProfile(prof);
+        setProjects(visibleProjects);
+
+        // optional: load thumbnails/covers
+        hydrateCovers(visibleProjects);
 
         setProfile(prof);
         setProjects(visibleProjects);
