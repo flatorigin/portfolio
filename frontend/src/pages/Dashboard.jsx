@@ -966,7 +966,12 @@ export default function Dashboard() {
                 return (
                   <Card
                     key={fav.id ?? `p-${projectId ?? "unknown"}`}
-                    className="overflow-hidden" (p?.is_job_posting ? "border-[#49D7FF]" : "border-slate-200")
+                    className={
+                      "overflow-hidden border " +
+                      ((fav?.project?.is_job_posting || fav?.is_job_posting)
+                        ? "border-[#49D7FF]"
+                        : "border-slate-200")
+                    }
                   >
                     {coverSrc ? (
                       <img
