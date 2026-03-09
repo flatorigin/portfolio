@@ -491,9 +491,14 @@ export default function Dashboard() {
         return owner === me;
       });
 
-      // ✅ Split for UI
-      const mineProjects = mineAll.filter((p) => !p?.is_job_posting);
-      const mineJobPosts = mineAll.filter((p) => !!p?.is_job_posting);
+      // =========================
+      // CHANGED: robust split for UI
+      // =========================
+      const mineProjects = mineAll.filter((p) => !isJobPostingFlag(p?.is_job_posting));
+      const mineJobPosts = mineAll.filter((p) => isJobPostingFlag(p?.is_job_posting));
+      // =========================
+      // END CHANGED
+      // =========================
 
       setProjects(mineProjects);
       setMyJobPosts(mineJobPosts);
@@ -937,6 +942,9 @@ export default function Dashboard() {
               {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map((fav) => {
                 const projectId = extractProjectId(fav);
 
+                // =========================
+                // CHANGED: fixed saved-project cover source
+                // =========================
                 const coverSrcRaw =
                   fav.project_cover_image_url ||
                   fav.project_cover_image ||
@@ -946,7 +954,11 @@ export default function Dashboard() {
                   fav.project?.cover ||
                   "";
 
-                const coverSrc = coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
+                const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
+                // =========================
+                // END CHANGED
+                // =========================
+
                 const title =
                   fav.project_title ||
                   fav.project?.title ||
