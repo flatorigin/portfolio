@@ -33,11 +33,20 @@ export default function FindLocalWork() {
 
     (async () => {
       try {
-        // ✅ Requires backend endpoint: GET /api/projects/job-postings/
         const { data } = await api.get("/projects/job-postings/");
         if (cancelled) return;
 
-        setProjects(Array.isArray(data) ? data : []);
+        const arr = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.results)
+          ? data.results
+          : [];
+
+        const onlyPublicJobs = arr.filter(
+          (p) => !!p?.is_job_posting && (p?.is_public === undefined || p?.is_public === true)
+        );
+
+        setProjects(onlyPublicJobs);
       } catch (err) {
         console.error("[FindLocalWork] load error", err?.response || err);
         if (!cancelled) {

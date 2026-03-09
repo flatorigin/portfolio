@@ -162,7 +162,12 @@ export default function Explore() {
         if (!alive) return;
 
         const arr = Array.isArray(data) ? data : [];
-        setProjects(arr);
+        const exploreProjects = arr.filter(
+          (p) => (p?.is_public === undefined || p?.is_public === true) && !p?.is_job_posting
+        );
+        setProjects(exploreProjects);
+        const exploreProjects = arr.filter((p) => !p?.is_job_posting);
+        setProjects(exploreProjects);
       } catch (e) {
         console.error("[Explore] projects fetch failed", e?.response || e);
         if (alive) setProjects([]);
