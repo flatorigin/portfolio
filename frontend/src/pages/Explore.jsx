@@ -151,35 +151,38 @@ export default function Explore() {
     [favBusyId, favMap, isOwner]
   );
 
-  // 1) Load projects once (stable)
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
+ // 1) Load projects once (stable)
+ useEffect(() => {
+   let alive = true;
+   setLoading(true);
 
-    (async () => {
-      try {
-        const { data } = await api.get("/projects/");
-        if (!alive) return;
+   (async () => {
+     try {
+       const { data } = await api.get("/projects/");
+       if (!alive) return;
 
-        const arr = Array.isArray(data) ? data : [];
-        const exploreProjects = arr.filter(
-          (p) => (p?.is_public === undefined || p?.is_public === true) && !p?.is_job_posting
-        );
-        setProjects(exploreProjects);
-        const exploreProjects = arr.filter((p) => !p?.is_job_posting);
-        setProjects(exploreProjects);
-      } catch (e) {
-        console.error("[Explore] projects fetch failed", e?.response || e);
-        if (alive) setProjects([]);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
+       const arr = Array.isArray(data) ? data : [];
 
-    return () => {
-      alive = false;
-    };
-  }, []);
+       // ✅ Explore = only PUBLIC + NOT job postings
+       const exploreProjects = arr.filter(
+         (p) =>
+           (p?.is_public === undefined || p?.is_public === true) &&
+           !p?.is_job_posting
+       );
+
+       setProjects(exploreProjects);
+     } catch (e) {
+       console.error("[Explore] projects fetch failed", e?.response || e);
+       if (alive) setProjects([]);
+     } finally {
+       if (alive) setLoading(false);
+     }
+   })();
+
+   return () => {
+     alive = false;
+   };
+ }, []);
 
   // 2) Load thumbs when projects change
   useEffect(() => {
