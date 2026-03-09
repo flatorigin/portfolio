@@ -482,11 +482,16 @@ export default function Dashboard() {
     try {
       const { data } = await api.get("/projects/");
       const mine = Array.isArray(data)
-        ? data.filter(
-            (p) =>
-              (p.owner_username || "").toLowerCase() ===
-              (meUser.username || "").toLowerCase()
-          )
+        ? data.filter((p) => {
+            const owner =
+              (p.owner_username || p.owner?.username || "").toLowerCase();
+            const me = (meUser.username || "").toLowerCase();
+
+            // ✅ Your Projects card = NOT job postings
+            const notJobPosting = !p?.is_job_posting;
+
+            return owner === me && notJobPosting;
+          })
         : [];
 
       setProjects(mine);
