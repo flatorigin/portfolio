@@ -517,10 +517,6 @@ export default function Dashboard() {
     refreshProjects();
   }, [refreshProjects]);
 
-  useEffect(() => {
-    refreshMyJobPosts();
-  }, [refreshMyJobPosts]);
-
   const list = projects;
 
   // ✅ Stable refreshImages (preserve UI order; do not allow backend ordering to reshuffle)
