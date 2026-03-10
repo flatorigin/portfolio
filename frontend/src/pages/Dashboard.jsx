@@ -1116,9 +1116,10 @@ export default function Dashboard() {
               .slice()
               .sort((a, b) => Number(b.is_public) - Number(a.is_public)) // published first
               .map((p) => {
-                const coverFromImgs = myThumbs?.[p.id]?.cover || "";
-                const coverSrc =
-                  coverFromImgs || (p.cover_image ? toUrl(p.cover_image) : "");
+                // =========================
+                // CHANGED: use shared cover helper for faster cover loading
+                // =========================
+                const coverSrc = getProjectCover(p);
 
                 const isPublished = !!p.is_public;
 
