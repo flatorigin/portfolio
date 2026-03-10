@@ -146,6 +146,7 @@ export default function App() {
             <div className="hidden md:flex items-center gap-2 ml-2">
               <NavLink to="/">Explore</NavLink>
               <NavLink to="/dashboard">Dashboard</NavLink>
+              <NavLink to="/work">Job Postings</NavLink>
             </div>
 
             {/* Right side */}

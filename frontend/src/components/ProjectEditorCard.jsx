@@ -1,115 +1,171 @@
-// =======================================
+// ============================================================================
 // file: frontend/src/components/ProjectEditorCard.jsx
-// Standalone card for creating/editing a project + images + job posting + cover selection
-// =======================================
+// Edit Project + Job Posting form fields (Public vs Private draft)
+// Action menu: Save Draft / Publish / Send to Contractor (placeholder)
+// ============================================================================
+import { useMemo, useState } from "react";
 import ImageUploader from "./ImageUploader";
 import { Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
 
-export default function ProjectEditorCard({
-  mode = "edit", // "edit" | "create"
-  projectId, // id when editing, optional for create
-  form, // { title, summary, category, ... }
-  setForm, // setForm(prev => ({...prev, field }))
-  coverFile, // kept for backwards compat (no longer used in UI)
-  setCoverFile, // kept for backwards compat (no longer used in UI)
-  busy = false,
-  images = [], // [{ id, url, caption, _localCaption, _saving }]
-  setImages, // setImages(prev => [...])
-  onSaveImageCaption, // (image) => void
-  onDeleteImage, // (image) => void
-  onSubmit, // () => void or (event) => void
-  onClose, // () => void
-  onView, // () => void (open public project page)
-  onAfterUpload, // async () => { refresh images + projects }
-  coverImageId, // selected cover image id (from parent)  (kept for backwards compat)
-  setCoverImageId, // (id|null) => void (kept for backwards compat)
-  onMakeCover, // (imageId) => void
-  onDeleteProject, // () => void
-}) {
-  const headerTitle =
-    mode === "edit"
-      ? projectId
-        ? `Editing Project #${projectId}`
-        : "Edit Project"
-      : "Create Project";
+function toggleInArray(arr, value) {
+  const list = Array.isArray(arr) ? arr : [];
+  return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
+}
 
-  const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
+function JobPostingHelp({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px] text-slate-700 hover:bg-slate-50"
+        aria-label="Help"
+        onClick={() => setOpen((v) => !v)}
+      >
+        ?
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-50 w-80 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow-xl">
+          <div className="font-semibold text-slate-900">Private posting</div>
+          <div className="mt-1 whitespace-pre-line">{text}</div>
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-800 hover:bg-slate-200"
+              onClick={() => setOpen(false)}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+export default function ProjectEditorCard({
+  mode = "edit",
+  projectId,
+  form,
+  setForm,
+  busy = false,
+  images = [],
+  setImages,
+  onSaveImageCaption,
+  onDeleteImage,
+  onSubmit, // saves project info
+  onClose,
+  onView,
+  onAfterUpload,
+  onMakeCover,
+  onDeleteProject,
+  onSendPrivate, // OPTIONAL: (username, payload) => void (later)
+}) {
   const isJobPosting = !!form.is_job_posting;
+
+  // ✅ Fix for your crash: submitLabel is used in JSX, so define it.
+  const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
+
+  const privateHelpText = useMemo(
+    () =>
+      [
+        "Private posts are drafts you can keep improving.",
+        "When ready, you can send the job post to a specific contractor username.",
+        "Limit: you can send to one contractor per day (enforced later).",
+        "Optional: enable email notifications to get alerted when there’s activity on this post.",
+      ].join("\n"),
+    []
+  );
 
   const currentCoverId = images.find((img) => Number(img.order) === 0)?.id ?? null;
 
-  const handleToggleJobPosting = () => {
+  const ensureJobDefaults = () => {
     setForm((prev) => ({
       ...prev,
-      is_job_posting: !prev.is_job_posting,
+      job_summary: prev.job_summary || "",
+      service_categories: Array.isArray(prev.service_categories)
+        ? prev.service_categories
+        : [],
+      part_of_larger_project: !!prev.part_of_larger_project,
+      larger_project_details: prev.larger_project_details || "",
+      required_expertise: prev.required_expertise || "",
+      permit_required: !!prev.permit_required,
+      permit_responsible_party: prev.permit_responsible_party || "",
+      compliance_confirmed: !!prev.compliance_confirmed,
+      post_privacy: prev.post_privacy || "public",
+      private_contractor_username: prev.private_contractor_username || "",
+      notify_by_email: !!prev.notify_by_email,
     }));
   };
 
-  const handleDeleteProject = () => {
-    if (!onDeleteProject || !projectId) return;
-
-    const ok = window.confirm(
-      "Are you sure?\n\nBy removing the project all the images and info about the project will be lost and the process is not retriveable."
-    );
-
-    if (!ok) return;
-    onDeleteProject();
+  const toggleJobPosting = () => {
+    setForm((p) => ({ ...p, is_job_posting: !p.is_job_posting }));
+    ensureJobDefaults();
   };
-  
-  const handleSelectCover = (imgId) => {
-    const normalized = imgId == null ? null : Number(imgId);
 
-    setForm((prev) => ({
-      ...prev,
-      cover_image_id: normalized,
-    }));
+  // NOTE: Dashboard saves using state; we set form first, then trigger save.
+  const saveDraft = () => {
+    ensureJobDefaults();
+    setForm((p) => ({ ...p, is_public: false }));
+    setTimeout(() => onSubmit?.(), 0);
+  };
 
-    if (setCoverImageId) {
-      setCoverImageId(normalized);
+  const publishProject = () => {
+    ensureJobDefaults();
+    if (isJobPosting && !form.compliance_confirmed) {
+      alert("Please confirm compliance before publishing.");
+      return;
     }
+    if (isJobPosting && (form.post_privacy || "public") !== "public") {
+      alert("Private posts are not published. Use Send to Contractor.");
+      return;
+    }
+    setForm((p) => ({ ...p, is_public: true }));
+    setTimeout(() => onSubmit?.(), 0);
+  };
+
+  const sendToContractor = () => {
+    ensureJobDefaults();
+    const u = (form.private_contractor_username || "").trim();
+    if (!isJobPosting) return alert("Turn on Job Posting first.");
+    if ((form.post_privacy || "public") !== "private")
+      return alert("Set Post Privacy to Private first.");
+    if (!u) return alert("Enter a contractor username to send this private post.");
+    if (!form.compliance_confirmed)
+      return alert("Please confirm compliance before sending.");
+
+    setForm((p) => ({ ...p, is_public: false, post_privacy: "private" }));
+    setTimeout(() => onSubmit?.(), 0);
+
+    if (onSendPrivate) onSendPrivate(u, { ...form, is_public: false, post_privacy: "private" });
+    else alert("Saved as Private draft. Sending/notification will be implemented next.");
   };
 
   return (
     <Card className="p-5">
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-800">{headerTitle}</div>
-
+        <div className="text-sm font-semibold text-slate-800">
+          {mode === "edit" ? `Editing Project #${projectId}` : "Create Project"}
+        </div>
         <div className="flex items-center gap-2">
-          {onView && projectId ? <GhostButton onClick={onView}>View</GhostButton> : null}
-
-          {/* ✅ Delete project (edit mode only) */}
-          {mode === "edit" && projectId ? (
-            <Button
-              type="button"
-              className="bg-red-600 text-white hover:bg-red-700"
-              onClick={handleDeleteProject}
-              disabled={busy}
-              title="Delete this project permanently"
-            >
-              Delete project
-            </Button>
-          ) : null}
-
-          {onClose ? (
-            <GhostButton onClick={onClose}>{mode === "edit" ? "Close" : "Cancel"}</GhostButton>
-          ) : null}
+          {onView && projectId && <GhostButton onClick={onView}>View</GhostButton>}
+          {onClose && <GhostButton onClick={onClose}>Close</GhostButton>}
         </div>
       </div>
 
-      {/* Job Posting toggle – TOP of card */}
+      {/* Job Posting toggle + Public toggle */}
       <div
         className={
           "mb-4 flex items-center justify-between rounded-lg border px-3 py-2 " +
-          (isJobPosting
-            ? "border-sky-300 bg-sky-50"
-            : "border-slate-200 bg-slate-50/70")
+          (isJobPosting ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-slate-50/70")
         }
       >
+        {/* LEFT: Job Posting switch + label */}
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={handleToggleJobPosting}
+            onClick={toggleJobPosting}
             aria-pressed={isJobPosting}
             className={
               "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
@@ -128,20 +184,35 @@ export default function ProjectEditorCard({
             <div className="font-semibold text-slate-900">Job Posting</div>
             <div className="text-[11px] text-slate-700/90">
               {isJobPosting
-                ? "This project is marked as a job posting and will appear on the public 'Find local work' page."
-                : "Mark this project as a job opportunity clients can respond to."}
+                ? "This project is treated as a job post and can receive bids."
+                : "Mark this project as a job opportunity."}
             </div>
           </div>
         </div>
 
-        <div className="hidden sm:block">
-          <Badge className={isJobPosting ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-700"}>
-            {isJobPosting ? "On" : "Off"}
-          </Badge>
+        {/* RIGHT: Public toggle */}
+        <div className="flex items-center gap-2">
+          <div className="text-[11px] font-semibold text-sky-900/80">Public</div>
+          <button
+            type="button"
+            onClick={() => setForm((p) => ({ ...p, is_public: !p.is_public }))}
+            aria-pressed={!!form.is_public}
+            className={
+              "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+              (form.is_public ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
+            }
+          >
+            <span
+              className={
+                "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
+                (form.is_public ? "translate-x-5" : "translate-x-1")
+              }
+            />
+          </button>
         </div>
       </div>
 
-      {/* Basic info form */}
+      {/* Basic fields */}
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
         Project Info (Draft)
       </div>
@@ -157,8 +228,8 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Project Name</label>
           <Input
-            value={form.title}
-            onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+            value={form.title || ""}
+            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
             placeholder="Project name"
           />
         </div>
@@ -166,8 +237,8 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Category</label>
           <Input
-            value={form.category}
-            onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
+            value={form.category || ""}
+            onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
             placeholder="Category"
           />
         </div>
@@ -175,8 +246,8 @@ export default function ProjectEditorCard({
         <div className="md:col-span-2">
           <label className="mb-1 block text-sm text-slate-600">Summary</label>
           <Textarea
-            value={form.summary}
-            onChange={(e) => setForm((prev) => ({ ...prev, summary: e.target.value }))}
+            value={form.summary || ""}
+            onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
             placeholder="Short description..."
           />
         </div>
@@ -184,8 +255,8 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
           <Input
-            value={form.location}
-            onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
+            value={form.location || ""}
+            onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
             placeholder="City, State"
           />
         </div>
@@ -193,18 +264,19 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Budget</label>
           <Input
-            value={form.budget}
-            onChange={(e) => setForm((prev) => ({ ...prev, budget: e.target.value }))}
+            value={form.budget ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
             inputMode="numeric"
-            placeholder="e.g. 250000"
+            placeholder="e.g. 25000"
           />
         </div>
 
+        {/* ✅ sqf input (prevents "sqf must be integer" complaints) */}
         <div>
           <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
           <Input
-            value={form.sqf}
-            onChange={(e) => setForm((prev) => ({ ...prev, sqf: e.target.value }))}
+            value={form.sqf ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, sqf: e.target.value }))}
             inputMode="numeric"
             placeholder="e.g. 1800"
           />
@@ -213,8 +285,8 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
           <Input
-            value={form.highlights}
-            onChange={(e) => setForm((prev) => ({ ...prev, highlights: e.target.value }))}
+            value={form.highlights || ""}
+            onChange={(e) => setForm((p) => ({ ...p, highlights: e.target.value }))}
             placeholder="comma-separated tags"
           />
         </div>
@@ -222,8 +294,8 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Material / tool link (optional)</label>
           <Input
-            value={form.material_url}
-            onChange={(e) => setForm((prev) => ({ ...prev, material_url: e.target.value }))}
+            value={form.material_url || ""}
+            onChange={(e) => setForm((p) => ({ ...p, material_url: e.target.value }))}
             placeholder="https://www.example.com/product/123"
           />
         </div>
@@ -231,33 +303,234 @@ export default function ProjectEditorCard({
         <div>
           <label className="mb-1 block text-sm text-slate-600">Material label (title + price)</label>
           <Input
-            value={form.material_label}
-            onChange={(e) => setForm((prev) => ({ ...prev, material_label: e.target.value }))}
+            value={form.material_label || ""}
+            onChange={(e) => setForm((p) => ({ ...p, material_label: e.target.value }))}
             placeholder="e.g. Bosch SDS Hammer Drill – $129"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-slate-600">
-            <input
-              type="checkbox"
-              className="mr-2 align-middle"
-              checked={!!form.is_public}
-              onChange={(e) => setForm((prev) => ({ ...prev, is_public: e.target.checked }))}
-            />
-            Public
-          </label>
-        </div>
-
-        <div className="md:col-span-2">
-          <button type="submit" className="hidden">
-            {submitLabel}
-          </button>
-        </div>
+        <button type="submit" className="hidden" />
       </form>
 
-      {/* Images section (edit mode only) */}
-      {mode === "edit" && projectId ? (
+      {/* Job Posting details */}
+      {isJobPosting && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Job Posting Details
+          </div>
+
+          <div className="mt-4">
+            <div className="text-sm font-semibold text-slate-800">1. Project Overview</div>
+
+            <div className="mt-3">
+              <label className="mb-1 block text-sm text-slate-600">Project Summary</label>
+              <Textarea
+                placeholder="e.g., Full kitchen remodel including custom cabinetry and island installation."
+                value={form.job_summary || ""}
+                onChange={(e) => setForm((p) => ({ ...p, job_summary: e.target.value }))}
+              />
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1 text-sm text-slate-600">Service Category</div>
+              <div className="flex flex-wrap gap-3 text-sm text-slate-700">
+                {["Plumbing", "Carpentry", "Electrical", "General", "Masonry"].map((c) => (
+                  <label key={c} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={Array.isArray(form.service_categories) && form.service_categories.includes(c)}
+                      onChange={() =>
+                        setForm((p) => ({
+                          ...p,
+                          service_categories: toggleInArray(p.service_categories, c),
+                        }))
+                      }
+                    />
+                    {c}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1 text-sm text-slate-600">Part of Larger Project</div>
+              <div className="flex items-center gap-4 text-sm text-slate-700">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="larger_project_edit"
+                    checked={!!form.part_of_larger_project}
+                    onChange={() => setForm((p) => ({ ...p, part_of_larger_project: true }))}
+                  />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="larger_project_edit"
+                    checked={!form.part_of_larger_project}
+                    onChange={() =>
+                      setForm((p) => ({ ...p, part_of_larger_project: false, larger_project_details: "" }))
+                    }
+                  />
+                  No
+                </label>
+              </div>
+
+              {form.part_of_larger_project && (
+                <div className="mt-2">
+                  <label className="mb-1 block text-sm text-slate-600">If yes, specify</label>
+                  <Input
+                    value={form.larger_project_details || ""}
+                    onChange={(e) => setForm((p) => ({ ...p, larger_project_details: e.target.value }))}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <div className="text-sm font-semibold text-slate-800">2. Professional &amp; Legal Requirements</div>
+
+            <div className="mt-3">
+              <div className="mb-1 text-sm text-slate-600">Required Expertise</div>
+              <div className="flex flex-col gap-2 text-sm text-slate-700">
+                <label className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="expertise_edit"
+                    checked={form.required_expertise === "licensed_pro"}
+                    onChange={() => setForm((p) => ({ ...p, required_expertise: "licensed_pro" }))}
+                  />
+                  <span>
+                    <span className="font-medium">Licensed Professional</span>{" "}
+                    <span className="text-xs text-slate-500">(verified credentials/insurance)</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="expertise_edit"
+                    checked={form.required_expertise === "handyman"}
+                    onChange={() => setForm((p) => ({ ...p, required_expertise: "handyman" }))}
+                  />
+                  <span>
+                    <span className="font-medium">Handyman / Expert Help</span>{" "}
+                    <span className="text-xs text-slate-500">(general labor/skilled assistance)</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1 text-sm text-slate-600">Permitting</div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={!!form.permit_required}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      permit_required: e.target.checked,
+                      permit_responsible_party: e.target.checked
+                        ? p.permit_responsible_party || "contractor"
+                        : "",
+                    }))
+                  }
+                />
+                Permit Required
+              </label>
+
+              {form.permit_required && (
+                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="permit_party_edit"
+                      checked={form.permit_responsible_party === "contractor"}
+                      onChange={() => setForm((p) => ({ ...p, permit_responsible_party: "contractor" }))}
+                    />
+                    Contractor handles filing
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="permit_party_edit"
+                      checked={form.permit_responsible_party === "homeowner"}
+                      onChange={() => setForm((p) => ({ ...p, permit_responsible_party: "homeowner" }))}
+                    />
+                    Homeowner handles filing
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3">
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={!!form.compliance_confirmed}
+                  onChange={(e) => setForm((p) => ({ ...p, compliance_confirmed: e.target.checked }))}
+                />
+                <span>
+                  I confirm this post complies with Portfolio Terms of Service, is not spam, and abides by all State and Federal laws.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <div className="text-sm font-semibold text-slate-800">4. Visibility &amp; Media</div>
+
+            <div className="mt-3 flex items-center gap-4 text-sm text-slate-700">
+              <div className="font-medium">Post Privacy</div>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="privacy_edit"
+                  checked={(form.post_privacy || "public") === "public"}
+                  onChange={() => setForm((p) => ({ ...p, post_privacy: "public", private_contractor_username: "" }))}
+                />
+                Public
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="privacy_edit"
+                  checked={form.post_privacy === "private"}
+                  onChange={() => setForm((p) => ({ ...p, post_privacy: "private" }))}
+                />
+                Private
+                <JobPostingHelp text={privateHelpText} />
+              </label>
+            </div>
+
+            {form.post_privacy === "private" && (
+              <div className="mt-2">
+                <label className="mb-1 block text-sm text-slate-600">Private contractor username</label>
+                <Input
+                  value={form.private_contractor_username || ""}
+                  onChange={(e) => setForm((p) => ({ ...p, private_contractor_username: e.target.value }))}
+                />
+              </div>
+            )}
+
+            <div className="mt-3">
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={!!form.notify_by_email}
+                  onChange={(e) => setForm((p) => ({ ...p, notify_by_email: e.target.checked }))}
+                />
+                <span>Email me when I receive a response and need to take action.</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Images + uploader */}
+      {mode === "edit" && projectId && (
         <>
           <div className="mt-6">
             <div className="mb-2 flex items-center justify-between">
@@ -272,27 +545,13 @@ export default function ProjectEditorCard({
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
                 {images.map((it) => (
-                  <figure
-                    key={it.id ?? it.url}
-                    className="rounded-xl border border-slate-200 bg-white p-3"
-                  >
+                  <figure key={it.id ?? it.url} className="rounded-xl border border-slate-200 bg-white p-3">
                     <img
                       src={it.url}
                       alt=""
                       className="mb-2 h-36 w-full rounded-md object-cover"
-                      loading="lazy"
                       onError={(e) => {
-                        // Hide broken image and show a simple fallback block (no external file needed)
-                        e.currentTarget.style.display = "none";
-                        const parent = e.currentTarget.parentElement;
-                        if (parent && !parent.querySelector("[data-img-fallback]")) {
-                          const fb = document.createElement("div");
-                          fb.setAttribute("data-img-fallback", "1");
-                          fb.className =
-                            "mb-2 flex h-36 w-full items-center justify-center rounded-md bg-slate-100 text-sm text-slate-500";
-                          fb.textContent = "Image missing";
-                          parent.insertBefore(fb, parent.firstChild);
-                        }
+                        e.currentTarget.src = "/placeholder.png";
                       }}
                     />
 
@@ -302,9 +561,7 @@ export default function ProjectEditorCard({
                       value={it._localCaption}
                       onChange={(e) =>
                         setImages((prev) =>
-                          prev.map((x) =>
-                            x.id === it.id ? { ...x, _localCaption: e.target.value } : x
-                          )
+                          prev.map((x) => (x.id === it.id ? { ...x, _localCaption: e.target.value } : x))
                         )
                       }
                     />
@@ -316,10 +573,7 @@ export default function ProjectEditorCard({
                           name="cover-image"
                           className="h-3 w-3"
                           checked={String(currentCoverId ?? "") === String(it.id ?? "")}
-                          onChange={() => {
-                            handleSelectCover(it.id);
-                            onMakeCover?.(it.id);
-                          }}
+                          onChange={() => onMakeCover?.(it.id)}
                         />
                         <span>
                           {String(currentCoverId ?? "") === String(it.id ?? "")
@@ -332,7 +586,6 @@ export default function ProjectEditorCard({
                         <GhostButton
                           onClick={() => it.id && onDeleteImage?.(it)}
                           disabled={!it.id || busy}
-                          title={it.id ? "Delete this image" : "Missing image id"}
                         >
                           Delete
                         </GhostButton>
@@ -356,17 +609,46 @@ export default function ProjectEditorCard({
             <ImageUploader
               projectId={projectId}
               onUploaded={async () => {
-                await onAfterUpload?.();
+                if (onAfterUpload) await onAfterUpload();
               }}
             />
           </div>
         </>
-      ) : null}
+      )}
 
-      <div className="mt-6 flex justify-end">
-        <Button type="submit" disabled={busy} form="project-editor-form">
-          {submitLabel}
+      {/* Actions */}
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          className="border-red-300 text-red-700 hover:bg-red-50"
+          onClick={onDeleteProject}
+          disabled={busy}
+        >
+          Delete project
         </Button>
+
+        {isJobPosting ? (
+          <>
+            <Button type="button" variant="outline" disabled={busy} onClick={saveDraft}>
+              Save as Draft
+            </Button>
+
+            {form.post_privacy === "private" ? (
+              <Button type="button" disabled={busy} onClick={sendToContractor}>
+                Send to Contractor
+              </Button>
+            ) : (
+              <Button type="button" disabled={busy} onClick={publishProject}>
+                Publish Project
+              </Button>
+            )}
+          </>
+        ) : (
+          <Button type="submit" disabled={busy} form="project-editor-form">
+            {submitLabel}
+          </Button>
+        )}
       </div>
     </Card>
   );

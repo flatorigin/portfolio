@@ -34,15 +34,30 @@ def project_image_upload_path(instance, filename):
     return f"projects/{instance.project.owner_id}/{instance.project_id}/images/{filename}"
 
 
+from django.conf import settings
+from django.db import models
+
+# file: backend/portfolio/models.py
+from django.conf import settings
+from django.db import models
+
+from .utils import convert_field_file_to_webp
+
+
 class Project(models.Model):
-    cover_image = models.ForeignKey(
+    cover_image_ref = models.ForeignKey(
         "ProjectImage",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="cover_for_projects",
-    )   
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects")
+    )
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="projects",
+    )
 
     title = models.CharField(max_length=255)
     summary = models.TextField(blank=True)
@@ -50,21 +65,63 @@ class Project(models.Model):
 
     is_job_posting = models.BooleanField(default=False)
 
-    cover_image = models.ImageField(upload_to="projects/covers/", blank=True, null=True)
+    # --- Job posting extensions (persisted) ---
+    job_summary = models.TextField(blank=True, default="")
+
+    # Job posting publish state (draft vs published)
+    job_is_published = models.BooleanField(default=False)
+    
+    service_categories = models.JSONField(blank=True, default=list)  # ["Plumbing", "Electrical"]
+    part_of_larger_project = models.BooleanField(default=False)
+    larger_project_details = models.CharField(max_length=255, blank=True, default="")
+
+    required_expertise = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        choices=[
+            ("licensed_pro", "Licensed Professional"),
+            ("handyman", "Handyman / Expert Help"),
+        ],
+    )
+
+    permit_required = models.BooleanField(default=False)
+    permit_responsible_party = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        choices=[
+            ("contractor", "Contractor handles filing"),
+            ("homeowner", "Homeowner handles filing"),
+        ],
+    )
+
+    compliance_confirmed = models.BooleanField(default=False)
+
+    post_privacy = models.CharField(
+        max_length=10,
+        blank=True,
+        default="public",
+        choices=[("public", "Public"), ("private", "Private")],
+    )
+
+    private_contractor_username = models.CharField(max_length=150, blank=True, default="")
+    notify_by_email = models.BooleanField(default=False)
+
+    cover_image_file = models.ImageField(
+        upload_to="projects/covers/",
+        blank=True,
+        null=True,
+    )
 
     is_public = models.BooleanField(default=True)
     tech_stack = models.JSONField(blank=True, null=True)
 
-    # New optional fields expected by the frontend
     location = models.CharField(max_length=140, blank=True, default="")
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     sqf = models.IntegerField(blank=True, null=True)
     highlights = models.TextField(blank=True, default="")
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    # Optional: link to a material/tool used for this project
     material_url = models.URLField(blank=True, null=True)
     material_label = models.CharField(
         max_length=255,
@@ -72,14 +129,19 @@ class Project(models.Model):
         help_text="Short title/description for the material/tool (e.g. 'DeWalt Drill – $129').",
         null=True,
     )
-    # NEW: extra links (label + url pairs)
+
     extra_links = models.JSONField(default=list, blank=True)
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} ({self.owner})"
+
     def save(self, *args, **kwargs):
-        if self.cover_image and hasattr(self.cover_image, "file"):
-            convert_field_file_to_webp(self.cover_image, quality=80)
+        if self.cover_image_file and hasattr(self.cover_image_file, "file"):
+            convert_field_file_to_webp(self.cover_image_file, quality=80)
         super().save(*args, **kwargs)
-    pass
 
 class ProjectFavorite(models.Model):
     user = models.ForeignKey(
