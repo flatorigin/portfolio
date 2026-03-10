@@ -848,12 +848,15 @@ export default function Dashboard() {
     };
   }, []);
 
-  // helper: show cover for any project (thumbs > cover_image_url > cover_image)
+  // =========================
+  // CHANGED: prefer already-available project payload first
+  // This helps dashboard cards render faster without waiting for thumbs
+  // =========================
   function getProjectCover(p) {
-    const fromThumbs = myThumbs?.[p?.id]?.cover || "";
     const fromUrl = p?.cover_image_url ? toUrl(p.cover_image_url) : "";
     const fromFile = p?.cover_image ? toUrl(p.cover_image) : "";
-    return fromThumbs || fromUrl || fromFile || "";
+    const fromThumbs = myThumbs?.[p?.id]?.cover || "";
+    return fromUrl || fromFile || fromThumbs || "";
   }
 
   return (
