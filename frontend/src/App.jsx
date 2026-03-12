@@ -2,7 +2,7 @@
 // file: frontend/src/App.jsx
 // Responsive nav:
 // - Mobile: Portfolio + Explore + Dashboard + Avatar (dropdown has Edit Profile/Inbox/Website/Logout)
-// - Desktop: Explore + Dashboard visible; bell + GlobalInbox visible; avatar dropdown
+// - Desktop: Explore + Dashboard + Job Postings visible; bell + GlobalInbox visible; avatar dropdown
 // =======================================
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -13,14 +13,12 @@ import GlobalInbox from "./components/GlobalInbox";
 
 // Icon assets (bundled by Vite)
 import bellIcon from "./assets/icons/bell.svg";
-import addIcon from "./assets/icons/add.svg";
 import logoutIcon from "./assets/icons/logout.svg";
 import loginIcon from "./assets/icons/login.svg";
 import registerIcon from "./assets/icons/register.svg";
 
 const ICONS = {
   bell: bellIcon,
-  add: addIcon,
   logout: logoutIcon,
   login: loginIcon,
   register: registerIcon,
@@ -119,6 +117,23 @@ export default function App() {
     navigate("/login");
   };
 
+  const goWebsite = () => {
+    setMenuOpen(false);
+    if (username) navigate(`/profiles/${username}`);
+    else navigate("/dashboard");
+  };
+
+  const goInbox = () => {
+    setMenuOpen(false);
+    // ✅ your inbox route is /messages (not /inbox)
+    navigate("/messages");
+  };
+
+  const goEditProfile = () => {
+    setMenuOpen(false);
+    navigate("/profile/edit");
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="relative z-30 border-b border-slate-200 bg-white">
@@ -142,18 +157,21 @@ export default function App() {
               </NavLink>
             </div>
 
-            {/* Desktop nav (only Explore + Dashboard) */}
-            <div className="hidden md:flex items-center gap-2 ml-2">
+            {/* Desktop nav (Explore + Dashboard + Job Postings) */}
+            <div className="ml-2 hidden items-center gap-2 md:flex">
               <NavLink to="/">Explore</NavLink>
               <NavLink to="/dashboard">Dashboard</NavLink>
               <NavLink to="/work">Job Postings</NavLink>
             </div>
 
             {/* Right side */}
-            <div className="relative ml-auto flex items-center gap-3" ref={menuRef}>
-              {/* Desktop-only: bell + inbox icon */}
+            <div
+              className="relative ml-auto flex items-center gap-3"
+              ref={menuRef}
+            >
+              {/* Desktop-only: bell + GlobalInbox */}
               {authed && (
-                <div className="hidden md:flex items-center gap-3">
+                <div className="hidden items-center gap-3 md:flex">
                   <button
                     type="button"
                     className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200"
@@ -206,19 +224,33 @@ export default function App() {
                       {/* Website (public profile) */}
                       <button
                         type="button"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          if (username) navigate(`/profiles/${username}`);
-                          else navigate("/dashboard");
-                        }}
+                        onClick={goWebsite}
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
                           {/* globe */}
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10Z" stroke="currentColor" strokeWidth="2"/>
-                            <path d="M2 12h20" stroke="currentColor" strokeWidth="2"/>
-                            <path d="M12 2c3 3 3 17 0 20" stroke="currentColor" strokeWidth="2"/>
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10Z"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
+                            <path
+                              d="M2 12h20"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
+                            <path
+                              d="M12 2c3 3 3 17 0 20"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
                           </svg>
                         </span>
                         <span>Website</span>
@@ -227,17 +259,30 @@ export default function App() {
                       {/* Edit Profile */}
                       <button
                         type="button"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          navigate("/profile/edit");
-                        }}
+                        onClick={goEditProfile}
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
                           {/* pencil */}
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M12 20h9"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinejoin="round"
+                            />
                           </svg>
                         </span>
                         <span>Edit Profile</span>
@@ -246,16 +291,24 @@ export default function App() {
                       {/* Inbox (route-based) */}
                       <button
                         type="button"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          navigate("/inbox");
-                        }}
+                        onClick={goInbox}
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
                           {/* chat bubble */}
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinejoin="round"
+                            />
                           </svg>
                         </span>
                         <span>Inbox</span>
@@ -296,7 +349,9 @@ export default function App() {
                   {menuOpen && (
                     <div className="absolute right-0 top-11 z-50 w-56 rounded-2xl border border-slate-200 bg-white py-3 shadow-xl">
                       <div className="px-4 pb-2">
-                        <div className="text-sm font-semibold text-slate-900">Welcome</div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          Welcome
+                        </div>
                         <div className="text-xs text-slate-500">
                           Sign in to manage your projects.
                         </div>
@@ -325,7 +380,11 @@ export default function App() {
                         }}
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          <img src={ICONS.register} alt="" className="h-4 w-4" />
+                          <img
+                            src={ICONS.register}
+                            alt=""
+                            className="h-4 w-4"
+                          />
                         </span>
                         <span>Register</span>
                       </button>
@@ -339,7 +398,13 @@ export default function App() {
       </header>
 
       <main className="w-full">
-        {isFullBleed ? <Outlet /> : <Container><Outlet /></Container>}
+        {isFullBleed ? (
+          <Outlet />
+        ) : (
+          <Container>
+            <Outlet />
+          </Container>
+        )}
       </main>
     </div>
   );
