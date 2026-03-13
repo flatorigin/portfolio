@@ -302,31 +302,32 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, attrs):
-        attachment = self.initial_data.get("attachment")
-        text = attrs.get("text", "").strip()
+        """
+        Auto-copy summary -> job_summary when job posting is on,
+        but only if job_summary isn't explicitly provided.
+        Works for both create and update.
+        """
+        instance = getattr(self, "instance", None)
 
-        if not text and not attachment:
-            raise serializers.ValidationError("Message must include text or an attachment.")
+        is_job_posting = attrs.get(
+            "is_job_posting",
+            getattr(instance, "is_job_posting", False) if instance else False,
+        )
 
-        if attachment:
-            allowed_doc_ext = {"pdf", "doc", "docx", "xls", "xlsx"}
-            allowed_image_ext = {"jpg", "jpeg", "png"}
+        if is_job_posting:
+            incoming_job_summary = attrs.get("job_summary", None)
+            incoming_summary = attrs.get("summary", None)
 
-            ext = (attachment.name or "").rsplit(".", 1)[-1].lower()
-            if ext not in allowed_doc_ext.union(allowed_image_ext):
-                raise serializers.ValidationError("Unsupported attachment type.")
+            if (incoming_job_summary is None or str(incoming_job_summary).strip() == "") and (
+                incoming_summary is not None and str(incoming_summary).strip() != ""
+            ):
+                attrs["job_summary"] = incoming_summary
 
-            if ext in allowed_image_ext and attachment.size > 3 * 1024 * 1024:
-                raise serializers.ValidationError("Images cannot exceed 3MB.")
-
-            if ext in allowed_doc_ext and attachment.size > 5 * 1024 * 1024:
-                raise serializers.ValidationError("Documents cannot exceed 5MB.")
-
-            attrs["attachment_name"] = attachment.name
-            attrs["attachment_type"] = "image" if ext in allowed_image_ext else "document"
+            # normalize JSON list if explicitly passed as null
+            if "service_categories" in attrs and attrs["service_categories"] is None:
+                attrs["service_categories"] = []
 
         return attrs
-
 
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")

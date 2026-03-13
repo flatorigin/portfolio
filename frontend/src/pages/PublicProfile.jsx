@@ -230,13 +230,6 @@ export default function PublicProfile() {
               </div>
 
               <div className="flex gap-2 sm:pb-1">
-                <Link
-                  to="/"
-                  className="rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur hover:bg-white/20"
-                >
-                  Explore
-                </Link>
-
                 <button
                   type="button"
                   onClick={() => setMsgOpen(true)}
@@ -333,6 +326,7 @@ export default function PublicProfile() {
               {projects.map((p) => {
                 const coverSrc =
                   coversByProject[p.id] ||
+                  toUrl(p.cover_image_url || "") ||
                   (p.cover_image ? toUrl(p.cover_image) : "");
 
                 return (

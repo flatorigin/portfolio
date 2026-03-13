@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from .views import MeView, PublicProfileView
+from .views import MeView, PublicProfileView, ProfileLikeView
 from .password_views import PasswordResetRequestView, PasswordResetConfirmView
 
 app_name = "accounts"
@@ -12,4 +12,5 @@ urlpatterns = [
     path("auth/password-reset/", PasswordResetRequestView.as_view(), name="password-reset"),
     path("auth/password-reset-confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
     path("profiles/<str:username>/", PublicProfileView.as_view(), name="public-profile"),
+    path("profiles/<str:username>/like/", ProfileLikeView.as_view(), name="profile-like"),
 ]
