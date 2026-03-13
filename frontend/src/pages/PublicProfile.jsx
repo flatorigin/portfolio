@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
 import ServiceAreaMap from "../components/ServiceAreaMap";
+import QuickMessageDrawer from "../components/QuickMessageDrawer";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -61,6 +62,7 @@ export default function PublicProfile() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [coversByProject, setCoversByProject] = useState({});
+  const [msgOpen, setMsgOpen] = useState(false); // ✅ must be inside component
 
   async function hydrateCovers(list) {
     const entries = await Promise.all(
@@ -116,8 +118,9 @@ export default function PublicProfile() {
         const uname = String(username || "").toLowerCase();
 
         const visibleProjects = rawList.filter((p) => {
-          const ownerU =
-            String(p?.owner_username || p?.owner?.username || "").toLowerCase();
+          const ownerU = String(
+            p?.owner_username || p?.owner?.username || ""
+          ).toLowerCase();
 
           const isPublic = p?.is_public === undefined ? true : !!p.is_public;
 
@@ -126,14 +129,6 @@ export default function PublicProfile() {
 
         setProfile(prof);
         setProjects(visibleProjects);
-
-        // optional: load thumbnails/covers
-        hydrateCovers(visibleProjects);
-
-        setProfile(prof);
-        setProjects(visibleProjects);
-
-        // ✅ pull cover images from /projects/:id/images/
         hydrateCovers(visibleProjects);
       } catch (err) {
         console.error("[PublicProfile] failed to load", err);
@@ -241,12 +236,14 @@ export default function PublicProfile() {
                 >
                   Explore
                 </Link>
-                <Link
-                  to={`/messages?to=${profile.username}`}
+
+                <button
+                  type="button"
+                  onClick={() => setMsgOpen(true)}
                   className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
                 >
                   Message
-                </Link>
+                </button>
               </div>
             </div>
           </div>
@@ -381,6 +378,12 @@ export default function PublicProfile() {
           )}
         </div>
       </div>
+      <QuickMessageDrawer
+        open={msgOpen}
+        onClose={() => setMsgOpen(false)}
+        recipientUsername={profile?.username}
+        recipientDisplayName={displayName}
+      />
     </div>
   );
 }
