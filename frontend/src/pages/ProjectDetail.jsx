@@ -884,9 +884,20 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            {/* RIGHT: owner edit button OR Save button */}
+            {/* RIGHT: actions */}
             <div className="flex items-start gap-2">
-              {authed && project && !isOwnerUser && (
+              {/* Visit Website (owner public profile) */}
+              {project?.owner_username ? (
+                <Link
+                  to={`/profiles/${project.owner_username}`}
+                  className="rounded-full border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm backdrop-blur-md hover:bg-white/20 active:scale-[0.99]"
+                >
+                  Visit website
+                </Link>
+              ) : null}
+
+              {/* Save (only if authed + not owner) */}
+              {authed && project && !isOwnerUser ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -902,7 +913,7 @@ export default function ProjectDetail() {
                 >
                   {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
