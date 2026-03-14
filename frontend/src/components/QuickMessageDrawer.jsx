@@ -1,9 +1,8 @@
 // ============================================================================
 // file: frontend/src/components/QuickMessageDrawer.jsx
-// Right-side quick message drawer (no page refresh)
-// - Tolerates 403 when loading message history (message-request flow)
+// Right-side quick message drawer (reuses existing Inbox + project-thread APIs)
 // ============================================================================
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import api from "../api";
 import { Button } from "../ui";
 
@@ -12,16 +11,48 @@ function toInitial(nameOrUsername) {
   return s ? s[0].toUpperCase() : "U";
 }
 
+function normalizeU(s) {
+  return String(s || "").trim().toLowerCase();
+}
+
+// Same counterpart logic as MessagesThread.jsx
+function counterpartFor(thread, meLower) {
+  if (!thread) return null;
+
+  const ownerProfile = thread.owner_profile || {};
+  const clientProfile = thread.client_profile || {};
+
+  const ownerUsernameRaw = thread.owner_username || ownerProfile.username || "";
+  const clientUsernameRaw = thread.client_username || clientProfile.username || "";
+
+  const ownerLower = ownerUsernameRaw.toLowerCase();
+  const clientLower = clientUsernameRaw.toLowerCase();
+
+  const ownerDisplay = ownerProfile.display_name || ownerUsernameRaw || "User";
+  const clientDisplay = clientProfile.display_name || clientUsernameRaw || "User";
+
+  if (meLower && ownerLower === meLower) {
+    return { username: clientUsernameRaw, display_name: clientDisplay };
+  }
+  if (meLower && clientLower === meLower) {
+    return { username: ownerUsernameRaw, display_name: ownerDisplay };
+  }
+  return { username: clientUsernameRaw, display_name: clientDisplay };
+}
+
 export default function QuickMessageDrawer({
   open,
   onClose,
   recipientUsername,
   recipientDisplayName,
 }) {
-  const [threadId, setThreadId] = useState(null);
+  const [threads, setThreads] = useState([]);
+  const [activeThread, setActiveThread] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
 
@@ -29,6 +60,7 @@ export default function QuickMessageDrawer({
 
   const authed = !!localStorage.getItem("access");
   const meUsername = localStorage.getItem("username") || "";
+  const meLower = normalizeU(meUsername);
 
   const title = useMemo(() => {
     return recipientDisplayName || recipientUsername || "Message";
@@ -54,7 +86,47 @@ export default function QuickMessageDrawer({
     };
   }, [open]);
 
-  // Start thread when opened
+  const fetchThreads = useCallback(async () => {
+    const { data } = await api.get("/inbox/threads/");
+    const arr = Array.isArray(data) ? data : [];
+    setThreads(arr);
+    return arr;
+  }, []);
+
+  const findThreadForRecipient = useCallback(
+    (arr) => {
+      const targetLower = normalizeU(recipientUsername);
+      if (!targetLower) return null;
+
+      for (const t of arr || []) {
+        const cp = counterpartFor(t, meLower);
+        if (normalizeU(cp?.username) === targetLower) {
+          return t;
+        }
+      }
+      return null;
+    },
+    [recipientUsername, meLower]
+  );
+
+  const fetchMessages = useCallback(async (thread) => {
+    if (!thread) {
+      setMessages([]);
+      return;
+    }
+    const projectId = thread.project;
+    if (!projectId) {
+      setMessages([]);
+      return;
+    }
+
+    const { data } = await api.get(
+      `/projects/${projectId}/threads/${thread.id}/messages/`
+    );
+    setMessages(Array.isArray(data) ? data : []);
+  }, []);
+
+  // Init/load when opened
   useEffect(() => {
     let cancelled = false;
 
@@ -62,9 +134,9 @@ export default function QuickMessageDrawer({
       if (!open) return;
 
       setError("");
-      setThreadId(null);
       setMessages([]);
       setText("");
+      setActiveThread(null);
 
       if (!authed) {
         setError("Please log in to send messages.");
@@ -77,38 +149,50 @@ export default function QuickMessageDrawer({
 
       setLoading(true);
       try {
-        // ✅ backend: POST /api/messages/start/ -> { thread_id }
-        const { data } = await api.post("/messages/start/", {
-          username: recipientUsername,
-        });
+        // 1) load inbox threads
+        const arr1 = await fetchThreads();
         if (cancelled) return;
 
-        const tid = data?.thread_id;
-        if (!tid) throw new Error("No thread_id returned from server.");
-        setThreadId(tid);
+        // 2) find existing thread
+        let t = findThreadForRecipient(arr1);
 
-        // ✅ backend: GET /api/messages/threads/<id>/messages/
-        // Some backends return 403 until the recipient "accepts" the request.
-        // We still want the drawer open so the sender can send the first message.
-        try {
-          const resp = await api.get(`/messages/threads/${tid}/messages/`);
-          if (cancelled) return;
-          setMessages(Array.isArray(resp.data) ? resp.data : []);
-        } catch (err) {
-          const status = err?.response?.status;
-          if (status === 403) {
-            // Treat as "no history yet / not allowed to view yet"
-            if (!cancelled) setMessages([]);
-          } else {
-            throw err;
+        // 3) if none exists, try to create via existing start endpoint
+        if (!t) {
+          try {
+            await api.post("/messages/start/", { username: recipientUsername });
+          } catch (e) {
+            // If backend blocks creation, show that error and stop
+            const msg =
+              e?.response?.data?.detail ||
+              e?.response?.data?.message ||
+              e?.message ||
+              "Could not start a conversation.";
+            throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
           }
+
+          // refresh inbox threads and find it again (so we get projectId)
+          const arr2 = await fetchThreads();
+          if (cancelled) return;
+          t = findThreadForRecipient(arr2);
         }
-      } catch (e) {
-        console.error("[QuickMessageDrawer] start failed", e?.response || e);
-        if (!cancelled) {
-          setError(
-            e?.response?.data?.detail || e?.message || "Could not open messages."
+
+        if (!t) {
+          throw new Error(
+            "Could not locate a conversation thread. Please open Inbox and start the chat there once."
           );
+        }
+
+        setActiveThread(t);
+
+        // Load messages (may be empty)
+        await fetchMessages(t);
+        if (cancelled) return;
+
+        setError("");
+      } catch (e) {
+        console.error("[QuickMessageDrawer] open failed", e);
+        if (!cancelled) {
+          setError(e?.message || "Could not open messages.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -119,7 +203,7 @@ export default function QuickMessageDrawer({
     return () => {
       cancelled = true;
     };
-  }, [open, authed, recipientUsername, onClose]);
+  }, [open, authed, recipientUsername, fetchThreads, findThreadForRecipient, fetchMessages]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -131,12 +215,18 @@ export default function QuickMessageDrawer({
 
   async function sendMessage() {
     const body = (text || "").trim();
-    if (!body || !threadId || sending) return;
+    if (!body || !activeThread || sending) return;
+
+    const projectId = activeThread.project;
+    if (!projectId) {
+      setError("This conversation has no project context. Please message from a project or use Inbox.");
+      return;
+    }
 
     setSending(true);
     setError("");
 
-    // optimistic message
+    // optimistic
     const optimistic = {
       id: `tmp-${Date.now()}`,
       sender_username: meUsername,
@@ -144,25 +234,33 @@ export default function QuickMessageDrawer({
       created_at: new Date().toISOString(),
       _optimistic: true,
     };
+
     setMessages((prev) => [...prev, optimistic]);
     setText("");
 
     try {
       const { data } = await api.post(
-        `/messages/threads/${threadId}/messages/`,
+        `/projects/${projectId}/threads/${activeThread.id}/messages/`,
         { text: body }
       );
 
-      // replace optimistic with real
       setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? data : m)));
-
-      // Let inbox refresh if it listens to events
       window.dispatchEvent(new CustomEvent("inbox:changed"));
     } catch (e) {
       console.error("[QuickMessageDrawer] send failed", e?.response || e);
+
+      // remove optimistic + restore text
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-      setText(body); // restore text
-      setError(e?.response?.data?.detail || e?.message || "Failed to send message.");
+      setText(body);
+
+      // 403 is typically the “message request / accept gate”
+      if (e?.response?.status === 403) {
+        setError(
+          "You can’t send messages in this conversation yet. Open Inbox to accept the request (or wait for the other user to accept)."
+        );
+      } else {
+        setError(e?.response?.data?.detail || e?.message || "Failed to send message.");
+      }
     } finally {
       setSending(false);
     }
@@ -211,9 +309,7 @@ export default function QuickMessageDrawer({
             ) : (
               <div className="space-y-3">
                 {messages.map((m) => {
-                  const mine =
-                    (m.sender_username || "").toLowerCase() ===
-                    (meUsername || "").toLowerCase();
+                  const mine = normalizeU(m.sender_username) === meLower;
 
                   return (
                     <div key={m.id} className={"flex " + (mine ? "justify-end" : "justify-start")}>
