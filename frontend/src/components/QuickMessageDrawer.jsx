@@ -1,8 +1,12 @@
 // ============================================================================
 // file: frontend/src/components/QuickMessageDrawer.jsx
-// Right-side quick message drawer (reuses existing Inbox + project-thread APIs)
+// Right-side quick message drawer (direct messages, no project context)
+// Uses:
+//   POST   /api/messages/start/                       -> { thread_id }
+//   GET    /api/messages/threads/:thread_id/messages/
+//   POST   /api/messages/threads/:thread_id/messages/ -> { ...message }
 // ============================================================================
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { Button } from "../ui";
 
@@ -11,33 +15,13 @@ function toInitial(nameOrUsername) {
   return s ? s[0].toUpperCase() : "U";
 }
 
-function normalizeU(s) {
-  return String(s || "").trim().toLowerCase();
-}
-
-// Same counterpart logic as MessagesThread.jsx
-function counterpartFor(thread, meLower) {
-  if (!thread) return null;
-
-  const ownerProfile = thread.owner_profile || {};
-  const clientProfile = thread.client_profile || {};
-
-  const ownerUsernameRaw = thread.owner_username || ownerProfile.username || "";
-  const clientUsernameRaw = thread.client_username || clientProfile.username || "";
-
-  const ownerLower = ownerUsernameRaw.toLowerCase();
-  const clientLower = clientUsernameRaw.toLowerCase();
-
-  const ownerDisplay = ownerProfile.display_name || ownerUsernameRaw || "User";
-  const clientDisplay = clientProfile.display_name || clientUsernameRaw || "User";
-
-  if (meLower && ownerLower === meLower) {
-    return { username: clientUsernameRaw, display_name: clientDisplay };
-  }
-  if (meLower && clientLower === meLower) {
-    return { username: ownerUsernameRaw, display_name: ownerDisplay };
-  }
-  return { username: clientUsernameRaw, display_name: clientDisplay };
+function normalizeErr(err) {
+  const data = err?.response?.data;
+  if (typeof data === "string" && data.trim()) return data;
+  if (data?.detail) return data.detail;
+  if (data?.message) return data.message;
+  if (err?.message) return err.message;
+  return "Request failed.";
 }
 
 export default function QuickMessageDrawer({
@@ -46,13 +30,10 @@ export default function QuickMessageDrawer({
   recipientUsername,
   recipientDisplayName,
 }) {
-  const [threads, setThreads] = useState([]);
-  const [activeThread, setActiveThread] = useState(null);
-
+  const [threadId, setThreadId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
 
@@ -60,7 +41,6 @@ export default function QuickMessageDrawer({
 
   const authed = !!localStorage.getItem("access");
   const meUsername = localStorage.getItem("username") || "";
-  const meLower = normalizeU(meUsername);
 
   const title = useMemo(() => {
     return recipientDisplayName || recipientUsername || "Message";
@@ -76,7 +56,7 @@ export default function QuickMessageDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Lock scroll behind modal
+  // Lock scroll behind drawer
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -86,57 +66,17 @@ export default function QuickMessageDrawer({
     };
   }, [open]);
 
-  const fetchThreads = useCallback(async () => {
-    const { data } = await api.get("/inbox/threads/");
-    const arr = Array.isArray(data) ? data : [];
-    setThreads(arr);
-    return arr;
-  }, []);
-
-  const findThreadForRecipient = useCallback(
-    (arr) => {
-      const targetLower = normalizeU(recipientUsername);
-      if (!targetLower) return null;
-
-      for (const t of arr || []) {
-        const cp = counterpartFor(t, meLower);
-        if (normalizeU(cp?.username) === targetLower) {
-          return t;
-        }
-      }
-      return null;
-    },
-    [recipientUsername, meLower]
-  );
-
-  const fetchMessages = useCallback(async (thread) => {
-    if (!thread) {
-      setMessages([]);
-      return;
-    }
-    const projectId = thread.project;
-    if (!projectId) {
-      setMessages([]);
-      return;
-    }
-
-    const { data } = await api.get(
-      `/projects/${projectId}/threads/${thread.id}/messages/`
-    );
-    setMessages(Array.isArray(data) ? data : []);
-  }, []);
-
-  // Init/load when opened
+  // Open (start/ensure thread + load messages)
   useEffect(() => {
     let cancelled = false;
 
-    async function start() {
+    async function run() {
       if (!open) return;
 
       setError("");
+      setThreadId(null);
       setMessages([]);
       setText("");
-      setActiveThread(null);
 
       if (!authed) {
         setError("Please log in to send messages.");
@@ -149,63 +89,36 @@ export default function QuickMessageDrawer({
 
       setLoading(true);
       try {
-        // 1) load inbox threads
-        const arr1 = await fetchThreads();
+        // ✅ Direct start (no project context)
+        const startRes = await api.post("/messages/start/", {
+          username: recipientUsername,
+        });
         if (cancelled) return;
 
-        // 2) find existing thread
-        let t = findThreadForRecipient(arr1);
+        const tid = startRes?.data?.thread_id;
+        if (!tid) throw new Error("No thread_id returned from server.");
+        setThreadId(tid);
 
-        // 3) if none exists, try to create via existing start endpoint
-        if (!t) {
-          try {
-            await api.post("/messages/start/", { username: recipientUsername });
-          } catch (e) {
-            // If backend blocks creation, show that error and stop
-            const msg =
-              e?.response?.data?.detail ||
-              e?.response?.data?.message ||
-              e?.message ||
-              "Could not start a conversation.";
-            throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-          }
-
-          // refresh inbox threads and find it again (so we get projectId)
-          const arr2 = await fetchThreads();
-          if (cancelled) return;
-          t = findThreadForRecipient(arr2);
-        }
-
-        if (!t) {
-          throw new Error(
-            "Could not locate a conversation thread. Please open Inbox and start the chat there once."
-          );
-        }
-
-        setActiveThread(t);
-
-        // Load messages (may be empty)
-        await fetchMessages(t);
+        // Load messages
+        const msgRes = await api.get(`/messages/threads/${tid}/messages/`);
         if (cancelled) return;
 
-        setError("");
-      } catch (e) {
-        console.error("[QuickMessageDrawer] open failed", e);
-        if (!cancelled) {
-          setError(e?.message || "Could not open messages.");
-        }
+        setMessages(Array.isArray(msgRes.data) ? msgRes.data : []);
+      } catch (err) {
+        console.error("[QuickMessageDrawer] open failed", err?.response || err);
+        if (!cancelled) setError(normalizeErr(err));
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    start();
+    run();
     return () => {
       cancelled = true;
     };
-  }, [open, authed, recipientUsername, fetchThreads, findThreadForRecipient, fetchMessages]);
+  }, [open, authed, recipientUsername]);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll on new messages
   useEffect(() => {
     if (!open) return;
     const el = scrollerRef.current;
@@ -215,13 +128,7 @@ export default function QuickMessageDrawer({
 
   async function sendMessage() {
     const body = (text || "").trim();
-    if (!body || !activeThread || sending) return;
-
-    const projectId = activeThread.project;
-    if (!projectId) {
-      setError("This conversation has no project context. Please message from a project or use Inbox.");
-      return;
-    }
+    if (!body || !threadId || sending) return;
 
     setSending(true);
     setError("");
@@ -239,28 +146,28 @@ export default function QuickMessageDrawer({
     setText("");
 
     try {
-      const { data } = await api.post(
-        `/projects/${projectId}/threads/${activeThread.id}/messages/`,
-        { text: body }
+      const res = await api.post(`/messages/threads/${threadId}/messages/`, {
+        text: body,
+      });
+
+      const real = res?.data || null;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimistic.id ? real || m : m))
       );
 
-      setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? data : m)));
       window.dispatchEvent(new CustomEvent("inbox:changed"));
-    } catch (e) {
-      console.error("[QuickMessageDrawer] send failed", e?.response || e);
+    } catch (err) {
+      console.error("[QuickMessageDrawer] send failed", err?.response || err);
 
-      // remove optimistic + restore text
+      // rollback optimistic
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setText(body);
 
-      // 403 is typically the “message request / accept gate”
-      if (e?.response?.status === 403) {
-        setError(
-          "You can’t send messages in this conversation yet. Open Inbox to accept the request (or wait for the other user to accept)."
-        );
-      } else {
-        setError(e?.response?.data?.detail || e?.message || "Failed to send message.");
-      }
+      const msg = normalizeErr(err);
+
+      // If your backend gates replies until acceptance, this makes it clear.
+      // (Your backend typically returns 403 with that detail.)
+      setError(msg);
     } finally {
       setSending(false);
     }
@@ -283,8 +190,12 @@ export default function QuickMessageDrawer({
         {/* header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-slate-900">{title}</div>
-            <div className="truncate text-[11px] text-slate-500">@{recipientUsername}</div>
+            <div className="truncate text-sm font-semibold text-slate-900">
+              {title}
+            </div>
+            <div className="truncate text-[11px] text-slate-500">
+              @{recipientUsername}
+            </div>
           </div>
           <button
             type="button"
@@ -305,18 +216,27 @@ export default function QuickMessageDrawer({
                 {error}
               </div>
             ) : messages.length === 0 ? (
-              <div className="text-sm text-slate-500">No messages yet. Say hello 👋</div>
+              <div className="text-sm text-slate-500">
+                No messages yet. Say hello 👋
+              </div>
             ) : (
               <div className="space-y-3">
                 {messages.map((m) => {
-                  const mine = normalizeU(m.sender_username) === meLower;
+                  const mine =
+                    (m.sender_username || "").toLowerCase() ===
+                    (meUsername || "").toLowerCase();
 
                   return (
-                    <div key={m.id} className={"flex " + (mine ? "justify-end" : "justify-start")}>
+                    <div
+                      key={m.id}
+                      className={"flex " + (mine ? "justify-end" : "justify-start")}
+                    >
                       <div
                         className={
                           "max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed " +
-                          (mine ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-900")
+                          (mine
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 text-slate-900")
                         }
                       >
                         {!mine && (
@@ -324,7 +244,9 @@ export default function QuickMessageDrawer({
                             <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-slate-700">
                               {toInitial(recipientDisplayName || recipientUsername)}
                             </span>
-                            <span className="truncate">{recipientDisplayName || recipientUsername}</span>
+                            <span className="truncate">
+                              {recipientDisplayName || recipientUsername}
+                            </span>
                           </div>
                         )}
                         <div>{m.text}</div>
@@ -361,7 +283,9 @@ export default function QuickMessageDrawer({
               </Button>
             </div>
 
-            <div className="mt-1 text-[11px] text-slate-500">Enter = send · Shift+Enter = new line</div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              Enter = send · Shift+Enter = new line
+            </div>
           </div>
         </div>
       </aside>
