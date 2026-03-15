@@ -8,6 +8,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import models
 from django.utils import timezone
+from datetime import timedelta
 from PIL import Image
 
 from .utils import convert_field_file_to_webp
@@ -273,6 +274,9 @@ class MessageThread(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    owner_ignored_until = models.DateTimeField(null=True, blank=True)
+    client_ignored_until = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["owner", "client"], name="unique_dm_pair")
@@ -370,6 +374,41 @@ def message_attachment_upload_path(instance, filename):
     project_part = thread.project_id or "direct"
     return f"messages/{thread.owner_id}/{project_part}/{thread.client_id}/{filename}"
 
+def ignored_until_for(self, user):
+    """Return ignore-until datetime for this user (participant) or None."""
+    if user.id == self.owner_id:
+        return self.owner_ignored_until
+    if user.id == self.client_id:
+        return self.client_ignored_until
+    return None
+
+def set_ignored_until(self, user, until_dt):
+    """Set ignore-until for the given user (participant)."""
+    if user.id == self.owner_id:
+        self.owner_ignored_until = until_dt
+        self.save(update_fields=["owner_ignored_until"])
+        return
+    if user.id == self.client_id:
+        self.client_ignored_until = until_dt
+        self.save(update_fields=["client_ignored_until"])
+        return
+
+def mark_accepted(self, user):
+    uid = user.id
+    changed = False
+    if uid == self.owner_id and not self.owner_has_accepted:
+        self.owner_has_accepted = True
+        self.owner_ignored_until = None
+        changed = True
+    elif uid == self.client_id and not self.client_has_accepted:
+        self.client_has_accepted = True
+        self.client_ignored_until = None
+        changed = True
+    if changed:
+        self.save(update_fields=[
+            "owner_has_accepted", "client_has_accepted",
+            "owner_ignored_until", "client_ignored_until"
+        ])
 
 class PrivateMessage(models.Model):
     thread = models.ForeignKey(

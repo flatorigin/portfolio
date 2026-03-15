@@ -389,6 +389,7 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
     def get_thread(self):
         thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
         user = self.request.user
+
         if user not in (thread.owner, thread.client):
             raise permissions.PermissionDenied("You are not in this conversation.")
         if thread.is_blocked_for(user):
@@ -397,19 +398,31 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         thread = self.get_thread()
-        return PrivateMessage.objects.filter(
-            thread=thread
-        ).select_related("sender")
+        return PrivateMessage.objects.filter(thread=thread).select_related("sender")
 
     def perform_create(self, serializer):
         thread = self.get_thread()
         user = self.request.user
 
-        # If the *other* user blocked me, do not allow sending.
+        # ✅ Ignore window enforcement (recipient ignored request → sender blocked temporarily)
+        other = thread.client if user.id == thread.owner_id else thread.owner
+        ignored_until = thread.ignored_until_for(other)
+        if (
+            (not thread.user_has_accepted(other))
+            and ignored_until
+            and timezone.now() < ignored_until
+        ):
+            raise permissions.PermissionDenied(
+                "Recipient ignored this request. Try again tomorrow."
+            )
+
+        # Block checks (defensive; also handled in get_thread)
         if thread.is_blocked_for(user):
             raise permissions.PermissionDenied("This conversation is blocked.")
 
+        # ✅ Save the message (this is where it persists)
         message = serializer.save(sender=user, thread=thread)
+
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
         return message
@@ -446,27 +459,29 @@ class MessageStartView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        username = (request.data.get("username") or "").strip()
-        if not username:
+        recipient_username = (request.data.get("username") or "").strip()
+        if not recipient_username:
             return Response({"detail": "Missing username."}, status=status.HTTP_400_BAD_REQUEST)
 
-        User = get_user_model()
-        target = get_object_or_404(User, username=username)
+        target = get_object_or_404(get_user_model(), username=recipient_username)
 
         if target.id == request.user.id:
             return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create or fetch DM between the two users (project optional)
-        thread, _created = MessageThread.get_or_create_dm(
+        # Create or fetch DM between the two users (no project context)
+        thread, created = MessageThread.get_or_create_dm(
             request.user,
             target,
             origin_project=None,
             initiated_by=request.user,
         )
 
-        # Mark the initiator accepted (safe / idempotent)
+        # Safety: ensure sender is accepted (should already be true for created threads)
         if not thread.user_has_accepted(request.user):
             thread.mark_accepted(request.user)
+
+        # IMPORTANT: do NOT auto-accept the recipient here.
+        # They must Accept from Inbox to reply.
 
         return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
 
@@ -536,12 +551,20 @@ class ThreadActionView(APIView):
         elif action == "block":
             thread.block_other(request.user)
 
+        elif action == "ignore":
+            # ignore for 24 hours
+            thread.set_ignored_until(request.user, timezone.now() + timezone.timedelta(days=1))
+
         elif action == "unblock":
             thread.unblock_other(request.user)
 
         elif action == "delete":
             thread.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
+
+        elif action == "ignore":
+            # ignore for 24 hours
+            thread.set_ignored_until(request.user, timezone.now() + timezone.timedelta(days=1))
 
         else:
             return Response(
@@ -602,8 +625,9 @@ class DirectMessageStartView(APIView):
             initiated_by=request.user,
         )
 
-        # ✅ IMPORTANT: always ensure the sender is marked accepted (even if thread existed)
-        thread.mark_accepted(request.user)
+        # Ensure ONLY the sender is accepted (recipient remains pending until they Accept in Inbox)
+        if not thread.user_has_accepted(request.user):
+            thread.mark_accepted(request.user)
 
         return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
 
@@ -612,6 +636,7 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
     GET  /api/messages/threads/<thread_id>/messages/
     POST /api/messages/threads/<thread_id>/messages/
     """
+
     serializer_class = PrivateMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -634,15 +659,27 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        # ✅ Rule:
-        # - Sender can always send (they are marked accepted when starting)
-        # - Recipient must ACCEPT before they can reply
+        # ✅ Ignore window enforcement (recipient ignored request → sender blocked temporarily)
+        other = thread.client if user.id == thread.owner_id else thread.owner
+        ignored_until = thread.ignored_until_for(other)
+        if (
+            (not thread.user_has_accepted(other))
+            and ignored_until
+            and timezone.now() < ignored_until
+        ):
+            raise permissions.PermissionDenied(
+                "Recipient ignored this request. Try again tomorrow."
+            )
+
+        # ✅ Gate: user must have accepted to send messages (reply)
         if not thread.user_has_accepted(user):
             raise permissions.PermissionDenied(
                 "Accept the message request to reply. (Open Inbox → Accept)"
             )
 
+        # ✅ Save the message (this is where it persists)
         msg = serializer.save(sender=user, thread=thread)
+
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
         return msg
