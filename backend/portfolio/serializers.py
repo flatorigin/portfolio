@@ -3,7 +3,6 @@
 # =============================================================================
 from rest_framework import serializers
 from django.utils import timezone
-from .serializers import PrivateMessageSerializer
 from accounts.serializers import ProfileSerializer
 
 from .models import (
