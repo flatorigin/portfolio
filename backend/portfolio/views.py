@@ -436,9 +436,6 @@ class InboxThreadListView(generics.ListAPIView):
         # Serializer will decide if it's inbox vs request based on flags.
         return qs
 
-# ---------------------------------------------------
-# Direct messaging (non-project) — used by QuickMessageDrawer
-# ---------------------------------------------------
 class MessageStartView(APIView):
     """
     POST /api/messages/start/
@@ -452,21 +449,21 @@ class MessageStartView(APIView):
         if not username:
             return Response({"detail": "Missing username."}, status=status.HTTP_400_BAD_REQUEST)
 
-        target = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
+        User = get_user_model()
+        target = get_object_or_404(User, username=username)
 
         if target.id == request.user.id:
             return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create or fetch DM between the two users (project optional)
-        thread, created = MessageThread.get_or_create_dm(
+        thread, _created = MessageThread.get_or_create_dm(
             request.user,
             target,
             origin_project=None,
             initiated_by=request.user,
         )
 
-        # If thread already existed but current user is initiating now, ensure they are marked accepted.
-        # This matches your "gate stays open once accepted" behavior.
+        # Mark the initiator accepted (safe / idempotent)
         if not thread.user_has_accepted(request.user):
             thread.mark_accepted(request.user)
 
@@ -487,9 +484,11 @@ class ThreadMessagesView(generics.ListCreateAPIView):
         user = self.request.user
 
         if user not in (thread.owner, thread.client):
-            raise permissions.PermissionDenied("You are not in this conversation.")
+            raise PermissionDenied("You are not in this conversation.")
+
         if thread.is_blocked_for(user):
-            raise permissions.PermissionDenied("This conversation is blocked.")
+            raise PermissionDenied("This conversation is blocked.")
+
         return thread
 
     def get_queryset(self):
@@ -500,15 +499,15 @@ class ThreadMessagesView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        # ✅ Gate: recipient must accept before they can send messages.
-        # (initiator is accepted when created; recipient stays unaccepted until ThreadActionView accept)
+        # ✅ Gate: user must have accepted to send messages
         if not thread.user_has_accepted(user):
-            raise permissions.PermissionDenied("Message request not accepted yet.")
+            raise PermissionDenied("Message request not accepted yet.")
 
         msg = serializer.save(sender=user, thread=thread)
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
         return msg
+
 
 class ThreadActionView(APIView):
     """
