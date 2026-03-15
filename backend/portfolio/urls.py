@@ -11,7 +11,9 @@ from .views import (
     InboxThreadListView,
     ThreadActionView,
     BlockListView,
-    FavoriteProjectListView,  # <- favorites list
+    FavoriteProjectListView,
+    MessageStartView,
+    ThreadMessagesView,
 )
 
 router = DefaultRouter()
@@ -77,5 +79,13 @@ urlpatterns = [
         "favorites/projects/",
         FavoriteProjectListView.as_view(),
         name="favorite-projects",
+    ),
+    path("messages/start/", 
+        MessageStartView.as_view(), 
+        name="messages-start",
+    ),
+    path("messages/threads/<int:thread_id>/messages/", 
+        ThreadMessagesView.as_view(), 
+        name="thread-messages",
     ),
 ]

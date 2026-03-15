@@ -435,6 +435,79 @@ class InboxThreadListView(generics.ListAPIView):
         # Serializer will decide if it's inbox vs request based on flags.
         return qs
 
+        # ---------------------------------------------------
+        # Direct messaging (non-project) — used by QuickMessageDrawer
+        # ---------------------------------------------------
+        class MessageStartView(APIView):
+            """
+            POST /api/messages/start/
+            Body: {"username": "<recipient_username>"}
+            Returns: {"thread_id": <id>}
+            """
+            permission_classes = [IsAuthenticated]
+
+            def post(self, request, *args, **kwargs):
+                username = (request.data.get("username") or "").strip()
+                if not username:
+                    return Response({"detail": "Missing username."}, status=status.HTTP_400_BAD_REQUEST)
+
+                target = get_object_or_404(settings.AUTH_USER_MODEL, username=username)
+
+                if target.id == request.user.id:
+                    return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+                # Create or fetch DM between the two users (project optional)
+                thread, created = MessageThread.get_or_create_dm(
+                    request.user,
+                    target,
+                    origin_project=None,
+                    initiated_by=request.user,
+                )
+
+                # If thread already existed but current user is initiating now, ensure they are marked accepted.
+                # This matches your "gate stays open once accepted" behavior.
+                if not thread.user_has_accepted(request.user):
+                    thread.mark_accepted(request.user)
+
+                return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
+
+
+        class ThreadMessagesView(generics.ListCreateAPIView):
+            """
+            GET  /api/messages/threads/<thread_id>/messages/
+            POST /api/messages/threads/<thread_id>/messages/
+            """
+            serializer_class = PrivateMessageSerializer
+            permission_classes = [IsAuthenticated]
+            parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+            def get_thread(self):
+                thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
+                user = self.request.user
+
+                if user not in (thread.owner, thread.client):
+                    raise permissions.PermissionDenied("You are not in this conversation.")
+                if thread.is_blocked_for(user):
+                    raise permissions.PermissionDenied("This conversation is blocked.")
+                return thread
+
+            def get_queryset(self):
+                thread = self.get_thread()
+                return PrivateMessage.objects.filter(thread=thread).select_related("sender")
+
+            def perform_create(self, serializer):
+                thread = self.get_thread()
+                user = self.request.user
+
+                # ✅ Gate: recipient must accept before they can send messages.
+                # (initiator is accepted when created; recipient stays unaccepted until ThreadActionView accept)
+                if not thread.user_has_accepted(user):
+                    raise permissions.PermissionDenied("Message request not accepted yet.")
+
+                msg = serializer.save(sender=user, thread=thread)
+                thread.updated_at = timezone.now()
+                thread.save(update_fields=["updated_at"])
+                return msg
 
 class ThreadActionView(APIView):
     """
