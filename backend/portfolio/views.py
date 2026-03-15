@@ -378,10 +378,8 @@ class ProjectThreadCreateView(generics.GenericAPIView):
 class ThreadMessageListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/projects/<pk>/threads/<thread_id>/messages/
-        (pk is ignored, kept only for URL compatibility)
     POST /api/projects/<pk>/threads/<thread_id>/messages/
     """
-
     serializer_class = PrivateMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -391,9 +389,9 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
         user = self.request.user
 
         if user not in (thread.owner, thread.client):
-            raise permissions.PermissionDenied("You are not in this conversation.")
+            raise PermissionDenied("You are not in this conversation.")
         if thread.is_blocked_for(user):
-            raise permissions.PermissionDenied("This conversation is blocked.")
+            raise PermissionDenied("This conversation is blocked.")
         return thread
 
     def get_queryset(self):
@@ -404,25 +402,16 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        # ✅ Ignore window enforcement (recipient ignored request → sender blocked temporarily)
+        # ✅ ignore window enforcement (only blocks sender if recipient ignored)
         other = thread.client if user.id == thread.owner_id else thread.owner
         ignored_until = thread.ignored_until_for(other)
-        if (
-            (not thread.user_has_accepted(other))
-            and ignored_until
-            and timezone.now() < ignored_until
-        ):
-            raise permissions.PermissionDenied(
-                "Recipient ignored this request. Try again tomorrow."
-            )
+        if (not thread.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
+            raise PermissionDenied("Recipient ignored this request. Try again tomorrow.")
 
-        # Block checks (defensive; also handled in get_thread)
         if thread.is_blocked_for(user):
-            raise permissions.PermissionDenied("This conversation is blocked.")
+            raise PermissionDenied("This conversation is blocked.")
 
-        # ✅ Save the message (this is where it persists)
         message = serializer.save(sender=user, thread=thread)
-
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
         return message
@@ -636,7 +625,6 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
     GET  /api/messages/threads/<thread_id>/messages/
     POST /api/messages/threads/<thread_id>/messages/
     """
-
     serializer_class = PrivateMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -646,9 +634,9 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         user = self.request.user
 
         if user not in (thread.owner, thread.client):
-            raise permissions.PermissionDenied("You are not in this conversation.")
+            raise PermissionDenied("You are not in this conversation.")
         if thread.is_blocked_for(user):
-            raise permissions.PermissionDenied("This conversation is blocked.")
+            raise PermissionDenied("This conversation is blocked.")
         return thread
 
     def get_queryset(self):
@@ -659,27 +647,17 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        # ✅ Ignore window enforcement (recipient ignored request → sender blocked temporarily)
+        # ✅ ignore window enforcement (blocks sender if recipient ignored)
         other = thread.client if user.id == thread.owner_id else thread.owner
         ignored_until = thread.ignored_until_for(other)
-        if (
-            (not thread.user_has_accepted(other))
-            and ignored_until
-            and timezone.now() < ignored_until
-        ):
-            raise permissions.PermissionDenied(
-                "Recipient ignored this request. Try again tomorrow."
-            )
+        if (not thread.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
+            raise PermissionDenied("Recipient ignored this request. Try again tomorrow.")
 
-        # ✅ Gate: user must have accepted to send messages (reply)
+        # ✅ gate: you must have accepted to send (reply)
         if not thread.user_has_accepted(user):
-            raise permissions.PermissionDenied(
-                "Accept the message request to reply. (Open Inbox → Accept)"
-            )
+            raise PermissionDenied("Accept the message request to reply. (Open Inbox → Accept)")
 
-        # ✅ Save the message (this is where it persists)
         msg = serializer.save(sender=user, thread=thread)
-
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
         return msg
