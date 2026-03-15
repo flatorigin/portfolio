@@ -365,12 +365,9 @@ class MessageThread(models.Model):
 
 
 def message_attachment_upload_path(instance, filename):
-    """
-    ✅ FIX: thread.project is optional.
-    Keep a stable path even if project is None.
-    """
     thread = instance.thread
-    project_part = str(thread.project_id) if thread.project_id else "no_project"
+    # thread.project can be null for "direct" messages (no project context)
+    project_part = thread.project_id or "direct"
     return f"messages/{thread.owner_id}/{project_part}/{thread.client_id}/{filename}"
 
 

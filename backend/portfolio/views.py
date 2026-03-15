@@ -11,7 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from accounts.models import Profile
 
@@ -578,74 +578,43 @@ class BlockListView(generics.ListAPIView):
 class DirectMessageStartView(APIView):
     """
     POST /api/messages/start/
-    Body: { "username": "<recipient_username>" }
-    Returns: { "thread_id": <id> }
-
-    Rules:
-    - Always allow if thread already exists.
-    - Otherwise allow only if:
-        * recipient.profile.allow_direct_messages == True
-        OR
-        * sender has at least one published public job posting
+    Body: {"username": "<recipient_username>"}
+    Returns: {"thread_id": <id>}
+    Creates or returns a DM thread WITHOUT requiring a project.
+    Message-request rules:
+      - Initiator is auto-accepted
+      - Recipient stays unaccepted until they accept in inbox
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         username = (request.data.get("username") or "").strip()
         if not username:
-            return Response({"detail": "Missing username."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "username is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         recipient = get_object_or_404(User, username=username)
 
         if recipient.id == request.user.id:
             return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1) If thread exists already -> allow
-        owner, client = MessageThread.normalize_users(request.user, recipient)
-        existing = MessageThread.objects.filter(owner=owner, client=client).first()
-        if existing:
-            return Response({"thread_id": existing.id}, status=status.HTTP_200_OK)
-
-        # Ensure recipient profile exists (safe)
-        recipient_profile, _ = Profile.objects.get_or_create(user=recipient)
-
-        # 2) Gate: recipient allows direct DMs?
-        recipient_allows = bool(getattr(recipient_profile, "allow_direct_messages", False))
-
-        # 3) Gate: sender has a published public job post?
-        sender_has_published_job = Project.objects.filter(
-            owner=request.user,
-            is_job_posting=True,
-            job_is_published=True,
-            post_privacy="public",
-        ).exists()
-
-        if not recipient_allows and not sender_has_published_job:
-            return Response(
-                {
-                    "detail": "Direct messages are restricted. Create a published job post or enable direct messages."
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        # Create DM thread (message request logic is in get_or_create_dm)
         thread, _created = MessageThread.get_or_create_dm(
             request.user,
             recipient,
-            origin_project=None,
-            initiated_by=request.user,
+            origin_project=None,          # ✅ no project context
+            initiated_by=request.user,    # ✅ message request gating
         )
 
-        return Response({"thread_id": thread.id}, status=status.HTTP_201_CREATED)
+        # Ensure the initiator is marked accepted even if thread already existed
+        thread.mark_accepted(request.user)
+
+        return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
 
 
-class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
+class DirectThreadMessagesView(generics.ListCreateAPIView):
     """
     GET  /api/messages/threads/<thread_id>/messages/
     POST /api/messages/threads/<thread_id>/messages/
-    Enforces message-request accept gate:
-      - Sender can send only ONE message until the other user accepts.
-      - Recipient must accept to reply.
+    This is the "no project" thread messages endpoint for QuickMessageDrawer.
     """
     serializer_class = PrivateMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -656,10 +625,10 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         user = self.request.user
 
         if user not in (thread.owner, thread.client):
-            raise PermissionDenied("You are not in this conversation.")
+            raise permissions.PermissionDenied("You are not in this conversation.")
 
         if thread.is_blocked_for(user):
-            raise PermissionDenied("This conversation is blocked.")
+            raise permissions.PermissionDenied("This conversation is blocked.")
 
         return thread
 
@@ -671,18 +640,10 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        if thread.is_blocked_for(user):
-            raise PermissionDenied("This conversation is blocked.")
-
-        # ---- Accept gate ----
-        # Allow exactly ONE message until the other user accepts.
-        other = thread.client if user.id == thread.owner_id else thread.owner
-        other_has_accepted = thread.user_has_accepted(other)
-
-        if not other_has_accepted:
-            # If any message already exists, block further sending until accepted
-            if PrivateMessage.objects.filter(thread=thread).exists():
-                raise PermissionDenied("Waiting for the recipient to accept this chat request.")
+        # ✅ Message-request rule:
+        # recipient cannot send until they accept the thread
+        if not thread.user_has_accepted(user):
+            raise permissions.PermissionDenied("Please accept this message request to reply.")
 
         msg = serializer.save(sender=user, thread=thread)
         thread.updated_at = timezone.now()
