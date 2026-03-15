@@ -20,65 +20,34 @@ router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
 
 urlpatterns = [
-    # -------------------------------------------------
-    # REST router (projects CRUD)
-    # -------------------------------------------------
+    # DRF router (projects CRUD)
     path("", include(router.urls)),
 
-    # -------------------------------------------------
-    # Favorites (projects)
-    # -------------------------------------------------
-    path(
-        "favorites/projects/",
-        FavoriteProjectListView.as_view(),
-        name="favorite-projects",
-    ),
+    # Favorites list for current user
+    path("favorites/projects/", FavoriteProjectListView.as_view(), name="favorite-projects"),
 
-    # -------------------------------------------------
-    # Project comments
-    # -------------------------------------------------
-    path(
-        "projects/<int:pk>/comments/",
-        ProjectCommentListCreateView.as_view(),
-        name="project-comments",
-    ),
+    # Comments
+    path("projects/<int:pk>/comments/", ProjectCommentListCreateView.as_view(), name="project-comments"),
     path(
         "projects/<int:pk>/comments/<int:comment_id>/",
         ProjectCommentDetailView.as_view(),
         name="project-comment-detail",
     ),
 
-    # -------------------------------------------------
-    # Project-context messaging (existing)
-    # -------------------------------------------------
-    path(
-        "projects/<int:pk>/threads/",
-        ProjectThreadCreateView.as_view(),
-        name="project-thread",
-    ),
+    # Project-tied private threads (existing system)
+    path("projects/<int:pk>/threads/", ProjectThreadCreateView.as_view(), name="project-thread"),
     path(
         "projects/<int:pk>/threads/<int:thread_id>/messages/",
         ThreadMessageListCreateView.as_view(),
         name="project-thread-messages",
     ),
 
-    # -------------------------------------------------
-    # Inbox (threads + actions)
-    # -------------------------------------------------
+    # Global inbox (threads)
     path("inbox/threads/", InboxThreadListView.as_view(), name="inbox-threads"),
-    path(
-        "inbox/threads/<int:pk>/actions/",
-        ThreadActionView.as_view(),
-        name="inbox-thread-actions",
-    ),
+    path("inbox/threads/<int:pk>/actions/", ThreadActionView.as_view(), name="inbox-thread-actions"),
     path("inbox/blocked/", BlockListView.as_view(), name="inbox-blocked"),
 
-    # -------------------------------------------------
-    # Direct messaging (NO project context)
-    # Frontend QuickMessageDrawer uses these:
-    #   POST /api/messages/start/
-    #   GET|POST /api/messages/threads/<id>/messages/
-    # -------------------------------------------------
+    # ✅ Direct messages (no project context) — used by QuickMessageDrawer
     path("messages/start/", DirectMessageStartView.as_view(), name="dm-start"),
     path(
         "messages/threads/<int:thread_id>/messages/",
