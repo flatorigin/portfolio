@@ -40,6 +40,7 @@ class Profile(models.Model):
 
     banner = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
 
+    allow_direct_messages = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"

@@ -14,6 +14,8 @@ from .views import (
     FavoriteProjectListView,
     MessageStartView,
     ThreadMessagesView,
+    DirectMessageStartView,
+    DirectThreadMessageListCreateView,
 )
 
 router = DefaultRouter()
@@ -82,4 +84,7 @@ urlpatterns = [
     ),
     path("messages/start/", MessageStartView.as_view(), name="messages-start"),
     path("messages/threads/<int:thread_id>/messages/", ThreadMessagesView.as_view(), name="thread-messages"),
+    path("messages/start/", DirectMessageStartView.as_view(), name="dm-start"),
+    path("messages/threads/<int:thread_id>/messages/", DirectThreadMessageListCreateView.as_view(), name="dm-thread-messages"),
 ]
+

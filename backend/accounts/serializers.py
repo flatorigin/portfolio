@@ -36,6 +36,7 @@ class MeSerializer(serializers.ModelSerializer):
             "banner_url",
             "like_count",
             "liked_by_me",
+            "allow_direct_messages",
         ]
         read_only_fields = ["id", "username", "email", "avatar_url", "banner_url", "like_count", "liked_by_me"]
 
@@ -95,6 +96,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             "banner_url",
             "like_count",
             "liked_by_me",
+            "allow_direct_messages",
         )
         read_only_fields = ("id", "username", "avatar_url", "banner_url", "like_count", "liked_by_me")
 
