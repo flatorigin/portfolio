@@ -1,4 +1,3 @@
-SavedProfilesGrid.jsx
 // =======================================
 // file: frontend/src/components/SavedProfilesGrid.jsx
 // Dashboard section: Saved Profiles (liked public profiles)
@@ -30,22 +29,34 @@ export default function SavedProfilesGrid() {
   const [tip, setTip] = useState({ open: false, x: 0, y: 0, p: null });
   const timerRef = useRef(null);
 
+  // Always use the correct backend path (accounts URLs are under /api/)
+  const API_PATH = "/api/profiles/liked/";
+
+  // Re-fetch when likes change
   useEffect(() => {
     const handler = () => {
-      // re-fetch quickly
-      api.get("/profiles/liked/").then(({ data }) => {
-        setProfiles(Array.isArray(data) ? data : []);
-      }).catch(() => {});
+      api
+        .get(API_PATH)
+        .then(({ data }) => {
+          setProfiles(Array.isArray(data) ? data : []);
+        })
+        .catch(() => {
+          /* silent */
+        });
     };
+
     window.addEventListener("profiles:liked_changed", handler);
     return () => window.removeEventListener("profiles:liked_changed", handler);
   }, []);
-  
+
+  // Initial load
   useEffect(() => {
     let alive = true;
+
     if (!authed) {
       setLoading(false);
       setProfiles([]);
+      setError("");
       return;
     }
 
@@ -53,7 +64,7 @@ export default function SavedProfilesGrid() {
       setLoading(true);
       setError("");
       try {
-        const { data } = await api.get("/profiles/liked/");
+        const { data } = await api.get(API_PATH);
         if (!alive) return;
         setProfiles(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -78,7 +89,9 @@ export default function SavedProfilesGrid() {
 
     const rect = evt.currentTarget.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
-    const y = rect.top; // tooltip above card
+
+    // anchor tooltip above the card
+    const y = rect.top;
 
     timerRef.current = setTimeout(() => {
       setTip({ open: true, x, y, p });
@@ -89,6 +102,9 @@ export default function SavedProfilesGrid() {
     if (timerRef.current) clearTimeout(timerRef.current);
     setTip({ open: false, x: 0, y: 0, p: null });
   };
+
+  // Put tooltip a bit above the card so it doesn’t overlap it
+  const tooltipTop = Math.max(12, tip.y - 140);
 
   return (
     <Card className="p-5">
@@ -122,6 +138,8 @@ export default function SavedProfilesGrid() {
                 className="group"
                 onMouseEnter={(e) => onEnter(e, p)}
                 onMouseLeave={onLeave}
+                onFocus={(e) => onEnter(e, p)}
+                onBlur={onLeave}
               >
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
                   <div className="flex items-center gap-3 p-4">
@@ -131,6 +149,7 @@ export default function SavedProfilesGrid() {
                         alt={name}
                         className="h-12 w-12 rounded-full object-cover"
                         onError={(e) => {
+                          // fallback to initial if image fails
                           e.currentTarget.style.display = "none";
                         }}
                       />
@@ -157,12 +176,12 @@ export default function SavedProfilesGrid() {
                 {tip.open && tip.p?.username === p.username ? (
                   <div
                     className="fixed z-[80] w-[320px] -translate-x-1/2 rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow-2xl"
-                    style={{ left: tip.x, top: Math.max(12, tip.y - 12) }}
+                    style={{ left: tip.x, top: tooltipTop }}
                   >
-                    <div className="text-sm font-semibold text-slate-900">
-                      {name}
-                    </div>
-                    {tag ? <div className="mt-1 text-[11px] text-slate-500">{tag}</div> : null}
+                    <div className="text-sm font-semibold text-slate-900">{name}</div>
+                    {tag ? (
+                      <div className="mt-1 text-[11px] text-slate-500">{tag}</div>
+                    ) : null}
                     {bio ? (
                       <div className="mt-2 text-[11px] text-slate-700">
                         {bio.length > 80 ? bio.slice(0, 80) + "…" : bio}
@@ -178,7 +197,6 @@ export default function SavedProfilesGrid() {
         </div>
       )}
 
-      {/* Optional: if more than 6, show a subtle hint */}
       {profiles.length > 6 ? (
         <div className="mt-3 text-[11px] text-slate-500">
           Showing 6 of {profiles.length}. (Pagination/scroll can be added next.)
