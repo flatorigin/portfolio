@@ -9,6 +9,7 @@ import api from "../api";
 import { Card, Button, Textarea } from "../ui";
 
 export default function MessagesThread() {
+  // optional route: /messages/:threadId
   const { threadId: threadIdParam } = useParams();
 
   const [threads, setThreads] = useState([]);
@@ -23,6 +24,7 @@ export default function MessagesThread() {
 
   const [readThreadIds, setReadThreadIds] = useState(new Set());
 
+  // Logged-in user (so the logic works for any account)
   const [meUsername, setMeUsername] = useState("");
 
   // ---------- Fetch current user (me) once ----------
@@ -30,12 +32,12 @@ export default function MessagesThread() {
     (async () => {
       try {
         const { data } = await api.get("/auth/users/me/");
-        setMeUsername(data.username || "");
+        setMeUsername(data?.username || "");
       } catch (err1) {
         try {
           const { data } = await api.get("/users/me/");
-          setMeUsername(data.username || data.user?.username || "");
-        } catch (err2) {
+          setMeUsername(data?.username || data?.user?.username || "");
+        } catch {
           const localUsername = localStorage.getItem("username") || "";
           setMeUsername(localUsername);
         }
@@ -45,11 +47,18 @@ export default function MessagesThread() {
 
   const meLower = (meUsername || "").toLowerCase();
 
+  // ---------- Helpers ----------
+
+  // Current selected thread
   const activeThread = useMemo(
     () => threads.find((t) => String(t.id) === String(activeThreadId)) || null,
     [threads, activeThreadId]
   );
 
+  // ✅ Request state (needs to be AFTER activeThread)
+  const threadIsRequest = !!activeThread?.is_request;
+
+  // Mark thread as read (local, session-only)
   const markThreadRead = (id) => {
     setReadThreadIds((prev) => {
       const next = new Set(prev);
@@ -58,29 +67,47 @@ export default function MessagesThread() {
     });
   };
 
-  // Decide who the “other person” is
+  // "Counterpart" = the other person in the conversation
   const counterpartFor = (thread) => {
     if (!thread) return null;
 
     const ownerProfile = thread.owner_profile || {};
     const clientProfile = thread.client_profile || {};
 
-    const ownerUsernameRaw = thread.owner_username || ownerProfile.username || "";
-    const clientUsernameRaw = thread.client_username || clientProfile.username || "";
+    const ownerUsernameRaw =
+      thread.owner_username || ownerProfile.username || "";
+    const clientUsernameRaw =
+      thread.client_username || clientProfile.username || "";
 
     const ownerLower = ownerUsernameRaw.toLowerCase();
     const clientLower = clientUsernameRaw.toLowerCase();
 
-    const ownerDisplay = ownerProfile.display_name || ownerUsernameRaw || "User";
-    const clientDisplay = clientProfile.display_name || clientUsernameRaw || "User";
+    const ownerDisplay =
+      ownerProfile.display_name || ownerUsernameRaw || "User";
+    const clientDisplay =
+      clientProfile.display_name || clientUsernameRaw || "User";
 
+    // If I'm the owner, the other person is the client
     if (meLower && ownerLower === meLower) {
-      return { username: clientUsernameRaw, display_name: clientDisplay };
+      return {
+        username: clientUsernameRaw,
+        display_name: clientDisplay,
+      };
     }
+
+    // If I'm the client, the other person is the owner
     if (meLower && clientLower === meLower) {
-      return { username: ownerUsernameRaw, display_name: ownerDisplay };
+      return {
+        username: ownerUsernameRaw,
+        display_name: ownerDisplay,
+      };
     }
-    return { username: clientUsernameRaw, display_name: clientDisplay };
+
+    // Fallback
+    return {
+      username: clientUsernameRaw,
+      display_name: clientDisplay,
+    };
   };
 
   const counterpart = useMemo(
@@ -88,7 +115,7 @@ export default function MessagesThread() {
     [activeThread, meLower]
   );
 
-  // ---------- Fetch threads ----------
+  // ---------- Fetch threads (left list) ----------
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true);
     try {
@@ -96,6 +123,7 @@ export default function MessagesThread() {
       const arr = Array.isArray(data) ? data : [];
       setThreads(arr);
 
+      // Initial selection logic
       setActiveThreadId((prev) => {
         if (prev) return prev;
         if (threadIdParam) return Number(threadIdParam);
@@ -113,6 +141,22 @@ export default function MessagesThread() {
     fetchThreads();
   }, [fetchThreads]);
 
+  // ✅ Thread actions: accept / ignore / block / unblock / delete
+  async function threadAction(action) {
+    if (!activeThread?.id) return;
+    try {
+      await api.post(`/inbox/threads/${activeThread.id}/actions/`, { action });
+      await fetchThreads(); // refresh list + flags
+      // refresh messages too when accepting
+      if (action === "accept") {
+        await fetchMessages({ silent: false });
+      }
+    } catch (err) {
+      console.error("[MessagesThread] thread action failed", err?.response || err);
+      alert(err?.response?.data?.detail || "Action failed.");
+    }
+  }
+
   // ---------- Fetch messages (DIRECT endpoint) ----------
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
@@ -129,6 +173,7 @@ export default function MessagesThread() {
         );
         const arr = Array.isArray(data) ? data : [];
 
+        // Avoid unnecessary re-renders if nothing changed
         setMessages((prev) => {
           if (
             prev.length === arr.length &&
@@ -140,9 +185,13 @@ export default function MessagesThread() {
         });
       } catch (err) {
         console.error("[MessagesThread] failed to load messages", err?.response || err);
-        if (!silent) setMessages([]);
+        if (!silent) {
+          setMessages([]);
+        }
       } finally {
-        if (!silent) setLoadingMessages(false);
+        if (!silent) {
+          setLoadingMessages(false);
+        }
       }
     },
     [activeThread?.id]
@@ -154,8 +203,10 @@ export default function MessagesThread() {
       return;
     }
 
+    // Initial load with spinner
     fetchMessages({ silent: false });
 
+    // Background polling every 8s (silent)
     const id = setInterval(() => {
       fetchMessages({ silent: true });
     }, 8000);
@@ -163,22 +214,7 @@ export default function MessagesThread() {
     return () => clearInterval(id);
   }, [activeThread?.id, fetchMessages]);
 
-  // ---------- Accept request (if needed) ----------
-  const acceptThread = async () => {
-    if (!activeThread?.id) return;
-    try {
-      await api.post(`/inbox/threads/${activeThread.id}/actions/`, {
-        action: "accept",
-      });
-      await fetchThreads();
-      await fetchMessages({ silent: false });
-    } catch (err) {
-      console.error("[MessagesThread] accept failed", err?.response || err);
-      alert("Failed to accept message request.");
-    }
-  };
-
-  // ---------- Send message (DIRECT endpoint) ----------
+  // ---------- Send new message (DIRECT endpoint) ----------
   const handleSend = async (e) => {
     e.preventDefault();
     if (!activeThread?.id || !messageText.trim()) return;
@@ -191,19 +227,17 @@ export default function MessagesThread() {
       setMessageText("");
       await fetchMessages({ silent: false });
     } catch (err) {
-      const msg =
-        err?.response?.data?.detail ||
-        err?.message ||
-        "Failed to send message.";
-      alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+      console.error("[MessagesThread] send error", err?.response || err);
+      alert(err?.response?.data?.detail || "Failed to send message.");
     } finally {
       setSending(false);
     }
   };
 
+  // ---------- Render ----------
   return (
     <div className="flex items-start gap-4">
-      {/* LEFT: thread list */}
+      {/* LEFT COLUMN: fixed width list of conversations */}
       <div className="w-64 shrink-0">
         <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -223,6 +257,7 @@ export default function MessagesThread() {
                 const name = cp?.display_name || cp?.username || "User";
 
                 const latest = t.latest_message || null;
+
                 const dateLabel = latest?.created_at
                   ? new Date(latest.created_at).toLocaleDateString()
                   : "";
@@ -270,7 +305,7 @@ export default function MessagesThread() {
         </Card>
       </div>
 
-      {/* RIGHT: messages */}
+      {/* RIGHT COLUMN: main conversation area */}
       <div className="flex-1">
         <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
           {!activeThread ? (
@@ -279,28 +314,61 @@ export default function MessagesThread() {
             </div>
           ) : (
             <>
+              {/* Header: name linked to counterpart's profile */}
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="text-sm font-semibold text-slate-900">
-                  {counterpart?.username ? (
+                  {counterpart && counterpart.username ? (
                     <Link
                       to={`/profiles/${counterpart.username}`}
                       className="text-slate-900 hover:underline"
                     >
-                      {counterpart.display_name || counterpart.username}
+                      {counterpart.display_name ||
+                        counterpart.username ||
+                        "Conversation"}
                     </Link>
                   ) : (
                     "Conversation"
                   )}
                 </div>
-
-                {/* If your serializer sets a flag like is_request, show Accept */}
-                {activeThread.is_request && (
-                  <Button type="button" onClick={acceptThread}>
-                    Accept
-                  </Button>
-                )}
               </div>
 
+              {/* Message request actions */}
+              {threadIsRequest && (
+                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                  <div className="text-xs font-semibold text-amber-900">
+                    Message request
+                  </div>
+                  <div className="mt-1 text-[11px] text-amber-800">
+                    Accept to allow replies. Ignore to pause it (try again later).
+                    Block to stop messages.
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button type="button" onClick={() => threadAction("accept")}>
+                      Accept
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => threadAction("ignore")}
+                    >
+                      Ignore
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-red-300 text-red-700 hover:bg-red-50"
+                      onClick={() => threadAction("block")}
+                    >
+                      Block
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Messages: other person left, me right */}
               <div className="mb-3 flex-1 overflow-y-auto rounded-xl bg-slate-50 p-3">
                 {loadingMessages ? (
                   <p className="text-xs text-slate-500">Loading messages…</p>
@@ -311,7 +379,8 @@ export default function MessagesThread() {
                 ) : (
                   messages.map((m) => {
                     const fromMe =
-                      (m.sender_username || "").toLowerCase() === meLower;
+                      m.sender_username &&
+                      m.sender_username.toLowerCase() === meLower;
 
                     const alignClass = fromMe ? "justify-end" : "justify-start";
                     const bubbleClass = fromMe
@@ -350,6 +419,7 @@ export default function MessagesThread() {
                 )}
               </div>
 
+              {/* Input */}
               <form onSubmit={handleSend} className="space-y-2">
                 <Textarea
                   rows={2}

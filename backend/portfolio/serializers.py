@@ -328,7 +328,7 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
                 attrs["service_categories"] = []
 
         return attrs
-
+        
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")
     owner_username = serializers.ReadOnlyField(source="owner.username")
@@ -336,6 +336,9 @@ class MessageThreadSerializer(serializers.ModelSerializer):
     latest_message = serializers.SerializerMethodField()
     owner_profile = ProfileSerializer(source="owner.profile", read_only=True)
     client_profile = ProfileSerializer(source="client.profile", read_only=True)
+
+    # ✅ ADD THIS
+    is_request = serializers.SerializerMethodField()
 
     class Meta:
         model = MessageThread
@@ -358,6 +361,9 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "latest_message",
+
+            # ✅ ADD THIS
+            "is_request",
         ]
         read_only_fields = fields
 
@@ -366,3 +372,16 @@ class MessageThreadSerializer(serializers.ModelSerializer):
         if not msg:
             return None
         return PrivateMessageSerializer(msg, context=self.context).data
+
+    # ✅ ADD THIS METHOD
+    def get_is_request(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        if user.id == obj.owner_id:
+            return not bool(getattr(obj, "owner_has_accepted", True))
+        if user.id == obj.client_id:
+            return not bool(getattr(obj, "client_has_accepted", True))
+        return False
