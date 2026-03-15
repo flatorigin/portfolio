@@ -594,7 +594,7 @@ class DirectMessageStartView(APIView):
         if recipient.id == request.user.id:
             return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create or fetch DM thread between users (NO project required)
+        # Create or fetch DM (no project context)
         thread, _created = MessageThread.get_or_create_dm(
             request.user,
             recipient,
@@ -602,11 +602,10 @@ class DirectMessageStartView(APIView):
             initiated_by=request.user,
         )
 
-        # Ensure the sender is "accepted" for this thread (idempotent)
+        # ✅ IMPORTANT: always ensure the sender is marked accepted (even if thread existed)
         thread.mark_accepted(request.user)
 
         return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
-
 
 class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
     """
@@ -622,11 +621,9 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         user = self.request.user
 
         if user not in (thread.owner, thread.client):
-            raise PermissionDenied("You are not in this conversation.")
-
+            raise permissions.PermissionDenied("You are not in this conversation.")
         if thread.is_blocked_for(user):
-            raise PermissionDenied("This conversation is blocked.")
-
+            raise permissions.PermissionDenied("This conversation is blocked.")
         return thread
 
     def get_queryset(self):
@@ -637,14 +634,13 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        if thread.is_blocked_for(user):
-            raise PermissionDenied("This conversation is blocked.")
-
-        # ✅ Accept gate:
-        # - initiator can send immediately (they are marked accepted)
-        # - recipient must accept before replying
+        # ✅ Rule:
+        # - Sender can always send (they are marked accepted when starting)
+        # - Recipient must ACCEPT before they can reply
         if not thread.user_has_accepted(user):
-            raise PermissionDenied("Message request not accepted yet. Open Inbox → Accept.")
+            raise permissions.PermissionDenied(
+                "Accept the message request to reply. (Open Inbox → Accept)"
+            )
 
         msg = serializer.save(sender=user, thread=thread)
         thread.updated_at = timezone.now()

@@ -47,7 +47,7 @@ urlpatterns = [
     path("inbox/threads/<int:pk>/actions/", ThreadActionView.as_view(), name="inbox-thread-actions"),
     path("inbox/blocked/", BlockListView.as_view(), name="inbox-blocked"),
 
-    # ✅ Direct messages (no project context) — used by QuickMessageDrawer
+    # ✅ Direct messages (no project context required)
     path("messages/start/", DirectMessageStartView.as_view(), name="dm-start"),
     path(
         "messages/threads/<int:thread_id>/messages/",
