@@ -127,3 +127,42 @@ class ProfileSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
         return ProfileLike.objects.filter(liker=request.user, liked_user=obj.user).exists()
+
+class LikedProfileCardSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+
+    # “small tag category below the name” → use service_location
+    tag = serializers.SerializerMethodField()
+
+    # used for tooltip
+    bio_preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "username",
+            "display_name",
+            "avatar_url",
+            "tag",
+            "bio_preview",
+        ]
+
+    def _abs(self, request, url: str):
+        return request.build_absolute_uri(url) if request else url
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        image = obj.avatar or obj.logo
+        if image and hasattr(image, "url"):
+            return self._abs(request, image.url)
+        return None
+
+    def get_tag(self, obj):
+        return (obj.service_location or "").strip()
+
+    def get_bio_preview(self, obj):
+        # first line only
+        txt = (obj.bio or "").strip().splitlines()
+        return (txt[0] if txt else "").strip()

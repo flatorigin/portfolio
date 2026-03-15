@@ -827,9 +827,20 @@ export default function ProjectDetail() {
       <div className="mb-4 flex items-center justify-between">
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            <Link to="/" className="hover:underline">
-              Explore
-            </Link>
+            {!isMine ? (
+              <button
+                type="button"
+                onClick={toggleLike}
+                disabled={!authed || likeBusy}
+                className="rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur hover:bg-white/20 disabled:opacity-60"
+                title={authed ? "Like this profile" : "Login to like profiles"}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                  <span>{likeCount}</span>
+                </span>
+              </button>
+            ) : null}
             <span className="mx-1">/</span>
             <span className="text-slate-700">Project</span>
           </div>

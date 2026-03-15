@@ -183,6 +183,59 @@ export default function PublicProfile() {
     );
   }
 
+  const authed = !!localStorage.getItem("access");
+  const meUsername = (localStorage.getItem("username") || "").toLowerCase();
+
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [likeBusy, setLikeBusy] = useState(false);
+
+  const isMine = (profile?.username || "").toLowerCase() === meUsername;
+
+  useEffect(() => {
+    let alive = true;
+    if (!profile?.username) return;
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/profiles/${profile.username}/like/`);
+        if (!alive) return;
+        setLiked(!!data?.liked);
+        setLikeCount(Number(data?.like_count || 0));
+      } catch {
+        if (!alive) return;
+        setLiked(false);
+        setLikeCount(0);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [profile?.username]);
+
+  async function toggleLike() {
+    if (!authed || !profile?.username || likeBusy || isMine) return;
+    setLikeBusy(true);
+    try {
+      if (liked) {
+        const { data } = await api.delete(`/profiles/${profile.username}/like/`);
+        setLiked(false);
+        setLikeCount(Number(data?.like_count || 0));
+      } else {
+        const { data } = await api.post(`/profiles/${profile.username}/like/`);
+        setLiked(true);
+        setLikeCount(Number(data?.like_count || 0));
+      }
+      // refresh dashboard card list if it listens later
+      window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Could not update like.");
+    } finally {
+      setLikeBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
       {/* FULL-WIDTH TOP BANNER */}
