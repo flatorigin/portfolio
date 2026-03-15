@@ -575,7 +575,6 @@ class BlockListView(generics.ListAPIView):
 # ---------------------------------------------------
 # Direct (non-project) messaging: start thread + messages
 # ---------------------------------------------------
-# --- Direct messaging (no project context) -----------------
 
 class DirectMessageStartView(APIView):
     """
@@ -593,17 +592,18 @@ class DirectMessageStartView(APIView):
         recipient = get_object_or_404(get_user_model(), username=recipient_username)
 
         if recipient.id == request.user.id:
-            return Response(
-                {"detail": "You cannot message yourself."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Create or fetch DM thread between users (NO project required)
         thread, _created = MessageThread.get_or_create_dm(
             request.user,
             recipient,
             origin_project=None,
             initiated_by=request.user,
         )
+
+        # Ensure the sender is "accepted" for this thread (idempotent)
+        thread.mark_accepted(request.user)
 
         return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
 
@@ -622,9 +622,11 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         user = self.request.user
 
         if user not in (thread.owner, thread.client):
-            raise permissions.PermissionDenied("You are not in this conversation.")
+            raise PermissionDenied("You are not in this conversation.")
+
         if thread.is_blocked_for(user):
-            raise permissions.PermissionDenied("This conversation is blocked.")
+            raise PermissionDenied("This conversation is blocked.")
+
         return thread
 
     def get_queryset(self):
@@ -635,11 +637,14 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        # ✅ gate: recipient must "accept" before they can reply
+        if thread.is_blocked_for(user):
+            raise PermissionDenied("This conversation is blocked.")
+
+        # ✅ Accept gate:
+        # - initiator can send immediately (they are marked accepted)
+        # - recipient must accept before replying
         if not thread.user_has_accepted(user):
-            raise permissions.PermissionDenied(
-                "Accept the message request to reply. (Open Inbox → Accept)"
-            )
+            raise PermissionDenied("Message request not accepted yet. Open Inbox → Accept.")
 
         msg = serializer.save(sender=user, thread=thread)
         thread.updated_at = timezone.now()
