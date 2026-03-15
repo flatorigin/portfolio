@@ -541,8 +541,15 @@ class ThreadActionView(APIView):
             thread.block_other(request.user)
 
         elif action == "ignore":
-            # ignore for 24 hours
-            thread.set_ignored_until(request.user, timezone.now() + timezone.timedelta(days=1))
+            # Ignore means: "I don't want to deal with this request right now"
+            # Block the OTHER user from sending until tomorrow (unless accepted already)
+            until = timezone.now() + timezone.timedelta(days=1)
+            if request.user.id == thread.owner_id:
+                thread.owner_ignored_until = until
+                thread.save(update_fields=["owner_ignored_until"])
+            elif request.user.id == thread.client_id:
+                thread.client_ignored_until = until
+                thread.save(update_fields=["client_ignored_until"])
 
         elif action == "unblock":
             thread.unblock_other(request.user)

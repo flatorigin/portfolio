@@ -351,6 +351,16 @@ class MessageThread(models.Model):
             self.client_blocked_owner = True
             self.save(update_fields=["client_blocked_owner"])
 
+    def ignored_until_for(self, user):
+        if not user:
+            return None
+        uid = getattr(user, "id", None)
+        if uid == self.owner_id:
+            return self.owner_ignored_until
+        if uid == self.client_id:
+            return self.client_ignored_until
+        return None
+
     def unblock_other(self, user):
         uid = getattr(user, "id", None)
         if uid == self.owner_id and self.owner_blocked_client:
@@ -373,14 +383,6 @@ def message_attachment_upload_path(instance, filename):
     # thread.project can be null for "direct" messages (no project context)
     project_part = thread.project_id or "direct"
     return f"messages/{thread.owner_id}/{project_part}/{thread.client_id}/{filename}"
-
-def ignored_until_for(self, user):
-    """Return ignore-until datetime for this user (participant) or None."""
-    if user.id == self.owner_id:
-        return self.owner_ignored_until
-    if user.id == self.client_id:
-        return self.client_ignored_until
-    return None
 
 def set_ignored_until(self, user, until_dt):
     """Set ignore-until for the given user (participant)."""
