@@ -352,14 +352,29 @@ class MessageThread(models.Model):
             self.save(update_fields=["client_blocked_owner"])
 
     def ignored_until_for(self, user):
+        """
+        Return ignore-until timestamp for THIS user (if they used Ignore).
+        """
         if not user:
             return None
-        uid = getattr(user, "id", None)
-        if uid == self.owner_id:
+        if user.id == self.owner_id:
             return self.owner_ignored_until
-        if uid == self.client_id:
+        if user.id == self.client_id:
             return self.client_ignored_until
         return None
+
+    def set_ignored_until(self, user, until_dt):
+        """
+        Set ignore-until timestamp for THIS user.
+        """
+        if not user:
+            return
+        if user.id == self.owner_id:
+            self.owner_ignored_until = until_dt
+            self.save(update_fields=["owner_ignored_until"])
+        elif user.id == self.client_id:
+            self.client_ignored_until = until_dt
+            self.save(update_fields=["client_ignored_until"])
 
     def unblock_other(self, user):
         uid = getattr(user, "id", None)
@@ -383,17 +398,6 @@ def message_attachment_upload_path(instance, filename):
     # thread.project can be null for "direct" messages (no project context)
     project_part = thread.project_id or "direct"
     return f"messages/{thread.owner_id}/{project_part}/{thread.client_id}/{filename}"
-
-def set_ignored_until(self, user, until_dt):
-    """Set ignore-until for the given user (participant)."""
-    if user.id == self.owner_id:
-        self.owner_ignored_until = until_dt
-        self.save(update_fields=["owner_ignored_until"])
-        return
-    if user.id == self.client_id:
-        self.client_ignored_until = until_dt
-        self.save(update_fields=["client_ignored_until"])
-        return
 
 def mark_accepted(self, user):
     uid = user.id

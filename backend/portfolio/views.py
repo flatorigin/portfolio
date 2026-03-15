@@ -3,6 +3,7 @@ from django.db import models, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from datetime import timedelta
 from django.contrib.auth import get_user_model
 
 from rest_framework.generics import ListAPIView
@@ -406,7 +407,7 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
         other = thread.client if user.id == thread.owner_id else thread.owner
         ignored_until = thread.ignored_until_for(other)
         if (not thread.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
-            raise PermissionDenied("Recipient ignored this request. Try again tomorrow.")
+            raise permissions.PermissionDenied("Recipient ignored this request. Try again tomorrow.")
 
         if thread.is_blocked_for(user):
             raise PermissionDenied("This conversation is blocked.")
@@ -559,8 +560,8 @@ class ThreadActionView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         elif action == "ignore":
-            # ignore for 24 hours
-            thread.set_ignored_until(request.user, timezone.now() + timezone.timedelta(days=1))
+            until = timezone.now() + timedelta(days=1)
+            thread.set_ignored_until(request.user, until)
 
         else:
             return Response(
@@ -658,7 +659,7 @@ class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
         other = thread.client if user.id == thread.owner_id else thread.owner
         ignored_until = thread.ignored_until_for(other)
         if (not thread.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
-            raise PermissionDenied("Recipient ignored this request. Try again tomorrow.")
+            raise permissions.PermissionDenied("Recipient ignored this request. Try again tomorrow.")
 
         # ✅ gate: you must have accepted to send (reply)
         if not thread.user_has_accepted(user):
