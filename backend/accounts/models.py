@@ -1,6 +1,9 @@
 # backend/accounts/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from django.conf import settings
+
 
 User = get_user_model()
 
@@ -37,6 +40,35 @@ class Profile(models.Model):
 
     banner = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
 
+    allow_direct_messages = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"
+
+class ProfileLike(models.Model):
+    """
+    A 'like' from one user -> another user's profile.
+    Used for "Save/Like public profile" (NOT project favorites).
+    """
+    liker = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile_likes_given",
+    )
+    liked_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile_likes_received",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["liker", "liked_user"],
+                name="unique_profile_like",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.liker_id} -> {self.liked_user_id}"

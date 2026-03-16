@@ -115,6 +115,12 @@ export default function ProjectDetail() {
       (meUser.username || "").toLowerCase();
 
   const myUsername = meUser?.username || null;
+  const isMine =
+    authed &&
+    project &&
+    meUser &&
+    (project.owner_username || "").toLowerCase() ===
+      (meUser.username || "").toLowerCase();
 
   // ─────────────────────────────
   // COVER SETTER (backend-friendly)
@@ -723,7 +729,7 @@ export default function ProjectDetail() {
       c.author_username.toLowerCase() ===
         (project.owner_username || "").toLowerCase();
 
-    const isMine =
+    const isMyComment =
       myUsername &&
       c.author_username &&
       c.author_username.toLowerCase() === myUsername.toLowerCase();
@@ -792,7 +798,7 @@ export default function ProjectDetail() {
               Reply as owner
             </button>
           )}
-          {isMine && !isEditingComment && (
+          {isMyComment && !isEditingComment && (
             <>
               <button
                 type="button"
@@ -827,9 +833,20 @@ export default function ProjectDetail() {
       <div className="mb-4 flex items-center justify-between">
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            <Link to="/" className="hover:underline">
-              Explore
-            </Link>
+            {false && !isMine ? (
+              <button
+                type="button"
+                onClick={toggleLike}
+                disabled={!authed || likeBusy}
+                className="rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur hover:bg-white/20 disabled:opacity-60"
+                title={authed ? "Like this profile" : "Login to like profiles"}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                  <span>{likeCount}</span>
+                </span>
+              </button>
+            ) : null}
             <span className="mx-1">/</span>
             <span className="text-slate-700">Project</span>
           </div>
@@ -884,9 +901,20 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            {/* RIGHT: owner edit button OR Save button */}
+            {/* RIGHT: actions */}
             <div className="flex items-start gap-2">
-              {authed && project && !isOwnerUser && (
+              {/* Visit Website (owner public profile) */}
+              {project?.owner_username ? (
+                <Link
+                  to={`/profiles/${project.owner_username}`}
+                  className="rounded-full border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm backdrop-blur-md hover:bg-white/20 active:scale-[0.99]"
+                >
+                  Visit website
+                </Link>
+              ) : null}
+
+              {/* Save (only if authed + not owner) */}
+              {authed && project && !isOwnerUser ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -902,7 +930,7 @@ export default function ProjectDetail() {
                 >
                   {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

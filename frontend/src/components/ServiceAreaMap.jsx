@@ -35,7 +35,13 @@ export default function ServiceAreaMap({
   savedLocationQuery,
   savedRadiusMiles,
 }) {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  // =========================
+  // CHANGED: read runtime-injected env first, then Vite fallback
+  // =========================
+  const apiKey =
+    (typeof window !== "undefined" && window.__ENV__?.GOOGLE_MAPS_API_KEY) ||
+    import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
+    "";
 
   const containerRef = useRef(null);
 
@@ -61,7 +67,7 @@ export default function ServiceAreaMap({
         setStatus({
           kind: "error",
           message:
-            "Missing VITE_GOOGLE_MAPS_API_KEY. Add it to Railway Variables and redeploy (it must exist at build time for Vite).",
+            "Missing Google Maps API key. Add it to Railway Variables and redeploy.",
         });
         return;
       }

@@ -1,183 +1,360 @@
 // =======================================
 // file: frontend/src/components/GlobalInbox.jsx
-// Small inbox dropdown in the header
+// Dropdown inbox + unread badge on button (local unread tracking)
+// PERF FIXES:
+// - no getReadMap() inside .map()
+// - memoized readMap + unreadCount
+// - keep last threads on error (don't nuke list)
 // =======================================
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { Card } from "../ui";
+import { Button } from "../ui";
 
-export default function GlobalInbox() {
-  const [open, setOpen] = useState(false);
-  const [threads, setThreads] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [meUsername, setMeUsername] = useState("");
+function normalizeU(s) {
+  return String(s || "").trim().toLowerCase();
+}
 
-  const navigate = useNavigate();
+function safeJsonParse(raw, fallback) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
 
-  const meLower = (meUsername || "").toLowerCase();
+function getReadMap() {
+  return safeJsonParse(localStorage.getItem("inbox_read_map") || "{}", {});
+}
 
-  // ---- fetch current user once ----
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/users/me/");
-        setMeUsername(data.username || data.user?.username || "");
-      } catch (err) {
-        console.warn("[GlobalInbox] /users/me/ failed, using localStorage", err);
-        const local = localStorage.getItem("username") || "";
-        setMeUsername(local);
-      }
-    })();
-  }, []);
+function setReadMap(next) {
+  localStorage.setItem("inbox_read_map", JSON.stringify(next || {}));
+}
 
-  // ---- helper to find counterpart (other person) ----
-  const counterpartFor = (thread) => {
-    if (!thread) return null;
+// Same counterpart logic pattern as MessagesThread.jsx
+function counterpartFor(thread, meLower) {
+  if (!thread) return null;
 
-    const ownerProfile = thread.owner_profile || {};
-    const clientProfile = thread.client_profile || {};
+  // If backend already provides counterpart, trust it
+  if (thread.counterpart) {
+    return {
+      username: thread.counterpart.username || "",
+      display_name:
+        thread.counterpart.display_name ||
+        thread.counterpart.username ||
+        "User",
+      avatar_url: thread.counterpart.avatar_url || "",
+    };
+  }
 
-    const ownerUsernameRaw =
-      thread.owner_username || ownerProfile.username || "";
-    const clientUsernameRaw =
-      thread.client_username || clientProfile.username || "";
+  const ownerProfile = thread.owner_profile || {};
+  const clientProfile = thread.client_profile || {};
 
-    const ownerLower = ownerUsernameRaw.toLowerCase();
-    const clientLower = clientUsernameRaw.toLowerCase();
+  const ownerUsernameRaw = thread.owner_username || ownerProfile.username || "";
+  const clientUsernameRaw = thread.client_username || clientProfile.username || "";
 
-    const ownerDisplay =
-      ownerProfile.display_name || ownerUsernameRaw || "User";
-    const clientDisplay =
-      clientProfile.display_name || clientUsernameRaw || "User";
+  const ownerLower = normalizeU(ownerUsernameRaw);
+  const clientLower = normalizeU(clientUsernameRaw);
 
-    // If I'm the owner, counterpart is the client
-    if (meLower && ownerLower === meLower) {
-      return {
-        username: clientUsernameRaw,
-        display_name: clientDisplay,
-      };
-    }
+  const ownerDisplay = ownerProfile.display_name || ownerUsernameRaw || "User";
+  const clientDisplay = clientProfile.display_name || clientUsernameRaw || "User";
 
-    // If I'm the client, counterpart is the owner
-    if (meLower && clientLower === meLower) {
-      return {
-        username: ownerUsernameRaw,
-        display_name: ownerDisplay,
-      };
-    }
+  const ownerAvatar = ownerProfile.avatar_url || ownerProfile.logo_url || "";
+  const clientAvatar = clientProfile.avatar_url || clientProfile.logo_url || "";
 
-    // fallback: treat client as counterpart
+  if (meLower && ownerLower === meLower) {
     return {
       username: clientUsernameRaw,
       display_name: clientDisplay,
+      avatar_url: clientAvatar,
     };
+  }
+  if (meLower && clientLower === meLower) {
+    return {
+      username: ownerUsernameRaw,
+      display_name: ownerDisplay,
+      avatar_url: ownerAvatar,
+    };
+  }
+
+  // fallback
+  return {
+    username: clientUsernameRaw,
+    display_name: clientDisplay,
+    avatar_url: clientAvatar,
   };
+}
 
-  // ---- fetch threads when dropdown opens ----
+// “Request” gate: if I haven’t accepted yet (based on flags)
+function isRequestForMe(thread, meLower) {
+  if (!thread || !meLower) return false;
+
+  const ownerLower = normalizeU(thread.owner_username);
+  const clientLower = normalizeU(thread.client_username);
+
+  const ownerAccepted = !!thread.owner_has_accepted;
+  const clientAccepted = !!thread.client_has_accepted;
+
+  if (ownerLower === meLower) return !ownerAccepted;
+  if (clientLower === meLower) return !clientAccepted;
+
+  return false;
+}
+
+export default function GlobalInbox() {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [threads, setThreads] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const panelRef = useRef(null);
+
+  const authed = !!localStorage.getItem("access");
+
+  const [meUsername, setMeUsername] = useState(
+    localStorage.getItem("username") || ""
+  );
+  const meLower = useMemo(() => normalizeU(meUsername), [meUsername]);
+
+  // ----- Click outside to close -----
   useEffect(() => {
-    if (!open) return;
-
-    let alive = true;
-    setLoading(true);
-
-    api
-      .get("/inbox/threads/")
-      .then(({ data }) => {
-        if (!alive) return;
-        const arr = Array.isArray(data) ? data : [];
-        setThreads(arr);
-      })
-      .catch((err) => {
-        console.error("[GlobalInbox] failed to load threads", err);
-        if (alive) setThreads([]);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
+    function handleClickOutside(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  // sort newest first by latest message time
-  const sortedThreads = useMemo(() => {
-    return [...threads].sort((a, b) => {
-      const aTime =
-        a.latest_message?.created_at || a.updated_at || a.created_at || "";
-      const bTime =
-        b.latest_message?.created_at || b.updated_at || b.created_at || "";
-      return (bTime || "").localeCompare(aTime || "");
-    });
-  }, [threads]);
+  // ----- Shared fetch function -----
+  const fetchThreads = useCallback(async () => {
+    if (!authed) return;
+    setError("");
+    try {
+      const { data } = await api.get("/inbox/threads/");
+      setThreads(Array.isArray(data) ? data : []);
+    } catch {
+      // PERF: keep existing threads if fetch fails (don't wipe UI)
+      setError("Unable to load your inbox.");
+    }
+  }, [authed]);
+
+  // ----- Load when dropdown opens -----
+  useEffect(() => {
+    if (!open || !authed) return;
+    setLoading(true);
+    (async () => {
+      await fetchThreads();
+      setLoading(false);
+    })();
+  }, [open, authed, fetchThreads]);
+
+  // ----- Ensure correct logged-in username -----
+  useEffect(() => {
+    if (!authed) return;
+
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/");
+        const u = data?.username || data?.user?.username || "";
+        if (u) {
+          setMeUsername(u);
+          localStorage.setItem("username", u);
+        }
+      } catch {
+        // keep existing value
+      }
+    })();
+  }, [authed]);
+
+  // ----- Background refresh for badge (poll + focus) -----
+  useEffect(() => {
+    if (!authed) return;
+
+    let cancelled = false;
+
+    async function refresh() {
+      if (cancelled) return;
+      await fetchThreads();
+    }
+
+    // initial
+    refresh();
+
+    const interval = setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("inbox:changed", refresh);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("inbox:changed", refresh);
+    };
+  }, [authed, fetchThreads]);
+
+  // ----- PERF: compute readMap once per open/list change -----
+  const readMap = useMemo(() => getReadMap(), [open, threads.length]);
+
+  // ----- Unread count (local) -----
+  const unreadCount = useMemo(() => {
+    return (threads || []).reduce((sum, t) => {
+      // If backend provides unread_count, use it
+      if (typeof t.unread_count === "number")
+        return sum + (t.unread_count > 0 ? t.unread_count : 0);
+
+      const latest = t.latest_message || null;
+      if (!latest?.id) return sum;
+
+      const latestFromMe = normalizeU(latest.sender_username) === meLower;
+      if (latestFromMe) return sum;
+
+      const lastReadId = readMap[String(t.id)];
+      const isUnread = String(lastReadId || "") !== String(latest.id);
+
+      return sum + (isUnread ? 1 : 0);
+    }, 0);
+  }, [threads, meLower, readMap]);
+
+  const markThreadRead = useCallback((thread) => {
+    const latestId = thread?.latest_message?.id;
+    if (!latestId) return;
+    const map = getReadMap();
+    map[String(thread.id)] = String(latestId);
+    setReadMap(map);
+  }, []);
+
+  if (!authed) return null;
 
   return (
-    <div className="relative">
-      <button
+    <div className="relative" ref={panelRef}>
+      <Button
         type="button"
+        className="relative px-3 py-1.5"
         onClick={() => setOpen((v) => !v)}
-        className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
       >
-        Inbox
-      </button>
+        <span>Inbox</span>
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </Button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80">
-          <Card className="overflow-hidden border border-slate-200 p-0 shadow-lg">
-            <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Messages
+        <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-900">
+              Private inbox
             </div>
+            <button
+              type="button"
+              className="text-xs text-slate-500 hover:text-slate-700"
+              onClick={() => setOpen(false)}
+            >
+              Close
+            </button>
+          </div>
 
-            {loading ? (
-              <div className="p-3 text-xs text-slate-500">Loading…</div>
-            ) : sortedThreads.length === 0 ? (
-              <div className="p-3 text-xs text-slate-500">
-                No private conversations yet.
-              </div>
-            ) : (
-              <div className="max-h-80 overflow-y-auto">
-                {sortedThreads.map((t) => {
-                  const cp = counterpartFor(t);
-                  const name = cp?.display_name || cp?.username || "User";
+          {/* Show loading without hiding existing list */}
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+          {loading ? (
+            <p className="mb-2 text-xs text-slate-500">Refreshing…</p>
+          ) : null}
 
-                  const latest = t.latest_message || null;
-                  const preview = latest?.text || "(attachment)";
-                  const timeLabel = latest?.created_at
-                    ? new Date(latest.created_at).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })
-                    : "";
+          {threads.length === 0 ? (
+            <p className="text-xs text-slate-500">No private conversations yet.</p>
+          ) : (
+            <div className="max-h-80 space-y-2 overflow-y-auto">
+              {threads.map((t) => {
+                const cp = counterpartFor(t, meLower);
+                const displayName = cp?.display_name || cp?.username || "User";
 
-                  return (
+                const latest = t.latest_message || null;
+                const latestPreview =
+                  latest?.text || latest?.attachment_name || "No messages yet";
+
+                const requestBadge =
+                  typeof t.is_request === "boolean"
+                    ? t.is_request
+                    : isRequestForMe(t, meLower);
+
+                // local unread bolding (no getReadMap() here)
+                const lastReadId = readMap[String(t.id)];
+                const latestId = latest?.id ? String(latest.id) : "";
+                const latestFromMe =
+                  normalizeU(latest?.sender_username) === meLower;
+                const isUnread =
+                  !!latestId &&
+                  !latestFromMe &&
+                  String(lastReadId || "") !== latestId;
+
+                return (
+                  <div
+                    key={t.id}
+                    className={
+                      "rounded-xl border p-2 hover:bg-slate-50 " +
+                      (isUnread
+                        ? "border-slate-300"
+                        : "border-slate-100 hover:border-slate-200")
+                    }
+                  >
                     <button
-                      key={t.id}
                       type="button"
+                      className="flex w-full flex-col items-start text-left"
                       onClick={() => {
+                        markThreadRead(t);
                         setOpen(false);
                         navigate(`/messages/${t.id}`);
                       }}
-                      className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-50"
                     >
-                      {/* name of the OTHER person */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="truncate text-xs font-semibold text-slate-900">
-                          {name}
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <div
+                          className={
+                            "truncate text-sm " +
+                            (isUnread
+                              ? "font-semibold text-slate-900"
+                              : "font-semibold text-slate-800")
+                          }
+                        >
+                          {displayName}
                         </div>
-                        <div className="text-[11px] text-slate-400">
-                          {timeLabel}
-                        </div>
+
+                        {requestBadge && (
+                          <span className="rounded-full bg-amber-100 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                            Request
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-0.5 line-clamp-2 text-[11px] text-slate-600">
-                        {preview}
+
+                      <div
+                        className={
+                          "mt-0.5 truncate text-[11px] " +
+                          (isUnread ? "text-slate-800" : "text-slate-500")
+                        }
+                      >
+                        {latest?.sender_username &&
+                        normalizeU(latest.sender_username) !== meLower
+                          ? `${latest.sender_username}: ${latestPreview}`
+                          : latestPreview}
                       </div>
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="mt-2 text-right text-[11px] text-slate-500">
+            <Link
+              to="/messages"
+              className="underline"
+              onClick={() => setOpen(false)}
+            >
+              Open inbox
+            </Link>
+          </div>
         </div>
       )}
     </div>

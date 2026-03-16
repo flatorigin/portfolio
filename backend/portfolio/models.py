@@ -1,13 +1,14 @@
 # backend/portfolio/models.py
 from io import BytesIO
 import os
-import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 from PIL import Image
 
 from .utils import convert_field_file_to_webp
@@ -15,36 +16,31 @@ from .utils import convert_field_file_to_webp
 User = get_user_model()
 
 
+# -------------------------------------------------------------------
+# Upload paths (keep stable if you already have migrations/files)
+# -------------------------------------------------------------------
 def direct_message_upload_path(instance, filename):
-    """
-    Used by older migrations for PrivateMessage attachments.
-    Keep it simple & stable so existing migrations & files still work.
-    """
-    # If you later want something fancier, you can tweak this,
-    # but keep the name and signature.
+    # legacy helper (kept for backward compat if used in old migrations)
     return os.path.join("direct_messages", filename)
-    
+
 
 def project_cover_upload_path(instance, filename):
+    # legacy helper (kept for backward compat if used in old migrations)
     return f"projects/{instance.owner_id}/{instance.id or 'new'}/cover/{filename}"
 
 
 def project_image_upload_path(instance, filename):
-    # instance is ProjectImage
+    # legacy helper (kept for backward compat if used in old migrations)
     return f"projects/{instance.project.owner_id}/{instance.project_id}/images/{filename}"
 
 
-from django.conf import settings
-from django.db import models
-
-# file: backend/portfolio/models.py
-from django.conf import settings
-from django.db import models
-
-from .utils import convert_field_file_to_webp
-
-
+# -------------------------------------------------------------------
+# Portfolio models
+# -------------------------------------------------------------------
 class Project(models.Model):
+    # Cover convention:
+    # - primary cover is first ProjectImage by order=0 (your serializer uses this)
+    # - optional cover_image_ref and cover_image_file are supported as well
     cover_image_ref = models.ForeignKey(
         "ProjectImage",
         null=True,
@@ -68,10 +64,10 @@ class Project(models.Model):
     # --- Job posting extensions (persisted) ---
     job_summary = models.TextField(blank=True, default="")
 
-    # Job posting publish state (draft vs published)
+    # draft vs published for job posts
     job_is_published = models.BooleanField(default=False)
-    
-    service_categories = models.JSONField(blank=True, default=list)  # ["Plumbing", "Electrical"]
+
+    service_categories = models.JSONField(blank=True, default=list)  # ["Plumbing", ...]
     part_of_larger_project = models.BooleanField(default=False)
     larger_project_details = models.CharField(max_length=255, blank=True, default="")
 
@@ -108,6 +104,7 @@ class Project(models.Model):
     private_contractor_username = models.CharField(max_length=150, blank=True, default="")
     notify_by_email = models.BooleanField(default=False)
 
+    # Optional separate cover file (fallback)
     cover_image_file = models.ImageField(
         upload_to="projects/covers/",
         blank=True,
@@ -139,15 +136,17 @@ class Project(models.Model):
         return f"{self.title} ({self.owner})"
 
     def save(self, *args, **kwargs):
+        # Convert cover_image_file to webp if present
         if self.cover_image_file and hasattr(self.cover_image_file, "file"):
             convert_field_file_to_webp(self.cover_image_file, quality=80)
         super().save(*args, **kwargs)
+
 
 class ProjectFavorite(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="project_favorites",  # avoid clashes
+        related_name="project_favorites",
     )
     project = models.ForeignKey(
         Project,
@@ -161,6 +160,7 @@ class ProjectFavorite(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.project}"
+
 
 class ProjectComment(models.Model):
     project = models.ForeignKey(
@@ -197,70 +197,52 @@ class ProjectImage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def _convert_image_to_webp(self):
-        """
-        Convert self.image file to WebP and replace the field's file.
-        Only runs if current file is NOT already .webp.
-        """
         if not self.image:
             return
 
-        # Current file name + extension
         current_name = self.image.name
-        root, ext = os.path.splitext(current_name.lower())
+        root, ext = os.path.splitext((current_name or "").lower())
 
-
-        # Already webp? nothing to do
         if ext == ".webp":
             return
 
-        # Open the image via Pillow
         img = Image.open(self.image)
-
-        # Ensure a safe mode for WEBP
         if img.mode not in ("RGB", "RGBA"):
             img = img.convert("RGB")
 
-        # Save to in-memory buffer as WEBP
         buffer = BytesIO()
-        # Tune quality as you like (60–85 is common)
         img.save(buffer, format="WEBP", quality=80)
         buffer.seek(0)
 
         new_name = f"{root}.webp"
         old_name = current_name
 
-        # Replace file on the field (but don't commit to DB yet)
         self.image.save(new_name, ContentFile(buffer.read()), save=False)
 
-        # Remove old file from storage if different
         if old_name and old_name != self.image.name and default_storage.exists(old_name):
             try:
                 default_storage.delete(old_name)
             except Exception:
-                # Silent fail – you can log this if you want
                 pass
 
     def save(self, *args, **kwargs):
-        # If there is a new file, convert it before actual save
         if self.image and hasattr(self.image, "file"):
             self._convert_image_to_webp()
-
         super().save(*args, **kwargs)
 
 
+# -------------------------------------------------------------------
+# Messaging
+# -------------------------------------------------------------------
 class MessageThread(models.Model):
     """
     Direct message thread between two users.
-    We reuse the existing `owner` and `client` fields as the two participants
-    (user A and user B). We no longer treat this as project-specific.
 
-    - Exactly one thread per user pair (owner, client) with ordered IDs.
-    - `project` is now optional and only used to remember origin of first contact.
-    - `*_has_accepted` implements message requests.
-    - `*_blocked_*` implements blocking.
+    - `project` is optional, used only as "origin project"
+    - accept flags implement message requests
+    - block flags implement blocking
     """
 
-    # OPTIONAL: keep project as "origin" (who you first contacted about)
     project = models.ForeignKey(
         Project,
         related_name="message_threads",
@@ -280,7 +262,6 @@ class MessageThread(models.Model):
         on_delete=models.CASCADE,
     )
 
-    # Per-user accept / archive / block flags
     owner_has_accepted = models.BooleanField(default=True)
     client_has_accepted = models.BooleanField(default=False)
 
@@ -293,70 +274,59 @@ class MessageThread(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    owner_ignored_until = models.DateTimeField(null=True, blank=True)
+    client_ignored_until = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         constraints = [
-            # one thread per user pair (owner, client) – we enforce ordering in code
-            models.UniqueConstraint(
-                fields=["owner", "client"],
-                name="unique_dm_pair",
-            )
+            models.UniqueConstraint(fields=["owner", "client"], name="unique_dm_pair")
         ]
 
     def __str__(self):
         return f"DM<{self.id}> users={self.owner_id},{self.client_id}"
 
-    # ---- helper methods ----
     @classmethod
     def normalize_users(cls, u1, u2):
-        """Return (owner, client) ordered by id so uniqueness works."""
         if u1.id < u2.id:
             return u1, u2
         return u2, u1
 
     @classmethod
     def get_or_create_dm(cls, u1, u2, *, origin_project=None, initiated_by=None):
-        """
-        Get or create a DM thread between two distinct users.
-        `initiated_by` is the sender of the first/new message.
-        """
         if u1 == u2:
             raise ValueError("Cannot create a DM thread with yourself.")
 
         owner, client = cls.normalize_users(u1, u2)
         thread, created = cls.objects.get_or_create(owner=owner, client=client)
 
-        # Set origin project only the first time
         if created and origin_project and not thread.project:
             thread.project = origin_project
 
-        # First contact / new sender side: mark acceptance for the sender.
-        if initiated_by is not None:
+        if initiated_by is not None and created:
             if initiated_by == owner:
-                if created:
-                    thread.owner_has_accepted = True
-                    thread.client_has_accepted = False
+                thread.owner_has_accepted = True
+                thread.client_has_accepted = False
             elif initiated_by == client:
-                if created:
-                    thread.client_has_accepted = True
-                    thread.owner_has_accepted = False
+                thread.client_has_accepted = True
+                thread.owner_has_accepted = False
 
         thread.save()
         return thread, created
 
     def user_is_participant(self, user):
-        return user_id(user) in (self.owner_id, self.client_id)
+        # ✅ FIX: no undefined helper
+        return user and user.id in (self.owner_id, self.client_id)
 
     def is_blocked_for(self, user):
-        """True if this user has blocked the other or is blocked by the other."""
-        uid = user.id
+        uid = getattr(user, "id", None)
         if uid == self.owner_id:
             return self.owner_blocked_client or self.client_blocked_owner
         if uid == self.client_id:
             return self.client_blocked_owner or self.owner_blocked_client
-        return True  # non-participant: treat as blocked
+        return True
 
     def user_has_accepted(self, user):
-        uid = user.id
+        uid = getattr(user, "id", None)
         if uid == self.owner_id:
             return self.owner_has_accepted
         if uid == self.client_id:
@@ -364,30 +334,50 @@ class MessageThread(models.Model):
         return False
 
     def mark_accepted(self, user):
-        uid = user.id
-        changed = False
+        uid = getattr(user, "id", None)
         if uid == self.owner_id and not self.owner_has_accepted:
             self.owner_has_accepted = True
-            changed = True
+            self.save(update_fields=["owner_has_accepted"])
         elif uid == self.client_id and not self.client_has_accepted:
             self.client_has_accepted = True
-            changed = True
-        if changed:
-            self.save(update_fields=["owner_has_accepted", "client_has_accepted"])
+            self.save(update_fields=["client_has_accepted"])
 
     def block_other(self, user):
-        uid = user.id
-        if uid == self.owner_id:
-            if not self.owner_blocked_client:
-                self.owner_blocked_client = True
-                self.save(update_fields=["owner_blocked_client"])
-        elif uid == self.client_id:
-            if not self.client_blocked_owner:
-                self.client_blocked_owner = True
-                self.save(update_fields=["client_blocked_owner"])
+        uid = getattr(user, "id", None)
+        if uid == self.owner_id and not self.owner_blocked_client:
+            self.owner_blocked_client = True
+            self.save(update_fields=["owner_blocked_client"])
+        elif uid == self.client_id and not self.client_blocked_owner:
+            self.client_blocked_owner = True
+            self.save(update_fields=["client_blocked_owner"])
+
+    def ignored_until_for(self, user):
+        """
+        Return ignore-until timestamp for THIS user (if they used Ignore).
+        """
+        if not user:
+            return None
+        if user.id == self.owner_id:
+            return self.owner_ignored_until
+        if user.id == self.client_id:
+            return self.client_ignored_until
+        return None
+
+    def set_ignored_until(self, user, until_dt):
+        """
+        Set ignore-until timestamp for THIS user.
+        """
+        if not user:
+            return
+        if user.id == self.owner_id:
+            self.owner_ignored_until = until_dt
+            self.save(update_fields=["owner_ignored_until"])
+        elif user.id == self.client_id:
+            self.client_ignored_until = until_dt
+            self.save(update_fields=["client_ignored_until"])
 
     def unblock_other(self, user):
-        uid = user.id
+        uid = getattr(user, "id", None)
         if uid == self.owner_id and self.owner_blocked_client:
             self.owner_blocked_client = False
             self.save(update_fields=["owner_blocked_client"])
@@ -400,29 +390,53 @@ class MessageThread(models.Model):
         return self.messages.order_by("-created_at").first()
 
     def unread_count_for(self, user):
-        """You can later add a MessageRead model; for now, return 0 or stub."""
-        return 0  # placeholder, or compute from a read-tracking model
-
+        return 0
 
 
 def message_attachment_upload_path(instance, filename):
     thread = instance.thread
-    return f"messages/{thread.owner_id}/{thread.project_id}/{thread.client_id}/{filename}"
+    # thread.project can be null for "direct" messages (no project context)
+    project_part = thread.project_id or "direct"
+    return f"messages/{thread.owner_id}/{project_part}/{thread.client_id}/{filename}"
 
+def mark_accepted(self, user):
+    uid = user.id
+    changed = False
+    if uid == self.owner_id and not self.owner_has_accepted:
+        self.owner_has_accepted = True
+        self.owner_ignored_until = None
+        changed = True
+    elif uid == self.client_id and not self.client_has_accepted:
+        self.client_has_accepted = True
+        self.client_ignored_until = None
+        changed = True
+    if changed:
+        self.save(update_fields=[
+            "owner_has_accepted", "client_has_accepted",
+            "owner_ignored_until", "client_ignored_until"
+        ])
 
 class PrivateMessage(models.Model):
     thread = models.ForeignKey(
-        MessageThread, related_name="messages", on_delete=models.CASCADE
+        MessageThread,
+        related_name="messages",
+        on_delete=models.CASCADE,
     )
     sender = models.ForeignKey(
-        settings.AUTH_USER_MODEL, related_name="sent_messages", on_delete=models.CASCADE
+        settings.AUTH_USER_MODEL,
+        related_name="sent_messages",
+        on_delete=models.CASCADE,
     )
     text = models.TextField(blank=True)
+
     attachment = models.FileField(
-        upload_to=message_attachment_upload_path, blank=True, null=True
+        upload_to=message_attachment_upload_path,
+        blank=True,
+        null=True,
     )
     attachment_name = models.CharField(max_length=255, blank=True, default="")
     attachment_type = models.CharField(max_length=50, blank=True, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

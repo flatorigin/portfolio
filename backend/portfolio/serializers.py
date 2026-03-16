@@ -2,6 +2,8 @@
 # file: backend/portfolio/serializers.py
 # =============================================================================
 from rest_framework import serializers
+from django.utils import timezone
+from accounts.serializers import ProfileSerializer
 
 from .models import (
     ProjectComment,
@@ -11,7 +13,7 @@ from .models import (
     PrivateMessage,
     ProjectFavorite,
 )
-from accounts.serializers import ProfileSerializer
+
 
 
 class ProjectImageSerializer(serializers.ModelSerializer):
@@ -302,39 +304,47 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, attrs):
-        attachment = self.initial_data.get("attachment")
-        text = attrs.get("text", "").strip()
+        """
+        Auto-copy summary -> job_summary when job posting is on,
+        but only if job_summary isn't explicitly provided.
+        Works for both create and update.
+        """
+        instance = getattr(self, "instance", None)
 
-        if not text and not attachment:
-            raise serializers.ValidationError("Message must include text or an attachment.")
+        is_job_posting = attrs.get(
+            "is_job_posting",
+            getattr(instance, "is_job_posting", False) if instance else False,
+        )
 
-        if attachment:
-            allowed_doc_ext = {"pdf", "doc", "docx", "xls", "xlsx"}
-            allowed_image_ext = {"jpg", "jpeg", "png"}
+        if is_job_posting:
+            incoming_job_summary = attrs.get("job_summary", None)
+            incoming_summary = attrs.get("summary", None)
 
-            ext = (attachment.name or "").rsplit(".", 1)[-1].lower()
-            if ext not in allowed_doc_ext.union(allowed_image_ext):
-                raise serializers.ValidationError("Unsupported attachment type.")
+            if (incoming_job_summary is None or str(incoming_job_summary).strip() == "") and (
+                incoming_summary is not None and str(incoming_summary).strip() != ""
+            ):
+                attrs["job_summary"] = incoming_summary
 
-            if ext in allowed_image_ext and attachment.size > 3 * 1024 * 1024:
-                raise serializers.ValidationError("Images cannot exceed 3MB.")
-
-            if ext in allowed_doc_ext and attachment.size > 5 * 1024 * 1024:
-                raise serializers.ValidationError("Documents cannot exceed 5MB.")
-
-            attrs["attachment_name"] = attachment.name
-            attrs["attachment_type"] = "image" if ext in allowed_image_ext else "document"
+            # normalize JSON list if explicitly passed as null
+            if "service_categories" in attrs and attrs["service_categories"] is None:
+                attrs["service_categories"] = []
 
         return attrs
-
 
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")
     owner_username = serializers.ReadOnlyField(source="owner.username")
     client_username = serializers.ReadOnlyField(source="client.username")
+
     latest_message = serializers.SerializerMethodField()
     owner_profile = ProfileSerializer(source="owner.profile", read_only=True)
     client_profile = ProfileSerializer(source="client.profile", read_only=True)
+
+    # ✅ stable flags for frontend
+    is_request = serializers.SerializerMethodField()
+    can_reply = serializers.SerializerMethodField()
+    ignored_until = serializers.SerializerMethodField()
+    blocked = serializers.SerializerMethodField()
 
     class Meta:
         model = MessageThread
@@ -348,12 +358,20 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "client",
             "client_username",
             "client_profile",
+
             "owner_has_accepted",
             "client_has_accepted",
             "owner_archived",
             "client_archived",
             "owner_blocked_client",
             "client_blocked_owner",
+
+            # ✅ new flags
+            "is_request",
+            "can_reply",
+            "ignored_until",
+            "blocked",
+
             "created_at",
             "updated_at",
             "latest_message",
@@ -365,3 +383,61 @@ class MessageThreadSerializer(serializers.ModelSerializer):
         if not msg:
             return None
         return PrivateMessageSerializer(msg, context=self.context).data
+
+    def _current_user(self):
+        request = self.context.get("request")
+        u = getattr(request, "user", None)
+        return u if u and u.is_authenticated else None
+
+    def get_is_request(self, obj):
+        """
+        For the CURRENT user: True if they have NOT accepted yet.
+        """
+        user = self._current_user()
+        if not user:
+            return False
+        return not bool(obj.user_has_accepted(user))
+
+    def get_can_reply(self, obj):
+        """
+        For the CURRENT user: can they send a message right now?
+        - must be participant
+        - not blocked
+        - must have accepted
+        - must not be inside ignore-window (if other side ignored)
+        """
+        user = self._current_user()
+        if not user:
+            return False
+        if not obj.user_is_participant(user):
+            return False
+        if obj.is_blocked_for(user):
+            return False
+        if not obj.user_has_accepted(user):
+            return False
+
+        # if recipient ignored this request, enforce throttle
+        other = obj.client if user.id == obj.owner_id else obj.owner
+        ignored_until = obj.ignored_until_for(other)
+        if (not obj.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
+            return False
+
+        return True
+
+    def get_ignored_until(self, obj):
+        """
+        Return ignore-until timestamp for the OTHER user (so sender can know cooldown).
+        """
+        user = self._current_user()
+        if not user or not obj.user_is_participant(user):
+            return None
+
+        other = obj.client if user.id == obj.owner_id else obj.owner
+        val = obj.ignored_until_for(other)
+        return val
+
+    def get_blocked(self, obj):
+        user = self._current_user()
+        if not user:
+            return False
+        return bool(obj.is_blocked_for(user))

@@ -1,9 +1,10 @@
 # backend/accounts/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Profile
+from .models import Profile, ProfileLike
 
 User = get_user_model()
+
 
 class MeSerializer(serializers.ModelSerializer):
     # read-only user identity
@@ -11,6 +12,10 @@ class MeSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
 
     avatar_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
+
+    like_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -21,36 +26,57 @@ class MeSerializer(serializers.ModelSerializer):
             "display_name",
             "service_location",
             "coverage_radius_miles",
-            "contact_email",      # NEW
-            "contact_phone",      # NEW
+            "contact_email",
+            "contact_phone",
             "bio",
             "logo",
             "avatar",
             "avatar_url",
+            "banner",
+            "banner_url",
+            "like_count",
+            "liked_by_me",
+            "allow_direct_messages",
         ]
-        read_only_fields = ["id", "username", "email", "avatar_url"]
+        read_only_fields = ["id", "username", "email", "avatar_url", "banner_url", "like_count", "liked_by_me"]
+
+    def _build_abs_url(self, request, url: str):
+        if not url:
+            return None
+        return request.build_absolute_uri(url) if request else url
 
     def get_avatar_url(self, obj):
         request = self.context.get("request")
-        if obj.logo and hasattr(obj.logo, "url"):
-            return (
-                request.build_absolute_uri(obj.logo.url)
-                if request
-                else obj.logo.url
-            )
+        image = obj.avatar or obj.logo
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
         return None
 
-    def update(self, instance, validated_data):
-        return super().update(instance, validated_data)
+    def get_banner_url(self, obj):
+        request = self.context.get("request")
+        image = obj.banner
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
+        return None
+
+    def get_like_count(self, obj):
+        return ProfileLike.objects.filter(liked_user=obj.user).count()
+
+    def get_liked_by_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return ProfileLike.objects.filter(liker=request.user, liked_user=obj.user).exists()
 
 
 class ProfileSerializer(serializers.ModelSerializer):
-    # expose username from related User
     username = serializers.CharField(source="user.username", read_only=True)
 
-    # computed URLs for images
     avatar_url = serializers.SerializerMethodField()
     banner_url = serializers.SerializerMethodField()
+
+    like_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -66,9 +92,13 @@ class ProfileSerializer(serializers.ModelSerializer):
             "logo",
             "avatar",
             "avatar_url",
-            "banner",      # raw file field (for /users/me/ write)
-            "banner_url",  # absolute URL for public hero
+            "banner",
+            "banner_url",
+            "like_count",
+            "liked_by_me",
+            "allow_direct_messages",
         )
+        read_only_fields = ("id", "username", "avatar_url", "banner_url", "like_count", "liked_by_me")
 
     def _build_abs_url(self, request, url: str):
         if not url:
@@ -77,7 +107,6 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def get_avatar_url(self, obj):
         request = self.context.get("request")
-        # prefer explicit avatar, fall back to logo
         image = obj.avatar or obj.logo
         if image and hasattr(image, "url"):
             return self._build_abs_url(request, image.url)
@@ -89,3 +118,51 @@ class ProfileSerializer(serializers.ModelSerializer):
         if image and hasattr(image, "url"):
             return self._build_abs_url(request, image.url)
         return None
+
+    def get_like_count(self, obj):
+        return ProfileLike.objects.filter(liked_user=obj.user).count()
+
+    def get_liked_by_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return ProfileLike.objects.filter(liker=request.user, liked_user=obj.user).exists()
+
+class LikedProfileCardSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+
+    # “small tag category below the name” → use service_location
+    tag = serializers.SerializerMethodField()
+
+    # used for tooltip
+    bio_preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "username",
+            "display_name",
+            "avatar_url",
+            "tag",
+            "bio_preview",
+        ]
+
+    def _abs(self, request, url: str):
+        return request.build_absolute_uri(url) if request else url
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        image = obj.avatar or obj.logo
+        if image and hasattr(image, "url"):
+            return self._abs(request, image.url)
+        return None
+
+    def get_tag(self, obj):
+        return (obj.service_location or "").strip()
+
+    def get_bio_preview(self, obj):
+        # first line only
+        txt = (obj.bio or "").strip().splitlines()
+        return (txt[0] if txt else "").strip()

@@ -8,6 +8,7 @@ import api from "../api";
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
+import SavedProfilesGrid from "../components/SavedProfilesGrid";
 
 // normalize media
 function toUrl(raw) {
@@ -1078,6 +1079,9 @@ export default function Dashboard() {
           </>
         )}
       </Card>
+
+      {/* SAVED PROFILES (liked public profiles) */}
+      <SavedProfilesGrid />
 
       {/* 1) Create Project */}
       <CreateProjectCard

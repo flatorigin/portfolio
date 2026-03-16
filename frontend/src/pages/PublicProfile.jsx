@@ -2,16 +2,18 @@
 // file: frontend/src/pages/PublicProfile.jsx
 // Public profile + projects + contact + map
 // Hero/banner is read from /profiles/:username/ only (public)
+// Adds: Like/Save profile button (hidden on own profile) + like count
+// Fix: ALL hooks are declared before any early return
 // =======================================
 import { useParams, Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
 import ServiceAreaMap from "../components/ServiceAreaMap";
+import QuickMessageDrawer from "../components/QuickMessageDrawer";
 
 function toUrl(raw) {
   if (!raw) return "";
-  // allow data: / blob: URLs (safety)
   if (/^(data:|blob:)/i.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
 
@@ -35,19 +37,14 @@ function extractHeroFromProfile(profile) {
   ];
 
   for (const k of explicitKeys) {
-    if (typeof profile[k] === "string" && profile[k].trim()) {
-      return profile[k];
-    }
+    if (typeof profile[k] === "string" && profile[k].trim()) return profile[k];
   }
 
-  // fallback: scan any key containing banner/hero
   for (const key of Object.keys(profile)) {
     const lower = key.toLowerCase();
     if (lower.includes("banner") || lower.includes("hero")) {
       const val = profile[key];
-      if (typeof val === "string" && val.trim()) {
-        return val;
-      }
+      if (typeof val === "string" && val.trim()) return val;
     }
   }
 
@@ -59,8 +56,44 @@ export default function PublicProfile() {
 
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [coversByProject, setCoversByProject] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  const [msgOpen, setMsgOpen] = useState(false);
+
+  // Like state (MUST be above returns)
+  const authed = !!localStorage.getItem("access");
+  const meUsernameLower = (localStorage.getItem("username") || "").toLowerCase();
+
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [likeBusy, setLikeBusy] = useState(false);
+
+  const displayName = useMemo(() => {
+    return profile?.display_name || profile?.username || "";
+  }, [profile?.display_name, profile?.username]);
+
+  const avatarSrc = useMemo(() => {
+    return toUrl(profile?.logo || profile?.avatar_url || profile?.avatar || "");
+  }, [profile?.logo, profile?.avatar_url, profile?.avatar]);
+
+  const bannerUrl = useMemo(() => {
+    const raw = extractHeroFromProfile(profile);
+    return toUrl(raw || "");
+  }, [profile]);
+
+  const bannerStyle = useMemo(() => {
+    if (!bannerUrl) return {};
+    return {
+      backgroundImage: `url(${bannerUrl})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }, [bannerUrl]);
+
+  const isMine = useMemo(() => {
+    return (profile?.username || "").toLowerCase() === meUsernameLower;
+  }, [profile?.username, meUsernameLower]);
 
   async function hydrateCovers(list) {
     const entries = await Promise.all(
@@ -91,9 +124,7 @@ export default function PublicProfile() {
     setCoversByProject(Object.fromEntries(entries));
   }
 
-  // ─────────────────────────────
   // Load profile + projects
-  // ─────────────────────────────
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -116,31 +147,28 @@ export default function PublicProfile() {
         const uname = String(username || "").toLowerCase();
 
         const visibleProjects = rawList.filter((p) => {
-          const ownerU =
-            String(p?.owner_username || p?.owner?.username || "").toLowerCase();
+          const ownerU = String(
+            p?.owner_username || p?.owner?.username || ""
+          ).toLowerCase();
 
           const isPublic = p?.is_public === undefined ? true : !!p.is_public;
-
           return ownerU === uname && isPublic;
         });
 
         setProfile(prof);
         setProjects(visibleProjects);
-
-        // optional: load thumbnails/covers
         hydrateCovers(visibleProjects);
 
-        setProfile(prof);
-        setProjects(visibleProjects);
-
-        // ✅ pull cover images from /projects/:id/images/
-        hydrateCovers(visibleProjects);
+        // Seed like count from public serializer field (works for anonymous too)
+        setLikeCount(Number(prof?.like_count || 0));
       } catch (err) {
         console.error("[PublicProfile] failed to load", err);
         if (!alive) return;
         setProfile(null);
         setProjects([]);
         setCoversByProject({});
+        setLikeCount(0);
+        setLiked(false);
       } finally {
         if (alive) setLoading(false);
       }
@@ -151,28 +179,61 @@ export default function PublicProfile() {
     };
   }, [username]);
 
-  const displayName = useMemo(() => {
-    return profile?.display_name || profile?.username || "";
-  }, [profile?.display_name, profile?.username]);
+  // Fetch "liked by me" state (auth-only endpoint) when authed + not my profile
+  useEffect(() => {
+    let alive = true;
 
-  const avatarSrc = useMemo(() => {
-    return toUrl(profile?.logo || profile?.avatar_url || profile?.avatar || "");
-  }, [profile?.logo, profile?.avatar_url, profile?.avatar]);
+    if (!authed || !profile?.username || isMine) {
+      setLiked(false);
+      return () => {
+        alive = false;
+      };
+    }
 
-  const bannerUrl = useMemo(() => {
-    const raw = extractHeroFromProfile(profile);
-    return toUrl(raw || "");
-  }, [profile]);
+    (async () => {
+      try {
+        const { data } = await api.get(`/profiles/${profile.username}/like/`);
+        if (!alive) return;
+        setLiked(!!data?.liked);
+        // keep count in sync if backend returns it
+        if (data?.like_count !== undefined) {
+          setLikeCount(Number(data.like_count || 0));
+        }
+      } catch {
+        if (!alive) return;
+        setLiked(false);
+        // keep likeCount as-is (from profile.like_count)
+      }
+    })();
 
-  const bannerStyle = useMemo(() => {
-    if (!bannerUrl) return {};
-    return {
-      backgroundImage: `url(${bannerUrl})`,
-      backgroundSize: "cover",
-      backgroundPosition: "center",
+    return () => {
+      alive = false;
     };
-  }, [bannerUrl]);
+  }, [authed, profile?.username, isMine]);
 
+  async function toggleLike() {
+    if (!authed || !profile?.username || likeBusy || isMine) return;
+
+    setLikeBusy(true);
+    try {
+      if (liked) {
+        const { data } = await api.delete(`/profiles/${profile.username}/like/`);
+        setLiked(false);
+        if (data?.like_count !== undefined) setLikeCount(Number(data.like_count || 0));
+      } else {
+        const { data } = await api.post(`/profiles/${profile.username}/like/`);
+        setLiked(true);
+        if (data?.like_count !== undefined) setLikeCount(Number(data.like_count || 0));
+      }
+      window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Could not update like.");
+    } finally {
+      setLikeBusy(false);
+    }
+  }
+
+  // ----- EARLY RETURNS (after hooks) -----
   if (loading && !profile) {
     return <div className="text-sm text-slate-500">Loading profile…</div>;
   }
@@ -234,21 +295,46 @@ export default function PublicProfile() {
                 </div>
               </div>
 
-              <div className="flex gap-2 sm:pb-1">
-                <Link
-                  to="/"
-                  className="rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur hover:bg-white/20"
-                >
-                  Explore
-                </Link>
-                <Link
-                  to={`/messages?to=${profile.username}`}
+              <div className="flex flex-wrap items-center gap-2 sm:pb-1">
+                {/* Like button (hidden on own profile) */}
+                {!isMine ? (
+                  <button
+                    type="button"
+                    onClick={toggleLike}
+                    disabled={!authed || likeBusy}
+                    className={
+                      "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium backdrop-blur " +
+                      (liked
+                        ? "bg-white text-slate-900 hover:bg-slate-100"
+                        : "bg-white/10 text-white hover:bg-white/20") +
+                      (!authed ? " opacity-70" : "")
+                    }
+                    title={!authed ? "Log in to like profiles" : "Like this profile"}
+                  >
+                    <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                    <span>{liked ? "Liked" : "Like"}</span>
+                    <span className={liked ? "text-slate-700" : "text-white/80"}>
+                      {Number.isFinite(likeCount) ? likeCount : 0}
+                    </span>
+                  </button>
+                ) : null}
+
+                {/* Message button */}
+                <button
+                  type="button"
+                  onClick={() => setMsgOpen(true)}
                   className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
                 >
                   Message
-                </Link>
+                </button>
               </div>
             </div>
+
+            {!authed && !isMine ? (
+              <div className="mt-3 text-[11px] text-white/80">
+                Log in to like this profile.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -336,6 +422,7 @@ export default function PublicProfile() {
               {projects.map((p) => {
                 const coverSrc =
                   coversByProject[p.id] ||
+                  toUrl(p.cover_image_url || "") ||
                   (p.cover_image ? toUrl(p.cover_image) : "");
 
                 return (
@@ -381,6 +468,13 @@ export default function PublicProfile() {
           )}
         </div>
       </div>
+
+      <QuickMessageDrawer
+        open={msgOpen}
+        onClose={() => setMsgOpen(false)}
+        recipientUsername={profile?.username}
+        recipientDisplayName={displayName}
+      />
     </div>
   );
 }
