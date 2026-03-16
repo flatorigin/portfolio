@@ -91,7 +91,6 @@ export default function GlobalInbox() {
   const panelRef = useRef(null);
 
   const authed = !!localStorage.getItem("access");
-  const authed = !!localStorage.getItem("access");
 
   const [meUsername, setMeUsername] = useState(localStorage.getItem("username") || "");
   const meLower = normalizeU(meUsername);
@@ -129,6 +128,24 @@ export default function GlobalInbox() {
       setLoading(false);
     })();
   }, [open, authed, fetchThreads]);
+
+  // ----- Ensure correct logged-in username -----
+  useEffect(() => {
+    if (!authed) return;
+
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/");
+        const u = data?.username || data?.user?.username || "";
+        if (u) {
+          setMeUsername(u);
+          localStorage.setItem("username", u);
+        }
+      } catch {
+        // keep existing value
+      }
+    })();
+  }, [authed]);
 
   // ----- Background refresh for badge (poll + focus) -----
   useEffect(() => {
