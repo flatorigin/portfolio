@@ -115,6 +115,12 @@ export default function ProjectDetail() {
       (meUser.username || "").toLowerCase();
 
   const myUsername = meUser?.username || null;
+  const isMine =
+    authed &&
+    project &&
+    meUser &&
+    (project.owner_username || "").toLowerCase() ===
+      (meUser.username || "").toLowerCase();
 
   // ─────────────────────────────
   // COVER SETTER (backend-friendly)
@@ -723,7 +729,7 @@ export default function ProjectDetail() {
       c.author_username.toLowerCase() ===
         (project.owner_username || "").toLowerCase();
 
-    const isMine =
+    const isMyComment =
       myUsername &&
       c.author_username &&
       c.author_username.toLowerCase() === myUsername.toLowerCase();
@@ -792,7 +798,7 @@ export default function ProjectDetail() {
               Reply as owner
             </button>
           )}
-          {isMine && !isEditingComment && (
+          {isMyComment && !isEditingComment && (
             <>
               <button
                 type="button"
