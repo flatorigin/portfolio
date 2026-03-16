@@ -432,9 +432,9 @@ class InboxThreadListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         qs = (
-            MessageThread.objects.filter(Q(owner=user) | Q(client=user))
+            MessageThread.objects
+            .filter(Q(owner=user) | Q(client=user))
             .select_related("owner", "client", "owner__profile", "client__profile")
-            .prefetch_related("messages")
             .order_by("-updated_at")
         )
         # Serializer will decide if it's inbox vs request based on flags.

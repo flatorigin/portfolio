@@ -1,6 +1,10 @@
 // =======================================
 // file: frontend/src/components/GlobalInbox.jsx
 // Dropdown inbox + unread badge on button (local unread tracking)
+// PERF FIXES:
+// - no getReadMap() inside .map()
+// - memoized readMap + unreadCount
+// - keep last threads on error (don't nuke list)
 // =======================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -35,7 +39,10 @@ function counterpartFor(thread, meLower) {
   if (thread.counterpart) {
     return {
       username: thread.counterpart.username || "",
-      display_name: thread.counterpart.display_name || thread.counterpart.username || "User",
+      display_name:
+        thread.counterpart.display_name ||
+        thread.counterpart.username ||
+        "User",
       avatar_url: thread.counterpart.avatar_url || "",
     };
   }
@@ -56,14 +63,26 @@ function counterpartFor(thread, meLower) {
   const clientAvatar = clientProfile.avatar_url || clientProfile.logo_url || "";
 
   if (meLower && ownerLower === meLower) {
-    return { username: clientUsernameRaw, display_name: clientDisplay, avatar_url: clientAvatar };
+    return {
+      username: clientUsernameRaw,
+      display_name: clientDisplay,
+      avatar_url: clientAvatar,
+    };
   }
   if (meLower && clientLower === meLower) {
-    return { username: ownerUsernameRaw, display_name: ownerDisplay, avatar_url: ownerAvatar };
+    return {
+      username: ownerUsernameRaw,
+      display_name: ownerDisplay,
+      avatar_url: ownerAvatar,
+    };
   }
 
   // fallback
-  return { username: clientUsernameRaw, display_name: clientDisplay, avatar_url: clientAvatar };
+  return {
+    username: clientUsernameRaw,
+    display_name: clientDisplay,
+    avatar_url: clientAvatar,
+  };
 }
 
 // “Request” gate: if I haven’t accepted yet (based on flags)
@@ -92,8 +111,10 @@ export default function GlobalInbox() {
 
   const authed = !!localStorage.getItem("access");
 
-  const [meUsername, setMeUsername] = useState(localStorage.getItem("username") || "");
-  const meLower = normalizeU(meUsername);
+  const [meUsername, setMeUsername] = useState(
+    localStorage.getItem("username") || ""
+  );
+  const meLower = useMemo(() => normalizeU(meUsername), [meUsername]);
 
   // ----- Click outside to close -----
   useEffect(() => {
@@ -114,8 +135,8 @@ export default function GlobalInbox() {
       const { data } = await api.get("/inbox/threads/");
       setThreads(Array.isArray(data) ? data : []);
     } catch {
+      // PERF: keep existing threads if fetch fails (don't wipe UI)
       setError("Unable to load your inbox.");
-      setThreads([]);
     }
   }, [authed]);
 
@@ -158,6 +179,7 @@ export default function GlobalInbox() {
       await fetchThreads();
     }
 
+    // initial
     refresh();
 
     const interval = setInterval(refresh, 15000);
@@ -172,13 +194,15 @@ export default function GlobalInbox() {
     };
   }, [authed, fetchThreads]);
 
+  // ----- PERF: compute readMap once per open/list change -----
+  const readMap = useMemo(() => getReadMap(), [open, threads.length]);
+
   // ----- Unread count (local) -----
   const unreadCount = useMemo(() => {
-    const readMap = getReadMap();
-
     return (threads || []).reduce((sum, t) => {
       // If backend provides unread_count, use it
-      if (typeof t.unread_count === "number") return sum + (t.unread_count > 0 ? t.unread_count : 0);
+      if (typeof t.unread_count === "number")
+        return sum + (t.unread_count > 0 ? t.unread_count : 0);
 
       const latest = t.latest_message || null;
       if (!latest?.id) return sum;
@@ -191,7 +215,7 @@ export default function GlobalInbox() {
 
       return sum + (isUnread ? 1 : 0);
     }, 0);
-  }, [threads, meLower]);
+  }, [threads, meLower, readMap]);
 
   const markThreadRead = useCallback((thread) => {
     const latestId = thread?.latest_message?.id;
@@ -221,7 +245,9 @@ export default function GlobalInbox() {
       {open && (
         <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-slate-900">Private inbox</div>
+            <div className="text-sm font-semibold text-slate-900">
+              Private inbox
+            </div>
             <button
               type="button"
               className="text-xs text-slate-500 hover:text-slate-700"
@@ -231,11 +257,13 @@ export default function GlobalInbox() {
             </button>
           </div>
 
+          {/* Show loading without hiding existing list */}
+          {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
           {loading ? (
-            <p className="text-xs text-slate-500">Loading…</p>
-          ) : error ? (
-            <p className="text-xs text-red-600">{error}</p>
-          ) : threads.length === 0 ? (
+            <p className="mb-2 text-xs text-slate-500">Refreshing…</p>
+          ) : null}
+
+          {threads.length === 0 ? (
             <p className="text-xs text-slate-500">No private conversations yet.</p>
           ) : (
             <div className="max-h-80 space-y-2 overflow-y-auto">
@@ -244,24 +272,32 @@ export default function GlobalInbox() {
                 const displayName = cp?.display_name || cp?.username || "User";
 
                 const latest = t.latest_message || null;
-                const latestPreview = latest?.text || latest?.attachment_name || "No messages yet";
+                const latestPreview =
+                  latest?.text || latest?.attachment_name || "No messages yet";
 
                 const requestBadge =
-                  typeof t.is_request === "boolean" ? t.is_request : isRequestForMe(t, meLower);
+                  typeof t.is_request === "boolean"
+                    ? t.is_request
+                    : isRequestForMe(t, meLower);
 
-                // local unread bolding
-                const readMap = getReadMap();
+                // local unread bolding (no getReadMap() here)
                 const lastReadId = readMap[String(t.id)];
                 const latestId = latest?.id ? String(latest.id) : "";
-                const latestFromMe = normalizeU(latest?.sender_username) === meLower;
-                const isUnread = !!latestId && !latestFromMe && String(lastReadId || "") !== latestId;
+                const latestFromMe =
+                  normalizeU(latest?.sender_username) === meLower;
+                const isUnread =
+                  !!latestId &&
+                  !latestFromMe &&
+                  String(lastReadId || "") !== latestId;
 
                 return (
                   <div
                     key={t.id}
                     className={
                       "rounded-xl border p-2 hover:bg-slate-50 " +
-                      (isUnread ? "border-slate-300" : "border-slate-100 hover:border-slate-200")
+                      (isUnread
+                        ? "border-slate-300"
+                        : "border-slate-100 hover:border-slate-200")
                     }
                   >
                     <button
@@ -277,7 +313,9 @@ export default function GlobalInbox() {
                         <div
                           className={
                             "truncate text-sm " +
-                            (isUnread ? "font-semibold text-slate-900" : "font-semibold text-slate-800")
+                            (isUnread
+                              ? "font-semibold text-slate-900"
+                              : "font-semibold text-slate-800")
                           }
                         >
                           {displayName}
@@ -296,7 +334,8 @@ export default function GlobalInbox() {
                           (isUnread ? "text-slate-800" : "text-slate-500")
                         }
                       >
-                        {latest?.sender_username && normalizeU(latest.sender_username) !== meLower
+                        {latest?.sender_username &&
+                        normalizeU(latest.sender_username) !== meLower
                           ? `${latest.sender_username}: ${latestPreview}`
                           : latestPreview}
                       </div>
@@ -308,7 +347,11 @@ export default function GlobalInbox() {
           )}
 
           <div className="mt-2 text-right text-[11px] text-slate-500">
-            <Link to="/messages" className="underline" onClick={() => setOpen(false)}>
+            <Link
+              to="/messages"
+              className="underline"
+              onClick={() => setOpen(false)}
+            >
               Open inbox
             </Link>
           </div>
