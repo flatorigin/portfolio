@@ -91,7 +91,10 @@ export default function GlobalInbox() {
   const panelRef = useRef(null);
 
   const authed = !!localStorage.getItem("access");
-  const meLower = normalizeU(localStorage.getItem("username") || "");
+  const authed = !!localStorage.getItem("access");
+
+  const [meUsername, setMeUsername] = useState(localStorage.getItem("username") || "");
+  const meLower = normalizeU(meUsername);
 
   // ----- Click outside to close -----
   useEffect(() => {
