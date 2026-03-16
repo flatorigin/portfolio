@@ -38,9 +38,6 @@ createRoot(document.getElementById("root")).render(
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="reset-password" element={<ResetPassword />} />
         <Route path="/work" element={<FindLocalWork />} />
-
-        {/* Public profile + project detail */}
-        {/* ✅ This matches /profiles/Artin etc */}
         <Route path="profiles/:username" element={<PublicProfile />} />
         <Route path="projects/:id" element={<ProjectDetail />} />
 

@@ -5,15 +5,21 @@
 // Shows request controls: Accept / Ignore / Block
 // =======================================
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { Card, Button, Textarea } from "../ui";
 
 export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
+  const navigate = useNavigate();
 
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
+
+  useEffect(() => {
+    if (!threadIdParam) return;
+    setActiveThreadId(Number(threadIdParam));
+  }, [threadIdParam]);
 
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
@@ -96,8 +102,8 @@ export default function MessagesThread() {
       setThreads(arr);
 
       setActiveThreadId((prev) => {
+        if (threadIdParam) return Number(threadIdParam); // ✅ always win
         if (prev) return prev;
-        if (threadIdParam) return Number(threadIdParam);
         return arr[0]?.id ?? null;
       });
     } catch (err) {
@@ -228,6 +234,7 @@ export default function MessagesThread() {
                     onClick={() => {
                       setActiveThreadId(t.id);
                       markThreadRead(t.id);
+                      navigate(`/messages/${t.id}`);
                     }}
                     className={[
                       "block w-full border-b border-slate-100 px-3 py-2 text-left text-sm",
