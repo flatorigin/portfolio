@@ -833,7 +833,7 @@ export default function ProjectDetail() {
       <div className="mb-4 flex items-center justify-between">
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {!isMine ? (
+            {false && !isMine ? (
               <button
                 type="button"
                 onClick={toggleLike}
