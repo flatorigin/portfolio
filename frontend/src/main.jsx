@@ -16,6 +16,8 @@ import ResetPassword from "./pages/ResetPassword.jsx";
 import MessagesThread from "./pages/MessagesThread.jsx";
 import NotFound from "./pages/NotFound";
 import FindLocalWork from "./pages/FindLocalWork";
+import DashboardProjectsPage from "./pages/DashboardProjectsPage";
+import ProjectEditPage from "./pages/ProjectEditPage";
 
 function RequireAuth({ children }) {
   return localStorage.getItem("access") ? (
@@ -40,6 +42,8 @@ createRoot(document.getElementById("root")).render(
         <Route path="/work" element={<FindLocalWork />} />
         <Route path="profiles/:username" element={<PublicProfile />} />
         <Route path="projects/:id" element={<ProjectDetail />} />
+        <Route path="/dashboard/projects" element={<DashboardProjectsPage />} />
+        <Route path="/dashboard/projects/:projectId/edit" element={<ProjectEditPage />} />
 
         {/* Protected routes */}
         <Route

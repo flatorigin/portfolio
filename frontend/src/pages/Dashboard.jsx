@@ -298,6 +298,17 @@ export default function Dashboard() {
     loadEditor(p.id);
   }
 
+  function openEditProject(p) {
+    if (!p?.id) return;
+
+    if (window.innerWidth < 768) {
+      navigate(`/dashboard/projects/${p.id}/edit`);
+      return;
+    }
+
+    requestEditProject(p);
+  }
+
   async function unpublishAndEdit() {
     const p = unpublishModal.project;
     if (!p?.id) return;
@@ -1183,7 +1194,7 @@ export default function Dashboard() {
                         <Button
                           className="w-1/2 min-w-0"
                           type="button"
-                          onClick={() => requestEditProject(p)}
+                          onClick={() => openEditProject(p)}
                         >
                           Edit
                         </Button>
@@ -1276,7 +1287,7 @@ export default function Dashboard() {
                         Open
                       </GhostButton>
 
-                      <Button className="w-1/2 min-w-0" onClick={() => loadEditor(p.id)}>
+                      <Button className="w-1/2 min-w-0" onClick={() => openEditProject(p)}>
                         Edit
                       </Button>
                     </div>
