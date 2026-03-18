@@ -105,17 +105,6 @@ export default function Dashboard() {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
 
     useEffect(() => {
-        if (!(editingId && isDesktop)) return;
-
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-
-        return () => {
-          document.body.style.overflow = previousOverflow;
-        };
-      }, [editingId, isDesktop]);
-
-    useEffect(() => {
       function handleResize() {
         setIsDesktop(window.innerWidth >= 768);
       }
@@ -395,6 +384,18 @@ export default function Dashboard() {
 
   // Editor
   const [editingId, setEditingId] = useState("");
+
+  useEffect(() => {
+      if (!(editingId && isDesktop)) return;
+
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      return () => {
+        document.body.style.overflow = previousOverflow;
+      };
+    }, [editingId, isDesktop]);
+  
   const [editForm, setEditForm] = useState({
     title: "",
     summary: "",
