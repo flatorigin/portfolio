@@ -102,6 +102,28 @@ function isJobPostingFlag(value) {
 export default function Dashboard() {
   const navigate = useNavigate();
 
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+
+    useEffect(() => {
+        if (!(editingId && isDesktop)) return;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+
+        return () => {
+          document.body.style.overflow = previousOverflow;
+        };
+      }, [editingId, isDesktop]);
+
+    useEffect(() => {
+      function handleResize() {
+        setIsDesktop(window.innerWidth >= 768);
+      }
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }, []);
+
   // ---- Profile header (live) ----
   const [meLite, setMeLite] = useState({
     display_name: localStorage.getItem("profile_display_name") || "",
@@ -1316,30 +1338,44 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* 4) Editor */}
-      {editingId ? (
-        <div ref={editorRef}>
-          <ProjectEditorCard
-            mode="edit"
-            projectId={editingId}
-            form={editForm}
-            setForm={setEditForm}
-            busy={busy}
-            images={editImgs}
-            setImages={setEditImgs}
-            onMakeCover={makeCoverImage}
-            onSaveImageCaption={saveImageCaption}
-            onDeleteImage={deleteImage}
-            onSubmit={handleEditorSubmit}
-            onDeleteProject={() => deleteProject(editingId)}
-            onClose={() => setEditingId("")}
-            onView={() => window.open(`/projects/${editingId}`, "_self")}
-            onAfterUpload={async () => {
-              await refreshImages(editingId);
-              await refreshProjects();
-              await refreshMyJobPosts();
-            }}
-          />
+      {editingId && isDesktop ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+              <div className="text-sm font-semibold text-slate-900">Edit Project</div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingId("")}
+              >
+                Close
+              </Button>
+            </div>
+
+            <div className="p-4">
+              <ProjectEditorCard
+                mode="edit"
+                projectId={editingId}
+                form={editForm}
+                setForm={setEditForm}
+                busy={busy}
+                images={editImgs}
+                setImages={setEditImgs}
+                onMakeCover={makeCoverImage}
+                onSaveImageCaption={saveImageCaption}
+                onDeleteImage={deleteImage}
+                onSubmit={handleEditorSubmit}
+                onDeleteProject={() => deleteProject(editingId)}
+                onClose={() => setEditingId("")}
+                onView={() => window.open(`/projects/${editingId}`, "_self")}
+                onAfterUpload={async () => {
+                  await refreshImages(editingId);
+                  await refreshProjects();
+                  await refreshMyJobPosts();
+                }}
+              />
+            </div>
+          </div>
         </div>
       ) : null}
 
