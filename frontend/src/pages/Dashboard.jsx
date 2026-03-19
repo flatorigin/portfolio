@@ -823,18 +823,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
-      <header className="mb-1">
-        <div className="flex items-center justify-between gap-3">
-          <SectionTitle>Dashboard</SectionTitle>
-
-          {isDesktop ? (
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              New Project
-            </Button>
-          ) : null}
-        </div>
-      </header>
+    <header className="mb-1">
+      <SectionTitle>Dashboard</SectionTitle>
+    </header>
 
       {/* Saved projects */}
       <Card className="p-5">
@@ -998,20 +989,25 @@ export default function Dashboard() {
       <SavedProfilesGrid />
 
       {/* 1) Create Project */}
-      {!isDesktop ? (
-        <CreateProjectCard
-          ownedCount={projects.length}
-          form={form}
-          setForm={setForm}
-          cover={cover}
-          setCover={setCover}
-          busy={busy}
-          error={createErr}
-          success={createOk}
-          onSubmit={createProject}
-          closeSignal={createCloseSignal}
-        />
-      ) : null}
+      <Card className="p-6">
+        <div className="mb-4 text-sm font-semibold text-slate-900">
+          Create Project
+        </div>
+
+        <div className="flex flex-col items-center justify-center text-center">
+          <Button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="min-h-[96px] min-w-[320px] rounded-2xl bg-sky-600 px-10 text-xl font-bold text-white hover:bg-sky-700"
+          >
+            + Add project
+          </Button>
+
+          <p className="mt-4 max-w-2xl text-sm text-slate-600">
+            This can be a new project or a job posting. remember to make it public once it's ready to be published.
+          </p>
+        </div>
+      </Card>
 
       {/* 1.5) YOUR JOB POSTS (distinct) */}
       <Card className="p-5 border border-sky-200 bg-sky-50/40">
