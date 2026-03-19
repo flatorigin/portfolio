@@ -113,16 +113,6 @@ export default function Dashboard() {
       return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-  // ---- Profile header (live) ----
-  const [meLite, setMeLite] = useState({
-    display_name: localStorage.getItem("profile_display_name") || "",
-    logo: localStorage.getItem("profile_logo") || "",
-    service_location: "",
-    coverage_radius_miles: "",
-    bio: "",
-  });
-  const [profileSaving, setProfileSaving] = useState(false);
-
   useEffect(() => {
     (async () => {
       try {
@@ -142,42 +132,6 @@ export default function Dashboard() {
       }
     })();
   }, []);
-
-  useEffect(() => {
-    const onUpdating = () => setProfileSaving(true);
-    const onUpdated = (e) => {
-      const d = e?.detail || {};
-      setProfileSaving(false);
-      if (
-        d.display_name ||
-        d.logo ||
-        d.service_location ||
-        d.coverage_radius_miles ||
-        d.bio
-      ) {
-        setMeLite((prev) => ({
-          ...prev,
-          ...(d.display_name !== undefined ? { display_name: d.display_name } : {}),
-          ...(d.logo !== undefined ? { logo: d.logo } : {}),
-          ...(d.service_location !== undefined
-            ? { service_location: d.service_location }
-            : {}),
-          ...(d.coverage_radius_miles !== undefined
-            ? { coverage_radius_miles: d.coverage_radius_miles }
-            : {}),
-          ...(d.bio !== undefined ? { bio: d.bio } : {}),
-        }));
-      }
-    };
-    window.addEventListener("profile:updating", onUpdating);
-    window.addEventListener("profile:updated", onUpdated);
-    return () => {
-      window.removeEventListener("profile:updating", onUpdating);
-      window.removeEventListener("profile:updated", onUpdated);
-    };
-  }, []);
-
-  const logoUrl = toUrl(meLite.logo);
 
   // ---- Saved projects (favorites) ----
   const [savedProjects, setSavedProjects] = useState([]);
@@ -881,66 +835,6 @@ export default function Dashboard() {
           ) : null}
         </div>
       </header>
-
-      {/* Profile summary */}
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="relative h-10 w-10 flex-shrink-0">
-              {logoUrl ? (
-                <img
-                  src={toUrl(localStorage.getItem("profile_logo"))}
-                  alt="Logo"
-                  className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
-                />
-              ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm text-slate-600">
-                  {meLite.display_name
-                    ? meLite.display_name.slice(0, 1).toUpperCase()
-                    : "•"}
-                </div>
-              )}
-              {profileSaving && (
-                <div className="absolute inset-0 grid place-items-center rounded-full bg-white/50">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Profile
-              </div>
-              <div className="text-sm font-semibold text-slate-800">
-                {meLite.display_name || "Add your name in Edit Profile"}
-              </div>
-
-              {(meLite.service_location || meLite.coverage_radius_miles) && (
-                <div className="mt-1 text-xs text-slate-600">
-                  {meLite.service_location || "Location not set"}
-                  {meLite.coverage_radius_miles !== "" && (
-                    <> · {meLite.coverage_radius_miles} mile radius</>
-                  )}
-                </div>
-              )}
-
-              {meLite.bio ? (
-                <p className="mt-2 text-xs text-slate-600">{meLite.bio}</p>
-              ) : (
-                <p className="mt-2 text-xs text-slate-500">
-                  Add your service area and a short bio so clients know who you are.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex w-full max-w-[140px] flex-col items-end gap-2">
-            <Button type="button" onClick={() => navigate("/profile/edit")}>
-              Edit Profile
-            </Button>
-          </div>
-        </div>
-      </Card>
 
       {/* Saved projects */}
       <Card className="p-5">
