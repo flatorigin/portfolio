@@ -184,6 +184,7 @@ export default function Dashboard() {
   const [showAllSaved, setShowAllSaved] = useState(false);
   const [removingFavoriteId, setRemovingFavoriteId] = useState(null);
   const [createCloseSignal, setCreateCloseSignal] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const refreshSaved = useCallback(async () => {
     try {
@@ -386,15 +387,15 @@ export default function Dashboard() {
   const [editingId, setEditingId] = useState("");
 
   useEffect(() => {
-      if (!(editingId && isDesktop)) return;
+    if (!isDesktop || (!editingId && !createOpen)) return;
 
-      const previousOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-      return () => {
-        document.body.style.overflow = previousOverflow;
-      };
-    }, [editingId, isDesktop]);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [editingId, createOpen, isDesktop]);
   
   const [editForm, setEditForm] = useState({
     title: "",
@@ -424,7 +425,6 @@ export default function Dashboard() {
     notify_by_email: false,
   });
   const [editImgs, setEditImgs] = useState([]);
-  const editorRef = useRef(null);
 
   // ✅ feedback + collapse control
   const [saveToast, setSaveToast] = useState("");
@@ -633,34 +633,9 @@ export default function Dashboard() {
       });
 
       await refreshImages(pid);
-
-      setTimeout(() => {
-        editorRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 150);
     },
     [refreshImages]
   );
-
-  useEffect(() => {
-    if (!editingId) return;
-    let attempts = 0;
-    function tryScroll() {
-      if (editorRef.current) {
-        const top =
-          editorRef.current.getBoundingClientRect().top + window.scrollY - 80;
-        window.scrollTo({ top, behavior: "smooth" });
-        return;
-      }
-      if (attempts < 10) {
-        attempts++;
-        setTimeout(tryScroll, 50);
-      }
-    }
-    tryScroll();
-  }, [editingId]);
 
   // ✅ cover = order 0 (backend). UI does NOT reorder due to refreshImages merge.
   async function makeCoverImage(imageId) {
@@ -765,6 +740,9 @@ export default function Dashboard() {
       setCover(null);
       setCreateOk(true);
       setCreateCloseSignal((n) => n + 1);
+      if (isDesktop) {
+        setCreateOpen(false);
+      }
     } catch (err) {
       const data = err?.response?.data;
       const msg =
@@ -893,7 +871,15 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       <header className="mb-1">
-        <SectionTitle>Dashboard</SectionTitle>
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle>Dashboard</SectionTitle>
+
+          {isDesktop ? (
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              New Project
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       {/* Profile summary */}
@@ -1118,18 +1104,20 @@ export default function Dashboard() {
       <SavedProfilesGrid />
 
       {/* 1) Create Project */}
-      <CreateProjectCard
-        ownedCount={projects.length}
-        form={form}
-        setForm={setForm}
-        cover={cover}
-        setCover={setCover}
-        busy={busy}
-        error={createErr}
-        success={createOk}
-        onSubmit={createProject}
-        closeSignal={createCloseSignal}
-      />
+      {!isDesktop ? (
+        <CreateProjectCard
+          ownedCount={projects.length}
+          form={form}
+          setForm={setForm}
+          cover={cover}
+          setCover={setCover}
+          busy={busy}
+          error={createErr}
+          success={createOk}
+          onSubmit={createProject}
+          closeSignal={createCloseSignal}
+        />
+      ) : null}
 
       {/* 1.5) YOUR JOB POSTS (distinct) */}
       <Card className="p-5 border border-sky-200 bg-sky-50/40">
@@ -1374,6 +1362,38 @@ export default function Dashboard() {
                   await refreshProjects();
                   await refreshMyJobPosts();
                 }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {createOpen && isDesktop ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+              <div className="text-sm font-semibold text-slate-900">Create Project</div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+
+            <div className="p-4">
+              <CreateProjectCard
+                ownedCount={projects.length}
+                form={form}
+                setForm={setForm}
+                cover={cover}
+                setCover={setCover}
+                busy={busy}
+                error={createErr}
+                success={createOk}
+                onSubmit={createProject}
+                closeSignal={createCloseSignal}
               />
             </div>
           </div>
