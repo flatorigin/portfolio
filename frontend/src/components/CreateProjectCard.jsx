@@ -15,6 +15,7 @@ function toggleInArray(arr, value) {
 
 function JobPostingHelp({ text }) {
   const [open, setOpen] = useState(false);
+
   return (
     <span className="relative inline-block">
       <button
@@ -57,6 +58,7 @@ export default function CreateProjectCard({
   onSubmit, // (event, images) => void
   onSendPrivate, // OPTIONAL: (username, payload) => void (later)
   defaultOpen = false,
+  hideLauncher = false,
   closeSignal = 0, // optional: increments when Dashboard wants this card to close + reset
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -147,6 +149,13 @@ export default function CreateProjectCard({
     resetLocalImages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeSignal]);
+
+  // Respect defaultOpen when the component is used in modal flows
+  useEffect(() => {
+    if (defaultOpen) {
+      setIsOpen(true);
+    }
+  }, [defaultOpen]);
 
   const toggleJobPosting = () => {
     // single state update to avoid weird batching interactions
@@ -273,6 +282,8 @@ export default function CreateProjectCard({
     resetLocalImages();
   };
 
+  const showForm = hideLauncher || isOpen;
+
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-center justify-between">
@@ -280,11 +291,13 @@ export default function CreateProjectCard({
         <Badge>{ownedCount} owned</Badge>
       </div>
 
-      <Button type="button" className="mb-3" onClick={toggleOpen}>
-        {isOpen ? "Hide form" : "Create new project"}
-      </Button>
+      {!hideLauncher ? (
+        <Button type="button" className="mb-3" onClick={toggleOpen}>
+          {isOpen ? "Hide form" : "Create new project"}
+        </Button>
+      ) : null}
 
-      {isOpen && (
+      {showForm && (
         <>
           {/* Job Posting header (blue) + Public toggle on right */}
           <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">

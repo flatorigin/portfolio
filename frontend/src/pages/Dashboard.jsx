@@ -1256,6 +1256,7 @@ export default function Dashboard() {
                 success={createOk}
                 onSubmit={createProject}
                 closeSignal={createCloseSignal}
+                defaultOpen
               />
             </div>
           </div>
