@@ -810,7 +810,7 @@ export default function Dashboard() {
       </header>
 
       {/* 1) Create Project */}
-      <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
+      <Card className="rounded-xl border border-slate-200 bg-white p-0 shadow-none">
         <div className="flex min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
           <div className="mb-5 text-slate-400">
             <svg
