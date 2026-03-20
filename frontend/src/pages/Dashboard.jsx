@@ -811,14 +811,14 @@ export default function Dashboard() {
 
       {/* 1) Create Project */}
       <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
-        <div className="flex min-h-[270px] flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-6 text-center">
           <div className="mb-5 text-slate-400">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
+              viewBox="0 0 16 16"
               fill="none"
               stroke="currentColor"
-              strokeWidth="1.8"
+              strokeWidth="1.2"
               className="h-16 w-16"
             >
               <path
@@ -831,14 +831,14 @@ export default function Dashboard() {
             </svg>
           </div>
 
-          <div className="text-[1rem] font-semibold tracking-[-0.02em] text-slate-900">
+          <div className="text-[1.05rem] font-semibold tracking-[-0.02em] text-slate-900">
             {projects.length === 0 ? "No Project" : "Add another project"}
           </div>
 
           <p className="mt-3 max-w-xl text-[1.05rem] text-slate-500">
             {projects.length === 0
               ? "Get started by creating a new project."
-              : "Create another project and keep building your portfolio."}
+              : "Create another project or switch to job posting."}
           </p>
 
           <Button
