@@ -104,33 +104,13 @@ export default function Dashboard() {
 
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
 
-    useEffect(() => {
-      function handleResize() {
-        setIsDesktop(window.innerWidth >= 768);
-      }
-
-      window.addEventListener("resize", handleResize);
-      return () => window.removeEventListener("resize", handleResize);
-    }, []);
-
   useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/users/me/");
-        const next = {
-          display_name: data?.display_name || data?.name || "",
-          logo: data?.logo || data?.logo_url || "",
-          service_location: data?.service_location || "",
-          coverage_radius_miles: data?.coverage_radius_miles ?? "",
-          bio: data?.bio || "",
-        };
-        setMeLite(next);
-        localStorage.setItem("profile_display_name", next.display_name || "");
-        localStorage.setItem("profile_logo", next.logo || "");
-      } catch {
-        /* non-blocking */
-      }
-    })();
+    function handleResize() {
+      setIsDesktop(window.innerWidth >= 768);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // ---- Saved projects (favorites) ----
@@ -341,7 +321,10 @@ export default function Dashboard() {
   const [editingId, setEditingId] = useState("");
 
   useEffect(() => {
-    if (!isDesktop || (!editingId && !createOpen)) return;
+    const hasEditModal = editingId && isDesktop;
+    const hasCreateModal = createOpen;
+
+    if (!hasEditModal && !hasCreateModal) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -350,7 +333,7 @@ export default function Dashboard() {
       document.body.style.overflow = previousOverflow;
     };
   }, [editingId, createOpen, isDesktop]);
-  
+
   const [editForm, setEditForm] = useState({
     title: "",
     summary: "",
@@ -694,9 +677,7 @@ export default function Dashboard() {
       setCover(null);
       setCreateOk(true);
       setCreateCloseSignal((n) => n + 1);
-      if (isDesktop) {
-        setCreateOpen(false);
-      }
+      setCreateOpen(false);
     } catch (err) {
       const data = err?.response?.data;
       const msg =
@@ -823,9 +804,31 @@ export default function Dashboard() {
   }
 
   return (
-    <header className="mb-1">
-      <SectionTitle>Dashboard</SectionTitle>
-    </header>
+    <div className="space-y-8">
+      <header className="mb-1">
+        <SectionTitle>Dashboard</SectionTitle>
+      </header>
+
+      {/* 1) Create Project */}
+      <Card className="p-6">
+        <div className="mb-4 text-sm font-semibold text-slate-900">
+          Create Project
+        </div>
+
+        <div className="flex flex-col items-center justify-center text-center">
+          <Button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="min-h-[96px] min-w-[320px] rounded-2xl bg-sky-600 px-10 text-xl font-bold text-white hover:bg-sky-700"
+          >
+            + Add project
+          </Button>
+
+          <p className="mt-4 max-w-2xl text-sm text-slate-600">
+            This can be a new project or a job posting. Remember to make it public once it’s ready to be published.
+          </p>
+        </div>
+      </Card>
 
       {/* Saved projects */}
       <Card className="p-5">
@@ -847,9 +850,6 @@ export default function Dashboard() {
               {(showAllSaved ? savedProjects : savedProjects.slice(0, 3)).map((fav) => {
                 const projectId = extractProjectId(fav);
 
-                // =========================
-                // CHANGED: fixed saved-project cover source
-                // =========================
                 const coverSrcRaw =
                   fav.project_cover_image_url ||
                   fav.project_cover_image ||
@@ -860,9 +860,6 @@ export default function Dashboard() {
                   "";
 
                 const coverSrc = coverSrcRaw ? toUrl(coverSrcRaw) : "";
-                // =========================
-                // END CHANGED
-                // =========================
 
                 const title =
                   fav.project_title ||
@@ -988,27 +985,6 @@ export default function Dashboard() {
       {/* SAVED PROFILES (liked public profiles) */}
       <SavedProfilesGrid />
 
-      {/* 1) Create Project */}
-      <Card className="p-6">
-        <div className="mb-4 text-sm font-semibold text-slate-900">
-          Create Project
-        </div>
-
-        <div className="flex flex-col items-center justify-center text-center">
-          <Button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="min-h-[96px] min-w-[320px] rounded-2xl bg-sky-600 px-10 text-xl font-bold text-white hover:bg-sky-700"
-          >
-            + Add project
-          </Button>
-
-          <p className="mt-4 max-w-2xl text-sm text-slate-600">
-            This can be a new project or a job posting. remember to make it public once it's ready to be published.
-          </p>
-        </div>
-      </Card>
-
       {/* 1.5) YOUR JOB POSTS (distinct) */}
       <Card className="p-5 border border-sky-200 bg-sky-50/40">
         <div className="mb-3 flex items-center justify-between">
@@ -1029,13 +1005,9 @@ export default function Dashboard() {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
             {myJobPosts
               .slice()
-              .sort((a, b) => Number(b.is_public) - Number(a.is_public)) // published first
+              .sort((a, b) => Number(b.is_public) - Number(a.is_public))
               .map((p) => {
-                // =========================
-                // CHANGED: use shared cover helper for faster cover loading
-                // =========================
                 const coverSrc = getProjectCover(p);
-
                 const isPublished = !!p.is_public;
 
                 return (
@@ -1258,7 +1230,7 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {createOpen && isDesktop ? (
+      {createOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
