@@ -810,7 +810,7 @@ export default function Dashboard() {
       </header>
 
       {/* 1) Create Project */}
-      <Card className="rounded-xl border border-slate-200 bg-white p-0 shadow-none">
+      <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
         <div className="flex min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
           <div className="mb-5 text-slate-400">
             <svg
@@ -832,11 +832,13 @@ export default function Dashboard() {
           </div>
 
           <div className="text-[2rem] font-semibold tracking-[-0.02em] text-slate-900">
-            No projects
+            {projects.length === 0 ? "No Project" : "Add another project"}
           </div>
 
           <p className="mt-3 max-w-xl text-[1.05rem] text-slate-500">
-            Get started by creating a new project.
+            {projects.length === 0
+              ? "Get started by creating a new project."
+              : "Create another project and keep building your portfolio."}
           </p>
 
           <Button
@@ -854,7 +856,7 @@ export default function Dashboard() {
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
             </svg>
-            New Project
+            {projects.length === 0 ? "New Project" : "Add Project"}
           </Button>
         </div>
       </Card>
