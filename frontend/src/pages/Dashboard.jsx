@@ -819,7 +819,7 @@ export default function Dashboard() {
           <Button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="min-h-[96px] min-w-[320px] rounded-2xl bg-sky-600 px-10 text-xl font-bold text-white hover:bg-sky-700"
+            className="min-h-[70px] min-w-[250px] rounded-2xl bg-sky-600 px-10 text-l text-white hover:bg-sky-700"
           >
             + Add project
           </Button>
