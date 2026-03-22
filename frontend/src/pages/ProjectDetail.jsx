@@ -1157,7 +1157,7 @@ export default function ProjectDetail() {
                 No media uploaded for this project.
               </div>
             ) : (
-              <div className="flex flex-wrap gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {images.map((img, i) => (
                   <button
                     type="button"
