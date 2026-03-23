@@ -865,9 +865,9 @@ export default function Dashboard() {
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-800">Saved projects</h2>
-          <span className="text-[11px] text-slate-500">
+          <Badge className="text-[11px] text-slate-500">
             {savedProjects.length} saved
-          </span>
+          </Badge>
         </div>
 
         {savedProjects.length === 0 ? (
@@ -1025,7 +1025,7 @@ export default function Dashboard() {
               Drafts are editable. Published posts require unpublishing to edit.
             </div>
           </div>
-          <Badge className="bg-sky-600 text-white">{myJobPosts.length}</Badge>
+          <Badge className="bg-white-600 text-slate-700">{myJobPosts.length} posts</Badge>
         </div>
 
         {myJobPosts.length === 0 ? (

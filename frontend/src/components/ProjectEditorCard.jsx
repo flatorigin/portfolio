@@ -621,7 +621,7 @@ export default function ProjectEditorCard({
         <Button
           type="button"
           variant="outline"
-          className="border-red-300 text-red-700 hover:bg-red-50"
+          className="!opacity-100 hover:!opacity-100 text-white-700 hover:text-white bg-slate-90 hover:!bg-red-600"
           onClick={onDeleteProject}
           disabled={busy}
         >

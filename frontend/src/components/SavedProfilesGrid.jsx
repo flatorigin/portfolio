@@ -8,7 +8,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
-import { Card } from "../ui";
+import { Card, Badge } from "../ui";
+
 
 function toInitial(nameOrUsername) {
   const s = (nameOrUsername || "").trim();
@@ -113,7 +114,7 @@ export default function SavedProfilesGrid() {
           <div className="text-sm font-semibold text-slate-800">Saved profiles</div>
           <div className="text-xs text-slate-500">People you liked</div>
         </div>
-        <div className="text-[11px] text-slate-500">{profiles.length} saved</div>
+        <Badge className="text-[11px] text-slate-500">{profiles.length} saved</Badge>
       </div>
 
       {loading ? (

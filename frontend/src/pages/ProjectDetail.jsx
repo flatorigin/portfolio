@@ -993,43 +993,44 @@ export default function ProjectDetail() {
 
           {/* Meta / Project details */}
           {(project?.location ||
-            project?.budget ||
-            project?.sqf ||
-            project?.highlights) && (
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Project details
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm text-slate-700 sm:grid-cols-4">
-                <div className="min-w-0">
-                  <div className="text-xs font-medium uppercase text-slate-500">Location</div>
-                  <div className="truncate text-lg font-semibold">
-                    {project?.location || "—"}
-                  </div>
-                </div>
+             project?.budget ||
+             project?.sqf ||
+             project?.highlights) && (
+             <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                 Project details
+               </div>
+               <div className="grid grid-cols-2 gap-4 text-sm text-slate-700 sm:grid-cols-4">
+                 <div className="min-w-0">
+                   <div className="text-xs font-medium uppercase text-slate-500">Location</div>
+                   <div className="truncate text-lg font-semibold">
+                     {project?.location || "—"}
+                   </div>
+                 </div>
 
-                <div className="min-w-0">
-                  <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
-                  <div className="truncate text-lg font-semibold">
-                    {project?.budget ?? "—"}
-                  </div>
-                </div>
+                 <div className="min-w-0">
+                   <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
+                   <div className="truncate text-lg font-semibold">
+                     {project?.budget ?? "—"}
+                   </div>
+                 </div>
 
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
-                  <div className="truncate text-lg font-semibold">
-                    {project?.sqf ?? "—"}
-                  </div>
-                </div>
+                 <div className="min-w-0">
+                   <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
+                   <div className="truncate text-lg font-semibold">
+                     {project?.sqf ?? "—"}
+                   </div>
+                 </div>
 
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
-                  <div className="truncate text-lg font-semibold">
-                    {project?.highlights || "—"}
-                  </div>
-                </div>
-              </div>
-          )}
+                 <div className="min-w-0">
+                   <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
+                   <div className="truncate text-lg font-semibold">
+                     {project?.highlights || "—"}
+                   </div>
+                 </div>
+               </div>
+             </div>
+           )}
 
           {/* Materials / tools used */}
           {(project?.material_url ||
