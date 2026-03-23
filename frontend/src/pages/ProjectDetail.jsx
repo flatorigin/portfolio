@@ -1000,20 +1000,19 @@ export default function ProjectDetail() {
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Project details
               </div>
-              <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm text-slate-700">
-                {project?.location && (
-                  <div className="min-w-[140px] flex-wrap">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 text-sm text-slate-700">                {project?.location && (
+                  <div className="min-w-0">
                     <div className="text-xs font-medium uppercase text-slate-500">
                       Location
                     </div>
-                    <div className="text-lg font-semibold">
+                    <div className="text-lg font-semibold turncate">
                       {project.location}
                     </div>
                   </div>
                 )}
 
                 {project?.budget && (
-                  <div className="min-w-[140px] flex-wrap">
+                  <div className="min-w-0">
                     <div className="text-xs font-medium uppercase text-slate-500">
                       Budget
                     </div>
@@ -1022,7 +1021,7 @@ export default function ProjectDetail() {
                 )}
 
                 {project?.sqf && (
-                  <div className="min-w-[140px] flex-wrap ">
+                  <div className="min-w-0">
                     <div className="text-xs font-semibold uppercase text-slate-500">
                       Sq Ft
                     </div>
@@ -1031,11 +1030,11 @@ export default function ProjectDetail() {
                 )}
 
                 {project?.highlights && (
-                  <div className="min-w-[140px] flex-wrap">
+                  <div className="min-w-0">
                     <div className="text-xs font-semibold uppercase text-slate-500">
                       Highlights
                     </div>
-                    <div className="mt-0.5 whitespace-pre-line text-lg font-semibold">
+                    <div className="mt-0.5 whitespace-pre-line text-lg font-semibold turncate">
                       {project.highlights}
                     </div>
                   </div>

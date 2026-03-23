@@ -11,3 +11,10 @@ staticfiles/
 .DS_Store
 .idea/
 .vscode/
+# local DBs
+*.sqlite3
+db.sqlite3
+
+# Vite output (if not already covered)
+frontend/dist/db.sqlite3
+db.sqlite3

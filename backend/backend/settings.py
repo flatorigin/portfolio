@@ -61,11 +61,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "backend.wsgi.application"
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL"),
-    )
-}
+# DATABASES = {
+#     "default": dj_database_url.config(
+#         default=os.environ.get("DATABASE_URL"),
+#     )
+# }
+
+USE_SQLITE = os.getenv("USE_SQLITE", "").lower() in ("1", "true", "yes", "on")
+SQLITE_PATH = os.getenv("SQLITE_PATH", "db.sqlite3")
+
+if USE_SQLITE:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.path.abspath(SQLITE_PATH),
+        }
+    }
+else:
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=os.getenv("DATABASE_URL", ""),
+            conn_max_age=600,
+            ssl_require=False,
+        )
+    }
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 

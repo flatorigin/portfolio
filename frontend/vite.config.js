@@ -2,12 +2,13 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwind from "@tailwindcss/vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwind()],
-  base: "/static/",
+  // ✅ local dev should be "/", production build stays "/static/"
+  base: mode === "development" ? "/" : "/static/",
+  server: { port: 5173 },
   build: {
     outDir: "dist",
     assetsDir: "",
-  server: { port: 5173 },
   },
-});
+}));
