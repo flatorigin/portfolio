@@ -1000,47 +1000,35 @@ export default function ProjectDetail() {
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Project details
               </div>
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 text-sm text-slate-700">                {project?.location && (
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium uppercase text-slate-500">
-                      Location
-                    </div>
-                    <div className="text-lg font-semibold turncate">
-                      {project.location}
-                    </div>
+              <div className="grid grid-cols-2 gap-4 text-sm text-slate-700 sm:grid-cols-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium uppercase text-slate-500">Location</div>
+                  <div className="truncate text-lg font-semibold">
+                    {project?.location || "—"}
                   </div>
-                )}
+                </div>
 
-                {project?.budget && (
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium uppercase text-slate-500">
-                      Budget
-                    </div>
-                    <div className="text-lg font-semibold">{project.budget}</div>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
+                  <div className="truncate text-lg font-semibold">
+                    {project?.budget ?? "—"}
                   </div>
-                )}
+                </div>
 
-                {project?.sqf && (
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold uppercase text-slate-500">
-                      Sq Ft
-                    </div>
-                    <div className="text-lg font-semibold">{project.sqf}</div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
+                  <div className="truncate text-lg font-semibold">
+                    {project?.sqf ?? "—"}
                   </div>
-                )}
+                </div>
 
-                {project?.highlights && (
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold uppercase text-slate-500">
-                      Highlights
-                    </div>
-                    <div className="mt-0.5 whitespace-pre-line text-lg font-semibold turncate">
-                      {project.highlights}
-                    </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
+                  <div className="truncate text-lg font-semibold">
+                    {project?.highlights || "—"}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
           )}
 
           {/* Materials / tools used */}
