@@ -11,9 +11,10 @@ urlpatterns = [
     path("auth/password-reset/", PasswordResetRequestView.as_view(), name="password-reset"),
     path("auth/password-reset-confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
 
-    # ✅ must be ABOVE profiles/<username>/ so "liked" doesn't get captured as username
+    # ✅ put fixed/static routes FIRST
     path("profiles/liked/", LikedProfilesView.as_view(), name="liked-profiles"),
 
+    # ✅ keep like route before/after public profile (either is fine)
     path("profiles/<str:username>/like/", ProfileLikeView.as_view(), name="profile-like"),
     path("profiles/<str:username>/", PublicProfileView.as_view(), name="public-profile"),
 ]
