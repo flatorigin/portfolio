@@ -253,3 +253,7 @@ export default function SavedProjectsGrid() {
     </Card>
   );
 }
+
+console.log("[SavedProfilesGrid] mounted", {
+  authed: !!localStorage.getItem("access"),
+});

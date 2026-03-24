@@ -31,7 +31,7 @@ export default function SavedProfilesGrid() {
   const timerRef = useRef(null);
 
   // Always use the correct backend path (accounts URLs are under /api/)
-  const API_PATH = "/api/profiles/liked/";
+  const API_PATH = "/profiles/liked/";
 
   // Re-fetch when likes change
   useEffect(() => {
