@@ -99,6 +99,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             "like_count",
             "liked_by_me",
             "allow_direct_messages",
+            "hero_headline",
+            "hero_blurb",
         )
         read_only_fields = ("id", "username", "avatar_url", "banner_url", "like_count", "liked_by_me")
 
