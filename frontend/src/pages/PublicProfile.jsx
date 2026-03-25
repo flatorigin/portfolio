@@ -3,8 +3,8 @@
 // Public profile + projects + contact + map
 // Hero/banner is read from /profiles/:username/ only (public)
 // Adds: Like/Save profile button (hidden on own profile) + like count
+// Adds: Hero headline + blurb on banner
 // Fix: ALL hooks are declared before any early return
-// Adds: Hero headline + blurb (defaults if fields missing)
 // =======================================
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -174,7 +174,7 @@ export default function PublicProfile() {
         setProjects(visibleProjects);
         hydrateCovers(visibleProjects);
 
-        // Seed like count from public serializer field (works for anonymous too)
+        // Seed like count from public serializer field
         setLikeCount(Number(prof?.like_count || 0));
       } catch (err) {
         console.error("[PublicProfile] failed to load", err);
@@ -276,15 +276,26 @@ export default function PublicProfile() {
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
 
+        {/* ✅ HERO OVERLAY */}
         <div className="absolute inset-x-0 bottom-0">
-          <div className="mx-auto max-w-6xl px-4 pb-8">
-            {/* ✅ New hero layout: left text stack + right actions */}
+          {/* pb creates room for the logo overlap + ~30px clearance */}
+          <div className="mx-auto max-w-6xl px-4 pb-10">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-              {/* LEFT */}
-              <div className="flex flex-col gap-5">
-                {/* identity row */}
-                <div className="flex items-end gap-4">
-                  <div className="-mb-3 h-24 w-24 overflow-hidden rounded-2xl border border-white/40 bg-white shadow-lg">
+              {/* LEFT: headline + blurb + identity */}
+              <div className="min-w-0">
+                {/* Headline/blurb are moved UP so the logo stays clear */}
+                <div className="max-w-2xl pb-[30px] text-white">
+                  <div className="text-3xl font-extrabold leading-tight sm:text-5xl">
+                    {heroHeadline}
+                  </div>
+                  <div className="mt-3 max-w-2xl text-sm leading-relaxed text-white/90 sm:text-[15px] -mb-[-20px]">
+                    {heroBlurb}
+                  </div>
+                </div>
+
+                {/* Identity row (logo goes back to the original overlap position) */}
+                <div className="flex items-end gap-4 -mb-[30px]">
+                  <div className="-mb-6 h-24 w-24 overflow-hidden rounded-2xl border border-white/40 bg-white shadow-lg">
                     {avatarSrc ? (
                       <img
                         src={avatarSrc}
@@ -298,37 +309,25 @@ export default function PublicProfile() {
                     )}
                   </div>
 
-                  <div className="text-white">
-                    <div className="text-2xl font-semibold sm:text-3xl">
+                  <div className="min-w-0 text-white">
+                    <div className="truncate text-2xl font-semibold sm:text-3xl">
                       {displayName}
                     </div>
-                    <div className="mt-1 text-xs text-white/80">
+                    <div className="mt-1 truncate text-xs text-white/80">
                       @{profile.username}
                       {profile.service_location ? (
                         <>
                           <span className="mx-2">•</span>
-                          <span>{profile.service_location}</span>
+                          <span className="truncate">{profile.service_location}</span>
                         </>
                       ) : null}
                     </div>
-                  </div>
-                </div>
-
-                {/* ✅ headline + blurb */}
-                <div className="max-w-2xl text-white">
-                  <div className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    {heroHeadline}
-                  </div>
-
-                  <div className="mt-4 text-sm leading-relaxed text-white/80 sm:text-base">
-                    {heroBlurb}
                   </div>
                 </div>
               </div>
 
               {/* RIGHT: actions */}
               <div className="flex flex-wrap items-center gap-2 sm:pb-1">
-                {/* Like button (hidden on own profile) */}
                 {!isMine ? (
                   <button
                     type="button"
@@ -415,7 +414,9 @@ export default function PublicProfile() {
                 </div>
                 <div>
                   <span className="text-slate-500">Phone:</span>{" "}
-                  <span className="font-medium">{profile.contact_phone || "—"}</span>
+                  <span className="font-medium">
+                    {profile.contact_phone || "—"}
+                  </span>
                 </div>
               </div>
             </div>
