@@ -23,6 +23,8 @@ function toUrl(raw) {
 export default function EditProfile() {
   const [form, setForm] = useState({
     display_name: "",
+    hero_headline: "",
+    hero_blurb: "",
     service_location: "",
     coverage_radius_miles: "",
     contact_email: "",
@@ -64,6 +66,8 @@ export default function EditProfile() {
 
         const nextForm = {
           display_name: data.display_name || "",
+          hero_headline: data.hero_headline || "",
+          hero_blurb: data.hero_blurb || "",
           service_location: data.service_location || "",
           coverage_radius_miles:
             data.coverage_radius_miles !== null &&
@@ -164,6 +168,8 @@ export default function EditProfile() {
     try {
       const data = new FormData();
       data.append("display_name", form.display_name || "");
+      data.append("hero_headline", form.hero_headline || "");
+      data.append("hero_blurb", form.hero_blurb || "");
       data.append("service_location", form.service_location || "");
       if (form.coverage_radius_miles !== "") {
         data.append("coverage_radius_miles", form.coverage_radius_miles);
@@ -190,6 +196,8 @@ export default function EditProfile() {
 
       const next = {
         display_name: updated.display_name ?? form.display_name,
+        hero_headline: updated.hero_headline ?? form.hero_headline,
+        hero_blurb: updated.hero_blurb ?? form.hero_blurb,
         service_location: updated.service_location ?? form.service_location,
         coverage_radius_miles:
           updated.coverage_radius_miles !== null &&
@@ -343,6 +351,37 @@ export default function EditProfile() {
                   onChange={updateField("display_name")}
                   placeholder="Business / owner name"
                 />
+              </div>
+
+              {/* Hero text */}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Hero headline
+                  </label>
+                  <Input
+                    value={form.hero_headline}
+                    onChange={updateField("hero_headline")}
+                    placeholder="We’re changing the way contractors connect"
+                    maxLength={120}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Short, bold line shown on your public profile hero.
+                  </p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Hero blurb
+                  </label>
+                  <Textarea
+                    rows={4}
+                    value={form.hero_blurb}
+                    onChange={updateField("hero_blurb")}
+                    placeholder="Connect directly with local pros who let their craftsmanship do the talking…"
+                    className="min-h-[110px]"
+                  />
+                </div>
               </div>
 
               {/* Service area */}

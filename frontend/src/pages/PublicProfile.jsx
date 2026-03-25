@@ -4,9 +4,10 @@
 // Hero/banner is read from /profiles/:username/ only (public)
 // Adds: Like/Save profile button (hidden on own profile) + like count
 // Fix: ALL hooks are declared before any early return
+// Adds: Hero headline + blurb (defaults if fields missing)
 // =======================================
 import { useParams, Link } from "react-router-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
 import ServiceAreaMap from "../components/ServiceAreaMap";
@@ -81,6 +82,20 @@ export default function PublicProfile() {
     const raw = extractHeroFromProfile(profile);
     return toUrl(raw || "");
   }, [profile]);
+
+  const heroHeadline = useMemo(() => {
+    return (
+      (profile?.hero_headline || "").trim() ||
+      "We’re changing the way contractors connect"
+    );
+  }, [profile?.hero_headline]);
+
+  const heroBlurb = useMemo(() => {
+    return (
+      (profile?.hero_blurb || "").trim() ||
+      "Connect directly with local pros who let their craftsmanship do the talking through full portfolios and transparent contact info. Skip the middleman and the sales pitches—just real conversations with contractors ready to bridge the gap on your specific project. Browse, ask questions, and hire the right expert for your home without the usual hassle."
+    );
+  }, [profile?.hero_blurb]);
 
   const bannerStyle = useMemo(() => {
     if (!bannerUrl) return {};
@@ -195,14 +210,12 @@ export default function PublicProfile() {
         const { data } = await api.get(`/profiles/${profile.username}/like/`);
         if (!alive) return;
         setLiked(!!data?.liked);
-        // keep count in sync if backend returns it
         if (data?.like_count !== undefined) {
           setLikeCount(Number(data.like_count || 0));
         }
       } catch {
         if (!alive) return;
         setLiked(false);
-        // keep likeCount as-is (from profile.like_count)
       }
     })();
 
@@ -219,11 +232,13 @@ export default function PublicProfile() {
       if (liked) {
         const { data } = await api.delete(`/profiles/${profile.username}/like/`);
         setLiked(false);
-        if (data?.like_count !== undefined) setLikeCount(Number(data.like_count || 0));
+        if (data?.like_count !== undefined)
+          setLikeCount(Number(data.like_count || 0));
       } else {
         const { data } = await api.post(`/profiles/${profile.username}/like/`);
         setLiked(true);
-        if (data?.like_count !== undefined) setLikeCount(Number(data.like_count || 0));
+        if (data?.like_count !== undefined)
+          setLikeCount(Number(data.like_count || 0));
       }
       window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
     } catch (e) {
@@ -262,39 +277,56 @@ export default function PublicProfile() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
 
         <div className="absolute inset-x-0 bottom-0">
-          <div className="mx-auto max-w-6xl px-4 pb-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex items-end gap-4">
-                <div className="-mb-6 h-24 w-24 overflow-hidden rounded-2xl border border-white/40 bg-white shadow-lg">
-                  {avatarSrc ? (
-                    <img
-                      src={avatarSrc}
-                      alt={displayName}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-500">
-                      LOGO
+          <div className="mx-auto max-w-6xl px-4 pb-8">
+            {/* ✅ New hero layout: left text stack + right actions */}
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+              {/* LEFT */}
+              <div className="flex flex-col gap-5">
+                {/* identity row */}
+                <div className="flex items-end gap-4">
+                  <div className="-mb-3 h-24 w-24 overflow-hidden rounded-2xl border border-white/40 bg-white shadow-lg">
+                    {avatarSrc ? (
+                      <img
+                        src={avatarSrc}
+                        alt={displayName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-500">
+                        LOGO
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-white">
+                    <div className="text-2xl font-semibold sm:text-3xl">
+                      {displayName}
                     </div>
-                  )}
+                    <div className="mt-1 text-xs text-white/80">
+                      @{profile.username}
+                      {profile.service_location ? (
+                        <>
+                          <span className="mx-2">•</span>
+                          <span>{profile.service_location}</span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="text-white">
-                  <div className="text-2xl font-semibold sm:text-3xl">
-                    {displayName}
+                {/* ✅ headline + blurb */}
+                <div className="max-w-2xl text-white">
+                  <div className="text-4xl font-semibold leading-tight sm:text-5xl">
+                    {heroHeadline}
                   </div>
-                  <div className="mt-1 text-xs text-white/80">
-                    @{profile.username}
-                    {profile.service_location ? (
-                      <>
-                        <span className="mx-2">•</span>
-                        <span>{profile.service_location}</span>
-                      </>
-                    ) : null}
+
+                  <div className="mt-4 text-sm leading-relaxed text-white/80 sm:text-base">
+                    {heroBlurb}
                   </div>
                 </div>
               </div>
 
+              {/* RIGHT: actions */}
               <div className="flex flex-wrap items-center gap-2 sm:pb-1">
                 {/* Like button (hidden on own profile) */}
                 {!isMine ? (
@@ -319,7 +351,6 @@ export default function PublicProfile() {
                   </button>
                 ) : null}
 
-                {/* Message button */}
                 <button
                   type="button"
                   onClick={() => setMsgOpen(true)}
@@ -384,9 +415,7 @@ export default function PublicProfile() {
                 </div>
                 <div>
                   <span className="text-slate-500">Phone:</span>{" "}
-                  <span className="font-medium">
-                    {profile.contact_phone || "—"}
-                  </span>
+                  <span className="font-medium">{profile.contact_phone || "—"}</span>
                 </div>
               </div>
             </div>

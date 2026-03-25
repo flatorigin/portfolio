@@ -40,6 +40,10 @@ class Profile(models.Model):
 
     banner = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
 
+    # Hero copy (public profile)
+    hero_headline = models.CharField(max_length=120, blank=True, default="")
+    hero_blurb = models.TextField(blank=True, default="")
+
     allow_direct_messages = models.BooleanField(default=False)
 
     def __str__(self) -> str:
