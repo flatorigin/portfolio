@@ -82,6 +82,74 @@ class ProjectCommentDetailView(generics.RetrieveUpdateDestroyAPIView):
         # Only allow comments belonging to this project
         return ProjectComment.objects.filter(project_id=project_id)
 
+    def perform_update(self, serializer):
+        obj = self.get_object()
+        if getattr(obj, "testimonial_published", False):
+            raise PermissionDenied("This comment is published as a testimonial and cannot be edited.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if getattr(instance, "testimonial_published", False):
+            raise PermissionDenied("This comment is published as a testimonial and cannot be deleted.")
+        instance.delete()
+
+class PublishTestimonialView(APIView):
+    """
+    POST /api/projects/<pk>/comments/<comment_id>/publish-testimonial/
+    Owner-only: promotes a comment to a public testimonial.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, comment_id):
+        project = get_object_or_404(Project, pk=pk)
+
+        # ✅ only project owner can publish
+        if project.owner_id != request.user.id:
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        comment = get_object_or_404(ProjectComment, id=comment_id, project_id=project.id)
+
+        comment.is_testimonial = True
+        comment.testimonial_published = True
+        comment.testimonial_published_at = timezone.now()
+        if not comment.is_testimonial:
+            return Response(
+                {"detail": "Comment must be marked as testimonial before publishing."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        comment.testimonial_published = True
+        comment.testimonial_published_at = timezone.now()
+        comment.save(update_fields=["testimonial_published", "testimonial_published_at"])
+        comment.save(update_fields=["is_testimonial", "testimonial_published", "testimonial_published_at"])
+
+        ser = ProjectCommentSerializer(comment, context={"request": request})
+        return Response(ser.data, status=status.HTTP_200_OK)
+
+
+class UnpublishTestimonialView(APIView):
+    """
+    POST /api/projects/<pk>/comments/<comment_id>/unpublish-testimonial/
+    Owner-only: removes comment from testimonial display.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, comment_id):
+        project = get_object_or_404(Project, pk=pk)
+
+        # ✅ only project owner can unpublish
+        if project.owner_id != request.user.id:
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        comment = get_object_or_404(ProjectComment, id=comment_id, project_id=project.id)
+
+        comment.testimonial_published = False
+        comment.testimonial_published_at = None
+        # (optional) keep is_testimonial=True as “was promoted once”
+        comment.save(update_fields=["testimonial_published", "testimonial_published_at"])
+
+        ser = ProjectCommentSerializer(comment, context={"request": request})
+        return Response(ser.data, status=status.HTTP_200_OK)
 
 # ---------------------------------------------------
 # Projects + images + favorites

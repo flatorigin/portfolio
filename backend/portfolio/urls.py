@@ -14,6 +14,8 @@ from .views import (
     FavoriteProjectListView,
     DirectMessageStartView,
     DirectThreadMessageListCreateView,
+    PublishTestimonialView,
+    UnpublishTestimonialView,
 )
 
 router = DefaultRouter()
@@ -32,6 +34,17 @@ urlpatterns = [
         "projects/<int:pk>/comments/<int:comment_id>/",
         ProjectCommentDetailView.as_view(),
         name="project-comment-detail",
+    ),
+
+    path(
+        "projects/<int:pk>/comments/<int:comment_id>/publish-testimonial/",
+        PublishTestimonialView.as_view(),
+        name="publish-testimonial",
+    ),
+    path(
+        "projects/<int:pk>/comments/<int:comment_id>/unpublish-testimonial/",
+        UnpublishTestimonialView.as_view(),
+        name="unpublish-testimonial",
     ),
 
     # Project-tied private threads (existing system)

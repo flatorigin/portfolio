@@ -10,6 +10,8 @@ from django.db import models
 from django.utils import timezone
 from datetime import timedelta
 from PIL import Image
+from django.core.validators import MinValueValidator, MaxValueValidator
+
 
 from .utils import convert_field_file_to_webp
 
@@ -173,6 +175,16 @@ class ProjectComment(models.Model):
         related_name="project_comments",
         on_delete=models.CASCADE,
     )
+    rating = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    
+    is_testimonial = models.BooleanField(default=False)
+    testimonial_published = models.BooleanField(default=False)
+    testimonial_published_at = models.DateTimeField(null=True, blank=True)
+
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 

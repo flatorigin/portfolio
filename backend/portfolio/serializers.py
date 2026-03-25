@@ -48,6 +48,10 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
             "is_owner",
             "text",
             "created_at",
+            "rating",
+            "is_testimonial",
+            "testimonial_published",
+            "testimonial_published_at",
         ]
         read_only_fields = [
             "id",
@@ -55,6 +59,8 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
             "author_username",
             "is_owner",
             "created_at",
+            "testimonial_published",
+            "testimonial_published_at",
         ]
 
     def get_is_owner(self, obj):

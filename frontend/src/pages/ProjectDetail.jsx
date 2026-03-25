@@ -1,16 +1,13 @@
 // =======================================
 // file: frontend/src/pages/ProjectDetail.jsx
 // Project page + lightbox-style comments modal + project edit + extra links
+// + Comments: optional rating, disclaimer, stars placeholder, lock edit/delete when testimonial_published
 // =======================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
-
-// ❌ REMOVED: invalid hooks at module scope
-// const [isSaved, setIsSaved] = useState(false);
-// const [saving, setSaving] = useState(false);
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -24,6 +21,38 @@ function buildMapSrc(location) {
   if (!location) return null;
   const q = encodeURIComponent(location);
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
+}
+
+function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) {
+  // value: 0..5
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((n) => {
+        const filled = Number(value || 0) >= n;
+        return (
+          <button
+            key={n}
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              if (!onChange) return;
+              onChange((prev) => (prev === n ? null : n)); // click again to clear
+            }}
+            className={
+              "text-lg leading-none " +
+              (disabled ? "cursor-default" : "cursor-pointer")
+            }
+            aria-label={`${titlePrefix} ${n} stars`}
+            title={`${titlePrefix} ${n} stars`}
+          >
+            <span className={filled ? "text-amber-500" : "text-slate-300"}>
+              ★
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function ProjectDetail() {
@@ -47,12 +76,11 @@ export default function ProjectDetail() {
     highlights: "",
     material_url: "",
     material_label: "",
-    // safe extra (used elsewhere)
     cover_image_id: null,
   });
 
-  const [editCoverFile, setEditCoverFile] = useState(null); // kept for backwards-compatibility
-  const [editImages, setEditImages] = useState([]); // [{id,url,caption,_localCaption,_saving}]
+  const [editCoverFile, setEditCoverFile] = useState(null);
+  const [editImages, setEditImages] = useState([]);
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -72,11 +100,13 @@ export default function ProjectDetail() {
   const [commentText, setCommentText] = useState("");
   const [commentBusy, setCommentBusy] = useState(false);
   const [commentError, setCommentError] = useState("");
+  const [commentRating, setCommentRating] = useState(null); // 1..5 or null
   const [replyingTo, setReplyingTo] = useState(null);
 
   // editing state for comments
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingText, setEditingText] = useState("");
+  const [editingRating, setEditingRating] = useState(null); // 1..5 or null
   const [editBusy, setEditBusy] = useState(false);
 
   // modal state (project + comments)
@@ -115,6 +145,7 @@ export default function ProjectDetail() {
       (meUser.username || "").toLowerCase();
 
   const myUsername = meUser?.username || null;
+
   const isMine =
     authed &&
     project &&
@@ -124,17 +155,12 @@ export default function ProjectDetail() {
 
   // ─────────────────────────────
   // COVER SETTER (backend-friendly)
-  // Tries multiple common field names on the image endpoint.
   // ─────────────────────────────
   async function setCoverOnBackend(projectId, imgId) {
     const normalized = imgId == null ? null : Number(imgId);
     if (!projectId || normalized == null) return;
 
-    const attempts = [
-      { is_cover: true },
-      { is_cover_image: true },
-      { is_cover_photo: true },
-    ];
+    const attempts = [{ is_cover: true }, { is_cover_image: true }, { is_cover_photo: true }];
 
     for (const body of attempts) {
       try {
@@ -145,11 +171,8 @@ export default function ProjectDetail() {
       }
     }
 
-    // fallback: some APIs use order=0 as "cover"
     try {
-      await api.patch(`/projects/${projectId}/images/${normalized}/`, {
-        order: 0,
-      });
+      await api.patch(`/projects/${projectId}/images/${normalized}/`, { order: 0 });
       return;
     } catch (e) {
       const data = e?.response?.data;
@@ -160,14 +183,12 @@ export default function ProjectDetail() {
         (typeof data === "string" ? data : null) ||
         e?.message ||
         "Failed to set cover image.";
-      throw new Error(
-        typeof msg === "string" ? msg : JSON.stringify(msg, null, 2)
-      );
+      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
     }
   }
 
   // ─────────────────────────────
-  // IMAGES (for both public view + editor card)
+  // IMAGES
   // ─────────────────────────────
   const refreshImages = useCallback(async () => {
     if (!id) return;
@@ -199,25 +220,17 @@ export default function ProjectDetail() {
       setImages(publicImages);
       setEditImages(editableImages);
 
-      // Determine backend-selected cover id (if any)
-      const flagged = raw.find(
-        (img) => img?.is_cover || img?.is_cover_image || img?.is_cover_photo
-      );
-
-      const flaggedIdRaw =
-        flagged?.id ?? flagged?.pk ?? flagged?.image_id ?? null;
-
+      const flagged = raw.find((img) => img?.is_cover || img?.is_cover_image || img?.is_cover_photo);
+      const flaggedIdRaw = flagged?.id ?? flagged?.pk ?? flagged?.image_id ?? null;
       const flaggedId = flaggedIdRaw == null ? null : Number(flaggedIdRaw);
 
-      // Only apply backend cover if user hasn't chosen one in this session
       if (flaggedId != null) {
         const exists = editableImages.some((it) => Number(it.id) === flaggedId);
         if (exists) {
           setEditCoverImageId((prev) => (prev == null ? flaggedId : prev));
           setEditForm((prev) => ({
             ...prev,
-            cover_image_id:
-              prev?.cover_image_id == null ? flaggedId : prev.cover_image_id,
+            cover_image_id: prev?.cover_image_id == null ? flaggedId : prev.cover_image_id,
           }));
         }
       }
@@ -229,7 +242,7 @@ export default function ProjectDetail() {
   }, [id]);
 
   // ─────────────────────────────
-  // LOAD PROJECT + COMMENTS (+ IMAGES via refreshImages)
+  // LOAD PROJECT + COMMENTS
   // ─────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!id) return;
@@ -245,13 +258,9 @@ export default function ProjectDetail() {
 
       if (meta) {
         const coverFromMetaRaw =
-          meta.cover_image_id ??
-          (meta.cover_image && meta.cover_image.id) ??
-          meta.cover_image_pk ??
-          null;
+          meta.cover_image_id ?? (meta.cover_image && meta.cover_image.id) ?? meta.cover_image_pk ?? null;
 
-        const coverFromMeta =
-          coverFromMetaRaw == null ? null : Number(coverFromMetaRaw);
+        const coverFromMeta = coverFromMetaRaw == null ? null : Number(coverFromMetaRaw);
 
         setEditForm({
           title: meta.title || "",
@@ -315,8 +324,7 @@ export default function ProjectDetail() {
     }
 
     const isOwner =
-      (project.owner_username || "").toLowerCase() ===
-      (meUser.username || "").toLowerCase();
+      (project.owner_username || "").toLowerCase() === (meUser.username || "").toLowerCase();
 
     if (isOwner) {
       setIsSaved(false);
@@ -328,26 +336,11 @@ export default function ProjectDetail() {
     (async () => {
       try {
         const { data } = await api.get(`/projects/${project.id}/favorite/`);
-        // ✅ IMPORTANT: default should be FALSE (not true)
-        const favored = !!(
-          data?.is_favorited ??
-          data?.favorited ??
-          data?.saved ??
-          data?.is_saved ??
-          false
-        );
+        const favored = !!(data?.is_favorited ?? data?.favorited ?? data?.saved ?? data?.is_saved ?? false);
         if (!cancelled) setIsSaved(favored);
       } catch (err) {
         if (cancelled) return;
-        if (err?.response?.status === 404) {
-          setIsSaved(false);
-        } else {
-          console.warn(
-            "[ProjectDetail] failed to check favorite state",
-            err?.response || err
-          );
-          setIsSaved(false);
-        }
+        setIsSaved(false);
       }
     })();
 
@@ -356,31 +349,25 @@ export default function ProjectDetail() {
     };
   }, [authed, project, meUser]);
 
-  // ✅ FIXED: toggle save/unsave + handle 404 gracefully
   async function toggleSave() {
     if (!authed || !project || saveBusy || isOwnerUser) return;
-
     const projectId = project.id;
     if (!projectId) return;
 
     setSaveBusy(true);
     try {
       if (isSaved) {
-        // unsave
         try {
           await api.delete(`/projects/${projectId}/favorite/`);
         } catch (err) {
-          // if backend returns 404 here, treat as already unsaved
           if (err?.response?.status !== 404) throw err;
         }
         setIsSaved(false);
       } else {
-        // save
         try {
           await api.post(`/projects/${projectId}/favorite/`);
           setIsSaved(true);
         } catch (err) {
-          // if backend returns 404/409/400 for "already saved", treat as saved
           const status = err?.response?.status;
           if (status === 404 || status === 409 || status === 400) {
             setIsSaved(true);
@@ -389,16 +376,11 @@ export default function ProjectDetail() {
           }
         }
       }
-
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
       console.error("[ProjectDetail] toggle favorite failed", err?.response || err);
       const data = err?.response?.data;
-      const msg =
-        data?.detail ||
-        data?.message ||
-        err?.message ||
-        "Failed to update saved state. Please try again.";
+      const msg = data?.detail || data?.message || err?.message || "Failed to update saved state.";
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSaveBusy(false);
@@ -465,22 +447,23 @@ export default function ProjectDetail() {
       return;
     }
 
+    const payload = { text: trimmed };
+    if (commentRating) payload.rating = commentRating;
+    if (replyingTo && isOwnerUser) payload.in_reply_to = replyingTo.id;
+
     setCommentBusy(true);
 
     try {
-      const payload = { text: trimmed };
-      if (replyingTo && isOwnerUser) payload.in_reply_to = replyingTo.id;
-
       await api.post(`/projects/${id}/comments/`, payload);
       const { data: fresh } = await api.get(`/projects/${id}/comments/`);
       setComments(Array.isArray(fresh) ? fresh : []);
 
       setCommentText("");
+      setCommentRating(null);
       setReplyingTo(null);
       setCommentError("");
     } catch (err) {
       console.error("[Comment] error:", err);
-
       const data = err?.response?.data;
       const msg =
         data?.detail ||
@@ -489,9 +472,7 @@ export default function ProjectDetail() {
         data?.message ||
         "Failed to post comment.";
 
-      setCommentError(
-        typeof msg === "string" ? msg : JSON.stringify(msg, null, 2)
-      );
+      setCommentError(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
     } finally {
       setCommentBusy(false);
     }
@@ -508,45 +489,55 @@ export default function ProjectDetail() {
   }
 
   function startEditComment(comment) {
+    if (comment?.testimonial_published) return; // lock
     setEditingCommentId(comment.id);
     setEditingText(comment.text || "");
+    setEditingRating(comment.rating || null);
   }
 
   function cancelEditComment() {
     setEditingCommentId(null);
     setEditingText("");
+    setEditingRating(null);
   }
 
   async function saveEditComment(comment) {
     if (!editingText.trim()) return;
+    if (comment?.testimonial_published) return; // lock
     setEditBusy(true);
     try {
-      const { data } = await api.patch(
-        `/projects/${id}/comments/${comment.id}/`,
-        { text: editingText.trim() }
-      );
+      const patch = { text: editingText.trim(), rating: editingRating || null };
+
+      const { data } = await api.patch(`/projects/${id}/comments/${comment.id}/`, patch);
+
       setComments((prev) =>
-        prev.map((c) => (c.id === comment.id ? { ...c, text: data.text } : c))
+        prev.map((c) =>
+          c.id === comment.id
+            ? { ...c, text: data.text, rating: data.rating ?? null, testimonial_published: data.testimonial_published }
+            : c
+        )
       );
       cancelEditComment();
     } catch (err) {
       console.error("edit comment error:", err?.response || err);
-      alert("Failed to update comment.");
+      alert(err?.response?.data?.detail || "Failed to update comment.");
     } finally {
       setEditBusy(false);
     }
   }
 
   async function deleteComment(comment) {
+    if (comment?.testimonial_published) {
+      alert("This comment is published as a testimonial and cannot be deleted.");
+      return;
+    }
     if (!window.confirm("Delete this comment? This cannot be undone.")) return;
     try {
       await api.delete(`/projects/${id}/comments/${comment.id}/`);
-      setComments((prev) =>
-        prev.filter((c) => c.id !== comment.id && c.in_reply_to !== comment.id)
-      );
+      setComments((prev) => prev.filter((c) => c.id !== comment.id && c.in_reply_to !== comment.id));
     } catch (err) {
       console.error("delete comment error:", err?.response || err);
-      alert("Failed to delete comment.");
+      alert(err?.response?.data?.detail || "Failed to delete comment.");
     }
   }
 
@@ -564,11 +555,8 @@ export default function ProjectDetail() {
       const projectId = project.id;
       if (!projectId) throw new Error("Missing project id");
 
-      // Normalize cover id from state OR form
-      const normalizedCoverId =
-        editCoverImageId ?? editForm.cover_image_id ?? null;
+      const normalizedCoverId = editCoverImageId ?? editForm.cover_image_id ?? null;
 
-      // Do NOT send cover_* fields to project endpoint (your backend 400s on that).
       const payload = {
         title: editForm.title || "",
         summary: editForm.summary || "",
@@ -587,9 +575,7 @@ export default function ProjectDetail() {
 
       if (editCoverFile) {
         const fd = new FormData();
-        Object.entries(payload).forEach(([k, v]) =>
-          fd.append(k, v == null ? "" : String(v))
-        );
+        Object.entries(payload).forEach(([k, v]) => fd.append(k, v == null ? "" : String(v)));
         fd.append("cover_image", editCoverFile);
 
         const resp = await api.patch(`/projects/${projectId}/`, fd, {
@@ -601,7 +587,6 @@ export default function ProjectDetail() {
         data = resp.data;
       }
 
-      // After project saves, set cover via image endpoint
       if (normalizedCoverId != null) {
         try {
           await setCoverOnBackend(projectId, normalizedCoverId);
@@ -613,7 +598,6 @@ export default function ProjectDetail() {
 
       setProject(data);
 
-      // Keep form stable; preserve selected cover id
       setEditForm((prev) => ({
         ...prev,
         title: data?.title ?? prev.title,
@@ -628,16 +612,11 @@ export default function ProjectDetail() {
         material_url: data?.material_url ?? prev.material_url,
         material_label: data?.material_label ?? prev.material_label,
         cover_image_id:
-          normalizedCoverId != null
-            ? Number(normalizedCoverId)
-            : prev.cover_image_id,
+          normalizedCoverId != null ? Number(normalizedCoverId) : prev.cover_image_id,
       }));
 
       setEditCoverFile(null);
-
-      if (normalizedCoverId != null) {
-        setEditCoverImageId(Number(normalizedCoverId));
-      }
+      if (normalizedCoverId != null) setEditCoverImageId(Number(normalizedCoverId));
 
       await refreshImages();
       setIsEditing(false);
@@ -667,9 +646,7 @@ export default function ProjectDetail() {
 
   async function handleSaveImageCaption(img) {
     if (!project || !img?.id) return;
-    setEditImages((prev) =>
-      prev.map((x) => (x.id === img.id ? { ...x, _saving: true } : x))
-    );
+    setEditImages((prev) => prev.map((x) => (x.id === img.id ? { ...x, _saving: true } : x)));
     try {
       await api.patch(`/projects/${project.id}/images/${img.id}/`, {
         caption: img._localCaption,
@@ -677,9 +654,7 @@ export default function ProjectDetail() {
       await refreshImages();
     } catch (e) {
       alert(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
-      setEditImages((prev) =>
-        prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x))
-      );
+      setEditImages((prev) => prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x)));
     }
   }
 
@@ -698,22 +673,15 @@ export default function ProjectDetail() {
   const mapSrc = buildMapSrc(project?.location || "");
 
   const currentImage =
-    images.length && activeImageIdx >= 0
-      ? images[Math.min(activeImageIdx, images.length - 1)]
-      : null;
+    images.length && activeImageIdx >= 0 ? images[Math.min(activeImageIdx, images.length - 1)] : null;
 
-  // Cover URL used for the banner on the project card
   const coverUrl = useMemo(() => {
     const selectedId = editCoverImageId ?? editForm.cover_image_id ?? null;
 
     if (selectedId != null) {
-      const match = editImages.find(
-        (im) => Number(im.id) === Number(selectedId)
-      );
+      const match = editImages.find((im) => Number(im.id) === Number(selectedId));
       if (match?.url) return match.url;
     }
-
-    // fallback: first image
     return images?.[0]?.url || null;
   }, [editCoverImageId, editForm.cover_image_id, editImages, images]);
 
@@ -726,53 +694,57 @@ export default function ProjectDetail() {
     const isOwnerAuthor =
       project &&
       c.author_username &&
-      c.author_username.toLowerCase() ===
-        (project.owner_username || "").toLowerCase();
+      c.author_username.toLowerCase() === (project.owner_username || "").toLowerCase();
 
     const isMyComment =
-      myUsername &&
-      c.author_username &&
-      c.author_username.toLowerCase() === myUsername.toLowerCase();
+      myUsername && c.author_username && c.author_username.toLowerCase() === myUsername.toLowerCase();
 
     const isEditingComment = editingCommentId === c.id;
+
+    const locked = !!c.testimonial_published;
 
     return (
       <div
         key={c.id}
-        className={
-          "rounded-lg border border-slate-200 bg-white p-3 text-sm " +
-          (isReply ? "ml-3" : "")
-        }
+        className={"rounded-lg border border-slate-200 bg-white p-3 text-sm " + (isReply ? "ml-3" : "")}
       >
         <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-700">
-              {c.author_username || "Anonymous"}
-            </span>
+            <span className="font-medium text-slate-700">{c.author_username || "Anonymous"}</span>
             {isOwnerAuthor && (
               <span className="rounded-full bg-slate-900 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-white">
                 Owner
               </span>
             )}
+            {locked && (
+              <span className="rounded-full bg-emerald-100 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-emerald-700">
+                Testimonial
+              </span>
+            )}
           </div>
-          <span>
-            {c.created_at ? new Date(c.created_at).toLocaleString() : ""}
-          </span>
+          <span>{c.created_at ? new Date(c.created_at).toLocaleString() : ""}</span>
+        </div>
+
+        {/* Always show stars placeholder (even if no rating) */}
+        <div className="mb-1 flex items-center gap-1 text-[12px]">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <span key={n} className={(c.rating || 0) >= n ? "text-amber-500" : "text-slate-300"}>
+              ★
+            </span>
+          ))}
         </div>
 
         {isEditingComment ? (
           <div className="space-y-2">
-            <Textarea
-              rows={2}
-              value={editingText}
-              onChange={(e) => setEditingText(e.target.value)}
-            />
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-medium text-slate-600">Rating (optional)</div>
+              <Stars value={editingRating || 0} onChange={setEditingRating} disabled={locked || editBusy} />
+            </div>
+
+            <Textarea rows={2} value={editingText} onChange={(e) => setEditingText(e.target.value)} />
+
             <div className="flex items-center gap-2 text-xs">
-              <Button
-                type="button"
-                disabled={editBusy}
-                onClick={() => saveEditComment(c)}
-              >
+              <Button type="button" disabled={editBusy || locked} onClick={() => saveEditComment(c)}>
                 {editBusy ? "Saving…" : "Save"}
               </Button>
               <button
@@ -783,6 +755,12 @@ export default function ProjectDetail() {
                 Cancel
               </button>
             </div>
+
+            {locked ? (
+              <div className="text-[11px] text-emerald-700">
+                This comment is published as a testimonial and can’t be edited.
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="whitespace-pre-line text-slate-800">{c.text}</p>
@@ -790,21 +768,14 @@ export default function ProjectDetail() {
 
         <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
           {isOwnerUser && !isOwnerAuthor && (
-            <button
-              type="button"
-              onClick={() => replyAsOwnerTo(c)}
-              className="font-medium hover:text-slate-700"
-            >
+            <button type="button" onClick={() => replyAsOwnerTo(c)} className="font-medium hover:text-slate-700">
               Reply as owner
             </button>
           )}
-          {isMyComment && !isEditingComment && (
+
+          {isMyComment && !isEditingComment && !locked && (
             <>
-              <button
-                type="button"
-                onClick={() => startEditComment(c)}
-                className="font-medium hover:text-slate-700"
-              >
+              <button type="button" onClick={() => startEditComment(c)} className="font-medium hover:text-slate-700">
                 Edit
               </button>
               <button
@@ -816,6 +787,12 @@ export default function ProjectDetail() {
               </button>
             </>
           )}
+
+          {isMyComment && locked ? (
+            <span className="text-[11px] text-slate-500">
+              Published testimonials can’t be edited or deleted.
+            </span>
+          ) : null}
         </div>
 
         {replies.length > 0 && (
@@ -878,9 +855,7 @@ export default function ProjectDetail() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             {/* LEFT: title + meta */}
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold sm:text-2xl">
-                {project?.title || `Project #${id}`}
-              </h1>
+              <h1 className="truncate text-xl font-semibold sm:text-2xl">{project?.title || `Project #${id}`}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
                 {project?.category && (
                   <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
@@ -903,7 +878,6 @@ export default function ProjectDetail() {
 
             {/* RIGHT: actions */}
             <div className="flex items-start gap-2">
-              {/* Visit Website (owner public profile) */}
               {project?.owner_username ? (
                 <Link
                   to={`/profiles/${project.owner_username}`}
@@ -913,7 +887,6 @@ export default function ProjectDetail() {
                 </Link>
               ) : null}
 
-              {/* Save (only if authed + not owner) */}
               {authed && project && !isOwnerUser ? (
                 <Button
                   type="button"
@@ -938,9 +911,7 @@ export default function ProjectDetail() {
         {/* body */}
         <div className="space-y-6 p-4 sm:p-6">
           {project?.summary && (
-            <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">
-              {project.summary}
-            </p>
+            <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
           )}
 
           {/* OWNER-ONLY PROJECT EDIT CARD */}
@@ -964,79 +935,56 @@ export default function ProjectDetail() {
                 onAfterUpload={async () => {
                   await refreshImages();
                 }}
-                // Keep cover selection in sync so banner updates immediately
                 coverImageId={editCoverImageId}
                 onCoverImageChange={(val) => {
                   const normalized = val == null ? null : Number(val);
                   setEditCoverImageId(normalized);
-                  setEditForm((prev) => ({
-                    ...prev,
-                    cover_image_id: normalized,
-                  }));
+                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
                 }}
                 setCoverImageId={(val) => {
                   const normalized = val == null ? null : Number(val);
                   setEditCoverImageId(normalized);
-                  setEditForm((prev) => ({
-                    ...prev,
-                    cover_image_id: normalized,
-                  }));
+                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
                 }}
               />
-              {editError && (
-                <p className="px-5 pb-3 pt-1 text-xs text-red-600">
-                  {editError}
-                </p>
-              )}
+              {editError && <p className="px-5 pb-3 pt-1 text-xs text-red-600">{editError}</p>}
             </div>
           )}
 
           {/* Meta / Project details */}
-          {(project?.location ||
-             project?.budget ||
-             project?.sqf ||
-             project?.highlights) && (
-             <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                 Project details
-               </div>
-               <div className="grid grid-cols-2 gap-4 text-sm text-slate-700 sm:grid-cols-4">
-                 <div className="min-w-0">
-                   <div className="text-xs font-medium uppercase text-slate-500">Location</div>
-                   <div className="truncate text-lg font-semibold">
-                     {project?.location || "—"}
-                   </div>
-                 </div>
+          {(project?.location || project?.budget || project?.sqf || project?.highlights) && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Project details
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm text-slate-700 sm:grid-cols-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-medium uppercase text-slate-500">Location</div>
+                  <div className="truncate text-lg font-semibold">{project?.location || "—"}</div>
+                </div>
 
-                 <div className="min-w-0">
-                   <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
-                   <div className="truncate text-lg font-semibold">
-                     {project?.budget ?? "—"}
-                   </div>
-                 </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
+                  <div className="truncate text-lg font-semibold">{project?.budget ?? "—"}</div>
+                </div>
 
-                 <div className="min-w-0">
-                   <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
-                   <div className="truncate text-lg font-semibold">
-                     {project?.sqf ?? "—"}
-                   </div>
-                 </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
+                  <div className="truncate text-lg font-semibold">{project?.sqf ?? "—"}</div>
+                </div>
 
-                 <div className="min-w-0">
-                   <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
-                   <div className="truncate text-lg font-semibold">
-                     {project?.highlights || "—"}
-                   </div>
-                 </div>
-               </div>
-             </div>
-           )}
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
+                  <div className="truncate text-lg font-semibold">{project?.highlights || "—"}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Materials / tools used */}
           {(project?.material_url ||
             project?.material_label ||
-            (Array.isArray(project?.extra_links) &&
-              project.extra_links.length > 0)) && (
+            (Array.isArray(project?.extra_links) && project.extra_links.length > 0)) && (
             <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Materials &amp; tools used
@@ -1081,53 +1029,45 @@ export default function ProjectDetail() {
                 </div>
               )}
 
-              {Array.isArray(project?.extra_links) &&
-                project.extra_links.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {project.extra_links.map((row, index) => {
-                      const label = row?.label || "";
-                      const url = row?.url || "";
-                      if (!label && !url) return null;
+              {Array.isArray(project?.extra_links) && project.extra_links.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {project.extra_links.map((row, index) => {
+                    const label = row?.label || "";
+                    const url = row?.url || "";
+                    if (!label && !url) return null;
 
-                      return (
-                        <div
-                          key={`${url || label || index}`}
-                          className="flex items-start gap-2"
-                        >
-                          <div className="mt-[3px] flex h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500">
-                            +
-                          </div>
-                          <div className="min-w-0">
-                            {label && (
-                              <div className="text-xs font-semibold text-slate-800">
-                                {label}
-                              </div>
-                            )}
-                            {url && (
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="break-all text-[11px] text-blue-600 hover:underline"
-                              >
-                                {url}
-                              </a>
-                            )}
-                          </div>
+                    return (
+                      <div key={`${url || label || index}`} className="flex items-start gap-2">
+                        <div className="mt-[3px] flex h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500">
+                          +
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        <div className="min-w-0">
+                          {label && <div className="text-xs font-semibold text-slate-800">{label}</div>}
+                          {url && (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="break-all text-[11px] text-blue-600 hover:underline"
+                            >
+                              {url}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <p className="mt-2 text-[11px] text-slate-500">
-                These links point to products or materials used in this project
-                (for example, tools, finishes, or suppliers).
+                These links point to products or materials used in this project (for example, tools, finishes, or
+                suppliers).
               </p>
             </div>
           )}
 
-          {/* Project media – BLOCK CARD layout */}
+          {/* Project media */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1145,7 +1085,7 @@ export default function ProjectDetail() {
                 No media uploaded for this project.
               </div>
             ) : (
-              <div className="flex grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {images.map((img, i) => (
                   <button
                     type="button"
@@ -1154,18 +1094,14 @@ export default function ProjectDetail() {
                       setActiveImageIdx(i);
                       setCommentsOpen(true);
                     }}
-                    className="group w-full max-w-xs overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
+                    className="group w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
                   >
                     <img
                       src={img.url}
                       alt={img.caption || ""}
                       className="block h-40 w-full object-cover transition-transform group-hover:scale-[1.02]"
                     />
-                    {img.caption && (
-                      <div className="px-3 py-2 text-xs text-slate-700">
-                        {img.caption}
-                      </div>
-                    )}
+                    {img.caption && <div className="px-3 py-2 text-xs text-slate-700">{img.caption}</div>}
                   </button>
                 ))}
               </div>
@@ -1181,8 +1117,7 @@ export default function ProjectDetail() {
                 </div>
                 {project?.location && (
                   <div className="text-[11px] text-slate-500">
-                    Centered on:{" "}
-                    <span className="font-medium">{project.location}</span>
+                    Centered on: <span className="font-medium">{project.location}</span>
                   </div>
                 )}
               </div>
@@ -1284,9 +1219,7 @@ export default function ProjectDetail() {
                   )}
                 </>
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-slate-200">
-                  No media
-                </div>
+                <div className="flex h-full items-center justify-center text-sm text-slate-200">No media</div>
               )}
             </div>
 
@@ -1298,8 +1231,7 @@ export default function ProjectDetail() {
                     {project?.title || `Project #${id}`}
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {comments.length || 0} comment
-                    {comments.length === 1 ? "" : "s"}
+                    {comments.length || 0} comment{comments.length === 1 ? "" : "s"}
                   </div>
                 </div>
                 <button
@@ -1313,9 +1245,7 @@ export default function ProjectDetail() {
 
               <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-3 text-sm">
                 {roots.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    No comments yet. Be the first to comment.
-                  </p>
+                  <p className="text-xs text-slate-500">No comments yet. Be the first to comment.</p>
                 ) : (
                   roots.map((c) => renderCommentBlock(c))
                 )}
@@ -1324,13 +1254,22 @@ export default function ProjectDetail() {
               <div className="border-t border-slate-200 bg-white px-3 py-3">
                 {authed ? (
                   <form onSubmit={submitComment} className="space-y-2">
+                    {/* Disclaimer (always visible) */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                      By commenting, you agree this comment may be used by the project owner as a public testimonial
+                      (with your username).
+                    </div>
+
+                    {/* Rating (optional) */}
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] font-medium text-slate-600">Rating (optional)</div>
+                      <Stars value={commentRating || 0} onChange={setCommentRating} disabled={commentBusy} />
+                    </div>
+
                     {replyingTo && (
                       <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
                         <div>
-                          Replying to{" "}
-                          <span className="font-semibold">
-                            {replyingTo.author_username || "user"}
-                          </span>
+                          Replying to <span className="font-semibold">{replyingTo.author_username || "user"}</span>
                         </div>
                         <button
                           type="button"
@@ -1341,6 +1280,7 @@ export default function ProjectDetail() {
                         </button>
                       </div>
                     )}
+
                     <Textarea
                       rows={2}
                       value={commentText}
@@ -1348,14 +1288,11 @@ export default function ProjectDetail() {
                       placeholder="Add a public comment…"
                       className="min-h-[60px]"
                     />
-                    {commentError && (
-                      <p className="text-[11px] text-red-600">{commentError}</p>
-                    )}
+
+                    {commentError && <p className="text-[11px] text-red-600">{commentError}</p>}
+
                     <div className="flex justify-end">
-                      <Button
-                        type="submit"
-                        disabled={commentBusy || !commentText.trim()}
-                      >
+                      <Button type="submit" disabled={commentBusy || !commentText.trim()}>
                         {commentBusy ? "Posting…" : "Post"}
                       </Button>
                     </div>
