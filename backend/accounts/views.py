@@ -9,7 +9,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Profile, ProfileLike
-from .serializers import ProfileSerializer, LikedProfileCardSerializer
+from .serializers import (
+    ProfileSerializer,
+    PublicUserProfileSerializer,
+    LikedProfileCardSerializer,
+)
 
 User = get_user_model()
 
@@ -56,7 +60,7 @@ class PublicProfileView(APIView):
     def get(self, request, username, *args, **kwargs):
         user = get_object_or_404(User, username=username)
         profile, _ = Profile.objects.get_or_create(user=user)
-        serializer = ProfileSerializer(profile, context={"request": request})
+        serializer = PublicUserProfileSerializer(profile, context={"request": request})
         return Response(serializer.data)
 
 

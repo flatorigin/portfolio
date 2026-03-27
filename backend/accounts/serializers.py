@@ -6,7 +6,62 @@ from .models import Profile, ProfileLike
 User = get_user_model()
 
 
-class MeSerializer(serializers.ModelSerializer):
+class ProfileBaseMixin:
+    def _build_abs_url(self, request, url: str):
+        if not url:
+            return None
+        return request.build_absolute_uri(url) if request else url
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        image = obj.avatar or obj.logo
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
+        return None
+
+    def get_banner_url(self, obj):
+        request = self.context.get("request")
+        image = obj.banner
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
+        return None
+
+    def get_like_count(self, obj):
+        return ProfileLike.objects.filter(liked_user=obj.user).count()
+
+    def get_liked_by_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return ProfileLike.objects.filter(
+            liker=request.user,
+            liked_user=obj.user,
+        ).exists()
+
+    def validate_service_location(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Service area is required.")
+        return value
+
+    def validate_contact_email(self, value):
+        value = (value or "").strip().lower()
+        if not value:
+            raise serializers.ValidationError("Email is required.")
+        return value
+
+    def validate_contact_phone(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Phone number is required.")
+        return value
+
+
+class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
+    
+    languages_display = serializers.ReadOnlyField()
+    member_since_label = serializers.ReadOnlyField()
+
     # read-only user identity
     username = serializers.CharField(source="user.username", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
@@ -16,6 +71,9 @@ class MeSerializer(serializers.ModelSerializer):
 
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
+
+    is_profile_complete = serializers.ReadOnlyField()
+    profile_status = serializers.ReadOnlyField()
 
     class Meta:
         model = Profile
@@ -28,6 +86,8 @@ class MeSerializer(serializers.ModelSerializer):
             "coverage_radius_miles",
             "contact_email",
             "contact_phone",
+            "show_contact_email",
+            "show_contact_phone",
             "bio",
             "logo",
             "avatar",
@@ -39,39 +99,71 @@ class MeSerializer(serializers.ModelSerializer):
             "allow_direct_messages",
             "hero_headline",
             "hero_blurb",
+            "is_profile_complete",
+            "profile_status",
+            "languages",
+            "languages_display",
+            "member_since_label",
         ]
-        read_only_fields = ["id", "username", "email", "avatar_url", "banner_url", "like_count", "liked_by_me"]
+        read_only_fields = [
+            "id",
+            "username",
+            "email",
+            "avatar_url",
+            "banner_url",
+            "like_count",
+            "liked_by_me",
+            "is_profile_complete",
+            "profile_status",
+        ]
 
-    def _build_abs_url(self, request, url: str):
-        if not url:
-            return None
-        return request.build_absolute_uri(url) if request else url
+    def validate_languages(self, value):
+        if isinstance(value, str):
+            import json
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                raise serializers.ValidationError("Languages must be a list.")
+        return value
 
-    def get_avatar_url(self, obj):
-        request = self.context.get("request")
-        image = obj.avatar or obj.logo
-        if image and hasattr(image, "url"):
-            return self._build_abs_url(request, image.url)
-        return None
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
 
-    def get_banner_url(self, obj):
-        request = self.context.get("request")
-        image = obj.banner
-        if image and hasattr(image, "url"):
-            return self._build_abs_url(request, image.url)
-        return None
+        service_location = attrs.get(
+            "service_location",
+            getattr(instance, "service_location", ""),
+        )
+        contact_email = attrs.get(
+            "contact_email",
+            getattr(instance, "contact_email", ""),
+        )
+        contact_phone = attrs.get(
+            "contact_phone",
+            getattr(instance, "contact_phone", ""),
+        )
 
-    def get_like_count(self, obj):
-        return ProfileLike.objects.filter(liked_user=obj.user).count()
+        if not str(service_location).strip():
+            raise serializers.ValidationError(
+                {"service_location": "Service area is required."}
+            )
+        if not str(contact_email).strip():
+            raise serializers.ValidationError(
+                {"contact_email": "Email is required."}
+            )
+        if not str(contact_phone).strip():
+            raise serializers.ValidationError(
+                {"contact_phone": "Phone number is required."}
+            )
 
-    def get_liked_by_me(self, obj):
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-        return ProfileLike.objects.filter(liker=request.user, liked_user=obj.user).exists()
+        return attrs
 
 
-class ProfileSerializer(serializers.ModelSerializer):
+class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
+    languages_display = serializers.ReadOnlyField()
+    member_since_label = serializers.ReadOnlyField()
+
     username = serializers.CharField(source="user.username", read_only=True)
 
     avatar_url = serializers.SerializerMethodField()
@@ -79,6 +171,9 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
+
+    is_profile_complete = serializers.ReadOnlyField()
+    profile_status = serializers.ReadOnlyField()
 
     class Meta:
         model = Profile
@@ -91,6 +186,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             "bio",
             "contact_email",
             "contact_phone",
+            "show_contact_email",
+            "show_contact_phone",
             "logo",
             "avatar",
             "avatar_url",
@@ -101,8 +198,108 @@ class ProfileSerializer(serializers.ModelSerializer):
             "allow_direct_messages",
             "hero_headline",
             "hero_blurb",
+            "is_profile_complete",
+            "profile_status",
+            "languages",
+            "languages_display",
+            "member_since_label",
         )
-        read_only_fields = ("id", "username", "avatar_url", "banner_url", "like_count", "liked_by_me")
+        read_only_fields = (
+            "id",
+            "username",
+            "avatar_url",
+            "banner_url",
+            "like_count",
+            "liked_by_me",
+            "is_profile_complete",
+            "profile_status",
+        )
+
+    def validate_languages(self, value):
+        if isinstance(value, str):
+            import json
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                raise serializers.ValidationError("Languages must be a list.")
+        return value
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+
+        service_location = attrs.get(
+            "service_location",
+            getattr(instance, "service_location", ""),
+        )
+        contact_email = attrs.get(
+            "contact_email",
+            getattr(instance, "contact_email", ""),
+        )
+        contact_phone = attrs.get(
+            "contact_phone",
+            getattr(instance, "contact_phone", ""),
+        )
+
+        if not str(service_location).strip():
+            raise serializers.ValidationError(
+                {"service_location": "Service area is required."}
+            )
+        if not str(contact_email).strip():
+            raise serializers.ValidationError(
+                {"contact_email": "Email is required."}
+            )
+        if not str(contact_phone).strip():
+            raise serializers.ValidationError(
+                {"contact_phone": "Phone number is required."}
+            )
+
+        return attrs
+
+
+class PublicUserProfileSerializer(serializers.ModelSerializer):
+    languages_display = serializers.ReadOnlyField()
+    member_since_label = serializers.ReadOnlyField()
+
+    username = serializers.CharField(source="user.username", read_only=True)
+
+    avatar_url = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
+
+    contact_email = serializers.SerializerMethodField()
+    contact_phone = serializers.SerializerMethodField()
+
+    badge = serializers.SerializerMethodField()
+    profile_status = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "username",
+            "display_name",
+            "service_location",
+            "coverage_radius_miles",
+            "bio",
+            "logo",
+            "avatar",
+            "banner",
+            "avatar_url",
+            "logo_url",
+            "banner_url",
+            "allow_direct_messages",
+            "hero_headline",
+            "hero_blurb",
+            "contact_email",
+            "contact_phone",
+            "badge",
+            "profile_status",
+            "languages",
+            "languages_display",
+            "member_since_label",
+        ]
 
     def _build_abs_url(self, request, url: str):
         if not url:
@@ -116,6 +313,13 @@ class ProfileSerializer(serializers.ModelSerializer):
             return self._build_abs_url(request, image.url)
         return None
 
+    def get_logo_url(self, obj):
+        request = self.context.get("request")
+        image = obj.logo or obj.avatar
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
+        return None
+
     def get_banner_url(self, obj):
         request = self.context.get("request")
         image = obj.banner
@@ -123,23 +327,19 @@ class ProfileSerializer(serializers.ModelSerializer):
             return self._build_abs_url(request, image.url)
         return None
 
-    def get_like_count(self, obj):
-        return ProfileLike.objects.filter(liked_user=obj.user).count()
+    def get_contact_email(self, obj):
+        return obj.contact_email if obj.show_contact_email else None
 
-    def get_liked_by_me(self, obj):
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-        return ProfileLike.objects.filter(liker=request.user, liked_user=obj.user).exists()
+    def get_contact_phone(self, obj):
+        return obj.contact_phone if obj.show_contact_phone else None
+
+    def get_badge(self, obj):
+        return "Profile Complete" if obj.is_profile_complete else "Incomplete Profile"
 
 class LikedProfileCardSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     avatar_url = serializers.SerializerMethodField()
-
-    # “small tag category below the name” → use service_location
     tag = serializers.SerializerMethodField()
-
-    # used for tooltip
     bio_preview = serializers.SerializerMethodField()
 
     class Meta:
@@ -167,6 +367,5 @@ class LikedProfileCardSerializer(serializers.ModelSerializer):
         return (obj.service_location or "").strip()
 
     def get_bio_preview(self, obj):
-        # first line only
         txt = (obj.bio or "").strip().splitlines()
         return (txt[0] if txt else "").strip()

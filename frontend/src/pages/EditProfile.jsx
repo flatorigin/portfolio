@@ -8,6 +8,30 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 import ServiceAreaMap from "../components/ServiceAreaMap";
+import LanguageMultiSelect from "../components/LanguageMultiSelect";
+
+function getProfileComplete(form) {
+  return Boolean(
+    form.service_location?.trim() &&
+      form.contact_email?.trim() &&
+      form.contact_phone?.trim()
+  );
+}
+
+function ProfileStatusBadge({ complete }) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-full px-3 py-1 text-sm font-medium",
+        complete
+          ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+          : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+      ].join(" ")}
+    >
+      {complete ? "Profile Complete" : "Incomplete Profile"}
+    </span>
+  );
+}
 
 // single source of truth for url normalization (supports blob/data previews)
 function toUrl(raw) {
@@ -30,12 +54,16 @@ export default function EditProfile() {
     contact_email: "",
     contact_phone: "",
     bio: "",
+    show_contact_email: false,
+    show_contact_phone: false,
+    languages: [],
   });
+
+  const complete = getProfileComplete(form);
 
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
 
-  // Hero/banner state
   const [bannerPreview, setBannerPreview] = useState(null);
   const [bannerFile, setBannerFile] = useState(null);
 
@@ -44,15 +72,11 @@ export default function EditProfile() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // ✅ Map updates only after load/save
   const [savedMapModel, setSavedMapModel] = useState({
     service_location: "",
     coverage_radius_miles: "",
   });
 
-  // ----------------------------
-  // Load current profile: /api/users/me/
-  // ----------------------------
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -77,20 +101,22 @@ export default function EditProfile() {
           contact_email: data.contact_email || "",
           contact_phone: data.contact_phone || "",
           bio: data.bio || "",
+          show_contact_email: !!data.show_contact_email,
+          show_contact_phone: !!data.show_contact_phone,
+          languages: Array.isArray(data.languages) ? data.languages : [],
         };
 
         setForm(nextForm);
 
-        // ✅ map uses saved values (not typing)
         setSavedMapModel({
           service_location: nextForm.service_location,
           coverage_radius_miles: nextForm.coverage_radius_miles,
         });
 
-        // ✅ logo preview
-        setAvatarPreview(toUrl(data.logo || data.logo_url || data.avatar_url || "") || null);
+        setAvatarPreview(
+          toUrl(data.logo || data.logo_url || data.avatar_url || "") || null
+        );
 
-        // ✅ banner preview
         setBannerPreview(toUrl(data.banner_url || data.banner || "") || null);
       })
       .catch((err) => {
@@ -106,12 +132,14 @@ export default function EditProfile() {
     };
   }, []);
 
-  // ----------------------------
-  // Form helpers
-  // ----------------------------
   const updateField = (key) => (e) => {
     const value = e.target.value;
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const updateToggle = (key) => (e) => {
+    const checked = e.target.checked;
+    setForm((prev) => ({ ...prev, [key]: checked }));
   };
 
   const handleLogoChange = (e) => {
@@ -155,10 +183,6 @@ export default function EditProfile() {
     setBannerPreview(null);
   };
 
-  // ----------------------------
-  // Save profile (PATCH /api/users/me/)
-  // ✅ after successful save -> update savedMapModel so map moves
-  // ----------------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -167,21 +191,26 @@ export default function EditProfile() {
 
     try {
       const data = new FormData();
+
       data.append("display_name", form.display_name || "");
       data.append("hero_headline", form.hero_headline || "");
       data.append("hero_blurb", form.hero_blurb || "");
       data.append("service_location", form.service_location || "");
+
       if (form.coverage_radius_miles !== "") {
         data.append("coverage_radius_miles", form.coverage_radius_miles);
       }
+
       data.append("contact_email", form.contact_email || "");
       data.append("contact_phone", form.contact_phone || "");
       data.append("bio", form.bio || "");
+      data.append("show_contact_email", String(!!form.show_contact_email));
+      data.append("show_contact_phone", String(!!form.show_contact_phone));
+      data.append("languages", JSON.stringify(form.languages || []));
 
       if (logoFile) data.append("logo", logoFile);
       if (bannerFile) data.append("banner", bannerFile);
 
-      // clear banner on server if removed
       if (!bannerFile && !bannerPreview) {
         data.append("banner_url", "");
         data.append("banner", "");
@@ -207,20 +236,28 @@ export default function EditProfile() {
         contact_email: updated.contact_email ?? form.contact_email,
         contact_phone: updated.contact_phone ?? form.contact_phone,
         bio: updated.bio ?? form.bio,
+        show_contact_email:
+          updated.show_contact_email ?? form.show_contact_email,
+        show_contact_phone:
+          updated.show_contact_phone ?? form.show_contact_phone,
+        languages: Array.isArray(updated.languages)
+          ? updated.languages
+          : form.languages,
       };
 
       setForm(next);
 
-      // ✅ map moves only after save
       setSavedMapModel({
         service_location: next.service_location,
         coverage_radius_miles: next.coverage_radius_miles,
       });
 
-      // ✅ refresh previews
       if (updated.logo || updated.logo_url || updated.avatar_url) {
-        setAvatarPreview(toUrl(updated.logo || updated.logo_url || updated.avatar_url) || null);
+        setAvatarPreview(
+          toUrl(updated.logo || updated.logo_url || updated.avatar_url) || null
+        );
       }
+
       if (updated.banner_url || updated.banner) {
         setBannerPreview(toUrl(updated.banner_url || updated.banner) || null);
       }
@@ -250,10 +287,22 @@ export default function EditProfile() {
         <p className="text-sm text-slate-600">Loading your profile…</p>
       ) : (
         <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)]">
-          {/* LEFT: form */}
           <Card className="space-y-4 p-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Hero / banner uploader */}
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Profile status
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Complete profiles appear more credible to visitors.
+                    </p>
+                  </div>
+                  <ProfileStatusBadge complete={complete} />
+                </div>
+              </div>
+
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -308,7 +357,6 @@ export default function EditProfile() {
                 ) : null}
               </div>
 
-              {/* Logo */}
               <div className="flex items-center gap-3">
                 {avatarPreview ? (
                   <img
@@ -341,7 +389,6 @@ export default function EditProfile() {
                 </div>
               </div>
 
-              {/* Identity */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
                   Display name
@@ -353,7 +400,6 @@ export default function EditProfile() {
                 />
               </div>
 
-              {/* Hero text */}
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">
@@ -384,67 +430,140 @@ export default function EditProfile() {
                 </div>
               </div>
 
-              {/* Service area */}
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Location(city, state) or ZIP code
-                  </label>
-                  <Input
-                    value={form.service_location}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, service_location: e.target.value }))
-                    }
-                    placeholder="City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
-                    pattern="^\s*(\d{5}(-\d{4})?|[A-Za-z][A-Za-z .'-]*,\s*[A-Za-z]{2})\s*$"
-                    title="Enter City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
-                    required
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Map updates only after Save. ZIP codes geocode as “ZIP, USA”.
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Required account info
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Service area is always public. Email and phone are required for
+                    your account, but you control whether they appear on your public profile.
                   </p>
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Coverage radius (miles)
-                  </label>
-                  <Input
-                    type="number"
-                    min="0"
-                    inputMode="numeric"
-                    value={form.coverage_radius_miles}
-                    onChange={updateField("coverage_radius_miles")}
-                    placeholder="e.g. 10"
-                  />
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Location (city, state) or ZIP code
+                    </label>
+                    <Input
+                      value={form.service_location}
+                      onChange={updateField("service_location")}
+                      placeholder="City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
+                      pattern="^\\s*(\\d{5}(-\\d{4})?|[A-Za-z][A-Za-z .'-]*,\\s*[A-Za-z]{2})\\s*$"
+                      title="Enter City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
+                      required
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Map updates only after Save. ZIP codes geocode as “ZIP, USA”.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Coverage radius (miles)
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      value={form.coverage_radius_miles}
+                      onChange={updateField("coverage_radius_miles")}
+                      placeholder="e.g. 10"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Contact email
+                    </label>
+                    <Input
+                      type="email"
+                      value={form.contact_email}
+                      onChange={updateField("contact_email")}
+                      placeholder="you@example.com"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Contact phone
+                    </label>
+                    <Input
+                      value={form.contact_phone}
+                      onChange={updateField("contact_phone")}
+                      placeholder="e.g. 215-555-1234"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Contact info */}
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Public contact email
-                  </label>
-                  <Input
-                    type="email"
-                    value={form.contact_email}
-                    onChange={updateField("contact_email")}
-                    placeholder="you@example.com"
-                  />
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Public contact visibility
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Visitors can always contact you through platform messaging. Choose
+                    whether your email or phone should also appear publicly.
+                  </p>
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    Public phone
+
+                <div className="space-y-3">
+                  <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
+                        Show email publicly
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Display an email action on your public profile.
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={!!form.show_contact_email}
+                      onChange={updateToggle("show_contact_email")}
+                    />
                   </label>
-                  <Input
-                    value={form.contact_phone}
-                    onChange={updateField("contact_phone")}
-                    placeholder="e.g. 215-555-1234"
-                  />
+
+                  <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
+                        Show phone publicly
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Display a call action on your public profile.
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={!!form.show_contact_phone}
+                      onChange={updateToggle("show_contact_phone")}
+                    />
+                  </label>
                 </div>
               </div>
 
-              {/* Bio */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Languages spoken
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Select all languages you speak. These can appear on your public profile.
+                  </p>
+                </div>
+
+                <LanguageMultiSelect
+                  value={form.languages}
+                  onChange={(next) =>
+                    setForm((prev) => ({ ...prev, languages: next }))
+                  }
+                />
+              </div>
+
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
                   Bio / about
@@ -469,7 +588,6 @@ export default function EditProfile() {
             </form>
           </Card>
 
-          {/* RIGHT: map preview */}
           <Card className="space-y-3 p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Service area preview

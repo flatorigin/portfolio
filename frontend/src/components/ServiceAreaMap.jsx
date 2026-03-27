@@ -1,6 +1,7 @@
 // ============================================================================
 // file: frontend/src/components/ServiceAreaMap.jsx
 // Google Maps (js-api-loader v2) + geocoding (ZIP or City, ST) + radius circle
+// Safe loader init, clearer error states, no fake-key fallback
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
@@ -8,15 +9,16 @@ import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 const DEFAULT_CENTER = { lat: 39.9526, lng: -75.1652 }; // Philadelphia fallback
 const MILES_TO_METERS = 1609.344;
 
+let loaderConfigured = false;
+let configuredKey = "";
+
 function normalizeQuery(raw) {
   const v = (raw || "").trim();
   if (!v) return "";
 
-  // If it's ZIP (or ZIP+4), add USA for better geocoding
   const zip = /^\d{5}(-\d{4})?$/.test(v);
   if (zip) return `${v}, USA`;
 
-  // If they typed City, ST keep it; otherwise append USA
   return v.includes(",") ? v : `${v}, USA`;
 }
 
@@ -24,6 +26,24 @@ function milesToMeters(miles) {
   const n = Number(miles);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return n * MILES_TO_METERS;
+}
+
+function getApiKey() {
+  const runtimeKey =
+    typeof window !== "undefined" ? window.__ENV__?.GOOGLE_MAPS_API_KEY : "";
+  const viteKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+  return String(runtimeKey || viteKey || "").trim();
+}
+
+function isPlaceholderKey(key) {
+  if (!key) return true;
+  const v = key.trim().toLowerCase();
+  return (
+    v === "your_key_if_needed" ||
+    v === "your_google_maps_api_key" ||
+    v === "your_api_key" ||
+    v.includes("replace_me")
+  );
 }
 
 export default function ServiceAreaMap({
@@ -35,39 +55,40 @@ export default function ServiceAreaMap({
   savedLocationQuery,
   savedRadiusMiles,
 }) {
-  // =========================
-  // CHANGED: read runtime-injected env first, then Vite fallback
-  // =========================
-  const apiKey =
-    (typeof window !== "undefined" && window.__ENV__?.GOOGLE_MAPS_API_KEY) ||
-    import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
-    "";
+  const apiKey = getApiKey();
 
   const containerRef = useRef(null);
-
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const circleRef = useRef(null);
   const geocoderRef = useRef(null);
+  const isMapReadyRef = useRef(false);
 
   const [status, setStatus] = useState({ kind: "idle", message: "" });
 
   const effectiveQuery = deferUpdatesUntilSave ? savedLocationQuery : locationQuery;
   const effectiveRadius = deferUpdatesUntilSave ? savedRadiusMiles : radiusMiles;
 
-  const normalizedQuery = useMemo(() => normalizeQuery(effectiveQuery), [effectiveQuery]);
-  const radiusMeters = useMemo(() => milesToMeters(effectiveRadius), [effectiveRadius]);
+  const normalizedQuery = useMemo(
+    () => normalizeQuery(effectiveQuery),
+    [effectiveQuery]
+  );
+  const radiusMeters = useMemo(
+    () => milesToMeters(effectiveRadius),
+    [effectiveRadius]
+  );
 
-  // --- Init map once ---
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
-      if (!apiKey) {
+      if (typeof window === "undefined") return;
+
+      if (isPlaceholderKey(apiKey)) {
         setStatus({
           kind: "error",
           message:
-            "Missing Google Maps API key. Add it to Railway Variables and redeploy.",
+            "Invalid or missing Google Maps API key. Set VITE_GOOGLE_MAPS_API_KEY to a real key and restart the frontend.",
         });
         return;
       }
@@ -75,90 +96,125 @@ export default function ServiceAreaMap({
       try {
         setStatus({ kind: "loading", message: "Loading Google Maps…" });
 
-        // IMPORTANT: v2 loader API
-        setOptions({
-          key: apiKey,
-          v: "weekly",
-          libraries: ["places"],
-        });
+        if (!loaderConfigured) {
+          setOptions({
+            key: apiKey,
+            v: "weekly",
+            libraries: ["places"],
+          });
+          loaderConfigured = true;
+          configuredKey = apiKey;
+        } else if (configuredKey !== apiKey) {
+          console.warn(
+            "[ServiceAreaMap] Google Maps loader already initialized with a different key. Reusing the first configured key."
+          );
+        }
 
         const { Map } = await importLibrary("maps");
         const { Geocoder } = await importLibrary("geocoding");
-        await importLibrary("marker"); // ensures marker classes available consistently
+        await importLibrary("marker");
 
         if (cancelled) return;
         if (!containerRef.current) return;
 
-        const map = new Map(containerRef.current, {
-          center: DEFAULT_CENTER,
-          zoom: 10,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-        });
+        if (!mapRef.current) {
+          const map = new Map(containerRef.current, {
+            center: DEFAULT_CENTER,
+            zoom: 10,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+          });
 
-        mapRef.current = map;
-        geocoderRef.current = new Geocoder();
+          mapRef.current = map;
+          geocoderRef.current = new Geocoder();
 
-        markerRef.current = new google.maps.Marker({
-          map,
-          position: DEFAULT_CENTER,
-        });
+          markerRef.current = new window.google.maps.Marker({
+            map,
+            position: DEFAULT_CENTER,
+          });
 
-        circleRef.current = new google.maps.Circle({
-          map,
-          center: DEFAULT_CENTER,
-          radius: radiusMeters || 0,
-          strokeOpacity: 0.4,
-          strokeWeight: 1,
-          fillColor: "#93C5FD",
-          fillOpacity: 0.12,
-          clickable: false,
-        });
+          circleRef.current = new window.google.maps.Circle({
+            map,
+            center: DEFAULT_CENTER,
+            radius: radiusMeters || 0,
+            strokeOpacity: 0.4,
+            strokeWeight: 1,
+            fillColor: "#93C5FD",
+            fillOpacity: 0.12,
+            clickable: false,
+          });
+        }
 
+        isMapReadyRef.current = true;
         setStatus({ kind: "ready", message: "" });
       } catch (err) {
         console.error("[ServiceAreaMap] init failed", err);
+
+        const message =
+          err?.message?.includes("InvalidKey") ||
+          err?.message?.includes("ApiNotActivated") ||
+          err?.message?.includes("BillingNotEnabled")
+            ? err.message
+            : "Maps failed to load. Check the API key, billing, referrer restrictions, Maps JavaScript API, and Geocoding API.";
+
         setStatus({
           kind: "error",
-          message:
-            err?.message ||
-            "Maps failed to load. Check API key restrictions + billing + enabled APIs (Maps JavaScript API + Geocoding API).",
+          message,
         });
       }
     }
 
     init();
+
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey]); // init once per key
+  }, [apiKey, radiusMeters]);
 
-  // --- Geocode & update circle whenever query/radius changes ---
   useEffect(() => {
     let cancelled = false;
 
     async function geocodeAndUpdate() {
-      if (!mapRef.current || !markerRef.current || !circleRef.current || !geocoderRef.current) return;
+      if (!isMapReadyRef.current) return;
+      if (!mapRef.current || !markerRef.current || !circleRef.current || !geocoderRef.current) {
+        return;
+      }
 
-      // Always update radius
       circleRef.current.setRadius(radiusMeters || 0);
 
-      // If no query, just keep default center
       if (!normalizedQuery) {
-        if (!cancelled) setStatus((s) => (s.kind === "error" ? s : { kind: "ready", message: "" }));
+        markerRef.current.setPosition(DEFAULT_CENTER);
+        circleRef.current.setCenter(DEFAULT_CENTER);
+        mapRef.current.setCenter(DEFAULT_CENTER);
+        mapRef.current.setZoom(10);
+
+        if (!cancelled) {
+          setStatus((s) =>
+            s.kind === "error" ? s : { kind: "ready", message: "" }
+          );
+        }
         return;
       }
 
       try {
-        if (!cancelled) setStatus({ kind: "geocoding", message: "Finding location…" });
+        if (!cancelled) {
+          setStatus({ kind: "geocoding", message: "Finding location…" });
+        }
 
-        const resp = await geocoderRef.current.geocode({ address: normalizedQuery });
+        const resp = await geocoderRef.current.geocode({
+          address: normalizedQuery,
+        });
+
         const first = resp?.results?.[0];
 
         if (!first) {
-          if (!cancelled) setStatus({ kind: "error", message: "No results for that location/ZIP." });
+          if (!cancelled) {
+            setStatus({
+              kind: "error",
+              message: "No results found for that location or ZIP code.",
+            });
+          }
           return;
         }
 
@@ -168,33 +224,43 @@ export default function ServiceAreaMap({
         markerRef.current.setPosition(center);
         circleRef.current.setCenter(center);
 
-        if (radiusMeters && radiusMeters > 0) {
+        if (radiusMeters > 0) {
           const bounds = circleRef.current.getBounds();
-          if (bounds) mapRef.current.fitBounds(bounds);
+          if (bounds) {
+            mapRef.current.fitBounds(bounds);
+          } else {
+            mapRef.current.setCenter(center);
+            mapRef.current.setZoom(12);
+          }
 
-          // prevent over-zoom for small radii
           const z = mapRef.current.getZoom?.();
-          if (typeof z === "number" && z > 15) mapRef.current.setZoom(15);
+          if (typeof z === "number" && z > 15) {
+            mapRef.current.setZoom(15);
+          }
         } else {
           mapRef.current.setCenter(center);
           mapRef.current.setZoom(12);
         }
 
-        if (!cancelled) setStatus({ kind: "ready", message: "" });
+        if (!cancelled) {
+          setStatus({ kind: "ready", message: "" });
+        }
       } catch (err) {
         console.error("[ServiceAreaMap] geocode failed", err);
+
         if (!cancelled) {
           setStatus({
             kind: "error",
             message:
               err?.message ||
-              "Geocoding failed. Ensure Geocoding API is enabled + billing is on.",
+              "Geocoding failed. Make sure Geocoding API is enabled and billing is active.",
           });
         }
       }
     }
 
     geocodeAndUpdate();
+
     return () => {
       cancelled = true;
     };
@@ -214,11 +280,15 @@ export default function ServiceAreaMap({
   return (
     <div className={className}>
       {banner}
-      <div className={`mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${heightClassName}`}>
+      <div
+        className={`mt-2 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${heightClassName}`}
+      >
         <div ref={containerRef} className="h-full w-full" />
       </div>
       <div className="mt-2 text-[11px] text-slate-500">
-        ZIP geocoding requires <span className="font-medium">Geocoding API</span> + billing + correct HTTP referrer restrictions.
+        ZIP geocoding requires{" "}
+        <span className="font-medium">Geocoding API</span>, billing, and correct
+        HTTP referrer restrictions.
       </div>
     </div>
   );

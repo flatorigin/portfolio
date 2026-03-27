@@ -5,6 +5,7 @@
 // Adds: Like/Save profile button (hidden on own profile) + like count
 // Adds: Hero headline + blurb on banner
 // Fix: ALL hooks are declared before any early return
+// Contact card uses member-since + languages + filtered public contact info
 // =======================================
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -75,8 +76,14 @@ export default function PublicProfile() {
   }, [profile?.display_name, profile?.username]);
 
   const avatarSrc = useMemo(() => {
-    return toUrl(profile?.logo || profile?.avatar_url || profile?.avatar || "");
-  }, [profile?.logo, profile?.avatar_url, profile?.avatar]);
+    return toUrl(
+      profile?.logo_url ||
+        profile?.logo ||
+        profile?.avatar_url ||
+        profile?.avatar ||
+        ""
+    );
+  }, [profile?.logo_url, profile?.logo, profile?.avatar_url, profile?.avatar]);
 
   const bannerUrl = useMemo(() => {
     const raw = extractHeroFromProfile(profile);
@@ -109,6 +116,23 @@ export default function PublicProfile() {
   const isMine = useMemo(() => {
     return (profile?.username || "").toLowerCase() === meUsernameLower;
   }, [profile?.username, meUsernameLower]);
+
+  const memberSince = useMemo(() => {
+    return (
+      profile?.member_since_label ||
+      profile?.member_since ||
+      profile?.joined_label ||
+      "—"
+    );
+  }, [profile?.member_since_label, profile?.member_since, profile?.joined_label]);
+
+  const languagesDisplay = useMemo(() => {
+    if (profile?.languages_display?.trim()) return profile.languages_display.trim();
+    if (Array.isArray(profile?.languages) && profile.languages.length > 0) {
+      return profile.languages.filter(Boolean).join(", ");
+    }
+    return "—";
+  }, [profile?.languages_display, profile?.languages]);
 
   async function hydrateCovers(list) {
     const entries = await Promise.all(
@@ -232,13 +256,15 @@ export default function PublicProfile() {
       if (liked) {
         const { data } = await api.delete(`/profiles/${profile.username}/like/`);
         setLiked(false);
-        if (data?.like_count !== undefined)
+        if (data?.like_count !== undefined) {
           setLikeCount(Number(data.like_count || 0));
+        }
       } else {
         const { data } = await api.post(`/profiles/${profile.username}/like/`);
         setLiked(true);
-        if (data?.like_count !== undefined)
+        if (data?.like_count !== undefined) {
           setLikeCount(Number(data.like_count || 0));
+        }
       }
       window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
     } catch (e) {
@@ -265,7 +291,7 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden">
+    <div className="min-h-screen overflow-x-hidden bg-white">
       {/* FULL-WIDTH TOP BANNER */}
       <div className="relative w-full">
         <div
@@ -274,16 +300,14 @@ export default function PublicProfile() {
           aria-label="Profile banner"
         />
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
-        {/* ✅ HERO OVERLAY */}
+        {/* HERO OVERLAY */}
         <div className="absolute inset-x-0 bottom-0">
-          {/* pb creates room for the logo overlap + ~30px clearance */}
           <div className="mx-auto max-w-6xl px-4 pb-10">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
               {/* LEFT: headline + blurb + identity */}
               <div className="min-w-0">
-                {/* Headline/blurb are moved UP so the logo stays clear */}
                 <div className="max-w-2xl pb-[30px] text-white">
                   <div className="text-3xl font-extrabold leading-tight sm:text-5xl">
                     {heroHeadline}
@@ -293,7 +317,6 @@ export default function PublicProfile() {
                   </div>
                 </div>
 
-                {/* Identity row (logo goes back to the original overlap position) */}
                 <div className="flex items-end gap-4 -mb-[30px]">
                   <div className="-mb-6 h-24 w-24 overflow-hidden rounded-2xl border border-white/40 bg-white shadow-lg">
                     {avatarSrc ? (
@@ -385,39 +408,87 @@ export default function PublicProfile() {
 
           <Card className="rounded-2xl border border-slate-200 shadow-sm">
             <div className="p-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Quick info
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Contact
+                  </div>
+                  <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                    {profile.display_name || profile.username}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Member since {memberSince}
+                  </p>
+                </div>
+
+                <span
+                  className={[
+                    "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
+                    profile.profile_status === "complete"
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                      : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+                  ].join(" ")}
+                >
+                  {profile.profile_status === "complete"
+                    ? "Profile Complete"
+                    : "Incomplete Profile"}
+                </span>
               </div>
-              <div className="mt-3 space-y-2 text-sm text-slate-700">
-                <div>
-                  <span className="text-slate-500">Username:</span>{" "}
-                  <span className="font-medium">{profile.username}</span>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Username
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
+                    {profile.username}
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-500">Service area:</span>{" "}
-                  <span className="font-medium">
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Service area
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
                     {profile.service_location || "—"}
-                  </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-500">Email:</span>{" "}
-                  {profile.contact_email ? (
-                    <a
-                      href={`mailto:${profile.contact_email}`}
-                      className="font-medium text-blue-600 hover:underline"
-                    >
-                      {profile.contact_email}
-                    </a>
-                  ) : (
-                    <span className="font-medium">—</span>
-                  )}
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Languages
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
+                    {languagesDisplay}
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-500">Phone:</span>{" "}
-                  <span className="font-medium">
-                    {profile.contact_phone || "—"}
-                  </span>
-                </div>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="flex flex-wrap rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium w-full text-white hover:bg-sky-700"
+                  onClick={() => setMsgOpen(true)}
+                >
+                  Message
+                </button>
+
+                {profile.contact_email && (
+                  <a
+                    href={`mailto:${profile.contact_email}`}
+                    className="flex flex-wrap rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium w-full text-slate-700 hover:bg-slate-50"
+                  >
+                    Email
+                  </a>
+                )}
+
+                {profile.contact_phone && (
+                  <a
+                    href={`tel:${profile.contact_phone}`}
+                    className="flex flex-wrap rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium w-full text-slate-700 hover:bg-slate-50"
+                  >
+                    Call
+                  </a>
+                )}
               </div>
             </div>
           </Card>

@@ -31,6 +31,9 @@ class Profile(models.Model):
     # Optional contact info (NEW)
     contact_email = models.EmailField(blank=True, default="")
     contact_phone = models.CharField(max_length=50, blank=True, default="")
+
+    show_contact_email = models.BooleanField(default=False)
+    show_contact_phone = models.BooleanField(default=False)
     
     # Media
     logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
@@ -44,7 +47,32 @@ class Profile(models.Model):
     hero_headline = models.CharField(max_length=120, blank=True, default="")
     hero_blurb = models.TextField(blank=True, default="")
 
+    languages = models.JSONField(default=list, blank=True)
+
     allow_direct_messages = models.BooleanField(default=False)
+
+    @property
+    def is_profile_complete(self):
+        return bool(
+            (self.service_location or "").strip()
+            and (self.contact_email or "").strip()
+            and (self.contact_phone or "").strip()
+        )
+
+    @property
+    def profile_status(self):
+        return "complete" if self.is_profile_complete else "incomplete"
+
+    @property
+    def languages_display(self):
+        items = self.languages or []
+        return ", ".join([str(x).strip() for x in items if str(x).strip()])
+
+    @property
+    def member_since_label(self):
+        if not self.user or not self.user.date_joined:
+            return ""
+        return self.user.date_joined.strftime("%B %Y")
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"
