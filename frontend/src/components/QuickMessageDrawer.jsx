@@ -19,6 +19,103 @@ function toInitial(nameOrUsername) {
   return s ? s[0].toUpperCase() : "U";
 }
 
+function MessageAttachments({ attachments = [], mine = false }) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return null;
+
+  return (
+    <div className="mt-2 space-y-2">
+      {attachments.map((att, idx) => {
+        const key = att.id || `${att.kind}-${att.url || att.file_url || idx}`;
+
+        const fileUrl = att.file_url || att.url || "";
+        const label =
+          att.name ||
+          att.original_name ||
+          att.url ||
+          "Attachment";
+
+        const isImage = att.kind === "image" || att.kind === "camera";
+        const isLink = att.kind === "link";
+
+        if (isImage && fileUrl) {
+          return (
+            <a
+              key={key}
+              href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block"
+            >
+              <img
+                src={fileUrl}
+                alt={label}
+                className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
+              />
+            </a>
+          );
+        }
+
+        if (isLink) {
+          return (
+            <a
+              key={key}
+              href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={
+                "block rounded-xl border px-3 py-2 text-xs underline " +
+                (mine
+                  ? "border-slate-700 bg-slate-800 text-slate-100"
+                  : "border-slate-200 bg-white text-slate-700")
+              }
+            >
+              {label}
+            </a>
+          );
+        }
+
+        return (
+          <a
+            key={key}
+            href={fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={
+              "block rounded-xl border px-3 py-2 text-xs " +
+              (mine
+                ? "border-slate-700 bg-slate-800 text-slate-100"
+                : "border-slate-200 bg-white text-slate-700")
+            }
+          >
+            {label}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReplySnippet({ message, mine = false }) {
+  if (!message) return null;
+
+  const sender = message.sender_username || "User";
+  const text = (message.text || "").trim() || "Attachment";
+
+  return (
+    <div
+      className={
+        "mb-2 rounded-xl border px-2 py-1.5 text-[11px] " +
+        (mine
+          ? "border-slate-700 bg-slate-800 text-slate-200"
+          : "border-slate-200 bg-white text-slate-600")
+      }
+    >
+      <div className="font-medium">Replying to {sender}</div>
+      <div className="mt-0.5 line-clamp-2 whitespace-pre-wrap">{text}</div>
+    </div>
+  );
+}
+
 function normalizeErr(err) {
   const data = err?.response?.data;
   if (typeof data === "string" && data.trim()) return data;
@@ -270,10 +367,11 @@ export default function QuickMessageDrawer({
                     (m.sender_username || "").toLowerCase() ===
                     (meUsername || "").toLowerCase();
 
-                  const parent =
-                    m.parent_message_id != null
+                  const replyPreview =
+                    m.parent_message_preview ||
+                    (m.parent_message_id
                       ? messages.find((x) => x.id === m.parent_message_id)
-                      : null;
+                      : null);
 
                   return (
                     <div
@@ -300,25 +398,11 @@ export default function QuickMessageDrawer({
                             </div>
                           )}
 
-                          {parent && (
-                            <div
-                              className={
-                                "mb-2 rounded-xl border px-2 py-1.5 text-[11px] " +
-                                (mine
-                                  ? "border-slate-700 bg-slate-800 text-slate-200"
-                                  : "border-slate-200 bg-white text-slate-600")
-                              }
-                            >
-                              <div className="font-medium">
-                                Replying to {parent.sender_username || "User"}
-                              </div>
-                              <div className="mt-0.5 line-clamp-2 whitespace-pre-wrap">
-                                {parent.text || "Attachment"}
-                              </div>
-                            </div>
-                          )}
+                          <ReplySnippet message={replyPreview} mine={mine} />
 
                           <div className="whitespace-pre-wrap">{m.text}</div>
+
+                          <MessageAttachments attachments={m.attachments} mine={mine} />
                         </div>
 
                         <div
@@ -367,7 +451,12 @@ export default function QuickMessageDrawer({
               disabled={!authed || loading}
               replyTo={replyTo}
               onCancelReply={() => setReplyTo(null)}
-              attachments={composerAttachments}
+              attachments: composerAttachments.map((item) => ({
+                kind: item.kind,
+                url: item.url || "",
+                name: item.file?.name || item.url || "Attachment",
+                file_url: item.file ? URL.createObjectURL(item.file) : "",
+              })),
               onAttachmentsChange={setComposerAttachments}
               placeholder={
                 authed

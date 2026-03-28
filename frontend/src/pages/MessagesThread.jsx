@@ -11,6 +11,103 @@ import api from "../api";
 import { Card, Button } from "../ui";
 import MessageComposer from "../components/MessageComposer";
 
+function MessageAttachments({ attachments = [], mine = false }) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return null;
+
+  return (
+    <div className="mt-2 space-y-2">
+      {attachments.map((att, idx) => {
+        const key = att.id || `${att.kind}-${att.url || att.file_url || idx}`;
+
+        const fileUrl = att.file_url || att.url || "";
+        const label =
+          att.name ||
+          att.original_name ||
+          att.url ||
+          "Attachment";
+
+        const isImage = att.kind === "image" || att.kind === "camera";
+        const isLink = att.kind === "link";
+
+        if (isImage && fileUrl) {
+          return (
+            <a
+              key={key}
+              href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block"
+            >
+              <img
+                src={fileUrl}
+                alt={label}
+                className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
+              />
+            </a>
+          );
+        }
+
+        if (isLink) {
+          return (
+            <a
+              key={key}
+              href={fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={
+                "block rounded-xl border px-3 py-2 text-xs underline " +
+                (mine
+                  ? "border-slate-700 bg-slate-800 text-slate-100"
+                  : "border-slate-200 bg-white text-slate-700")
+              }
+            >
+              {label}
+            </a>
+          );
+        }
+
+        return (
+          <a
+            key={key}
+            href={fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={
+              "block rounded-xl border px-3 py-2 text-xs " +
+              (mine
+                ? "border-slate-700 bg-slate-800 text-slate-100"
+                : "border-slate-200 bg-white text-slate-700")
+            }
+          >
+            {label}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReplySnippet({ message, mine = false }) {
+  if (!message) return null;
+
+  const sender = message.sender_username || "User";
+  const text = (message.text || "").trim() || "Attachment";
+
+  return (
+    <div
+      className={
+        "mb-2 rounded-xl border px-2 py-1.5 text-[11px] " +
+        (mine
+          ? "border-slate-700 bg-slate-800 text-slate-200"
+          : "border-slate-200 bg-white text-slate-600")
+      }
+    >
+      <div className="font-medium">Replying to {sender}</div>
+      <div className="mt-0.5 line-clamp-2 whitespace-pre-wrap">{text}</div>
+    </div>
+  );
+}
+
 export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
   const navigate = useNavigate();
@@ -385,28 +482,33 @@ export default function MessagesThread() {
                         })
                       : "";
 
+                    const replyPreview =
+                      m.parent_message_preview ||
+                      (m.parent_message_id
+                        ? messages.find((x) => x.id === m.parent_message_id)
+                        : null);
+
                     return (
                       <div key={m.id} className={`mb-2 flex ${alignClass}`}>
                         <div className="max-w-[70%]">
-                          <div
-                            className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}
-                          >
+                          <div className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}>
+                            <ReplySnippet message={replyPreview} mine={fromMe} />
+
                             {m.text ? <p className="whitespace-pre-wrap">{m.text}</p> : null}
+
+                            <MessageAttachments attachments={m.attachments} mine={fromMe} />
+
                             <div
                               className={
                                 "mt-1 text-[10px] " +
-                                (fromMe ? "text-slate-300 text-right" : "text-slate-500")
+                                (fromMe ? "text-right text-slate-300" : "text-slate-500")
                               }
                             >
                               {timeLabel}
                             </div>
                           </div>
 
-                          <div
-                            className={
-                              "mt-1 flex " + (fromMe ? "justify-end" : "justify-start")
-                            }
-                          >
+                          <div className={"mt-1 flex " + (fromMe ? "justify-end" : "justify-start")}>
                             <button
                               type="button"
                               onClick={() => setReplyTo(m)}
