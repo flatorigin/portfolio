@@ -3,11 +3,13 @@
 // Inbox page: left = people list, right = conversation
 // Uses DIRECT message endpoints (no project required)
 // Shows request controls: Accept / Ignore / Block
+// Adds reusable MessageComposer with attachments + reply preview
 // =======================================
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { Card, Button, Textarea } from "../ui";
+import { Card, Button } from "../ui";
+import MessageComposer from "../components/MessageComposer";
 
 export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
@@ -24,6 +26,8 @@ export default function MessagesThread() {
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
+  const [composerAttachments, setComposerAttachments] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
 
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -102,7 +106,7 @@ export default function MessagesThread() {
       setThreads(arr);
 
       setActiveThreadId((prev) => {
-        if (threadIdParam) return Number(threadIdParam); // ✅ always win
+        if (threadIdParam) return Number(threadIdParam);
         if (prev) return prev;
         return arr[0]?.id ?? null;
       });
@@ -118,7 +122,7 @@ export default function MessagesThread() {
     fetchThreads();
   }, [fetchThreads]);
 
-  // ---------- Fetch messages (DIRECT endpoint) ----------
+  // ---------- Fetch messages ----------
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
       if (!activeThread?.id) {
@@ -176,17 +180,33 @@ export default function MessagesThread() {
     }
   }
 
-  // ---------- Send message (DIRECT endpoint) ----------
+  // ---------- Send message ----------
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!activeThread?.id || !messageText.trim()) return;
+    if (!activeThread?.id) return;
+
+    const hasText = !!messageText.trim();
+    const hasAttachments = composerAttachments.length > 0;
+    if (!hasText && !hasAttachments) return;
 
     setSending(true);
     try {
+      // Plain-text only first version.
+      // Attachments + reply are included in payload structure for forward compatibility.
       await api.post(`/messages/threads/${activeThread.id}/messages/`, {
         text: messageText.trim(),
+        parent_message_id: replyTo?.id || null,
+        attachments: composerAttachments.map((item) => ({
+          kind: item.kind,
+          name: item.file?.name || null,
+          url: item.url || null,
+        })),
       });
+
       setMessageText("");
+      setComposerAttachments([]);
+      setReplyTo(null);
+
       await fetchMessages({ silent: false });
       await fetchThreads();
     } catch (err) {
@@ -217,7 +237,9 @@ export default function MessagesThread() {
                 const name = cp?.display_name || cp?.username || "User";
 
                 const latest = t.latest_message || null;
-                const dateLabel = latest?.created_at ? new Date(latest.created_at).toLocaleDateString() : "";
+                const dateLabel = latest?.created_at
+                  ? new Date(latest.created_at).toLocaleDateString()
+                  : "";
 
                 const latestFromMe =
                   latest?.sender_username && latest.sender_username.toLowerCase() === meLower;
@@ -327,15 +349,41 @@ export default function MessagesThread() {
                       : "rounded-bl-sm bg-white text-slate-900";
 
                     const timeLabel = m.created_at
-                      ? new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                      ? new Date(m.created_at).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
                       : "";
 
                     return (
                       <div key={m.id} className={`mb-2 flex ${alignClass}`}>
-                        <div className={`max-w-[70%] rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}>
-                          {m.text ? <p className="whitespace-pre-wrap">{m.text}</p> : null}
-                          <div className={"mt-1 text-[10px] " + (fromMe ? "text-slate-300 text-right" : "text-slate-500")}>
-                            {timeLabel}
+                        <div className="max-w-[70%]">
+                          <div
+                            className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}
+                          >
+                            {m.text ? <p className="whitespace-pre-wrap">{m.text}</p> : null}
+                            <div
+                              className={
+                                "mt-1 text-[10px] " +
+                                (fromMe ? "text-slate-300 text-right" : "text-slate-500")
+                              }
+                            >
+                              {timeLabel}
+                            </div>
+                          </div>
+
+                          <div
+                            className={
+                              "mt-1 flex " + (fromMe ? "justify-end" : "justify-start")
+                            }
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setReplyTo(m)}
+                              className="text-[11px] text-slate-500 hover:text-slate-800"
+                            >
+                              Reply
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -344,27 +392,22 @@ export default function MessagesThread() {
                 )}
               </div>
 
-              <form onSubmit={handleSend} className="space-y-2">
-                {!canReply ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
-                    You can’t reply yet. Accept the request first (or the other user ignored/blocked).
-                  </div>
-                ) : null}
-
-                <Textarea
-                  rows={2}
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder="Type a message…"
-                  className="min-h-[70px]"
-                  disabled={!canReply}
-                />
-                <div className="flex items-center justify-end gap-2">
-                  <Button type="submit" disabled={!canReply || !messageText.trim() || sending}>
-                    {sending ? "Sending…" : "Send"}
-                  </Button>
-                </div>
-              </form>
+              <MessageComposer
+                value={messageText}
+                onChange={setMessageText}
+                onSend={handleSend}
+                sending={sending}
+                disabled={!canReply}
+                replyTo={replyTo}
+                onCancelReply={() => setReplyTo(null)}
+                attachments={composerAttachments}
+                onAttachmentsChange={setComposerAttachments}
+                placeholder="Type a message…"
+                allowCamera={true}
+                allowImages={true}
+                allowDocs={true}
+                allowLinks={true}
+              />
             </>
           )}
         </Card>
