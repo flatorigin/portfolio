@@ -185,23 +185,50 @@ export default function MessagesThread() {
     e.preventDefault();
     if (!activeThread?.id) return;
 
-    const hasText = !!messageText.trim();
+    const body = (messageText || "").trim();
+    const hasText = !!body;
     const hasAttachments = composerAttachments.length > 0;
+
     if (!hasText && !hasAttachments) return;
 
     setSending(true);
     try {
-      // Plain-text only first version.
-      // Attachments + reply are included in payload structure for forward compatibility.
-      await api.post(`/messages/threads/${activeThread.id}/messages/`, {
-        text: messageText.trim(),
-        parent_message_id: replyTo?.id || null,
-        attachments: composerAttachments.map((item) => ({
-          kind: item.kind,
-          name: item.file?.name || null,
-          url: item.url || null,
-        })),
+      const formData = new FormData();
+
+      formData.append("text", body);
+      if (replyTo?.id) {
+        formData.append("parent_message_id", String(replyTo.id));
+      }
+
+      const links = [];
+
+      composerAttachments.forEach((item) => {
+        if (item.kind === "link" && item.url) {
+          links.push({ url: item.url });
+        } else if (
+          (item.kind === "image" || item.kind === "camera") &&
+          item.file
+        ) {
+          formData.append(
+            item.kind === "camera" ? "camera_images" : "images",
+            item.file
+          );
+        } else if (item.kind === "document" && item.file) {
+          formData.append("documents", item.file);
+        }
       });
+
+      if (links.length) {
+        formData.append("links", JSON.stringify(links));
+      }
+
+      await api.post(
+        `/messages/threads/${activeThread.id}/messages/`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
 
       setMessageText("");
       setComposerAttachments([]);
@@ -210,7 +237,10 @@ export default function MessagesThread() {
       await fetchMessages({ silent: false });
       await fetchThreads();
     } catch (err) {
-      const msg = err?.response?.data?.detail || err?.message || "Failed to send message.";
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to send message.";
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setSending(false);

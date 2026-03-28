@@ -2,13 +2,17 @@
 // file: frontend/src/components/QuickMessageDrawer.jsx
 // Right-side quick message drawer (direct messages, no project context)
 // Uses:
-//   POST   /api/messages/start/                       -> { thread_id }
+//   POST   /api/messages/start/                        -> { thread_id }
 //   GET    /api/messages/threads/:thread_id/messages/
 //   POST   /api/messages/threads/:thread_id/messages/ -> { ...message }
+// Reusable composer UI:
+//   - plain text
+//   - plus menu for camera / image / doc / link
+//   - reply preview
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
-import { Button } from "../ui";
+import MessageComposer from "./MessageComposer";
 
 function toInitial(nameOrUsername) {
   const s = (nameOrUsername || "").trim();
@@ -35,7 +39,9 @@ export default function QuickMessageDrawer({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
+  const [messageText, setMessageText] = useState("");
+  const [composerAttachments, setComposerAttachments] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
 
   const scrollerRef = useRef(null);
 
@@ -76,7 +82,9 @@ export default function QuickMessageDrawer({
       setError("");
       setThreadId(null);
       setMessages([]);
-      setText("");
+      setMessageText("");
+      setComposerAttachments([]);
+      setReplyTo(null);
 
       if (!authed) {
         setError("Please log in to send messages.");
@@ -89,7 +97,6 @@ export default function QuickMessageDrawer({
 
       setLoading(true);
       try {
-        // ✅ Direct start (no project context)
         const startRes = await api.post("/messages/start/", {
           username: recipientUsername,
         });
@@ -99,7 +106,6 @@ export default function QuickMessageDrawer({
         if (!tid) throw new Error("No thread_id returned from server.");
         setThreadId(tid);
 
-        // Load messages
         const msgRes = await api.get(`/messages/threads/${tid}/messages/`);
         if (cancelled) return;
 
@@ -126,29 +132,70 @@ export default function QuickMessageDrawer({
     el.scrollTop = el.scrollHeight;
   }, [open, messages.length]);
 
-  async function sendMessage() {
-    const body = (text || "").trim();
-    if (!body || !threadId || sending) return;
+  async function handleSend(e) {
+    e?.preventDefault?.();
+
+    const body = (messageText || "").trim();
+    const hasText = !!body;
+    const hasAttachments = composerAttachments.length > 0;
+
+    if ((!hasText && !hasAttachments) || !threadId || sending) return;
 
     setSending(true);
     setError("");
 
-    // optimistic
     const optimistic = {
       id: `tmp-${Date.now()}`,
       sender_username: meUsername,
       text: body,
       created_at: new Date().toISOString(),
+      parent_message_id: replyTo?.id || null,
+      attachments: composerAttachments,
       _optimistic: true,
     };
 
     setMessages((prev) => [...prev, optimistic]);
-    setText("");
+    setMessageText("");
+    setComposerAttachments([]);
+    setReplyTo(null);
 
     try {
-      const res = await api.post(`/messages/threads/${threadId}/messages/`, {
-        text: body,
+      const formData = new FormData();
+
+      formData.append("text", body);
+      if (replyTo?.id) {
+        formData.append("parent_message_id", String(replyTo.id));
+      }
+
+      const links = [];
+
+      composerAttachments.forEach((item) => {
+        if (item.kind === "link" && item.url) {
+          links.push({ url: item.url });
+        } else if (
+          (item.kind === "image" || item.kind === "camera") &&
+          item.file
+        ) {
+          formData.append(
+            item.kind === "camera" ? "camera_images" : "images",
+            item.file
+          );
+        } else if (item.kind === "document" && item.file) {
+          formData.append("documents", item.file);
+        }
       });
+
+      if (links.length) {
+        formData.append("links", JSON.stringify(links));
+      }
+
+      const res = await api.post(
+        `/messages/threads/${threadId}/messages/`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
 
       const real = res?.data || null;
       setMessages((prev) =>
@@ -159,15 +206,16 @@ export default function QuickMessageDrawer({
     } catch (err) {
       console.error("[QuickMessageDrawer] send failed", err?.response || err);
 
-      // rollback optimistic
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-      setText(body);
+      setMessageText(body);
+      setComposerAttachments(optimistic.attachments || []);
+      setReplyTo(
+        optimistic.parent_message_id
+          ? messages.find((m) => m.id === optimistic.parent_message_id) || null
+          : null
+      );
 
-      const msg = normalizeErr(err);
-
-      // If your backend gates replies until acceptance, this makes it clear.
-      // (Your backend typically returns 403 with that detail.)
-      setError(msg);
+      setError(normalizeErr(err));
     } finally {
       setSending(false);
     }
@@ -177,7 +225,6 @@ export default function QuickMessageDrawer({
 
   return (
     <div className="fixed inset-0 z-[60]">
-      {/* backdrop */}
       <button
         type="button"
         className="absolute inset-0 bg-black/40"
@@ -185,9 +232,7 @@ export default function QuickMessageDrawer({
         aria-label="Close messages"
       />
 
-      {/* drawer */}
       <aside className="absolute right-0 top-0 h-full w-full max-w-[520px] bg-white shadow-2xl">
-        {/* header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-slate-900">
@@ -206,18 +251,17 @@ export default function QuickMessageDrawer({
           </button>
         </div>
 
-        {/* body */}
-        <div className="flex h-[calc(100%-116px)] flex-col">
+        <div className="flex h-[calc(100%-64px)] flex-col">
           <div ref={scrollerRef} className="flex-1 overflow-y-auto px-4 py-4">
             {loading ? (
               <div className="text-sm text-slate-500">Loading…</div>
-            ) : error ? (
+            ) : error && messages.length === 0 ? (
               <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {error}
               </div>
             ) : messages.length === 0 ? (
               <div className="text-sm text-slate-500">
-                No messages yet. Say hello 👋
+                No messages yet. Say hello.
               </div>
             ) : (
               <div className="space-y-3">
@@ -226,30 +270,80 @@ export default function QuickMessageDrawer({
                     (m.sender_username || "").toLowerCase() ===
                     (meUsername || "").toLowerCase();
 
+                  const parent =
+                    m.parent_message_id != null
+                      ? messages.find((x) => x.id === m.parent_message_id)
+                      : null;
+
                   return (
                     <div
                       key={m.id}
                       className={"flex " + (mine ? "justify-end" : "justify-start")}
                     >
-                      <div
-                        className={
-                          "max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed " +
-                          (mine
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-100 text-slate-900")
-                        }
-                      >
-                        {!mine && (
-                          <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
-                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-slate-700">
-                              {toInitial(recipientDisplayName || recipientUsername)}
-                            </span>
-                            <span className="truncate">
-                              {recipientDisplayName || recipientUsername}
-                            </span>
-                          </div>
-                        )}
-                        <div>{m.text}</div>
+                      <div className="max-w-[80%]">
+                        <div
+                          className={
+                            "rounded-2xl px-3 py-2 text-sm leading-relaxed " +
+                            (mine
+                              ? "bg-slate-900 text-white"
+                              : "bg-slate-100 text-slate-900")
+                          }
+                        >
+                          {!mine && (
+                            <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
+                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-slate-700">
+                                {toInitial(recipientDisplayName || recipientUsername)}
+                              </span>
+                              <span className="truncate">
+                                {recipientDisplayName || recipientUsername}
+                              </span>
+                            </div>
+                          )}
+
+                          {parent && (
+                            <div
+                              className={
+                                "mb-2 rounded-xl border px-2 py-1.5 text-[11px] " +
+                                (mine
+                                  ? "border-slate-700 bg-slate-800 text-slate-200"
+                                  : "border-slate-200 bg-white text-slate-600")
+                              }
+                            >
+                              <div className="font-medium">
+                                Replying to {parent.sender_username || "User"}
+                              </div>
+                              <div className="mt-0.5 line-clamp-2 whitespace-pre-wrap">
+                                {parent.text || "Attachment"}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="whitespace-pre-wrap">{m.text}</div>
+                        </div>
+
+                        <div
+                          className={
+                            "mt-1 flex items-center gap-3 " +
+                            (mine ? "justify-end" : "justify-start")
+                          }
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setReplyTo(m)}
+                            className="text-[11px] text-slate-500 hover:text-slate-800"
+                          >
+                            Reply
+                          </button>
+
+                          {m.created_at ? (
+                            <div className="text-[10px] text-slate-400">
+                              {new Date(m.created_at).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   );
@@ -258,33 +352,36 @@ export default function QuickMessageDrawer({
             )}
           </div>
 
-          {/* composer */}
           <div className="border-t border-slate-200 p-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                className="min-h-[44px] flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-                placeholder={authed ? "Type a message…" : "Log in to send a message…"}
-                value={text}
-                disabled={!authed || loading}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                onClick={sendMessage}
-                disabled={!authed || loading || sending || !text.trim()}
-              >
-                Send
-              </Button>
-            </div>
+            {error && messages.length > 0 ? (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
 
-            <div className="mt-1 text-[11px] text-slate-500">
-              Enter = send · Shift+Enter = new line
+            <MessageComposer
+              value={messageText}
+              onChange={setMessageText}
+              onSend={handleSend}
+              sending={sending}
+              disabled={!authed || loading}
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+              attachments={composerAttachments}
+              onAttachmentsChange={setComposerAttachments}
+              placeholder={
+                authed
+                  ? `Message ${recipientDisplayName || recipientUsername || "user"}…`
+                  : "Log in to send a message…"
+              }
+              allowCamera={true}
+              allowImages={true}
+              allowDocs={true}
+              allowLinks={true}
+            />
+
+            <div className="mt-2 text-[11px] text-slate-500">
+              Enter the message and use the plus button for photo, image, document, or link.
             </div>
           </div>
         </div>

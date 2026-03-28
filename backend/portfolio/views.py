@@ -13,7 +13,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from accounts.models import Profile
 
 from .models import (
@@ -23,6 +23,7 @@ from .models import (
     MessageThread,
     PrivateMessage,
     ProjectFavorite,
+    MessageAttachment,
 )
 from .serializers import (
     ProjectSerializer,
@@ -103,7 +104,6 @@ class PublishTestimonialView(APIView):
     def post(self, request, pk, comment_id):
         project = get_object_or_404(Project, pk=pk)
 
-        # ✅ only project owner can publish
         if project.owner_id != request.user.id:
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -112,20 +112,10 @@ class PublishTestimonialView(APIView):
         comment.is_testimonial = True
         comment.testimonial_published = True
         comment.testimonial_published_at = timezone.now()
-        if not comment.is_testimonial:
-            return Response(
-                {"detail": "Comment must be marked as testimonial before publishing."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        comment.testimonial_published = True
-        comment.testimonial_published_at = timezone.now()
-        comment.save(update_fields=["testimonial_published", "testimonial_published_at"])
         comment.save(update_fields=["is_testimonial", "testimonial_published", "testimonial_published_at"])
 
         ser = ProjectCommentSerializer(comment, context={"request": request})
         return Response(ser.data, status=status.HTTP_200_OK)
-
 
 class UnpublishTestimonialView(APIView):
     """
@@ -210,7 +200,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ProjectFavorite.objects.filter(project=project).delete()
 
             # ✅ Correct field name for your MessageThread model
-            MessageThread.objects.filter(project=project).delete()
+            MessageThread.objects.filter(origin_project=project).delete()
 
             project.delete()
 
@@ -519,14 +509,19 @@ class MessageStartView(APIView):
     def post(self, request, *args, **kwargs):
         recipient_username = (request.data.get("username") or "").strip()
         if not recipient_username:
-            return Response({"detail": "Missing username."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Missing username."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         target = get_object_or_404(get_user_model(), username=recipient_username)
 
         if target.id == request.user.id:
-            return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "You cannot message yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Create or fetch DM between the two users (no project context)
         thread, created = MessageThread.get_or_create_dm(
             request.user,
             target,
@@ -534,20 +529,23 @@ class MessageStartView(APIView):
             initiated_by=request.user,
         )
 
-        # Safety: ensure sender is accepted (should already be true for created threads)
         if not thread.user_has_accepted(request.user):
             thread.mark_accepted(request.user)
 
-        # IMPORTANT: do NOT auto-accept the recipient here.
-        # They must Accept from Inbox to reply.
-
         return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
-
 
 class ThreadMessagesView(generics.ListCreateAPIView):
     """
     GET  /api/messages/threads/<thread_id>/messages/
     POST /api/messages/threads/<thread_id>/messages/
+
+    Supports:
+    - JSON
+    - multipart/form-data
+    - text
+    - parent_message_id
+    - links (JSON string)
+    - uploaded files
     """
     serializer_class = PrivateMessageSerializer
     permission_classes = [IsAuthenticated]
@@ -567,26 +565,112 @@ class ThreadMessagesView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         thread = self.get_thread()
-        return PrivateMessage.objects.filter(thread=thread).select_related("sender")
+        return (
+            PrivateMessage.objects
+            .filter(thread=thread)
+            .select_related("sender", "parent_message")
+            .prefetch_related("attachments")
+        )
+
+    def _parse_links(self, request):
+        raw = request.data.get("links")
+        if not raw:
+            return []
+
+        if isinstance(raw, list):
+            return raw
+
+        if isinstance(raw, str):
+            try:
+                import json
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, list) else []
+            except Exception:
+                return []
+
+        return []
+
+    def _get_parent_message(self, thread, request):
+        parent_id = request.data.get("parent_message_id")
+        if not parent_id:
+            return None
+
+        try:
+            return PrivateMessage.objects.get(id=parent_id, thread=thread)
+        except PrivateMessage.DoesNotExist:
+            raise ValidationError({"parent_message_id": "Invalid parent message."})
 
     def perform_create(self, serializer):
         thread = self.get_thread()
         user = self.request.user
 
-        # ✅ Gate: user must have accepted to send messages
         if not thread.user_has_accepted(user):
             raise PermissionDenied("Message request not accepted yet.")
 
-        msg = serializer.save(sender=user, thread=thread)
+        parent_message = self._get_parent_message(thread, self.request)
+
+        msg = serializer.save(
+            sender=user,
+            thread=thread,
+            parent_message=parent_message,
+        )
+
+        # -------- attachments --------
+        # These names should match what the frontend sends later.
+        image_files = self.request.FILES.getlist("images")
+        doc_files = self.request.FILES.getlist("documents")
+        camera_files = self.request.FILES.getlist("camera_images")
+        links = self._parse_links(self.request)
+
+        # Assumes you have a MessageAttachment model related to PrivateMessage
+        # with fields: message, kind, file, original_name, url
+        for f in image_files:
+            MessageAttachment.objects.create(
+                message=msg,
+                kind="image",
+                file=f,
+                original_name=getattr(f, "name", "") or "",
+            )
+
+        for f in doc_files:
+            MessageAttachment.objects.create(
+                message=msg,
+                kind="document",
+                file=f,
+                original_name=getattr(f, "name", "") or "",
+            )
+
+        for f in camera_files:
+            MessageAttachment.objects.create(
+                message=msg,
+                kind="camera",
+                file=f,
+                original_name=getattr(f, "name", "") or "",
+            )
+
+        for item in links:
+            url = ""
+            if isinstance(item, dict):
+                url = (item.get("url") or "").strip()
+            elif isinstance(item, str):
+                url = item.strip()
+
+            if url:
+                MessageAttachment.objects.create(
+                    message=msg,
+                    kind="link",
+                    url=url,
+                    original_name="",
+                )
+
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
         return msg
 
-
 class ThreadActionView(APIView):
     """
     POST /api/inbox/threads/<pk>/actions/
-    Body: {"action": "accept" | "block" | "unblock" | "delete"}
+    Body: {"action": "accept" | "ignore" | "block" | "unblock" | "delete"}
     Only participants (owner or client) may act.
     """
     permission_classes = [IsAuthenticated]
@@ -610,15 +694,8 @@ class ThreadActionView(APIView):
             thread.block_other(request.user)
 
         elif action == "ignore":
-            # Ignore means: "I don't want to deal with this request right now"
-            # Block the OTHER user from sending until tomorrow (unless accepted already)
-            until = timezone.now() + timezone.timedelta(days=1)
-            if request.user.id == thread.owner_id:
-                thread.owner_ignored_until = until
-                thread.save(update_fields=["owner_ignored_until"])
-            elif request.user.id == thread.client_id:
-                thread.client_ignored_until = until
-                thread.save(update_fields=["client_ignored_until"])
+            until = timezone.now() + timedelta(days=1)
+            thread.set_ignored_until(request.user, until)
 
         elif action == "unblock":
             thread.unblock_other(request.user)
@@ -626,10 +703,6 @@ class ThreadActionView(APIView):
         elif action == "delete":
             thread.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-
-        elif action == "ignore":
-            until = timezone.now() + timedelta(days=1)
-            thread.set_ignored_until(request.user, until)
 
         else:
             return Response(
@@ -639,6 +712,7 @@ class ThreadActionView(APIView):
 
         ser = MessageThreadSerializer(thread, context={"request": request})
         return Response(ser.data)
+
 
 # ---------------------------------------------------
 # BlockListView
@@ -664,76 +738,14 @@ class BlockListView(generics.ListAPIView):
 # Direct (non-project) messaging: start thread + messages
 # ---------------------------------------------------
 
-class DirectMessageStartView(APIView):
+class DirectMessageStartView(MessageStartView):
     """
-    POST /api/messages/start/
-    Body: {"username": "<recipient_username>"}
-    Returns: {"thread_id": <id>}
+    Backward-compatible alias for direct message start.
     """
-    permission_classes = [IsAuthenticated]
+    pass
 
-    def post(self, request, *args, **kwargs):
-        recipient_username = (request.data.get("username") or "").strip()
-        if not recipient_username:
-            return Response({"detail": "Missing username."}, status=status.HTTP_400_BAD_REQUEST)
-
-        recipient = get_object_or_404(get_user_model(), username=recipient_username)
-
-        if recipient.id == request.user.id:
-            return Response({"detail": "You cannot message yourself."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Create or fetch DM (no project context)
-        thread, _created = MessageThread.get_or_create_dm(
-            request.user,
-            recipient,
-            origin_project=None,
-            initiated_by=request.user,
-        )
-
-        # Ensure ONLY the sender is accepted (recipient remains pending until they Accept in Inbox)
-        if not thread.user_has_accepted(request.user):
-            thread.mark_accepted(request.user)
-
-        return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
-
-class DirectThreadMessageListCreateView(generics.ListCreateAPIView):
+class DirectThreadMessageListCreateView(ThreadMessagesView):
     """
-    GET  /api/messages/threads/<thread_id>/messages/
-    POST /api/messages/threads/<thread_id>/messages/
+    Backward-compatible alias for direct thread messages.
     """
-    serializer_class = PrivateMessageSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-
-    def get_thread(self):
-        thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
-        user = self.request.user
-
-        if user not in (thread.owner, thread.client):
-            raise PermissionDenied("You are not in this conversation.")
-        if thread.is_blocked_for(user):
-            raise PermissionDenied("This conversation is blocked.")
-        return thread
-
-    def get_queryset(self):
-        thread = self.get_thread()
-        return PrivateMessage.objects.filter(thread=thread).select_related("sender")
-
-    def perform_create(self, serializer):
-        thread = self.get_thread()
-        user = self.request.user
-
-        # ✅ ignore window enforcement (blocks sender if recipient ignored)
-        other = thread.client if user.id == thread.owner_id else thread.owner
-        ignored_until = thread.ignored_until_for(other)
-        if (not thread.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
-            raise permissions.PermissionDenied("Recipient ignored this request. Try again tomorrow.")
-
-        # ✅ gate: you must have accepted to send (reply)
-        if not thread.user_has_accepted(user):
-            raise PermissionDenied("Accept the message request to reply. (Open Inbox → Accept)")
-
-        msg = serializer.save(sender=user, thread=thread)
-        thread.updated_at = timezone.now()
-        thread.save(update_fields=["updated_at"])
-        return msg
+    pass
