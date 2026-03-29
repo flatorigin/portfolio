@@ -457,7 +457,7 @@ export default function QuickMessageDrawer({
                 name: item.file?.name || item.url || "Attachment",
                 file_url: item.file ? URL.createObjectURL(item.file) : "",
               })),
-              onAttachmentsChange={setComposerAttachments}
+              onAttachmentsChange={setComposerAttachments},
               placeholder={
                 authed
                   ? `Message ${recipientDisplayName || recipientUsername || "user"}…`
