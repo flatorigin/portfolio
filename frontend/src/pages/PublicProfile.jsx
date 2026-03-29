@@ -14,6 +14,24 @@ import { Card } from "../ui";
 import ServiceAreaMap from "../components/ServiceAreaMap";
 import QuickMessageDrawer from "../components/QuickMessageDrawer";
 
+function DisabledActionWithTooltip({ label, message }) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        disabled
+        className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400"
+      >
+        {label}
+      </button>
+
+      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+        {message}
+      </div>
+    </div>
+  );
+}
+
 function toUrl(raw) {
   if (!raw) return "";
   if (/^(data:|blob:)/i.test(raw)) return raw;
@@ -435,59 +453,105 @@ export default function PublicProfile() {
                 </span>
               </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Username
+              <div className="mt-5 overflow-hidden rounded-2xl bg-white">
+                <div className="grid sm:grid-cols-3">
+                  <div className="px-6 py-5">
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Username
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900">
+                      {profile.username}
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">
-                    {profile.username}
-                  </div>
-                </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Service area
+                  <div className="border-t border-slate-200 px-6 py-5 sm:border-l sm:border-t-0">
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Service area
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900">
+                      {profile.service_location || "—"}
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">
-                    {profile.service_location || "—"}
-                  </div>
-                </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Languages
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">
-                    {languagesDisplay}
+                  <div className="border-t border-slate-200 px-6 py-5 sm:border-l sm:border-t-0">
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Languages
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900">
+                      {languagesDisplay}
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className="flex flex-wrap rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium w-full text-white hover:bg-sky-700"
-                  onClick={() => setMsgOpen(true)}
-                >
-                  Message
-                </button>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (profile.allow_direct_messages) setMsgOpen(true);
+                    }}
+                    disabled={!profile.allow_direct_messages}
+                    className={[
+                      "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
+                      profile.allow_direct_messages
+                        ? "bg-sky-600 text-white hover:bg-sky-700"
+                        : "cursor-not-allowed bg-slate-200 text-slate-400",
+                    ].join(" ")}
+                  >
+                    Message
+                  </button>
 
-                {profile.contact_email && (
+                  {!profile.allow_direct_messages && (
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      This user has not opted in to receive direct messages.
+                    </div>
+                  )}
+                </div>
+
+                {profile.contact_email ? (
                   <a
                     href={`mailto:${profile.contact_email}`}
-                    className="flex flex-wrap rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium w-full text-slate-700 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Email
                   </a>
+                ) : (
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400"
+                    >
+                      Email
+                    </button>
+
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      This user has not opted in to share their email publicly.
+                    </div>
+                  </div>
                 )}
 
-                {profile.contact_phone && (
+                {profile.contact_phone ? (
                   <a
                     href={`tel:${profile.contact_phone}`}
-                    className="flex flex-wrap rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium w-full text-slate-700 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Call
                   </a>
+                ) : (
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400"
+                    >
+                      Call
+                    </button>
+
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      This user has not opted in to receive calls.
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
