@@ -1,12 +1,11 @@
 # =============================================================================
 # file: backend/portfolio/serializers.py
 # =============================================================================
-import json
+from datetime import timedelta
 
 from rest_framework import serializers
 from django.utils import timezone
 from accounts.serializers import ProfileSerializer
-from datetime import timedelta
 
 from .models import (
     ProjectComment,
@@ -262,6 +261,17 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
     def get_name(self, obj):
         return obj.original_name or (obj.file.name.split("/")[-1] if obj.file else "")
 
+    def get_can_delete(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        if obj.message.sender_id != user.id:
+            return False
+
+        return timezone.now() <= obj.message.created_at + timedelta(minutes=1)
+
 
 class PrivateMessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.ReadOnlyField(source="sender.username")
@@ -305,6 +315,7 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
             "parent_message_preview",
             "created_at",
             "attachments",
+            "can_delete",
         ]
 
     def get_attachment_url(self, obj):
@@ -326,7 +337,6 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        request = self.context.get("request")
         thread = attrs.get("thread") or getattr(self.instance, "thread", None)
         parent = attrs.get("parent_message") or getattr(self.instance, "parent_message", None)
 
