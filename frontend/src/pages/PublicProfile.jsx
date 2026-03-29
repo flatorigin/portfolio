@@ -390,14 +390,6 @@ export default function PublicProfile() {
                     </span>
                   </button>
                 ) : null}
-
-                <button
-                  type="button"
-                  onClick={() => setMsgOpen(true)}
-                  className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
-                >
-                  Message
-                </button>
               </div>
             </div>
 
