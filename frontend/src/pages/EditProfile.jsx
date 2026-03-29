@@ -57,7 +57,7 @@ export default function EditProfile() {
     show_contact_email: false,
     show_contact_phone: false,
     languages: [],
-    allow_direct_messages: false,
+    allow_direct_messages: true,
     dm_opt_out_reason: "",
     dm_opt_out_until: "",
   });
