@@ -3,6 +3,7 @@
 // Loads / updates /api/users/me/
 // Shows contact info + service-area Google Map with radius circle
 // Map updates ONLY after successful Save (not while typing)
+// Adds direct-message opt-out modal with reason capture
 // =======================================
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
@@ -33,7 +34,6 @@ function ProfileStatusBadge({ complete }) {
   );
 }
 
-// single source of truth for url normalization (supports blob/data previews)
 function toUrl(raw) {
   if (!raw) return "";
   if (/^(data:|blob:)/i.test(raw)) return raw;
@@ -57,7 +57,13 @@ export default function EditProfile() {
     show_contact_email: false,
     show_contact_phone: false,
     languages: [],
+    allow_direct_messages: false,
+    dm_opt_out_reason: "",
+    dm_opt_out_until: "",
   });
+
+  const [showDmOptOutModal, setShowDmOptOutModal] = useState(false);
+  const [dmReasonDraft, setDmReasonDraft] = useState("");
 
   const complete = getProfileComplete(form);
 
@@ -104,6 +110,9 @@ export default function EditProfile() {
           show_contact_email: !!data.show_contact_email,
           show_contact_phone: !!data.show_contact_phone,
           languages: Array.isArray(data.languages) ? data.languages : [],
+          allow_direct_messages: !!data.allow_direct_messages,
+          dm_opt_out_reason: data.dm_opt_out_reason || "",
+          dm_opt_out_until: data.dm_opt_out_until || "",
         };
 
         setForm(nextForm);
@@ -140,6 +149,23 @@ export default function EditProfile() {
   const updateToggle = (key) => (e) => {
     const checked = e.target.checked;
     setForm((prev) => ({ ...prev, [key]: checked }));
+  };
+
+  const handleDirectMessageToggle = (e) => {
+    const checked = e.target.checked;
+
+    if (checked) {
+      setForm((prev) => ({
+        ...prev,
+        allow_direct_messages: true,
+        dm_opt_out_reason: "",
+        dm_opt_out_until: "",
+      }));
+      return;
+    }
+
+    setDmReasonDraft("");
+    setShowDmOptOutModal(true);
   };
 
   const handleLogoChange = (e) => {
@@ -207,6 +233,9 @@ export default function EditProfile() {
       data.append("show_contact_email", String(!!form.show_contact_email));
       data.append("show_contact_phone", String(!!form.show_contact_phone));
       data.append("languages", JSON.stringify(form.languages || []));
+      data.append("allow_direct_messages", String(!!form.allow_direct_messages));
+      data.append("dm_opt_out_reason", form.dm_opt_out_reason || "");
+      data.append("dm_opt_out_until", form.dm_opt_out_until || "");
 
       if (logoFile) data.append("logo", logoFile);
       if (bannerFile) data.append("banner", bannerFile);
@@ -243,6 +272,12 @@ export default function EditProfile() {
         languages: Array.isArray(updated.languages)
           ? updated.languages
           : form.languages,
+        allow_direct_messages:
+          updated.allow_direct_messages ?? form.allow_direct_messages,
+        dm_opt_out_reason:
+          updated.dm_opt_out_reason ?? form.dm_opt_out_reason,
+        dm_opt_out_until:
+          updated.dm_opt_out_until ?? form.dm_opt_out_until,
       };
 
       setForm(next);
@@ -515,6 +550,29 @@ export default function EditProfile() {
                   <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
                     <div>
                       <div className="text-sm font-medium text-slate-900">
+                        Allow direct messages
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Let other professionals contact you through the platform.
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={!!form.allow_direct_messages}
+                      onChange={handleDirectMessageToggle}
+                    />
+                  </label>
+
+                  {!form.allow_direct_messages && form.dm_opt_out_until ? (
+                    <p className="mt-2 text-xs text-amber-700">
+                      Direct messages are paused until{" "}
+                      {new Date(form.dm_opt_out_until).toLocaleDateString()}.
+                    </p>
+                  ) : null}
+
+                  <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
                         Show email publicly
                       </div>
                       <div className="text-xs text-slate-500">
@@ -605,6 +663,79 @@ export default function EditProfile() {
               heightClassName="h-64"
             />
           </Card>
+        </div>
+      )}
+
+      {showDmOptOutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Turn off direct messages?
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Messaging is the main way others can connect with you on the platform.
+              Why are you turning it off?
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {[
+                ["too_many", "Too many messages"],
+                ["spam", "Spam"],
+                ["not_ready", "Not ready yet"],
+                ["other", "Other"],
+              ].map(([value, label]) => (
+                <label
+                  key={value}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2"
+                >
+                  <input
+                    type="radio"
+                    name="dm_opt_out_reason"
+                    value={value}
+                    checked={dmReasonDraft === value}
+                    onChange={(e) => setDmReasonDraft(e.target.value)}
+                  />
+                  <span className="text-sm text-slate-800">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDmOptOutModal(false);
+                  setDmReasonDraft("");
+                }}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={!dmReasonDraft}
+                onClick={() => {
+                  const until = new Date(
+                    Date.now() + 14 * 24 * 60 * 60 * 1000
+                  ).toISOString();
+
+                  setForm((prev) => ({
+                    ...prev,
+                    allow_direct_messages: false,
+                    dm_opt_out_reason: dmReasonDraft,
+                    dm_opt_out_until: until,
+                  }));
+
+                  setShowDmOptOutModal(false);
+                  setDmReasonDraft("");
+                }}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+              >
+                Turn off messaging
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -104,6 +104,8 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "languages",
             "languages_display",
             "member_since_label",
+            "dm_opt_out_reason",
+            "dm_opt_out_until",
         ]
         read_only_fields = [
             "id",

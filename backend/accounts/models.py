@@ -49,7 +49,21 @@ class Profile(models.Model):
 
     languages = models.JSONField(default=list, blank=True)
 
-    allow_direct_messages = models.BooleanField(default=False)
+    allow_direct_messages = models.BooleanField(default=True)
+
+    dm_opt_out_reason = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        choices=[
+            ("too_many", "Too many messages"),
+            ("spam", "Spam"),
+            ("not_ready", "Not ready yet"),
+            ("other", "Other"),
+        ],
+    )
+
+    dm_opt_out_until = models.DateTimeField(null=True, blank=True)
 
     @property
     def is_profile_complete(self):
