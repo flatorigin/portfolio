@@ -9,6 +9,10 @@
 //   - plain text
 //   - plus menu for camera / image / doc / link
 //   - reply preview
+// Adds:
+//   - attachment rendering
+//   - 1-minute delete window for messages/attachments
+//   - consistent image sizing
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
@@ -19,76 +23,86 @@ function toInitial(nameOrUsername) {
   return s ? s[0].toUpperCase() : "U";
 }
 
-function MessageAttachments({ attachments = [], mine = false }) {
+function isWithinDeleteWindow(createdAt) {
+  if (!createdAt) return false;
+  const created = new Date(createdAt).getTime();
+  if (!Number.isFinite(created)) return false;
+  return Date.now() - created <= 60 * 1000;
+}
+
+function MessageAttachments({
+  attachments = [],
+  mine = false,
+  canDeleteMessage = false,
+  onDeleteAttachment,
+}) {
   if (!Array.isArray(attachments) || attachments.length === 0) return null;
 
   return (
     <div className="mt-2 space-y-2">
       {attachments.map((att, idx) => {
         const key = att.id || `${att.kind}-${att.url || att.file_url || idx}`;
-
         const fileUrl = att.file_url || att.url || "";
-        const label =
-          att.name ||
-          att.original_name ||
-          att.url ||
-          "Attachment";
+        const label = att.name || att.original_name || att.url || "Attachment";
 
         const isImage = att.kind === "image" || att.kind === "camera";
         const isLink = att.kind === "link";
-
-        if (isImage && fileUrl) {
-          return (
-            <a
-              key={key}
-              href={fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="block"
-            >
-              <img
-                src={fileUrl}
-                alt={label}
-                className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
-              />
-            </a>
-          );
-        }
-
-        if (isLink) {
-          return (
-            <a
-              key={key}
-              href={fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={
-                "block rounded-xl border px-3 py-2 text-xs underline " +
-                (mine
-                  ? "border-slate-700 bg-slate-800 text-slate-100"
-                  : "border-slate-200 bg-white text-slate-700")
-              }
-            >
-              {label}
-            </a>
-          );
-        }
+        const canDelete = att.can_delete ?? canDeleteMessage;
 
         return (
-          <a
-            key={key}
-            href={fileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className={
-              "block rounded-xl border px-3 py-2 text-xs " +
-              (mine
-                ? "border-slate-700 bg-slate-800 text-slate-100"
-                : "border-slate-200 bg-white text-slate-700")
-            }
-          >
-            {label}
-          </a>
+          <div key={key}>
+            {isImage && fileUrl ? (
+              <a href={fileUrl} target="_blank" rel="noreferrer" className="block">
+                <div className="max-w-[340px]">
+                  <img
+                    src={fileUrl}
+                    alt={label}
+                    className="h-auto w-full rounded-xl border border-black/10 object-cover"
+                  />
+                </div>
+              </a>
+            ) : isLink ? (
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={
+                  "block rounded-xl border px-3 py-2 text-xs underline " +
+                  (mine
+                    ? "border-slate-700 bg-slate-800 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-700")
+                }
+              >
+                {label}
+              </a>
+            ) : (
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={
+                  "block rounded-xl border px-3 py-2 text-xs " +
+                  (mine
+                    ? "border-slate-700 bg-slate-800 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-700")
+                }
+              >
+                {label}
+              </a>
+            )}
+
+            {canDelete && att.id ? (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => onDeleteAttachment?.(att)}
+                  className="text-[11px] text-red-500 hover:text-red-700"
+                >
+                  Remove attachment
+                </button>
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>
@@ -104,10 +118,10 @@ function ReplySnippet({ message, mine = false }) {
   return (
     <div
       className={
-        "mb-2 rounded-xl border px-2 py-1.5 text-[11px] " +
+        "mb-2 border-l-2 pl-3 text-[11px] " +
         (mine
-          ? "border-slate-700 bg-slate-800 text-slate-200"
-          : "border-slate-200 bg-white text-slate-600")
+          ? "border-slate-500 text-slate-200"
+          : "border-slate-300 text-slate-600")
       }
     >
       <div className="font-medium">Replying to {sender}</div>
@@ -149,7 +163,6 @@ export default function QuickMessageDrawer({
     return recipientDisplayName || recipientUsername || "Message";
   }, [recipientDisplayName, recipientUsername]);
 
-  // Close on ESC
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -159,7 +172,6 @@ export default function QuickMessageDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Lock scroll behind drawer
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -169,7 +181,6 @@ export default function QuickMessageDrawer({
     };
   }, [open]);
 
-  // Open (start/ensure thread + load messages)
   useEffect(() => {
     let cancelled = false;
 
@@ -221,13 +232,38 @@ export default function QuickMessageDrawer({
     };
   }, [open, authed, recipientUsername]);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     if (!open) return;
     const el = scrollerRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [open, messages.length]);
+
+  async function reloadMessages() {
+    if (!threadId) return;
+    const msgRes = await api.get(`/messages/threads/${threadId}/messages/`);
+    setMessages(Array.isArray(msgRes.data) ? msgRes.data : []);
+  }
+
+  async function handleDeleteMessage(messageId) {
+    try {
+      await api.delete(`/messages/${messageId}/`);
+      await reloadMessages();
+      window.dispatchEvent(new CustomEvent("inbox:changed"));
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to delete message.");
+    }
+  }
+
+  async function handleDeleteAttachment(att) {
+    try {
+      await api.delete(`/message-attachments/${att.id}/`);
+      await reloadMessages();
+      window.dispatchEvent(new CustomEvent("inbox:changed"));
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to remove attachment.");
+    }
+  }
 
   async function handleSend(e) {
     e?.preventDefault?.();
@@ -247,7 +283,20 @@ export default function QuickMessageDrawer({
       text: body,
       created_at: new Date().toISOString(),
       parent_message_id: replyTo?.id || null,
-      attachments: composerAttachments,
+      parent_message_preview: replyTo
+        ? {
+            id: replyTo.id,
+            sender_username: replyTo.sender_username || "User",
+            text: replyTo.text || "",
+            created_at: replyTo.created_at,
+          }
+        : null,
+      attachments: composerAttachments.map((item) => ({
+        kind: item.kind,
+        url: item.url || "",
+        name: item.file?.name || item.url || "Attachment",
+        file_url: item.file ? URL.createObjectURL(item.file) : "",
+      })),
       _optimistic: true,
     };
 
@@ -269,10 +318,7 @@ export default function QuickMessageDrawer({
       composerAttachments.forEach((item) => {
         if (item.kind === "link" && item.url) {
           links.push({ url: item.url });
-        } else if (
-          (item.kind === "image" || item.kind === "camera") &&
-          item.file
-        ) {
+        } else if ((item.kind === "image" || item.kind === "camera") && item.file) {
           formData.append(
             item.kind === "camera" ? "camera_images" : "images",
             item.file
@@ -305,7 +351,7 @@ export default function QuickMessageDrawer({
 
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setMessageText(body);
-      setComposerAttachments(optimistic.attachments || []);
+      setComposerAttachments(composerAttachments);
       setReplyTo(
         optimistic.parent_message_id
           ? messages.find((m) => m.id === optimistic.parent_message_id) || null
@@ -373,6 +419,9 @@ export default function QuickMessageDrawer({
                       ? messages.find((x) => x.id === m.parent_message_id)
                       : null);
 
+                  const canDelete =
+                    m.can_delete ?? isWithinDeleteWindow(m.created_at);
+
                   return (
                     <div
                       key={m.id}
@@ -400,9 +449,14 @@ export default function QuickMessageDrawer({
 
                           <ReplySnippet message={replyPreview} mine={mine} />
 
-                          <div className="whitespace-pre-wrap">{m.text}</div>
+                          {m.text ? <div className="whitespace-pre-wrap">{m.text}</div> : null}
 
-                          <MessageAttachments attachments={m.attachments} mine={mine} />
+                          <MessageAttachments
+                            attachments={m.attachments}
+                            mine={mine}
+                            canDeleteMessage={canDelete}
+                            onDeleteAttachment={handleDeleteAttachment}
+                          />
                         </div>
 
                         <div
@@ -418,6 +472,16 @@ export default function QuickMessageDrawer({
                           >
                             Reply
                           </button>
+
+                          {mine && canDelete && m.id ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMessage(m.id)}
+                              className="text-[11px] text-red-500 hover:text-red-700"
+                            >
+                              Delete
+                            </button>
+                          ) : null}
 
                           {m.created_at ? (
                             <div className="text-[10px] text-slate-400">
@@ -451,13 +515,8 @@ export default function QuickMessageDrawer({
               disabled={!authed || loading}
               replyTo={replyTo}
               onCancelReply={() => setReplyTo(null)}
-              attachments: composerAttachments.map((item) => ({
-                kind: item.kind,
-                url: item.url || "",
-                name: item.file?.name || item.url || "Attachment",
-                file_url: item.file ? URL.createObjectURL(item.file) : "",
-              })),
-              onAttachmentsChange={setComposerAttachments},
+              attachments={composerAttachments}
+              onAttachmentsChange={setComposerAttachments}
               placeholder={
                 authed
                   ? `Message ${recipientDisplayName || recipientUsername || "user"}…`

@@ -4,6 +4,11 @@
 // Uses DIRECT message endpoints (no project required)
 // Shows request controls: Accept / Ignore / Block
 // Adds reusable MessageComposer with attachments + reply preview
+// Adds:
+// - reply snippet inside messages
+// - attachment rendering
+// - 1-minute delete window for messages/attachments
+// - consistent image sizing
 // =======================================
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
@@ -11,76 +16,86 @@ import api from "../api";
 import { Card, Button } from "../ui";
 import MessageComposer from "../components/MessageComposer";
 
-function MessageAttachments({ attachments = [], mine = false }) {
+function isWithinDeleteWindow(createdAt) {
+  if (!createdAt) return false;
+  const created = new Date(createdAt).getTime();
+  if (!Number.isFinite(created)) return false;
+  return Date.now() - created <= 60 * 1000;
+}
+
+function MessageAttachments({
+  attachments = [],
+  mine = false,
+  canDeleteMessage = false,
+  onDeleteAttachment,
+}) {
   if (!Array.isArray(attachments) || attachments.length === 0) return null;
 
   return (
     <div className="mt-2 space-y-2">
       {attachments.map((att, idx) => {
         const key = att.id || `${att.kind}-${att.url || att.file_url || idx}`;
-
         const fileUrl = att.file_url || att.url || "";
-        const label =
-          att.name ||
-          att.original_name ||
-          att.url ||
-          "Attachment";
+        const label = att.name || att.original_name || att.url || "Attachment";
 
         const isImage = att.kind === "image" || att.kind === "camera";
         const isLink = att.kind === "link";
-
-        if (isImage && fileUrl) {
-          return (
-            <a
-              key={key}
-              href={fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="block"
-            >
-              <img
-                src={fileUrl}
-                alt={label}
-                className="max-h-56 w-auto rounded-xl border border-black/10 object-cover"
-              />
-            </a>
-          );
-        }
-
-        if (isLink) {
-          return (
-            <a
-              key={key}
-              href={fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={
-                "block rounded-xl border px-3 py-2 text-xs underline " +
-                (mine
-                  ? "border-slate-700 bg-slate-800 text-slate-100"
-                  : "border-slate-200 bg-white text-slate-700")
-              }
-            >
-              {label}
-            </a>
-          );
-        }
+        const canDelete = att.can_delete ?? canDeleteMessage;
 
         return (
-          <a
-            key={key}
-            href={fileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className={
-              "block rounded-xl border px-3 py-2 text-xs " +
-              (mine
-                ? "border-slate-700 bg-slate-800 text-slate-100"
-                : "border-slate-200 bg-white text-slate-700")
-            }
-          >
-            {label}
-          </a>
+          <div key={key}>
+            {isImage && fileUrl ? (
+              <a href={fileUrl} target="_blank" rel="noreferrer" className="block">
+                <div className="max-w-[340px]">
+                  <img
+                    src={fileUrl}
+                    alt={label}
+                    className="h-auto w-full rounded-xl border border-black/10 object-cover"
+                  />
+                </div>
+              </a>
+            ) : isLink ? (
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={
+                  "block rounded-xl border px-3 py-2 text-xs underline " +
+                  (mine
+                    ? "border-slate-700 bg-slate-800 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-700")
+                }
+              >
+                {label}
+              </a>
+            ) : (
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={
+                  "block rounded-xl border px-3 py-2 text-xs " +
+                  (mine
+                    ? "border-slate-700 bg-slate-800 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-700")
+                }
+              >
+                {label}
+              </a>
+            )}
+
+            {canDelete && att.id ? (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => onDeleteAttachment?.(att)}
+                  className="text-[11px] text-red-500 hover:text-red-700"
+                >
+                  Remove attachment
+                </button>
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>
@@ -96,10 +111,10 @@ function ReplySnippet({ message, mine = false }) {
   return (
     <div
       className={
-        "mb-2 rounded-xl border px-2 py-1.5 text-[11px] " +
+        "mb-2 border-l-2 pl-3 text-[11px] " +
         (mine
-          ? "border-slate-700 bg-slate-800 text-slate-200"
-          : "border-slate-200 bg-white text-slate-600")
+          ? "border-slate-500 text-slate-200"
+          : "border-slate-300 text-slate-600")
       }
     >
       <div className="font-medium">Replying to {sender}</div>
@@ -132,7 +147,6 @@ export default function MessagesThread() {
   const [readThreadIds, setReadThreadIds] = useState(new Set());
   const [meUsername, setMeUsername] = useState("");
 
-  // ---------- Fetch current user (me) once ----------
   useEffect(() => {
     (async () => {
       try {
@@ -157,7 +171,8 @@ export default function MessagesThread() {
   );
 
   const threadIsRequest = !!activeThread?.is_request;
-  const canReply = activeThread?.can_reply !== undefined ? !!activeThread.can_reply : true;
+  const canReply =
+    activeThread?.can_reply !== undefined ? !!activeThread.can_reply : true;
 
   const markThreadRead = (id) => {
     setReadThreadIds((prev) => {
@@ -167,7 +182,6 @@ export default function MessagesThread() {
     });
   };
 
-  // Decide who the “other person” is
   const counterpartFor = (thread) => {
     if (!thread) return null;
 
@@ -192,9 +206,11 @@ export default function MessagesThread() {
     return { username: clientUsernameRaw, display_name: clientDisplay };
   };
 
-  const counterpart = useMemo(() => counterpartFor(activeThread), [activeThread, meLower]);
+  const counterpart = useMemo(
+    () => counterpartFor(activeThread),
+    [activeThread, meLower]
+  );
 
-  // ---------- Fetch threads ----------
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true);
     try {
@@ -219,7 +235,6 @@ export default function MessagesThread() {
     fetchThreads();
   }, [fetchThreads]);
 
-  // ---------- Fetch messages ----------
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
       if (!activeThread?.id) {
@@ -230,7 +245,9 @@ export default function MessagesThread() {
       if (!silent) setLoadingMessages(true);
 
       try {
-        const { data } = await api.get(`/messages/threads/${activeThread.id}/messages/`);
+        const { data } = await api.get(
+          `/messages/threads/${activeThread.id}/messages/`
+        );
         const arr = Array.isArray(data) ? data : [];
 
         setMessages((prev) => {
@@ -243,7 +260,10 @@ export default function MessagesThread() {
           return arr;
         });
       } catch (err) {
-        console.error("[MessagesThread] failed to load messages", err?.response || err);
+        console.error(
+          "[MessagesThread] failed to load messages",
+          err?.response || err
+        );
         if (!silent) setMessages([]);
       } finally {
         if (!silent) setLoadingMessages(false);
@@ -264,7 +284,6 @@ export default function MessagesThread() {
     return () => clearInterval(timer);
   }, [activeThread?.id, fetchMessages]);
 
-  // ---------- Thread actions ----------
   async function threadAction(action) {
     if (!activeThread?.id) return;
     try {
@@ -272,12 +291,34 @@ export default function MessagesThread() {
       await fetchThreads();
       await fetchMessages({ silent: false });
     } catch (err) {
-      console.error("[MessagesThread] thread action failed", err?.response || err);
+      console.error(
+        "[MessagesThread] thread action failed",
+        err?.response || err
+      );
       alert(err?.response?.data?.detail || "Action failed.");
     }
   }
 
-  // ---------- Send message ----------
+  async function handleDeleteMessage(messageId) {
+    try {
+      await api.delete(`/messages/${messageId}/`);
+      await fetchMessages({ silent: false });
+      await fetchThreads();
+    } catch (err) {
+      alert(err?.response?.data?.detail || "Failed to delete message.");
+    }
+  }
+
+  async function handleDeleteAttachment(att) {
+    try {
+      await api.delete(`/message-attachments/${att.id}/`);
+      await fetchMessages({ silent: false });
+      await fetchThreads();
+    } catch (err) {
+      alert(err?.response?.data?.detail || "Failed to remove attachment.");
+    }
+  }
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!activeThread?.id) return;
@@ -319,13 +360,9 @@ export default function MessagesThread() {
         formData.append("links", JSON.stringify(links));
       }
 
-      await api.post(
-        `/messages/threads/${activeThread.id}/messages/`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
+      await api.post(`/messages/threads/${activeThread.id}/messages/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       setMessageText("");
       setComposerAttachments([]);
@@ -346,7 +383,6 @@ export default function MessagesThread() {
 
   return (
     <div className="flex items-start gap-4">
-      {/* LEFT: thread list */}
       <div className="w-64 shrink-0">
         <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -357,7 +393,9 @@ export default function MessagesThread() {
             {loadingThreads ? (
               <div className="p-3 text-xs text-slate-500">Loading…</div>
             ) : threads.length === 0 ? (
-              <div className="p-3 text-xs text-slate-500">No conversations yet.</div>
+              <div className="p-3 text-xs text-slate-500">
+                No conversations yet.
+              </div>
             ) : (
               threads.map((t) => {
                 const cp = counterpartFor(t);
@@ -369,7 +407,8 @@ export default function MessagesThread() {
                   : "";
 
                 const latestFromMe =
-                  latest?.sender_username && latest.sender_username.toLowerCase() === meLower;
+                  latest?.sender_username &&
+                  latest.sender_username.toLowerCase() === meLower;
 
                 const hasBeenRead = readThreadIds.has(t.id);
                 const isUnread = !hasBeenRead && !latestFromMe && !!latest;
@@ -393,12 +432,16 @@ export default function MessagesThread() {
                     <div
                       className={
                         "truncate text-xs " +
-                        (isUnread ? "font-semibold text-slate-900" : "font-normal text-slate-800")
+                        (isUnread
+                          ? "font-semibold text-slate-900"
+                          : "font-normal text-slate-800")
                       }
                     >
                       {name}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">{dateLabel || "—"}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {dateLabel || "—"}
+                    </div>
                   </button>
                 );
               })
@@ -407,7 +450,6 @@ export default function MessagesThread() {
         </Card>
       </div>
 
-      {/* RIGHT: messages */}
       <div className="flex-1">
         <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
           {!activeThread ? (
@@ -434,9 +476,12 @@ export default function MessagesThread() {
 
                 {threadIsRequest && (
                   <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                    <div className="text-xs font-semibold text-amber-900">Message request</div>
+                    <div className="text-xs font-semibold text-amber-900">
+                      Message request
+                    </div>
                     <div className="mt-1 text-[11px] text-amber-800">
-                      Accept to allow replies. Ignore to pause it for 24 hours. Block stops messages.
+                      Accept to allow replies. Ignore to pause it for 24 hours.
+                      Block stops messages.
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -444,7 +489,11 @@ export default function MessagesThread() {
                         Accept
                       </Button>
 
-                      <Button type="button" variant="outline" onClick={() => threadAction("ignore")}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => threadAction("ignore")}
+                      >
                         Ignore
                       </Button>
 
@@ -468,7 +517,8 @@ export default function MessagesThread() {
                   <p className="text-xs text-slate-500">No messages yet.</p>
                 ) : (
                   messages.map((m) => {
-                    const fromMe = (m.sender_username || "").toLowerCase() === meLower;
+                    const fromMe =
+                      (m.sender_username || "").toLowerCase() === meLower;
 
                     const alignClass = fromMe ? "justify-end" : "justify-start";
                     const bubbleClass = fromMe
@@ -488,27 +538,46 @@ export default function MessagesThread() {
                         ? messages.find((x) => x.id === m.parent_message_id)
                         : null);
 
+                    const canDelete =
+                      m.can_delete ?? isWithinDeleteWindow(m.created_at);
+
                     return (
                       <div key={m.id} className={`mb-2 flex ${alignClass}`}>
                         <div className="max-w-[70%]">
-                          <div className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}>
+                          <div
+                            className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}
+                          >
                             <ReplySnippet message={replyPreview} mine={fromMe} />
 
-                            {m.text ? <p className="whitespace-pre-wrap">{m.text}</p> : null}
+                            {m.text ? (
+                              <p className="whitespace-pre-wrap">{m.text}</p>
+                            ) : null}
 
-                            <MessageAttachments attachments={m.attachments} mine={fromMe} />
+                            <MessageAttachments
+                              attachments={m.attachments}
+                              mine={fromMe}
+                              canDeleteMessage={canDelete}
+                              onDeleteAttachment={handleDeleteAttachment}
+                            />
 
                             <div
                               className={
                                 "mt-1 text-[10px] " +
-                                (fromMe ? "text-right text-slate-300" : "text-slate-500")
+                                (fromMe
+                                  ? "text-right text-slate-300"
+                                  : "text-slate-500")
                               }
                             >
                               {timeLabel}
                             </div>
                           </div>
 
-                          <div className={"mt-1 flex " + (fromMe ? "justify-end" : "justify-start")}>
+                          <div
+                            className={
+                              "mt-1 flex items-center gap-3 " +
+                              (fromMe ? "justify-end" : "justify-start")
+                            }
+                          >
                             <button
                               type="button"
                               onClick={() => setReplyTo(m)}
@@ -516,6 +585,16 @@ export default function MessagesThread() {
                             >
                               Reply
                             </button>
+
+                            {fromMe && canDelete && m.id ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMessage(m.id)}
+                                className="text-[11px] text-red-500 hover:text-red-700"
+                              >
+                                Delete
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       </div>

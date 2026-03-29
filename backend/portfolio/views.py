@@ -667,6 +667,73 @@ class ThreadMessagesView(generics.ListCreateAPIView):
         thread.save(update_fields=["updated_at"])
         return msg
 
+class MessageDetailView(APIView):
+    """
+    DELETE /api/messages/<message_id>/
+    Delete a message only within 1 minute of sending and only by sender.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, message_id, *args, **kwargs):
+        msg = get_object_or_404(
+            PrivateMessage.objects.select_related("thread", "sender"),
+            id=message_id,
+        )
+
+        if msg.sender_id != request.user.id:
+            return Response(
+                {"detail": "You can only delete your own messages."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if timezone.now() > msg.created_at + timedelta(minutes=1):
+            return Response(
+                {"detail": "Delete window has expired."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        thread = msg.thread
+        msg.delete()
+        thread.updated_at = timezone.now()
+        thread.save(update_fields=["updated_at"])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MessageAttachmentDeleteView(APIView):
+    """
+    DELETE /api/message-attachments/<attachment_id>/
+    Delete a message attachment only within 1 minute of sending and only by sender.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, attachment_id, *args, **kwargs):
+        attachment = get_object_or_404(
+            MessageAttachment.objects.select_related("message", "message__thread"),
+            id=attachment_id,
+        )
+
+        msg = attachment.message
+
+        if msg.sender_id != request.user.id:
+            return Response(
+                {"detail": "You can only delete your own attachments."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if timezone.now() > msg.created_at + timedelta(minutes=1):
+            return Response(
+                {"detail": "Delete window has expired."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        thread = msg.thread
+        attachment.delete()
+        thread.updated_at = timezone.now()
+        thread.save(update_fields=["updated_at"])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 class ThreadActionView(APIView):
     """
     POST /api/inbox/threads/<pk>/actions/

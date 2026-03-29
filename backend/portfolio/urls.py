@@ -16,6 +16,8 @@ from .views import (
     DirectThreadMessageListCreateView,
     PublishTestimonialView,
     UnpublishTestimonialView,
+    MessageDetailView,
+    MessageAttachmentDeleteView,
 )
 
 router = DefaultRouter()
@@ -67,4 +69,6 @@ urlpatterns = [
         DirectThreadMessageListCreateView.as_view(),
         name="dm-thread-messages",
     ),
+    path("messages/<int:message_id>/", MessageDetailView.as_view()),
+    path("message-attachments/<int:attachment_id>/", MessageAttachmentDeleteView.as_view()),
 ]

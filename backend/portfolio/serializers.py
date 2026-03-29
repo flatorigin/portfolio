@@ -6,6 +6,7 @@ import json
 from rest_framework import serializers
 from django.utils import timezone
 from accounts.serializers import ProfileSerializer
+from datetime import timedelta
 
 from .models import (
     ProjectComment,
@@ -235,6 +236,7 @@ class ProjectFavoriteSerializer(serializers.ModelSerializer):
 class MessageAttachmentSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
 
     class Meta:
         model = MessageAttachment
@@ -246,6 +248,7 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
             "url",
             "file_url",
             "created_at",
+            "can_delete",
         ]
         read_only_fields = fields
 
@@ -263,6 +266,7 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
 class PrivateMessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.ReadOnlyField(source="sender.username")
     attachment_url = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
 
     parent_message_id = serializers.PrimaryKeyRelatedField(
         source="parent_message",
@@ -290,6 +294,7 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
             "parent_message_preview",
             "created_at",
             "attachments",
+            "can_delete",
         ]
         read_only_fields = [
             "id",
@@ -331,6 +336,28 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+    def get_can_delete(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        if obj.sender_id != user.id:
+            return False
+
+        return timezone.now() <= obj.created_at + timedelta(minutes=1)
+
+    def get_can_delete(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        if obj.message.sender_id != user.id:
+            return False
+
+        return timezone.now() <= obj.message.created_at + timedelta(minutes=1)
 
 
 class MessageThreadSerializer(serializers.ModelSerializer):
