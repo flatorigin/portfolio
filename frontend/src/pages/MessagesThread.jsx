@@ -1,6 +1,8 @@
 // =======================================
 // file: frontend/src/pages/MessagesThread.jsx
-// Inbox page: left = people list, right = conversation
+// Inbox page
+// Desktop: left = people list, right = conversation
+// Mobile: list first, then full-screen thread view after tap
 // Uses DIRECT message endpoints (no project required)
 // Shows request controls: Accept / Ignore / Block
 // Adds reusable MessageComposer with attachments + reply preview
@@ -131,7 +133,10 @@ export default function MessagesThread() {
   const [activeThreadId, setActiveThreadId] = useState(null);
 
   useEffect(() => {
-    if (!threadIdParam) return;
+    if (!threadIdParam) {
+      setActiveThreadId(null);
+      return;
+    }
     setActiveThreadId(Number(threadIdParam));
   }, [threadIdParam]);
 
@@ -221,7 +226,7 @@ export default function MessagesThread() {
       setActiveThreadId((prev) => {
         if (threadIdParam) return Number(threadIdParam);
         if (prev) return prev;
-        return arr[0]?.id ?? null;
+        return null;
       });
     } catch (err) {
       console.error("[MessagesThread] failed to load threads", err?.response || err);
@@ -343,10 +348,7 @@ export default function MessagesThread() {
       composerAttachments.forEach((item) => {
         if (item.kind === "link" && item.url) {
           links.push({ url: item.url });
-        } else if (
-          (item.kind === "image" || item.kind === "camera") &&
-          item.file
-        ) {
+        } else if ((item.kind === "image" || item.kind === "camera") && item.file) {
           formData.append(
             item.kind === "camera" ? "camera_images" : "images",
             item.file
@@ -381,9 +383,26 @@ export default function MessagesThread() {
     }
   };
 
+  const openThread = (id) => {
+    setActiveThreadId(id);
+    markThreadRead(id);
+    navigate(`/messages/${id}`);
+  };
+
+  const closeMobileThread = () => {
+    setActiveThreadId(null);
+    setReplyTo(null);
+    navigate("/messages");
+  };
+
   return (
     <div className="flex items-start gap-4">
-      <div className="w-64 shrink-0">
+      <div
+        className={[
+          "w-full md:w-64 md:shrink-0",
+          activeThreadId ? "hidden md:block" : "block",
+        ].join(" ")}
+      >
         <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Conversations
@@ -419,19 +438,15 @@ export default function MessagesThread() {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => {
-                      setActiveThreadId(t.id);
-                      markThreadRead(t.id);
-                      navigate(`/messages/${t.id}`);
-                    }}
+                    onClick={() => openThread(t.id)}
                     className={[
-                      "block w-full border-b border-slate-100 px-3 py-2 text-left text-sm",
+                      "block w-full border-b border-slate-100 px-3 py-3 text-left text-sm",
                       isActive ? "bg-slate-100" : "hover:bg-slate-50",
                     ].join(" ")}
                   >
                     <div
                       className={
-                        "truncate text-xs " +
+                        "truncate text-sm " +
                         (isUnread
                           ? "font-semibold text-slate-900"
                           : "font-normal text-slate-800")
@@ -450,7 +465,12 @@ export default function MessagesThread() {
         </Card>
       </div>
 
-      <div className="flex-1">
+      <div
+        className={[
+          "w-full flex-1",
+          activeThreadId ? "block" : "hidden md:block",
+        ].join(" ")}
+      >
         <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
           {!activeThread ? (
             <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
@@ -459,18 +479,28 @@ export default function MessagesThread() {
           ) : (
             <>
               <div className="mb-3 border-b border-slate-200 pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900">
-                    {counterpart?.username ? (
-                      <Link
-                        to={`/profiles/${counterpart.username}`}
-                        className="text-slate-900 hover:underline"
-                      >
-                        {counterpart.display_name || counterpart.username}
-                      </Link>
-                    ) : (
-                      "Conversation"
-                    )}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center">
+                    <button
+                      type="button"
+                      onClick={closeMobileThread}
+                      className="mr-2 rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 md:hidden"
+                    >
+                      Back
+                    </button>
+
+                    <div className="truncate text-sm font-semibold text-slate-900">
+                      {counterpart?.username ? (
+                        <Link
+                          to={`/profiles/${counterpart.username}`}
+                          className="text-slate-900 hover:underline"
+                        >
+                          {counterpart.display_name || counterpart.username}
+                        </Link>
+                      ) : (
+                        "Conversation"
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -543,7 +573,7 @@ export default function MessagesThread() {
 
                     return (
                       <div key={m.id} className={`mb-2 flex ${alignClass}`}>
-                        <div className="max-w-[70%]">
+                        <div className="max-w-[85%] md:max-w-[70%]">
                           <div
                             className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}
                           >
