@@ -348,17 +348,6 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
 
         return timezone.now() <= obj.created_at + timedelta(minutes=1)
 
-    def get_can_delete(self, obj):
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-        if not user or not user.is_authenticated:
-            return False
-
-        if obj.message.sender_id != user.id:
-            return False
-
-        return timezone.now() <= obj.message.created_at + timedelta(minutes=1)
-
 
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")
