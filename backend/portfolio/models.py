@@ -40,6 +40,10 @@ def message_attachment_upload_path(instance, filename):
     project_part = thread.project_id or "direct"
     return f"messages/{thread.owner_id}/{project_part}/{thread.client_id}/{filename}"
 
+def project_bid_attachment_upload_path(instance, filename):
+    project_id = instance.bid.project_id or "project"
+    contractor_id = instance.bid.contractor_id or "contractor"
+    return f"project_bids/{project_id}/{contractor_id}/{filename}"
 
 # -------------------------------------------------------------------
 # Portfolio models
@@ -243,6 +247,177 @@ class ProjectImage(models.Model):
         if self.image and hasattr(self.image, "file"):
             self._convert_image_to_webp()
         super().save(*args, **kwargs)
+
+class ProjectBid(models.Model):
+    STATUS_DRAFT = "draft"
+    STATUS_SUBMITTED = "submitted"
+    STATUS_REVISED = "revised"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_DECLINED = "declined"
+    STATUS_WITHDRAWN = "withdrawn"
+
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_SUBMITTED, "Submitted"),
+        (STATUS_REVISED, "Revised"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_DECLINED, "Declined"),
+        (STATUS_WITHDRAWN, "Withdrawn"),
+    ]
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="bids",
+    )
+    contractor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="project_bids",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_DRAFT,
+    )
+
+    accepted_version = models.ForeignKey(
+        "ProjectBidVersion",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="accepted_for_bids",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "contractor"],
+                name="unique_project_bid_per_contractor",
+            )
+        ]
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return f"Bid<{self.id}> project={self.project_id} contractor={self.contractor_id}"
+
+    @property
+    def latest_version(self):
+        return self.versions.order_by("-version_number", "-id").first()
+
+    def next_version_number(self):
+        latest = self.latest_version
+        return (latest.version_number + 1) if latest else 1
+
+
+class ProjectBidVersion(models.Model):
+    PRICE_TYPE_FIXED = "fixed"
+    PRICE_TYPE_RANGE = "range"
+
+    PRICE_TYPE_CHOICES = [
+        (PRICE_TYPE_FIXED, "Fixed price"),
+        (PRICE_TYPE_RANGE, "Estimate range"),
+    ]
+
+    bid = models.ForeignKey(
+        ProjectBid,
+        on_delete=models.CASCADE,
+        related_name="versions",
+    )
+
+    version_number = models.PositiveIntegerField()
+
+    price_type = models.CharField(
+        max_length=20,
+        choices=PRICE_TYPE_CHOICES,
+        default=PRICE_TYPE_FIXED,
+    )
+
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    amount_min = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    amount_max = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+
+    timeline_text = models.CharField(max_length=255, blank=True, default="")
+    proposal_text = models.TextField(blank=True, default="")
+    included_text = models.TextField(blank=True, default="")
+    excluded_text = models.TextField(blank=True, default="")
+    payment_terms = models.TextField(blank=True, default="")
+
+    valid_until = models.DateField(null=True, blank=True)
+
+    attachment = models.FileField(
+        upload_to=project_bid_attachment_upload_path,
+        null=True,
+        blank=True,
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="project_bid_versions_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["bid", "version_number"],
+                name="unique_bid_version_number",
+            )
+        ]
+        ordering = ["-version_number", "-id"]
+
+    def __str__(self):
+        return f"BidVersion<{self.id}> bid={self.bid_id} v{self.version_number}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.price_type == self.PRICE_TYPE_FIXED:
+            if self.amount is None:
+                raise ValidationError({"amount": "Amount is required for a fixed-price bid."})
+            if self.amount_min is not None or self.amount_max is not None:
+                raise ValidationError(
+                    {"price_type": "Use amount only for a fixed-price bid."}
+                )
+
+        if self.price_type == self.PRICE_TYPE_RANGE:
+            if self.amount_min is None or self.amount_max is None:
+                raise ValidationError(
+                    {"price_type": "Amount min and amount max are required for a range bid."}
+                )
+            if self.amount is not None:
+                raise ValidationError(
+                    {"price_type": "Use amount min/max only for a range bid."}
+                )
+            if self.amount_min > self.amount_max:
+                raise ValidationError(
+                    {"amount_max": "Amount max must be greater than or equal to amount min."}
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
 
 
 # -------------------------------------------------------------------

@@ -18,6 +18,12 @@ from .views import (
     UnpublishTestimonialView,
     MessageDetailView,
     MessageAttachmentDeleteView,
+    ProjectBidListCreateView,
+    ProjectBidDetailView,
+    ProjectBidReviseView,
+    ProjectBidAcceptView,
+    ProjectBidDeclineView,
+    ProjectBidWithdrawView,
 )
 
 router = DefaultRouter()
@@ -37,7 +43,6 @@ urlpatterns = [
         ProjectCommentDetailView.as_view(),
         name="project-comment-detail",
     ),
-
     path(
         "projects/<int:pk>/comments/<int:comment_id>/publish-testimonial/",
         PublishTestimonialView.as_view(),
@@ -48,6 +53,14 @@ urlpatterns = [
         UnpublishTestimonialView.as_view(),
         name="unpublish-testimonial",
     ),
+
+    # Project bids
+    path("projects/<int:pk>/bids/", ProjectBidListCreateView.as_view(), name="project-bids"),
+    path("bids/<int:bid_id>/", ProjectBidDetailView.as_view(), name="project-bid-detail"),
+    path("bids/<int:bid_id>/revise/", ProjectBidReviseView.as_view(), name="project-bid-revise"),
+    path("bids/<int:bid_id>/accept/", ProjectBidAcceptView.as_view(), name="project-bid-accept"),
+    path("bids/<int:bid_id>/decline/", ProjectBidDeclineView.as_view(), name="project-bid-decline"),
+    path("bids/<int:bid_id>/withdraw/", ProjectBidWithdrawView.as_view(), name="project-bid-withdraw"),
 
     # Project-tied private threads (existing system)
     path("projects/<int:pk>/threads/", ProjectThreadCreateView.as_view(), name="project-thread"),
@@ -62,13 +75,17 @@ urlpatterns = [
     path("inbox/threads/<int:pk>/actions/", ThreadActionView.as_view(), name="inbox-thread-actions"),
     path("inbox/blocked/", BlockListView.as_view(), name="inbox-blocked"),
 
-    # ✅ Direct messages (no project context required)
+    # Direct messages (no project context required)
     path("messages/start/", DirectMessageStartView.as_view(), name="dm-start"),
     path(
         "messages/threads/<int:thread_id>/messages/",
         DirectThreadMessageListCreateView.as_view(),
         name="dm-thread-messages",
     ),
-    path("messages/<int:message_id>/", MessageDetailView.as_view()),
-    path("message-attachments/<int:attachment_id>/", MessageAttachmentDeleteView.as_view()),
+    path("messages/<int:message_id>/", MessageDetailView.as_view(), name="message-detail"),
+    path(
+        "message-attachments/<int:attachment_id>/",
+        MessageAttachmentDeleteView.as_view(),
+        name="message-attachment-delete",
+    ),
 ]

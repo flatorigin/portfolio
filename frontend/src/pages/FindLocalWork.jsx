@@ -2,6 +2,7 @@
 // file: frontend/src/pages/FindLocalWork.jsx
 // "Find Local Work" page
 // Shows ONLY published PUBLIC job postings (via backend endpoint)
+// + Adds new/open bid badge on each job post card
 // =======================================
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -10,24 +11,116 @@ import { Badge } from "../ui";
 
 function toUrl(raw) {
   if (!raw) return "";
-  if (/^(data:|blob:)/i.test(raw)) return raw;
-  if (/^https?:\/\//i.test(raw)) return raw;
+  const value = String(raw).trim();
+
+  if (/^(data:|blob:)/i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
+  const isAllowedProtocol = /^(https?:|data:|blob:|mailto:)/i.test(value);
+  if (hasProtocol && !isAllowedProtocol) return "";
+
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
-  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+  return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
 }
 
 function pickCover(p) {
   return toUrl(p?.cover_image_url || "") || toUrl(p?.cover_image || "") || "";
 }
 
+function getBidSummaryMeta(bids) {
+  const list = Array.isArray(bids) ? bids : [];
+
+  const openStatuses = new Set(["submitted", "revised"]);
+  const closedStatuses = new Set(["accepted", "declined", "withdrawn"]);
+
+  let openCount = 0;
+  const totalCount = list.length;
+  let latestCreatedAt = null;
+
+  for (const bid of list) {
+    const latest = bid?.latest_version || {};
+    const status = String(latest.status || bid?.status || "").toLowerCase();
+
+    if (openStatuses.has(status)) openCount += 1;
+
+    const createdAt =
+      latest?.created_at ||
+      bid?.updated_at ||
+      bid?.created_at ||
+      null;
+
+    if (createdAt) {
+      const ts = new Date(createdAt).getTime();
+      if (Number.isFinite(ts) && (!latestCreatedAt || ts > latestCreatedAt)) {
+        latestCreatedAt = ts;
+      }
+    }
+
+    if (!status || (!openStatuses.has(status) && !closedStatuses.has(status))) {
+      if (!closedStatuses.has(status)) openCount += 1;
+    }
+  }
+
+  return {
+    totalCount,
+    openCount,
+    hasNewBid: openCount > 0,
+    latestCreatedAt,
+  };
+}
+
 export default function FindLocalWork() {
   const [projects, setProjects] = useState([]);
+  const [bidMeta, setBidMeta] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadingBidMeta, setLoadingBidMeta] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+
+    async function loadBidMeta(projectsList) {
+      if (!Array.isArray(projectsList) || projectsList.length === 0) {
+        if (!cancelled) setBidMeta({});
+        return;
+      }
+
+      setLoadingBidMeta(true);
+      try {
+        const entries = await Promise.all(
+          projectsList.map(async (p) => {
+            try {
+              const { data } = await api.get(`/projects/${p.id}/bids/`);
+              return [p.id, getBidSummaryMeta(data)];
+            } catch (err) {
+              console.warn(
+                "[FindLocalWork] bid summary failed for project",
+                p.id,
+                err?.response || err
+              );
+              return [
+                p.id,
+                {
+                  totalCount: 0,
+                  openCount: 0,
+                  hasNewBid: false,
+                  latestCreatedAt: null,
+                },
+              ];
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setBidMeta(Object.fromEntries(entries));
+        }
+      } finally {
+        if (!cancelled) setLoadingBidMeta(false);
+      }
+    }
+
     setLoading(true);
     setError("");
 
@@ -43,15 +136,19 @@ export default function FindLocalWork() {
           : [];
 
         const onlyPublicJobs = arr.filter(
-          (p) => !!p?.is_job_posting && (p?.is_public === undefined || p?.is_public === true)
+          (p) =>
+            !!p?.is_job_posting &&
+            (p?.is_public === undefined || p?.is_public === true)
         );
 
         setProjects(onlyPublicJobs);
+        await loadBidMeta(onlyPublicJobs);
       } catch (err) {
         console.error("[FindLocalWork] load error", err?.response || err);
         if (!cancelled) {
           setError("Could not load job postings.");
           setProjects([]);
+          setBidMeta({});
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -93,6 +190,11 @@ export default function FindLocalWork() {
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => {
             const coverSrc = pickCover(p);
+            const meta = bidMeta?.[p.id] || {
+              totalCount: 0,
+              openCount: 0,
+              hasNewBid: false,
+            };
 
             return (
               <Link
@@ -116,10 +218,21 @@ export default function FindLocalWork() {
                     </div>
                   )}
 
-                  <div className="absolute left-3 top-3">
+                  <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                     <Badge className="bg-emerald-600/95 text-[11px] font-semibold text-emerald-50">
                       Job posting
                     </Badge>
+                    {meta.hasNewBid ? (
+                      <div className="relative inline-flex h-[22px] items-center pl-3">
+                        <div className="absolute left-0 top-1/3 z-100 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-full bg-[#4A3CFF] text-[11px] font-semibold leading-none text-white shadow-[0_6px_14px_rgba(74,60,255,0.28)]">
+                          {meta.openCount}
+                        </div>
+
+                        <div className="rounded-full border border-indigo-600 bg-white px-3 py-1 text-[11px] font-medium text-indigo-600 shadow-sm">
+                          New Bid
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -143,6 +256,34 @@ export default function FindLocalWork() {
                       {p.job_summary || p.summary}
                     </div>
                   )}
+
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <div className="text-slate-600">
+                        <span className="font-medium text-slate-800">
+                          {loadingBidMeta && bidMeta[p.id] === undefined
+                            ? "—"
+                            : meta.totalCount}
+                        </span>{" "}
+                        total bid{meta.totalCount === 1 ? "" : "s"}
+                      </div>
+
+                      <div
+                        className={
+                          "font-medium " +
+                          (meta.openCount > 0
+                            ? "text-emerald-700"
+                            : "text-slate-500")
+                        }
+                      >
+                        {loadingBidMeta && bidMeta[p.id] === undefined
+                          ? "Loading…"
+                          : meta.openCount > 0
+                          ? `${meta.openCount} open`
+                          : "No open bids"}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </Link>
             );

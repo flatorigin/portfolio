@@ -11,14 +11,21 @@ import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
 import SavedProfilesGrid from "../components/SavedProfilesGrid";
 import SavedProjectsGrid from "../components/SavedProjectsGrid";
 
-// normalize media
+// normalize media + safer protocol handling
 function toUrl(raw) {
   if (!raw) return "";
-  if (/^(data:|blob:)/i.test(raw)) return raw;
-  if (/^https?:\/\//i.test(raw)) return raw;
+  const value = String(raw).trim();
+
+  if (/^(data:|blob:)/i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
+  const isAllowedProtocol = /^(https?:|data:|blob:|mailto:)/i.test(value);
+  if (hasProtocol && !isAllowedProtocol) return "";
+
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
-  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+  return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
 }
 
 // robust extraction of project id from favorite payload
@@ -52,13 +59,11 @@ function buildProjectFormData(form, cover) {
   const DECIMAL_KEYS = new Set(["budget"]);
 
   Object.entries(form || {}).forEach(([k, v]) => {
-    // booleans -> "true"/"false"
     if (BOOL_KEYS.has(k)) {
       fd.append(k, v ? "true" : "false");
       return;
     }
 
-    // json -> stringify
     if (JSON_KEYS.has(k)) {
       const safe =
         v === null || v === undefined ? (k === "service_categories" ? [] : []) : v;
@@ -66,7 +71,6 @@ function buildProjectFormData(form, cover) {
       return;
     }
 
-    // integers -> omit if empty
     if (INT_KEYS.has(k)) {
       if (v === "" || v === null || v === undefined) return;
       const n = Number(String(v));
@@ -74,14 +78,12 @@ function buildProjectFormData(form, cover) {
       return;
     }
 
-    // decimals -> omit if empty
     if (DECIMAL_KEYS.has(k)) {
       if (v === "" || v === null || v === undefined) return;
       fd.append(k, String(v));
       return;
     }
 
-    // default (strings etc.) -> omit ONLY if null/undefined
     if (v === null || v === undefined) return;
     fd.append(k, String(v));
   });
@@ -91,7 +93,6 @@ function buildProjectFormData(form, cover) {
   return fd;
 }
 
-// treat "true", "1", 1, true as truthy
 function isJobPostingFlag(value) {
   if (value === true) return true;
   if (value === 1) return true;
@@ -100,14 +101,64 @@ function isJobPostingFlag(value) {
   return false;
 }
 
+function getBidSummaryMeta(bids) {
+  const list = Array.isArray(bids) ? bids : [];
+
+  const openStatuses = new Set(["submitted", "revised"]);
+  const closedStatuses = new Set(["accepted", "declined", "withdrawn"]);
+
+  let openCount = 0;
+  let totalCount = list.length;
+  let latestCreatedAt = null;
+
+  for (const bid of list) {
+    const latest = bid?.latest_version || {};
+    const status = String(latest.status || bid?.status || "").toLowerCase();
+
+    if (openStatuses.has(status)) openCount += 1;
+
+    const createdAt =
+      latest?.created_at ||
+      bid?.updated_at ||
+      bid?.created_at ||
+      null;
+
+    if (createdAt) {
+      const ts = new Date(createdAt).getTime();
+      if (Number.isFinite(ts) && (!latestCreatedAt || ts > latestCreatedAt)) {
+        latestCreatedAt = ts;
+      }
+    }
+
+    if (!status || (!openStatuses.has(status) && !closedStatuses.has(status))) {
+      if (!closedStatuses.has(status)) openCount += 1;
+    }
+  }
+
+  return {
+    totalCount,
+    openCount,
+    hasNewBid: openCount > 0,
+    latestCreatedAt,
+  };
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const isMountedRef = useRef(false);
 
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     function handleResize() {
-      setIsDesktop(window.innerWidth >= 768);
+      if (isMountedRef.current) setIsDesktop(window.innerWidth >= 768);
     }
 
     window.addEventListener("resize", handleResize);
@@ -129,10 +180,10 @@ export default function Dashboard() {
             (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
           )
         : [];
-      setSavedProjects(sorted);
+      if (isMountedRef.current) setSavedProjects(sorted);
     } catch (err) {
       console.warn("[Dashboard] failed to load saved projects", err);
-      setSavedProjects([]);
+      if (isMountedRef.current) setSavedProjects([]);
     }
   }, []);
 
@@ -161,9 +212,11 @@ export default function Dashboard() {
     setRemovingFavoriteId(projectId);
     try {
       await api.delete(`/projects/${projectId}/favorite/`);
-      setSavedProjects((prev) =>
-        prev.filter((f) => extractProjectId(f) !== projectId)
-      );
+      if (isMountedRef.current) {
+        setSavedProjects((prev) =>
+          prev.filter((f) => extractProjectId(f) !== projectId)
+        );
+      }
       window.dispatchEvent(new CustomEvent("favorites:changed"));
     } catch (err) {
       console.error("[Dashboard] failed to remove favorite", err?.response || err);
@@ -175,11 +228,10 @@ export default function Dashboard() {
         "Failed to remove favorite. Please try again.";
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
-      setRemovingFavoriteId(null);
+      if (isMountedRef.current) setRemovingFavoriteId(null);
     }
   }
 
-  // ✅ Standardized: same contract as editor uploader -> "images" + "captions[]"
   async function uploadProjectImages(projectId, images) {
     const list = Array.isArray(images) ? images : [];
     const files = list.filter((img) => img?._file);
@@ -208,10 +260,10 @@ export default function Dashboard() {
     setBusy(true);
     try {
       await api.delete(`/projects/${projectId}/`);
-      setEditingId("");
+      if (isMountedRef.current) setEditingId("");
       await refreshProjects();
       await refreshMyJobPosts();
-      setSaveToast("Deleted ✓  Project removed");
+      if (isMountedRef.current) setSaveToast("Deleted ✓  Project removed");
     } catch (err) {
       const data = err?.response?.data;
       alert(
@@ -222,11 +274,10 @@ export default function Dashboard() {
           "Failed to delete project."
       );
     } finally {
-      setBusy(false);
+      if (isMountedRef.current) setBusy(false);
     }
   }
 
-  // --- Job post edit gate (published -> require unpublish) ---
   const [unpublishModal, setUnpublishModal] = useState({
     open: false,
     project: null,
@@ -235,13 +286,11 @@ export default function Dashboard() {
   function requestEditProject(p) {
     if (!p?.id) return;
 
-    // If it's a published job posting, require unpublish first
     if (p.is_job_posting && p.is_public) {
       setUnpublishModal({ open: true, project: p });
       return;
     }
 
-    // otherwise edit normally
     loadEditor(p.id);
   }
 
@@ -263,12 +312,10 @@ export default function Dashboard() {
     setBusy(true);
     try {
       await api.patch(`/projects/${p.id}/`, { is_public: false });
-      setUnpublishModal({ open: false, project: null });
+      if (isMountedRef.current) setUnpublishModal({ open: false, project: null });
 
       await refreshProjects();
       await refreshMyJobPosts();
-
-      // Now allow editing
       await loadEditor(p.id);
     } catch (err) {
       console.error("[Dashboard] unpublish failed", err?.response || err);
@@ -281,7 +328,7 @@ export default function Dashboard() {
           "Failed to unpublish."
       );
     } finally {
-      setBusy(false);
+      if (isMountedRef.current) setBusy(false);
     }
   }
 
@@ -289,7 +336,6 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  // Create form state (includes job-posting fields)
   const [form, setForm] = useState({
     title: "",
     summary: "",
@@ -303,7 +349,6 @@ export default function Dashboard() {
     material_label: "",
     is_job_posting: false,
 
-    // job-posting extensions
     job_summary: "",
     service_categories: [],
     part_of_larger_project: false,
@@ -318,7 +363,6 @@ export default function Dashboard() {
   });
   const [cover, setCover] = useState(null);
 
-  // Editor
   const [editingId, setEditingId] = useState("");
 
   useEffect(() => {
@@ -349,7 +393,6 @@ export default function Dashboard() {
     material_label: "",
     cover_image_id: null,
 
-    // job-posting extensions
     job_summary: "",
     service_categories: [],
     part_of_larger_project: false,
@@ -364,39 +407,48 @@ export default function Dashboard() {
   });
   const [editImgs, setEditImgs] = useState([]);
 
-  // ✅ feedback + collapse control
   const [saveToast, setSaveToast] = useState("");
   const saveToastTimerRef = useRef(null);
   const collapseTimerRef = useRef(null);
 
-  // current user (ownership)
   const [meUser, setMeUser] = useState({
     username: localStorage.getItem("username") || "",
   });
 
-  // myThumbs[projectId] = { cover: string|null }
   const [myThumbs, setMyThumbs] = useState({});
 
+  // NEW: bid summary per owned job/project
+  const [jobBidMeta, setJobBidMeta] = useState({});
+
   useEffect(() => {
+    let active = true;
+
     (async () => {
       try {
         const { data } = await api.get("/auth/users/me/");
-        if (data?.username) setMeUser({ username: data.username });
+        if (active && data?.username && isMountedRef.current) {
+          setMeUser({ username: data.username });
+        }
       } catch {
         try {
           const { data } = await api.get("/users/me/");
-          if (data?.username) setMeUser({ username: data.username });
+          if (active && data?.username && isMountedRef.current) {
+            setMeUser({ username: data.username });
+          }
         } catch {
           /* fallback */
         }
       }
     })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const [createErr, setCreateErr] = useState("");
   const [createOk, setCreateOk] = useState(false);
 
-  // ✅ define refreshMyThumbs BEFORE refreshProjects (avoids TDZ crash)
   const refreshMyThumbs = useCallback(async (projList) => {
     const list = Array.isArray(projList) ? projList : [];
 
@@ -427,7 +479,43 @@ export default function Dashboard() {
       })
     );
 
-    setMyThumbs(Object.fromEntries(entries));
+    if (isMountedRef.current) {
+      setMyThumbs(Object.fromEntries(entries));
+    }
+  }, []);
+
+  const refreshJobBidMeta = useCallback(async (projList) => {
+    const list = Array.isArray(projList) ? projList : [];
+
+    if (list.length === 0) {
+      if (isMountedRef.current) setJobBidMeta({});
+      return;
+    }
+
+    const entries = await Promise.all(
+      list.map(async (p) => {
+        try {
+          const { data } = await api.get(`/projects/${p.id}/bids/`);
+          const summary = getBidSummaryMeta(data);
+          return [p.id, summary];
+        } catch (err) {
+          console.warn("[Dashboard] bid summary failed for project", p.id, err?.response || err);
+          return [
+            p.id,
+            {
+              totalCount: 0,
+              openCount: 0,
+              hasNewBid: false,
+              latestCreatedAt: null,
+            },
+          ];
+        }
+      })
+    );
+
+    if (isMountedRef.current) {
+      setJobBidMeta(Object.fromEntries(entries));
+    }
   }, []);
 
   // ---- Job posts for current user (job postings only) ----
@@ -444,13 +532,17 @@ export default function Dashboard() {
               isJobPostingFlag(p.is_job_posting)
           )
         : [];
-      setMyJobPosts(mineJobs);
-    } catch {
-      setMyJobPosts([]);
-    }
-  }, [meUser.username]);
 
-  // ---- Refresh my projects (all types) ----
+      if (isMountedRef.current) setMyJobPosts(mineJobs);
+      await refreshJobBidMeta(mineJobs);
+    } catch {
+      if (isMountedRef.current) {
+        setMyJobPosts([]);
+        setJobBidMeta({});
+      }
+    }
+  }, [meUser.username, refreshJobBidMeta]);
+
   const refreshProjects = useCallback(async () => {
     try {
       const { data } = await api.get("/projects/");
@@ -458,33 +550,31 @@ export default function Dashboard() {
 
       const me = (meUser.username || "").toLowerCase();
 
-      // ✅ All owned items (projects + job posts)
       const mineAll = all.filter((p) => {
         const owner = (p.owner_username || p.owner?.username || "").toLowerCase();
         return owner === me;
       });
 
-      // =========================
-      // CHANGED: robust split for UI
-      // =========================
       const mineProjects = mineAll.filter((p) => !isJobPostingFlag(p?.is_job_posting));
       const mineJobPosts = mineAll.filter((p) => isJobPostingFlag(p?.is_job_posting));
-      // =========================
-      // END CHANGED
-      // =========================
 
-      setProjects(mineProjects);
-      setMyJobPosts(mineJobPosts);
+      if (isMountedRef.current) {
+        setProjects(mineProjects);
+        setMyJobPosts(mineJobPosts);
+      }
 
-      // ✅ thumbs for BOTH lists
       await refreshMyThumbs(mineAll);
+      await refreshJobBidMeta(mineJobPosts);
     } catch (err) {
       console.warn("[Dashboard] failed to load my projects", err);
-      setProjects([]);
-      setMyJobPosts([]);
-      setMyThumbs({});
+      if (isMountedRef.current) {
+        setProjects([]);
+        setMyJobPosts([]);
+        setMyThumbs({});
+        setJobBidMeta({});
+      }
     }
-  }, [meUser.username, refreshMyThumbs]);
+  }, [meUser.username, refreshMyThumbs, refreshJobBidMeta]);
 
   useEffect(() => {
     refreshProjects();
@@ -492,7 +582,13 @@ export default function Dashboard() {
 
   const list = projects;
 
-  // ✅ Stable refreshImages (preserve UI order; do not allow backend ordering to reshuffle)
+  function getProjectCover(p) {
+    const fromUrl = p?.cover_image_url ? toUrl(p.cover_image_url) : "";
+    const fromFile = p?.cover_image ? toUrl(p.cover_image) : "";
+    const fromThumbs = myThumbs?.[p?.id]?.cover || "";
+    return fromUrl || fromFile || fromThumbs || "";
+  }
+
   const refreshImages = useCallback(async (pid) => {
     const { data } = await api.get(`/projects/${pid}/images/`);
 
@@ -506,6 +602,8 @@ export default function Dashboard() {
         _saving: false,
       }))
       .filter((x) => !!x.url);
+
+    if (!isMountedRef.current) return;
 
     setEditImgs((prev) => {
       const byId = new Map(incoming.map((it) => [String(it.id), it]));
@@ -534,9 +632,11 @@ export default function Dashboard() {
   const loadEditor = useCallback(
     async (id) => {
       const pid = String(id);
-      setEditingId(pid);
+      if (isMountedRef.current) setEditingId(pid);
 
       const { data: meta } = await api.get(`/projects/${pid}/`);
+      if (!isMountedRef.current) return;
+
       setEditForm({
         title: meta?.title || "",
         summary: meta?.summary || "",
@@ -575,7 +675,6 @@ export default function Dashboard() {
     [refreshImages]
   );
 
-  // ✅ cover = order 0 (backend). UI does NOT reorder due to refreshImages merge.
   async function makeCoverImage(imageId) {
     if (!editingId || !imageId) return;
 
@@ -645,7 +744,8 @@ export default function Dashboard() {
       await refreshProjects();
       await refreshMyJobPosts();
 
-      // reset create form (include ALL fields you use)
+      if (!isMountedRef.current) return;
+
       setForm({
         title: "",
         summary: "",
@@ -686,10 +786,10 @@ export default function Dashboard() {
         (typeof data === "string" ? data : data ? JSON.stringify(data) : "") ||
         err?.message ||
         "Create failed";
-      setCreateErr(msg);
+      if (isMountedRef.current) setCreateErr(msg);
       console.error("[createProject] failed:", err?.response || err);
     } finally {
-      setBusy(false);
+      if (isMountedRef.current) setBusy(false);
     }
   }
 
@@ -703,8 +803,6 @@ export default function Dashboard() {
 
       payload.is_public = !!payload.is_public;
       payload.is_job_posting = !!payload.is_job_posting;
-
-      // normalize booleans for backend consistency
       payload.part_of_larger_project = !!payload.part_of_larger_project;
       payload.permit_required = !!payload.permit_required;
       payload.compliance_confirmed = !!payload.compliance_confirmed;
@@ -724,15 +822,19 @@ export default function Dashboard() {
       await refreshMyJobPosts();
 
       const title = (payload.title || "").trim();
-      setSaveToast(title ? `Saved ✓  “${title}”` : "Saved ✓  Your changes are live");
+      if (isMountedRef.current) {
+        setSaveToast(title ? `Saved ✓  “${title}”` : "Saved ✓  Your changes are live");
+      }
 
       if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
 
-      saveToastTimerRef.current = setTimeout(() => setSaveToast(""), 1600);
+      saveToastTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) setSaveToast("");
+      }, 1600);
 
       collapseTimerRef.current = setTimeout(() => {
-        setEditingId("");
+        if (isMountedRef.current) setEditingId("");
       }, 550);
     } catch (err) {
       console.error("[Dashboard] save failed", err?.response || err);
@@ -745,7 +847,7 @@ export default function Dashboard() {
           "Save failed"
       );
     } finally {
-      setBusy(false);
+      if (isMountedRef.current) setBusy(false);
     }
   }
 
@@ -764,6 +866,7 @@ export default function Dashboard() {
       await refreshImages(editingId);
     } catch (e) {
       alert(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
+      if (!isMountedRef.current) return;
       setEditImgs((prev) =>
         prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x))
       );
@@ -779,13 +882,12 @@ export default function Dashboard() {
       await refreshImages(editingId);
       await refreshProjects();
     } finally {
-      setBusy(false);
+      if (isMountedRef.current) setBusy(false);
     }
   }
 
   const handleEditorSubmit = useCallback((e) => saveProjectInfo(e), [editingId, editForm]);
 
-  // cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
@@ -793,10 +895,6 @@ export default function Dashboard() {
     };
   }, []);
 
-  // =========================
-  // CHANGED: prefer already-available project payload first
-  // This helps dashboard cards render faster without waiting for thumbs
-  // =========================
   function getProjectCover(p) {
     const fromUrl = p?.cover_image_url ? toUrl(p.cover_image_url) : "";
     const fromFile = p?.cover_image ? toUrl(p.cover_image) : "";
@@ -810,7 +908,6 @@ export default function Dashboard() {
         <SectionTitle>Dashboard</SectionTitle>
       </header>
 
-      {/* 1) Create Project */}
       <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
         <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-6 text-center">
           <div className="mb-5 text-slate-400">
@@ -862,13 +959,9 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      {/* Saved projects */}
       <SavedProjectsGrid />
-
-      {/* SAVED PROFILES (liked public profiles) */}
       <SavedProfilesGrid />
 
-      {/* 1.5) YOUR JOB POSTS (distinct) */}
       <Card className="p-5 border border-sky-200 bg-sky-50/40">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -888,10 +981,20 @@ export default function Dashboard() {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
             {myJobPosts
               .slice()
-              .sort((a, b) => Number(b.is_public) - Number(a.is_public))
+              .sort((a, b) => {
+                const aOpen = jobBidMeta?.[a.id]?.openCount || 0;
+                const bOpen = jobBidMeta?.[b.id]?.openCount || 0;
+                if (bOpen !== aOpen) return bOpen - aOpen;
+                return Number(b.is_public) - Number(a.is_public);
+              })
               .map((p) => {
                 const coverSrc = getProjectCover(p);
                 const isPublished = !!p.is_public;
+                const bidMeta = jobBidMeta?.[p.id] || {
+                  totalCount: 0,
+                  openCount: 0,
+                  hasNewBid: false,
+                };
 
                 return (
                   <Card
@@ -914,13 +1017,26 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      <div className="absolute left-3 top-3 flex gap-2">
+                      <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                         <Badge className="bg-slate-900 text-white">Job post</Badge>
                         {isPublished ? (
                           <Badge className="bg-slate-900 text-white">Published</Badge>
                         ) : (
                           <Badge className="bg-slate-200 text-slate-800">Draft</Badge>
                         )}
+                        {bidMeta.hasNewBid ? (
+                          <div className="relative">
+                            {/* pill */}
+                            <div className="rounded-full border border-indigo-600 bg-white px-4 py-1 text-xs font-medium text-indigo-600 shadow-sm">
+                              New Bid
+                            </div>
+
+                            {/* counter bubble */}
+                            <div className="absolute -left-2 -top-2 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-semibold text-white shadow">
+                              {bidMeta.openCount}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
@@ -937,6 +1053,27 @@ export default function Dashboard() {
 
                       <div className="line-clamp-2 text-sm text-slate-700">
                         {p.job_summary || p.summary || <span className="opacity-60">No summary</span>}
+                      </div>
+
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <div className="text-slate-600">
+                            <span className="font-medium text-slate-800">
+                              {bidMeta.totalCount}
+                            </span>{" "}
+                            total bid{bidMeta.totalCount === 1 ? "" : "s"}
+                          </div>
+                          <div
+                            className={
+                              "font-medium " +
+                              (bidMeta.openCount > 0 ? "text-emerald-700" : "text-slate-500")
+                            }
+                          >
+                            {bidMeta.openCount > 0
+                              ? `${bidMeta.openCount} open`
+                              : "No open bids"}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="mt-3 flex w-full flex-nowrap gap-2">
@@ -963,7 +1100,6 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* 3) Your Projects */}
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-800">Your Projects</div>
@@ -1055,7 +1191,6 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {/* ✅ Save feedback */}
       {saveToast ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           <div className="flex items-center gap-2">
@@ -1146,7 +1281,6 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* Unpublish modal */}
       {unpublishModal?.open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">

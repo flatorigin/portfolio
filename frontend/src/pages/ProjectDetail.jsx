@@ -2,19 +2,30 @@
 // file: frontend/src/pages/ProjectDetail.jsx
 // Project page + lightbox-style comments modal + project edit + extra links
 // + Comments: optional rating, disclaimer, stars placeholder, lock edit/delete when testimonial_published
+// + Bids: compact owner-side bid cards + full bid modal, send/revise/withdraw/accept/decline flow
+// + Safety/UI: safer URL handling, loading state, async cleanup guards
 // =======================================
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
-import { Badge, Card, Button, Textarea } from "../ui";
+import { Badge, Card, Button, Textarea, Input } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 
 function toUrl(raw) {
   if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const value = String(raw).trim();
+
+  const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
+  const isAllowedProtocol = /^(https?:|data:|mailto:)/i.test(value);
+
+  if (hasProtocol && !isAllowedProtocol) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
-  return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
+
+  return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
 }
 
 function buildMapSrc(location) {
@@ -24,7 +35,6 @@ function buildMapSrc(location) {
 }
 
 function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) {
-  // value: 0..5
   return (
     <div className="flex items-center gap-1">
       {[1, 2, 3, 4, 5].map((n) => {
@@ -36,7 +46,7 @@ function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) 
             disabled={disabled}
             onClick={() => {
               if (!onChange) return;
-              onChange((prev) => (prev === n ? null : n)); // click again to clear
+              onChange((prev) => (prev === n ? null : n));
             }}
             className={
               "text-lg leading-none " +
@@ -45,9 +55,7 @@ function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) 
             aria-label={`${titlePrefix} ${n} stars`}
             title={`${titlePrefix} ${n} stars`}
           >
-            <span className={filled ? "text-amber-500" : "text-slate-300"}>
-              ★
-            </span>
+            <span className={filled ? "text-amber-500" : "text-slate-300"}>★</span>
           </button>
         );
       })}
@@ -55,14 +63,22 @@ function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) 
   );
 }
 
+function getInitials(name = "") {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() || "?";
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
 export default function ProjectDetail() {
   const { id } = useParams();
+  const isMountedRef = useRef(false);
 
-  // project + media (public view)
+  const [pageLoading, setPageLoading] = useState(true);
+
   const [project, setProject] = useState(null);
   const [images, setImages] = useState([]);
 
-  // edit project state (for ProjectEditorCard)
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
@@ -83,58 +99,86 @@ export default function ProjectDetail() {
   const [editImages, setEditImages] = useState([]);
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
-
-  // cover image selected from images list
   const [editCoverImageId, setEditCoverImageId] = useState(null);
 
-  // current user
   const [meUser, setMeUser] = useState(null);
   const authed = !!localStorage.getItem("access");
 
-  // favorite state
   const [isSaved, setIsSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
 
-  // comments state
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [commentBusy, setCommentBusy] = useState(false);
   const [commentError, setCommentError] = useState("");
-  const [commentRating, setCommentRating] = useState(null); // 1..5 or null
+  const [commentRating, setCommentRating] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
 
-  // editing state for comments
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingText, setEditingText] = useState("");
-  const [editingRating, setEditingRating] = useState(null); // 1..5 or null
+  const [editingRating, setEditingRating] = useState(null);
   const [editBusy, setEditBusy] = useState(false);
 
-  // modal state (project + comments)
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
-  // ─────────────────────────────
-  // FETCH CURRENT USER
-  // ─────────────────────────────
+  const [bidOpen, setBidOpen] = useState(false);
+  const [bidBusy, setBidBusy] = useState(false);
+  const [bidError, setBidError] = useState("");
+  const [bidSuccess, setBidSuccess] = useState("");
+  const [editingBidId, setEditingBidId] = useState(null);
+  const [bids, setBids] = useState([]);
+  const [loadingBids, setLoadingBids] = useState(false);
+  const [bidActionBusyId, setBidActionBusyId] = useState(null);
+  const [activeBid, setActiveBid] = useState(null);
+
+  const [bidForm, setBidForm] = useState({
+    price_type: "fixed",
+    amount: "",
+    amount_min: "",
+    amount_max: "",
+    timeline_text: "",
+    proposal_text: "",
+    included_text: "",
+    excluded_text: "",
+    payment_terms: "",
+    valid_until: "",
+    attachment: null,
+  });
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!authed) {
       setMeUser(null);
       return;
     }
+
+    let active = true;
+
     (async () => {
       try {
         const { data } = await api.get("/auth/users/me/");
-        setMeUser(data);
+        if (active && isMountedRef.current) setMeUser(data);
       } catch {
         try {
           const { data } = await api.get("/users/me/");
-          setMeUser(data);
+          if (active && isMountedRef.current) setMeUser(data);
         } catch (err) {
           console.warn("[ProjectDetail] failed to fetch meUser", err);
-          setMeUser(null);
+          if (active && isMountedRef.current) setMeUser(null);
         }
       }
     })();
+
+    return () => {
+      active = false;
+    };
   }, [authed]);
 
   const isOwnerUser =
@@ -153,9 +197,6 @@ export default function ProjectDetail() {
     (project.owner_username || "").toLowerCase() ===
       (meUser.username || "").toLowerCase();
 
-  // ─────────────────────────────
-  // COVER SETTER (backend-friendly)
-  // ─────────────────────────────
   async function setCoverOnBackend(projectId, imgId) {
     const normalized = imgId == null ? null : Number(imgId);
     if (!projectId || normalized == null) return;
@@ -187,14 +228,13 @@ export default function ProjectDetail() {
     }
   }
 
-  // ─────────────────────────────
-  // IMAGES
-  // ─────────────────────────────
   const refreshImages = useCallback(async () => {
     if (!id) return;
 
     try {
       const { data } = await api.get(`/projects/${id}/images/`);
+      if (!isMountedRef.current) return;
+
       const raw = Array.isArray(data) ? data : [];
 
       const publicImages = raw
@@ -236,22 +276,44 @@ export default function ProjectDetail() {
       }
     } catch (err) {
       console.error("[ProjectDetail] refreshImages failed:", err);
+      if (!isMountedRef.current) return;
       setImages([]);
       setEditImages([]);
     }
   }, [id]);
 
-  // ─────────────────────────────
-  // LOAD PROJECT + COMMENTS
-  // ─────────────────────────────
+  const fetchBids = useCallback(async () => {
+    if (!id || !authed) {
+      if (isMountedRef.current) setBids([]);
+      return;
+    }
+
+    setLoadingBids(true);
+    try {
+      const { data } = await api.get(`/projects/${id}/bids/`);
+      if (!isMountedRef.current) return;
+      setBids(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("[ProjectDetail] fetchBids failed:", err?.response || err);
+      if (!isMountedRef.current) return;
+      setBids([]);
+    } finally {
+      if (isMountedRef.current) setLoadingBids(false);
+    }
+  }, [id, authed]);
+
   const fetchAll = useCallback(async () => {
     if (!id) return;
+
+    setPageLoading(true);
 
     try {
       const [{ data: meta }, { data: cmts }] = await Promise.all([
         api.get(`/projects/${id}/`),
         api.get(`/projects/${id}/comments/`).catch(() => ({ data: [] })),
       ]);
+
+      if (!isMountedRef.current) return;
 
       setProject(meta || null);
       setComments(Array.isArray(cmts) ? cmts : []);
@@ -302,11 +364,14 @@ export default function ProjectDetail() {
       await refreshImages();
     } catch (err) {
       console.error("[ProjectDetail] fetchAll failed:", err);
+      if (!isMountedRef.current) return;
       setProject(null);
       setImages([]);
       setComments([]);
       setEditImages([]);
       setEditCoverImageId(null);
+    } finally {
+      if (isMountedRef.current) setPageLoading(false);
     }
   }, [id, refreshImages]);
 
@@ -314,9 +379,10 @@ export default function ProjectDetail() {
     fetchAll();
   }, [fetchAll]);
 
-  // ─────────────────────────────
-  // INITIAL SAVED STATE
-  // ─────────────────────────────
+  useEffect(() => {
+    fetchBids();
+  }, [fetchBids]);
+
   useEffect(() => {
     if (!authed || !project || !meUser) {
       setIsSaved(false);
@@ -337,9 +403,9 @@ export default function ProjectDetail() {
       try {
         const { data } = await api.get(`/projects/${project.id}/favorite/`);
         const favored = !!(data?.is_favorited ?? data?.favorited ?? data?.saved ?? data?.is_saved ?? false);
-        if (!cancelled) setIsSaved(favored);
-      } catch (err) {
-        if (cancelled) return;
+        if (!cancelled && isMountedRef.current) setIsSaved(favored);
+      } catch {
+        if (cancelled || !isMountedRef.current) return;
         setIsSaved(false);
       }
     })();
@@ -362,15 +428,15 @@ export default function ProjectDetail() {
         } catch (err) {
           if (err?.response?.status !== 404) throw err;
         }
-        setIsSaved(false);
+        if (isMountedRef.current) setIsSaved(false);
       } else {
         try {
           await api.post(`/projects/${projectId}/favorite/`);
-          setIsSaved(true);
+          if (isMountedRef.current) setIsSaved(true);
         } catch (err) {
           const status = err?.response?.status;
           if (status === 404 || status === 409 || status === 400) {
-            setIsSaved(true);
+            if (isMountedRef.current) setIsSaved(true);
           } else {
             throw err;
           }
@@ -383,13 +449,10 @@ export default function ProjectDetail() {
       const msg = data?.detail || data?.message || err?.message || "Failed to update saved state.";
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
-      setSaveBusy(false);
+      if (isMountedRef.current) setSaveBusy(false);
     }
   }
 
-  // ─────────────────────────────
-  // IMAGE NAVIGATION (for modal)
-  // ─────────────────────────────
   const nextImage = useCallback(() => {
     if (!images.length) return;
     setActiveImageIdx((idx) => (idx + 1) % images.length);
@@ -415,9 +478,6 @@ export default function ProjectDetail() {
     return () => window.removeEventListener("keydown", handler);
   }, [commentsOpen, nextImage, prevImage]);
 
-  // ─────────────────────────────
-  // COMMENTS HELPERS
-  // ─────────────────────────────
   const roots = useMemo(() => comments.filter((c) => !c.in_reply_to), [comments]);
 
   const repliesByParent = useMemo(
@@ -431,6 +491,20 @@ export default function ProjectDetail() {
       }, {}),
     [comments]
   );
+
+  const myBid = useMemo(() => {
+    if (!myUsername) return null;
+    return (
+      bids.find(
+        (b) =>
+          (b.contractor_username || "").toLowerCase() === myUsername.toLowerCase()
+      ) || null
+    );
+  }, [bids, myUsername]);
+
+  const incomingBids = useMemo(() => {
+    return isOwnerUser ? bids : [];
+  }, [bids, isOwnerUser]);
 
   async function submitComment(e) {
     e.preventDefault();
@@ -456,8 +530,9 @@ export default function ProjectDetail() {
     try {
       await api.post(`/projects/${id}/comments/`, payload);
       const { data: fresh } = await api.get(`/projects/${id}/comments/`);
-      setComments(Array.isArray(fresh) ? fresh : []);
+      if (!isMountedRef.current) return;
 
+      setComments(Array.isArray(fresh) ? fresh : []);
       setCommentText("");
       setCommentRating(null);
       setReplyingTo(null);
@@ -472,9 +547,11 @@ export default function ProjectDetail() {
         data?.message ||
         "Failed to post comment.";
 
-      setCommentError(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
+      if (isMountedRef.current) {
+        setCommentError(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
+      }
     } finally {
-      setCommentBusy(false);
+      if (isMountedRef.current) setCommentBusy(false);
     }
   }
 
@@ -489,7 +566,7 @@ export default function ProjectDetail() {
   }
 
   function startEditComment(comment) {
-    if (comment?.testimonial_published) return; // lock
+    if (comment?.testimonial_published) return;
     setEditingCommentId(comment.id);
     setEditingText(comment.text || "");
     setEditingRating(comment.rating || null);
@@ -503,12 +580,13 @@ export default function ProjectDetail() {
 
   async function saveEditComment(comment) {
     if (!editingText.trim()) return;
-    if (comment?.testimonial_published) return; // lock
+    if (comment?.testimonial_published) return;
     setEditBusy(true);
     try {
       const patch = { text: editingText.trim(), rating: editingRating || null };
 
       const { data } = await api.patch(`/projects/${id}/comments/${comment.id}/`, patch);
+      if (!isMountedRef.current) return;
 
       setComments((prev) =>
         prev.map((c) =>
@@ -522,7 +600,7 @@ export default function ProjectDetail() {
       console.error("edit comment error:", err?.response || err);
       alert(err?.response?.data?.detail || "Failed to update comment.");
     } finally {
-      setEditBusy(false);
+      if (isMountedRef.current) setEditBusy(false);
     }
   }
 
@@ -534,6 +612,7 @@ export default function ProjectDetail() {
     if (!window.confirm("Delete this comment? This cannot be undone.")) return;
     try {
       await api.delete(`/projects/${id}/comments/${comment.id}/`);
+      if (!isMountedRef.current) return;
       setComments((prev) => prev.filter((c) => c.id !== comment.id && c.in_reply_to !== comment.id));
     } catch (err) {
       console.error("delete comment error:", err?.response || err);
@@ -541,9 +620,6 @@ export default function ProjectDetail() {
     }
   }
 
-  // ─────────────────────────────
-  // PROJECT EDIT SAVE HANDLERS (for ProjectEditorCard)
-  // ─────────────────────────────
   async function handleSaveEdits(e) {
     if (e?.preventDefault) e.preventDefault();
     if (!project) return;
@@ -596,6 +672,8 @@ export default function ProjectDetail() {
         }
       }
 
+      if (!isMountedRef.current) return;
+
       setProject(data);
 
       setEditForm((prev) => ({
@@ -619,7 +697,7 @@ export default function ProjectDetail() {
       if (normalizedCoverId != null) setEditCoverImageId(Number(normalizedCoverId));
 
       await refreshImages();
-      setIsEditing(false);
+      if (isMountedRef.current) setIsEditing(false);
     } catch (err) {
       console.error("[handleSaveEdits] error:", err?.response || err);
 
@@ -637,10 +715,10 @@ export default function ProjectDetail() {
       if (typeof msg !== "string") msg = JSON.stringify(msg, null, 2);
 
       const full = `Save failed${status ? ` (status ${status})` : ""}: ${msg}`;
-      setEditError(full);
+      if (isMountedRef.current) setEditError(full);
       alert(full);
     } finally {
-      setSavingEdits(false);
+      if (isMountedRef.current) setSavingEdits(false);
     }
   }
 
@@ -654,6 +732,7 @@ export default function ProjectDetail() {
       await refreshImages();
     } catch (e) {
       alert(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
+      if (!isMountedRef.current) return;
       setEditImages((prev) => prev.map((x) => (x.id === img.id ? { ...x, _saving: false } : x)));
     }
   }
@@ -667,6 +746,164 @@ export default function ProjectDetail() {
     } catch (e) {
       console.error("delete image error:", e?.response || e);
       alert("Failed to delete image.");
+    }
+  }
+
+  function resetBidForm() {
+    setEditingBidId(null);
+    setBidForm({
+      price_type: "fixed",
+      amount: "",
+      amount_min: "",
+      amount_max: "",
+      timeline_text: "",
+      proposal_text: "",
+      included_text: "",
+      excluded_text: "",
+      payment_terms: "",
+      valid_until: "",
+      attachment: null,
+    });
+    setBidError("");
+    setBidSuccess("");
+  }
+
+  function updateBidField(key) {
+    return (e) => {
+      const value = e.target.value;
+      setBidForm((prev) => ({ ...prev, [key]: value }));
+    };
+  }
+
+  function handleBidAttachmentChange(e) {
+    const file = e.target.files?.[0] || null;
+    setBidForm((prev) => ({ ...prev, attachment: file }));
+    e.target.value = "";
+  }
+
+  function reviseBid(bid) {
+    if (!bid?.id || !bid?.latest_version) return;
+
+    const latest = bid.latest_version;
+
+    setEditingBidId(bid.id);
+    setBidForm({
+      price_type: latest.price_type || "fixed",
+      amount: latest.amount ?? "",
+      amount_min: latest.amount_min ?? "",
+      amount_max: latest.amount_max ?? "",
+      timeline_text: latest.timeline_text || "",
+      proposal_text: latest.proposal_text || "",
+      included_text: latest.included_text || "",
+      excluded_text: latest.excluded_text || "",
+      payment_terms: latest.payment_terms || "",
+      valid_until: latest.valid_until || "",
+      attachment: null,
+    });
+
+    setBidError("");
+    setBidSuccess("");
+    setBidOpen(true);
+  }
+
+  async function runBidAction(bidId, action) {
+    setBidActionBusyId(bidId);
+    try {
+      await api.post(`/bids/${bidId}/${action}/`);
+      await fetchBids();
+
+      if (action === "accept" || action === "decline") {
+        const refreshed = await api.get(`/projects/${id}/bids/`).catch(() => null);
+        if (refreshed?.data && isMountedRef.current) {
+          const nextBids = Array.isArray(refreshed.data) ? refreshed.data : [];
+          setBids(nextBids);
+
+          if (activeBid?.id === bidId) {
+            const updatedActive = nextBids.find((b) => b.id === bidId) || null;
+            setActiveBid(updatedActive);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[ProjectDetail] ${action} bid failed:`, err?.response || err);
+      alert(err?.response?.data?.detail || `Failed to ${action} bid.`);
+    } finally {
+      if (isMountedRef.current) setBidActionBusyId(null);
+    }
+  }
+
+  async function submitBid(e) {
+    e.preventDefault();
+
+    if (!authed) {
+      setBidError("You need to be logged in to submit a bid.");
+      return;
+    }
+
+    if (!project?.id) {
+      setBidError("Missing project.");
+      return;
+    }
+
+    setBidBusy(true);
+    setBidError("");
+    setBidSuccess("");
+
+    try {
+      const fd = new FormData();
+
+      fd.append("price_type", bidForm.price_type);
+
+      if (bidForm.price_type === "fixed") {
+        fd.append("amount", bidForm.amount || "");
+      } else {
+        fd.append("amount_min", bidForm.amount_min || "");
+        fd.append("amount_max", bidForm.amount_max || "");
+      }
+
+      fd.append("timeline_text", bidForm.timeline_text || "");
+      fd.append("proposal_text", bidForm.proposal_text || "");
+      fd.append("included_text", bidForm.included_text || "");
+      fd.append("excluded_text", bidForm.excluded_text || "");
+      fd.append("payment_terms", bidForm.payment_terms || "");
+      fd.append("valid_until", bidForm.valid_until || "");
+
+      if (bidForm.attachment) {
+        fd.append("attachment", bidForm.attachment);
+      }
+
+      const wasEditingBid = !!editingBidId;
+
+      if (editingBidId) {
+        await api.post(`/bids/${editingBidId}/revise/`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await api.post(`/projects/${project.id}/bids/`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      await fetchBids();
+      if (!isMountedRef.current) return;
+
+      resetBidForm();
+      setBidSuccess(wasEditingBid ? "Bid revised." : "Bid submitted.");
+      setBidOpen(false);
+    } catch (err) {
+      console.error("[ProjectDetail] submitBid failed:", err?.response || err);
+      const data = err?.response?.data;
+      const msg =
+        data?.detail ||
+        data?.message ||
+        data?.non_field_errors ||
+        (typeof data === "string" ? data : null) ||
+        "Could not submit bid.";
+      if (isMountedRef.current) {
+        setBidError(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
+      }
+    } finally {
+      if (isMountedRef.current) setBidBusy(false);
     }
   }
 
@@ -685,9 +922,284 @@ export default function ProjectDetail() {
     return images?.[0]?.url || null;
   }, [editCoverImageId, editForm.cover_image_id, editImages, images]);
 
-  // ─────────────────────────────
-  // RENDER
-  // ─────────────────────────────
+  function getBidContractorMeta(bid) {
+    const displayName =
+      bid?.contractor_display_name ||
+      bid?.contractor_name ||
+      bid?.contractor_full_name ||
+      bid?.contractor_profile?.display_name ||
+      bid?.contractor_username ||
+      "Contractor";
+
+    const avatarUrl = toUrl(
+      bid?.contractor_avatar_url ||
+        bid?.contractor_logo_url ||
+        bid?.contractor_profile?.logo_url ||
+        bid?.contractor_profile?.avatar_url ||
+        bid?.contractor_profile?.logo ||
+        bid?.contractor_profile?.avatar ||
+        ""
+    );
+
+    return { displayName, avatarUrl };
+  }
+
+  function renderBidCard(bid, { ownerView = false, compact = false } = {}) {
+    const latest = bid?.latest_version;
+    if (!latest) return null;
+
+    const isRange = latest.price_type === "range";
+
+    const priceLabel = isRange
+      ? `${latest.amount_min ?? "—"} – ${latest.amount_max ?? "—"}`
+      : `${latest.amount ?? "—"}`;
+
+    const statusValue = latest.status || bid.status || "submitted";
+    const busy = bidActionBusyId === bid.id;
+    const contractor = getBidContractorMeta(bid);
+
+    if (compact && ownerView) {
+      return (
+        <button
+          key={bid.id}
+          type="button"
+          onClick={() => setActiveBid(bid)}
+          className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:shadow-md"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-3">
+              {contractor.avatarUrl ? (
+                <img
+                  src={contractor.avatarUrl}
+                  alt={contractor.displayName}
+                  className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+                  {getInitials(contractor.displayName)}
+                </div>
+              )}
+
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-900">
+                  {contractor.displayName}
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-500 capitalize">
+                  {statusValue}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div className="text-sm font-bold text-slate-900">{priceLabel}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">
+                {latest.valid_until || "No expiry"}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Timeline
+              </div>
+              <div className="mt-1 text-sm text-slate-800">
+                {latest.timeline_text || "—"}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Price type
+              </div>
+              <div className="mt-1 text-sm text-slate-800">
+                {isRange ? "Estimate range" : "Fixed price"}
+              </div>
+            </div>
+          </div>
+
+          {latest.proposal_text ? (
+            <div className="mt-3">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Proposal
+              </div>
+              <div className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-slate-700">
+                {latest.proposal_text}
+              </div>
+            </div>
+          ) : null}
+        </button>
+      );
+    }
+
+    return (
+      <div
+        key={bid.id}
+        className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex items-center gap-3">
+            {ownerView ? (
+              contractor.avatarUrl ? (
+                <img
+                  src={contractor.avatarUrl}
+                  alt={contractor.displayName}
+                  className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-xs font-semibold text-slate-700">
+                  {getInitials(contractor.displayName)}
+                </div>
+              )
+            ) : null}
+
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-900">
+                {ownerView ? contractor.displayName : "Your Bid"}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Status: <span className="font-medium capitalize">{statusValue}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+            {isRange ? "Estimate range" : "Fixed price"}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Timeline
+            </div>
+            <div className="mt-1 text-sm text-slate-800">
+              {latest.timeline_text || "—"}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Valid until
+            </div>
+            <div className="mt-1 text-sm text-slate-800">
+              {latest.valid_until || "—"}
+            </div>
+          </div>
+        </div>
+
+        {latest.proposal_text ? (
+          <div className="mt-4">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Proposal
+            </div>
+            <div className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+              {latest.proposal_text}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Included
+            </div>
+            <div className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+              {latest.included_text || "—"}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Excluded
+            </div>
+            <div className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+              {latest.excluded_text || "—"}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Payment terms
+            </div>
+            <div className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+              {latest.payment_terms || "—"}
+            </div>
+          </div>
+        </div>
+
+        {latest.attachment_url ? (
+          <div className="mt-4">
+            <a
+              href={latest.attachment_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-blue-600 hover:underline"
+            >
+              View attachment
+            </a>
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!ownerView && statusValue !== "accepted" && statusValue !== "withdrawn" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => reviseBid(bid)}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Revise
+              </button>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => runBidAction(bid.id, "withdraw")}
+                className="rounded-xl border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                {busy ? "Working…" : "Withdraw"}
+              </button>
+            </>
+          ) : null}
+
+          {ownerView && statusValue !== "accepted" && statusValue !== "declined" ? (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => runBidAction(bid.id, "accept")}
+                className="rounded-xl bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+              >
+                {busy ? "Working…" : "Accept"}
+              </button>
+
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => runBidAction(bid.id, "decline")}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {busy ? "Working…" : "Decline"}
+              </button>
+            </>
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex items-end justify-end border-t border-slate-200 pt-4">
+          <div className="text-right">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Price
+            </div>
+            <div className="mt-1 text-lg font-bold text-slate-900">
+              {priceLabel}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const renderCommentBlock = (c, isReply = false) => {
     const replies = repliesByParent[c.id] || [];
 
@@ -725,7 +1237,6 @@ export default function ProjectDetail() {
           <span>{c.created_at ? new Date(c.created_at).toLocaleString() : ""}</span>
         </div>
 
-        {/* Always show stars placeholder (even if no rating) */}
         <div className="mb-1 flex items-center gap-1 text-[12px]">
           {[1, 2, 3, 4, 5].map((n) => (
             <span key={n} className={(c.rating || 0) >= n ? "text-amber-500" : "text-slate-300"}>
@@ -804,26 +1315,19 @@ export default function ProjectDetail() {
     );
   };
 
+  if (pageLoading) {
+    return (
+      <div className="flex min-h-[280px] items-center justify-center">
+        <div className="text-sm text-slate-500">Loading project…</div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      {/* Breadcrumb */}
       <div className="mb-4 flex items-center justify-between">
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {false && !isMine ? (
-              <button
-                type="button"
-                onClick={toggleLike}
-                disabled={!authed || likeBusy}
-                className="rounded-full bg-white/10 px-4 py-2 text-sm text-white backdrop-blur hover:bg-white/20 disabled:opacity-60"
-                title={authed ? "Like this profile" : "Login to like profiles"}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <span aria-hidden>{liked ? "♥" : "♡"}</span>
-                  <span>{likeCount}</span>
-                </span>
-              </button>
-            ) : null}
             <span className="mx-1">/</span>
             <span className="text-slate-700">Project</span>
           </div>
@@ -833,9 +1337,7 @@ export default function ProjectDetail() {
         </Link>
       </div>
 
-      {/* Main project card */}
       <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
-        {/* Cover banner */}
         {coverUrl && (
           <div className="relative h-[200px] w-full bg-slate-200">
             <img src={coverUrl} alt="" className="h-full w-full object-cover" />
@@ -843,7 +1345,6 @@ export default function ProjectDetail() {
           </div>
         )}
 
-        {/* header */}
         <div
           className={
             "border-b border-slate-100 px-5 py-4 text-white sm:px-6 " +
@@ -853,7 +1354,6 @@ export default function ProjectDetail() {
           }
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
-            {/* LEFT: title + meta */}
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold sm:text-2xl">{project?.title || `Project #${id}`}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
@@ -876,7 +1376,6 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            {/* RIGHT: actions */}
             <div className="flex items-start gap-2">
               {project?.owner_username ? (
                 <Link
@@ -904,17 +1403,63 @@ export default function ProjectDetail() {
                   {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
                 </Button>
               ) : null}
+
+              {authed && project && !isOwnerUser ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setBidError("");
+                    setBidSuccess("");
+                    setBidOpen(true);
+                  }}
+                  className="min-w-[110px] justify-center rounded-full bg-sky-500 px-6 text-sm font-semibold text-white shadow-sm hover:bg-sky-600 active:scale-[0.99]"
+                >
+                  Send Bid
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
 
-        {/* body */}
         <div className="space-y-6 p-4 sm:p-6">
           {project?.summary && (
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
           )}
 
-          {/* OWNER-ONLY PROJECT EDIT CARD */}
+          {authed && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {isOwnerUser ? "Incoming bids" : "Your bid"}
+                </div>
+                {loadingBids ? (
+                  <div className="text-[11px] text-slate-500">Loading…</div>
+                ) : null}
+              </div>
+
+              {isOwnerUser ? (
+                incomingBids.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                    No bids submitted yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {incomingBids.map((bid) =>
+                      renderBidCard(bid, { ownerView: true, compact: true })
+                    )}
+                  </div>
+                )
+              ) : myBid ? (
+                renderBidCard(myBid, { ownerView: false, compact: false })
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                  You have not submitted a bid for this project yet.
+                </div>
+              )}
+            </div>
+          )}
+
           {isOwnerUser && isEditing && project && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0">
               <ProjectEditorCard
@@ -951,7 +1496,6 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Meta / Project details */}
           {(project?.location || project?.budget || project?.sqf || project?.highlights) && (
             <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -981,7 +1525,6 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Materials / tools used */}
           {(project?.material_url ||
             project?.material_label ||
             (Array.isArray(project?.extra_links) && project.extra_links.length > 0)) && (
@@ -1067,7 +1610,6 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Project media */}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1108,7 +1650,6 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          {/* map */}
           {mapSrc && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -1135,7 +1676,6 @@ export default function ProjectDetail() {
         </div>
       </Card>
 
-      {/* comment trigger under project */}
       <div className="flex justify-end">
         <button
           type="button"
@@ -1147,11 +1687,9 @@ export default function ProjectDetail() {
         </button>
       </div>
 
-      {/* FULLSCREEN MODAL: images + comments */}
       {commentsOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-2 sm:p-4">
           <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl md:h-[90vh] md:flex-row">
-            {/* Left: image area */}
             <div className="relative flex-1 bg-black md:min-w-[60%]">
               {currentImage ? (
                 <>
@@ -1223,7 +1761,6 @@ export default function ProjectDetail() {
               )}
             </div>
 
-            {/* Right: comments column */}
             <div className="flex w-full max-w-sm flex-col border-t border-slate-200 bg-slate-50 md:h-full md:border-l md:border-t-0">
               <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
                 <div className="min-w-0">
@@ -1254,13 +1791,11 @@ export default function ProjectDetail() {
               <div className="border-t border-slate-200 bg-white px-3 py-3">
                 {authed ? (
                   <form onSubmit={submitComment} className="space-y-2">
-                    {/* Disclaimer (always visible) */}
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
                       By commenting, you agree this comment may be used by the project owner as a public testimonial
                       (with your username).
                     </div>
 
-                    {/* Rating (optional) */}
                     <div className="flex items-center justify-between">
                       <div className="text-[11px] font-medium text-slate-600">Rating (optional)</div>
                       <Stars value={commentRating || 0} onChange={setCommentRating} disabled={commentBusy} />
@@ -1307,6 +1842,244 @@ export default function ProjectDetail() {
           </div>
         </div>
       )}
+
+      {bidOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">
+                  {editingBidId ? "Revise Bid" : "Send Bid"}
+                </div>
+                <div className="text-xs text-slate-500">
+                  Submit a project-specific bid for this job
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBidOpen(false);
+                  setBidError("");
+                }}
+                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={submitBid} className="space-y-4 px-5 py-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Price type
+                  </label>
+                  <select
+                    value={bidForm.price_type}
+                    onChange={updateBidField("price_type")}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="fixed">Fixed price</option>
+                    <option value="range">Estimate range</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Valid until
+                  </label>
+                  <Input
+                    type="date"
+                    value={bidForm.valid_until}
+                    onChange={updateBidField("valid_until")}
+                  />
+                </div>
+              </div>
+
+              {bidForm.price_type === "fixed" ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Amount
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={bidForm.amount}
+                    onChange={updateBidField("amount")}
+                    placeholder="e.g. 4500"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Minimum amount
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={bidForm.amount_min}
+                      onChange={updateBidField("amount_min")}
+                      placeholder="e.g. 5000"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Maximum amount
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={bidForm.amount_max}
+                      onChange={updateBidField("amount_max")}
+                      placeholder="e.g. 6500"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Estimated timeline
+                </label>
+                <Input
+                  value={bidForm.timeline_text}
+                  onChange={updateBidField("timeline_text")}
+                  placeholder="e.g. 2–3 weeks"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Proposal
+                </label>
+                <Textarea
+                  rows={4}
+                  value={bidForm.proposal_text}
+                  onChange={updateBidField("proposal_text")}
+                  placeholder="Describe your approach, scope understanding, and what the client should know."
+                  className="min-h-[110px]"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Included
+                  </label>
+                  <Textarea
+                    rows={4}
+                    value={bidForm.included_text}
+                    onChange={updateBidField("included_text")}
+                    placeholder="Labor, installation, cleanup, standard materials..."
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Excluded
+                  </label>
+                  <Textarea
+                    rows={4}
+                    value={bidForm.excluded_text}
+                    onChange={updateBidField("excluded_text")}
+                    placeholder="Permit fees, specialty finishes, hidden damage..."
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Payment terms
+                </label>
+                <Textarea
+                  rows={3}
+                  value={bidForm.payment_terms}
+                  onChange={updateBidField("payment_terms")}
+                  placeholder="30% deposit, 40% mid-project, 30% on completion"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Attachment (optional)
+                </label>
+                <input
+                  type="file"
+                  onChange={handleBidAttachmentChange}
+                  className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-slate-200"
+                />
+                {bidForm.attachment ? (
+                  <div className="mt-1 text-xs text-slate-500">{bidForm.attachment.name}</div>
+                ) : null}
+              </div>
+
+              {bidError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {bidError}
+                </div>
+              )}
+
+              {bidSuccess && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  {bidSuccess}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBidOpen(false);
+                    setBidError("");
+                  }}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+
+                <Button type="submit" disabled={bidBusy}>
+                  {bidBusy ? "Submitting…" : editingBidId ? "Save Revision" : "Submit Bid"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {activeBid ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">Bid Details</div>
+                <div className="text-xs text-slate-500">
+                  Full estimate and decision controls
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveBid(null)}
+                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="max-h-[80vh] overflow-y-auto p-5">
+              {renderBidCard(activeBid, { ownerView: true, compact: false })}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

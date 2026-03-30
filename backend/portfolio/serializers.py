@@ -15,6 +15,8 @@ from .models import (
     PrivateMessage,
     ProjectFavorite,
     MessageAttachment,
+    ProjectBid,
+    ProjectBidVersion,
 )
 
 
@@ -449,3 +451,141 @@ class MessageThreadSerializer(serializers.ModelSerializer):
         if not user:
             return False
         return bool(obj.is_blocked_for(user))
+
+
+# -------------------------------------------------------------------
+# Project bids
+# -------------------------------------------------------------------
+class ProjectBidVersionSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+    attachment_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectBidVersion
+        fields = [
+            "id",
+            "bid",
+            "version_number",
+            "price_type",
+            "amount",
+            "amount_min",
+            "amount_max",
+            "timeline_text",
+            "proposal_text",
+            "included_text",
+            "excluded_text",
+            "payment_terms",
+            "valid_until",
+            "attachment",
+            "attachment_url",
+            "created_by",
+            "created_by_username",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "bid",
+            "version_number",
+            "attachment_url",
+            "created_by",
+            "created_by_username",
+            "created_at",
+        ]
+
+    def get_attachment_url(self, obj):
+        request = self.context.get("request")
+        if obj.attachment and hasattr(obj.attachment, "url"):
+            url = obj.attachment.url
+            return request.build_absolute_uri(url) if request else url
+        return None
+
+    def validate(self, attrs):
+        price_type = attrs.get("price_type", getattr(self.instance, "price_type", None))
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        amount_min = attrs.get("amount_min", getattr(self.instance, "amount_min", None))
+        amount_max = attrs.get("amount_max", getattr(self.instance, "amount_max", None))
+
+        if price_type == ProjectBidVersion.PRICE_TYPE_FIXED:
+            if amount is None:
+                raise serializers.ValidationError(
+                    {"amount": "Amount is required for a fixed-price bid."}
+                )
+            if amount_min is not None or amount_max is not None:
+                raise serializers.ValidationError(
+                    {"price_type": "Use amount only for a fixed-price bid."}
+                )
+
+        elif price_type == ProjectBidVersion.PRICE_TYPE_RANGE:
+            if amount_min is None or amount_max is None:
+                raise serializers.ValidationError(
+                    {"price_type": "Amount min and amount max are required for a range bid."}
+                )
+            if amount is not None:
+                raise serializers.ValidationError(
+                    {"price_type": "Use amount min/max only for a range bid."}
+                )
+            if amount_min > amount_max:
+                raise serializers.ValidationError(
+                    {"amount_max": "Amount max must be greater than or equal to amount min."}
+                )
+
+        return attrs
+
+
+class ProjectBidSerializer(serializers.ModelSerializer):
+    contractor_username = serializers.CharField(source="contractor.username", read_only=True)
+    project_title = serializers.CharField(source="project.title", read_only=True)
+    latest_version = serializers.SerializerMethodField()
+    accepted_version_id = serializers.IntegerField(source="accepted_version.id", read_only=True)
+    is_owner = serializers.SerializerMethodField()
+    is_contractor = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectBid
+        fields = [
+            "id",
+            "project",
+            "project_title",
+            "contractor",
+            "contractor_username",
+            "status",
+            "accepted_version",
+            "accepted_version_id",
+            "latest_version",
+            "is_owner",
+            "is_contractor",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "project",
+            "project_title",
+            "contractor",
+            "contractor_username",
+            "accepted_version",
+            "accepted_version_id",
+            "latest_version",
+            "is_owner",
+            "is_contractor",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_latest_version(self, obj):
+        latest = obj.latest_version
+        if not latest:
+            return None
+        return ProjectBidVersionSerializer(latest, context=self.context).data
+
+    def get_is_owner(self, obj):
+        request = self.context.get("request")
+        return bool(
+            request and request.user.is_authenticated and obj.project.owner_id == request.user.id
+        )
+
+    def get_is_contractor(self, obj):
+        request = self.context.get("request")
+        return bool(
+            request and request.user.is_authenticated and obj.contractor_id == request.user.id
+        )

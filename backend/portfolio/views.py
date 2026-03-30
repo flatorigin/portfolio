@@ -6,15 +6,13 @@ from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth import get_user_model
 
-from rest_framework.generics import ListAPIView
 from rest_framework import viewsets, permissions, status, generics
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from accounts.models import Profile
 
 from .models import (
     Project,
@@ -24,6 +22,8 @@ from .models import (
     PrivateMessage,
     ProjectFavorite,
     MessageAttachment,
+    ProjectBid,
+    ProjectBidVersion,
 )
 from .serializers import (
     ProjectSerializer,
@@ -32,10 +32,13 @@ from .serializers import (
     MessageThreadSerializer,
     PrivateMessageSerializer,
     ProjectFavoriteSerializer,
+    ProjectBidSerializer,
+    ProjectBidVersionSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 
 User = get_user_model()
+
 
 # ---------------------------------------------------
 # Comments: list + create
@@ -43,44 +46,29 @@ User = get_user_model()
 #   POST /api/projects/<pk>/comments/
 # ---------------------------------------------------
 class ProjectCommentListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/projects/<pk>/comments/   -> list comments for project
-    POST /api/projects/<pk>/comments/   -> add comment (auth required)
-    """
     serializer_class = ProjectCommentSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
         project_id = self.kwargs["pk"]
-        return (
-            ProjectComment.objects
-            .filter(project_id=project_id)
-            .order_by("-created_at")
-        )
+        return ProjectComment.objects.filter(project_id=project_id).order_by("-created_at")
 
     def perform_create(self, serializer):
-        """Attach the project + author when creating a new comment."""
         project = get_object_or_404(Project, pk=self.kwargs["pk"])
         serializer.save(project=project, author=self.request.user)
 
 
 class ProjectCommentDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    Retrieve, update, or delete a single comment for a project.
-    Only the author can update/delete.
-    URL: /api/projects/<pk>/comments/<comment_id>/
-    """
     serializer_class = ProjectCommentSerializer
     permission_classes = [
         permissions.IsAuthenticatedOrReadOnly,
         IsCommentAuthorOrReadOnly,
     ]
-    lookup_field = "id"               # model field
-    lookup_url_kwarg = "comment_id"   # URL kwarg: <int:comment_id>
+    lookup_field = "id"
+    lookup_url_kwarg = "comment_id"
 
     def get_queryset(self):
         project_id = self.kwargs["pk"]
-        # Only allow comments belonging to this project
         return ProjectComment.objects.filter(project_id=project_id)
 
     def perform_update(self, serializer):
@@ -94,11 +82,8 @@ class ProjectCommentDetailView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied("This comment is published as a testimonial and cannot be deleted.")
         instance.delete()
 
+
 class PublishTestimonialView(APIView):
-    """
-    POST /api/projects/<pk>/comments/<comment_id>/publish-testimonial/
-    Owner-only: promotes a comment to a public testimonial.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, comment_id):
@@ -108,7 +93,6 @@ class PublishTestimonialView(APIView):
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
 
         comment = get_object_or_404(ProjectComment, id=comment_id, project_id=project.id)
-
         comment.is_testimonial = True
         comment.testimonial_published = True
         comment.testimonial_published_at = timezone.now()
@@ -117,29 +101,24 @@ class PublishTestimonialView(APIView):
         ser = ProjectCommentSerializer(comment, context={"request": request})
         return Response(ser.data, status=status.HTTP_200_OK)
 
+
 class UnpublishTestimonialView(APIView):
-    """
-    POST /api/projects/<pk>/comments/<comment_id>/unpublish-testimonial/
-    Owner-only: removes comment from testimonial display.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, comment_id):
         project = get_object_or_404(Project, pk=pk)
 
-        # ✅ only project owner can unpublish
         if project.owner_id != request.user.id:
             return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
 
         comment = get_object_or_404(ProjectComment, id=comment_id, project_id=project.id)
-
         comment.testimonial_published = False
         comment.testimonial_published_at = None
-        # (optional) keep is_testimonial=True as “was promoted once”
         comment.save(update_fields=["testimonial_published", "testimonial_published_at"])
 
         ser = ProjectCommentSerializer(comment, context={"request": request})
         return Response(ser.data, status=status.HTTP_200_OK)
+
 
 # ---------------------------------------------------
 # Projects + images + favorites
@@ -152,10 +131,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated], url_path="mine")
     def mine(self, request):
-        """
-        GET /api/projects/mine/
-        Returns ONLY projects owned by the current user.
-        """
         qs = Project.objects.select_related("owner").filter(owner=request.user).order_by("-updated_at")
         ser = self.get_serializer(qs, many=True, context={"request": request})
         return Response(ser.data)
@@ -164,19 +139,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
         qs = Project.objects.select_related("owner").all()
         request = self.request
 
-        # Only public projects for anonymous users
         if not request.user.is_authenticated:
             return qs.filter(is_public=True)
 
-        # For logged in users: see own + public
         return qs.filter(Q(is_public=True) | Q(owner=request.user)).distinct()
 
     def perform_create(self, serializer):
-        # Ensure owner is always the current user
         serializer.save(owner=self.request.user)
 
     def perform_update(self, serializer):
-        # Prevent owner from being changed via API
         serializer.save(owner=self.request.user)
 
     def destroy(self, request, *args, **kwargs):
@@ -185,7 +156,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to delete this project.")
 
         with transaction.atomic():
-            # Delete image files + rows
             imgs = ProjectImage.objects.filter(project=project)
             for img in imgs:
                 try:
@@ -195,12 +165,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     pass
             imgs.delete()
 
-            # Delete comments + favorites
             ProjectComment.objects.filter(project=project).delete()
             ProjectFavorite.objects.filter(project=project).delete()
 
-            # ✅ Correct field name for your MessageThread model
-            MessageThread.objects.filter(origin_project=project).delete()
+            MessageThread.objects.filter(project=project).delete()
+            ProjectBid.objects.filter(project=project).delete()
 
             project.delete()
 
@@ -213,10 +182,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get", "post"], url_path="images")
     def images(self, request, pk=None):
-        """
-        GET  /api/projects/:id/images/         → list images
-        POST /api/projects/:id/images/         → upload one or more images
-        """
         project = self.get_object()
 
         if request.method.lower() == "get":
@@ -224,16 +189,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ser = ProjectImageSerializer(qs, many=True, context={"request": request})
             return Response(ser.data)
 
-        # POST: upload images
         if project.owner != request.user:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         files = request.FILES.getlist("images")
-        captions = (
-            request.data.getlist("captions[]")
-            or request.data.getlist("captions")
-            or []
-        )
+        captions = request.data.getlist("captions[]") or request.data.getlist("captions") or []
 
         created = []
         base_order = project.images.count()
@@ -252,10 +212,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch", "delete"], url_path="images/(?P<img_id>[^/.]+)")
     def image_detail(self, request, pk=None, img_id=None):
-        """
-        PATCH /api/projects/:id/images/:img_id/   → update caption/alt/order (+ cover intent)
-        DELETE /api/projects/:id/images/:img_id/  → delete image
-        """
         project = self.get_object()
         try:
             img = ProjectImage.objects.get(id=img_id, project=project)
@@ -269,14 +225,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
             img.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-        # ---- 1) Detect cover intent BEFORE serializer validation
         cover_keys = ("is_cover", "is_cover_image", "is_cover_photo")
         wants_cover_flag = any(
             str(request.data.get(k, "")).lower() in ("1", "true", "yes", "on")
             for k in cover_keys
         )
 
-        # ---- 2) Make serializer-friendly mutable data (strip cover flags)
         data = request.data.copy()
         for k in cover_keys:
             if k in data:
@@ -292,7 +246,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         new_order = ser.validated_data.get("order", None)
 
-        # ---- 3) Plan A: any cover intent OR order=0 means "make this the cover"
         if wants_cover_flag or new_order == 0:
             with transaction.atomic():
                 ProjectImage.objects.filter(project=project).exclude(id=img.id).update(
@@ -300,7 +253,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 )
                 ser.save(order=0)
 
-            # Optional normalize (recommended)
             with transaction.atomic():
                 qs = list(ProjectImage.objects.filter(project=project).order_by("order", "id"))
                 for idx, row in enumerate(qs):
@@ -311,14 +263,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
             updated = ProjectImage.objects.get(id=img.id)
             return Response(
                 ProjectImageSerializer(updated, context={"request": request}).data,
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
-
-        # normal patch
         ser.save()
         return Response(ser.data, status=status.HTTP_200_OK)
-
 
     @action(
         detail=True,
@@ -327,11 +276,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         url_path="favorite",
     )
     def favorite(self, request, pk=None):
-        """
-        GET:    {"is_favorited": bool}
-        POST:   idempotent add -> {"is_favorited": true}
-        DELETE: idempotent remove -> {"is_favorited": false}
-        """
         project = self.get_object()
         user = request.user
 
@@ -344,7 +288,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ProjectFavorite.objects.get_or_create(user=user, project=project)
             return Response({"is_favorited": True}, status=status.HTTP_200_OK)
 
-        # DELETE
         qs.delete()
         return Response({"is_favorited": False}, status=status.HTTP_200_OK)
 
@@ -363,82 +306,329 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ser = self.get_serializer(qs, many=True, context={"request": request})
         return Response(ser.data)
 
+
 class FavoriteProjectListView(generics.ListAPIView):
-    """
-    GET /api/favorites/projects/
-    Returns favorites for the current user, newest first.
-    """
     serializer_class = ProjectFavoriteSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # newest first
         return (
             ProjectFavorite.objects
             .filter(user=self.request.user)
             .select_related("project", "project__owner")
             .order_by("-created_at", "-id")
         )
+
+
+# ---------------------------------------------------
+# Project bids
+# ---------------------------------------------------
+class ProjectBidListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/projects/<pk>/bids/
+    POST /api/projects/<pk>/bids/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_project(self):
+        return get_object_or_404(Project.objects.select_related("owner"), pk=self.kwargs["pk"])
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return ProjectBidVersionSerializer
+        return ProjectBidSerializer
+
+    def get_queryset(self):
+        project = self.get_project()
+        user = self.request.user
+
+        if project.owner_id == user.id:
+            return (
+                ProjectBid.objects.filter(project=project)
+                .select_related("project", "contractor", "accepted_version")
+                .prefetch_related("versions")
+                .order_by("-updated_at", "-id")
+            )
+
+        return (
+            ProjectBid.objects.filter(project=project, contractor=user)
+            .select_related("project", "contractor", "accepted_version")
+            .prefetch_related("versions")
+            .order_by("-updated_at", "-id")
+        )
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = ProjectBidSerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        project = self.get_project()
+        user = request.user
+
+        if project.owner_id == user.id:
+            return Response(
+                {"detail": "Project owners cannot bid on their own project."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not project.is_public:
+            return Response(
+                {"detail": "Bids are only allowed on public projects."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        bid, _created = ProjectBid.objects.get_or_create(
+            project=project,
+            contractor=user,
+            defaults={"status": ProjectBid.STATUS_DRAFT},
+        )
+
+        if bid.status == ProjectBid.STATUS_ACCEPTED:
+            return Response(
+                {"detail": "Accepted bids cannot be revised."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        version_serializer = ProjectBidVersionSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        version_serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            version = version_serializer.save(
+                bid=bid,
+                version_number=bid.next_version_number(),
+                created_by=user,
+            )
+
+            bid.status = (
+                ProjectBid.STATUS_SUBMITTED
+                if version.version_number == 1
+                else ProjectBid.STATUS_REVISED
+            )
+            bid.save(update_fields=["status", "updated_at"])
+
+        bid_serializer = ProjectBidSerializer(bid, context={"request": request})
+        return Response(bid_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ProjectBidDetailView(generics.RetrieveAPIView):
+    """
+    GET /api/bids/<bid_id>/
+    """
+    serializer_class = ProjectBidSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "bid_id"
+
+    def get_queryset(self):
+        user = self.request.user
+        return (
+            ProjectBid.objects.filter(Q(project__owner=user) | Q(contractor=user))
+            .select_related("project", "contractor", "accepted_version")
+            .prefetch_related("versions")
+            .order_by("-updated_at", "-id")
+        )
+
+
+class ProjectBidReviseView(APIView):
+    """
+    POST /api/bids/<bid_id>/revise/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request, bid_id, *args, **kwargs):
+        bid = get_object_or_404(
+            ProjectBid.objects.select_related("project", "contractor"),
+            id=bid_id,
+        )
+
+        if bid.contractor_id != request.user.id:
+            return Response(
+                {"detail": "Only the bidding contractor can revise this bid."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if bid.status == ProjectBid.STATUS_ACCEPTED:
+            return Response(
+                {"detail": "Accepted bids cannot be revised."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if bid.status == ProjectBid.STATUS_WITHDRAWN:
+            return Response(
+                {"detail": "Withdrawn bids cannot be revised."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        version_serializer = ProjectBidVersionSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        version_serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            version_serializer.save(
+                bid=bid,
+                version_number=bid.next_version_number(),
+                created_by=request.user,
+            )
+            bid.status = ProjectBid.STATUS_REVISED
+            bid.save(update_fields=["status", "updated_at"])
+
+        serializer = ProjectBidSerializer(bid, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ProjectBidAcceptView(APIView):
+    """
+    POST /api/bids/<bid_id>/accept/
+    Body optional: {"version_id": <id>}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bid_id, *args, **kwargs):
+        bid = get_object_or_404(
+            ProjectBid.objects.select_related("project", "contractor", "accepted_version"),
+            id=bid_id,
+        )
+
+        if bid.project.owner_id != request.user.id:
+            return Response(
+                {"detail": "Only the project owner can accept a bid."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        version_id = request.data.get("version_id")
+        if version_id:
+            accepted_version = get_object_or_404(ProjectBidVersion, id=version_id, bid=bid)
+        else:
+            accepted_version = bid.latest_version
+
+        if not accepted_version:
+            return Response(
+                {"detail": "This bid has no submitted version to accept."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bid.accepted_version = accepted_version
+        bid.status = ProjectBid.STATUS_ACCEPTED
+        bid.save(update_fields=["accepted_version", "status", "updated_at"])
+
+        serializer = ProjectBidSerializer(bid, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ProjectBidDeclineView(APIView):
+    """
+    POST /api/bids/<bid_id>/decline/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bid_id, *args, **kwargs):
+        bid = get_object_or_404(
+            ProjectBid.objects.select_related("project", "contractor"),
+            id=bid_id,
+        )
+
+        if bid.project.owner_id != request.user.id:
+            return Response(
+                {"detail": "Only the project owner can decline a bid."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        bid.status = ProjectBid.STATUS_DECLINED
+        bid.save(update_fields=["status", "updated_at"])
+
+        serializer = ProjectBidSerializer(bid, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ProjectBidWithdrawView(APIView):
+    """
+    POST /api/bids/<bid_id>/withdraw/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, bid_id, *args, **kwargs):
+        bid = get_object_or_404(
+            ProjectBid.objects.select_related("project", "contractor"),
+            id=bid_id,
+        )
+
+        if bid.contractor_id != request.user.id:
+            return Response(
+                {"detail": "Only the bidding contractor can withdraw this bid."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if bid.status == ProjectBid.STATUS_ACCEPTED:
+            return Response(
+                {"detail": "Accepted bids cannot be withdrawn."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bid.status = ProjectBid.STATUS_WITHDRAWN
+        bid.save(update_fields=["status", "updated_at"])
+
+        serializer = ProjectBidSerializer(bid, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 # ---------------------------------------------------
 # Private messaging
 # ---------------------------------------------------
 class ProjectThreadCreateView(generics.GenericAPIView):
-  """
-  Ensure a direct-message thread exists between requesting user and project owner.
-  This is a DM entry point tied to the project.
+    """
+    POST /api/projects/<pk>/threads/
+    GET  /api/projects/<pk>/threads/
+    """
+    serializer_class = MessageThreadSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-  POST /api/projects/<pk>/threads/
-  GET  /api/projects/<pk>/threads/  (get DM, if it exists)
-  """
+    def post(self, request, *args, **kwargs):
+        project = get_object_or_404(Project, pk=kwargs.get("pk"))
+        sender = request.user
+        receiver = project.owner
 
-  serializer_class = MessageThreadSerializer
-  permission_classes = [permissions.IsAuthenticated]
+        if sender == receiver:
+            return Response(
+                {"detail": "You cannot start a private chat with yourself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-  def post(self, request, *args, **kwargs):
-      project = get_object_or_404(Project, pk=kwargs.get("pk"))
-      sender = request.user
-      receiver = project.owner
+        thread, created = MessageThread.get_or_create_dm(
+            sender,
+            receiver,
+            origin_project=project,
+            initiated_by=sender,
+        )
 
-      if sender == receiver:
-          return Response(
-              {"detail": "You cannot start a private chat with yourself."},
-              status=status.HTTP_400_BAD_REQUEST,
-          )
+        ser = self.get_serializer(thread, context={"request": request})
+        return Response(
+            ser.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
-      # Create or fetch DM between sender & project owner
-      thread, created = MessageThread.get_or_create_dm(
-          sender,
-          receiver,
-          origin_project=project,
-          initiated_by=sender,
-      )
+    def get(self, request, *args, **kwargs):
+        project = get_object_or_404(Project, pk=kwargs.get("pk"))
+        user = request.user
+        if not user.is_authenticated:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
 
-      ser = self.get_serializer(thread, context={"request": request})
-      return Response(
-          ser.data,
-          status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-      )
+        owner, client = MessageThread.normalize_users(user, project.owner)
+        thread = MessageThread.objects.filter(owner=owner, client=client).first()
+        if not thread:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
-  def get(self, request, *args, **kwargs):
-      project = get_object_or_404(Project, pk=kwargs.get("pk"))
-      user = request.user
-      if not user.is_authenticated:
-          return Response(status=status.HTTP_401_UNAUTHORIZED)
-
-      owner, client = MessageThread.normalize_users(user, project.owner)
-      thread = MessageThread.objects.filter(owner=owner, client=client).first()
-      if not thread:
-          return Response(status=status.HTTP_404_NOT_FOUND)
-
-      ser = self.get_serializer(thread, context={"request": request})
-      return Response(ser.data)
+        ser = self.get_serializer(thread, context={"request": request})
+        return Response(ser.data)
 
 
 class ThreadMessageListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/projects/<pk>/threads/<thread_id>/messages/
-    POST /api/projects/<pk>/threads/<thread_id>/messages/
-    """
     serializer_class = PrivateMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -461,7 +651,6 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
         thread = self.get_thread()
         user = self.request.user
 
-        # ✅ ignore window enforcement (only blocks sender if recipient ignored)
         other = thread.client if user.id == thread.owner_id else thread.owner
         ignored_until = thread.ignored_until_for(other)
         if (not thread.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
@@ -477,33 +666,20 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
 
 
 class InboxThreadListView(generics.ListAPIView):
-    """
-    GET /api/inbox/threads/
-    Returns all threads the user participates in, split into:
-    - accepted inbox threads
-    - pending message requests
-    """
-
     serializer_class = MessageThreadSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        qs = (
+        return (
             MessageThread.objects
             .filter(Q(owner=user) | Q(client=user))
             .select_related("owner", "client", "owner__profile", "client__profile")
             .order_by("-updated_at")
         )
-        # Serializer will decide if it's inbox vs request based on flags.
-        return qs
+
 
 class MessageStartView(APIView):
-    """
-    POST /api/messages/start/
-    Body: {"username": "<recipient_username>"}
-    Returns: {"thread_id": <id>}
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
@@ -534,19 +710,8 @@ class MessageStartView(APIView):
 
         return Response({"thread_id": thread.id}, status=status.HTTP_200_OK)
 
-class ThreadMessagesView(generics.ListCreateAPIView):
-    """
-    GET  /api/messages/threads/<thread_id>/messages/
-    POST /api/messages/threads/<thread_id>/messages/
 
-    Supports:
-    - JSON
-    - multipart/form-data
-    - text
-    - parent_message_id
-    - links (JSON string)
-    - uploaded files
-    """
+class ThreadMessagesView(generics.ListCreateAPIView):
     serializer_class = PrivateMessageSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -615,15 +780,11 @@ class ThreadMessagesView(generics.ListCreateAPIView):
             parent_message=parent_message,
         )
 
-        # -------- attachments --------
-        # These names should match what the frontend sends later.
         image_files = self.request.FILES.getlist("images")
         doc_files = self.request.FILES.getlist("documents")
         camera_files = self.request.FILES.getlist("camera_images")
         links = self._parse_links(self.request)
 
-        # Assumes you have a MessageAttachment model related to PrivateMessage
-        # with fields: message, kind, file, original_name, url
         for f in image_files:
             MessageAttachment.objects.create(
                 message=msg,
@@ -667,11 +828,8 @@ class ThreadMessagesView(generics.ListCreateAPIView):
         thread.save(update_fields=["updated_at"])
         return msg
 
+
 class MessageDetailView(APIView):
-    """
-    DELETE /api/messages/<message_id>/
-    Delete a message only within 1 minute of sending and only by sender.
-    """
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, message_id, *args, **kwargs):
@@ -701,10 +859,6 @@ class MessageDetailView(APIView):
 
 
 class MessageAttachmentDeleteView(APIView):
-    """
-    DELETE /api/message-attachments/<attachment_id>/
-    Delete a message attachment only within 1 minute of sending and only by sender.
-    """
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, attachment_id, *args, **kwargs):
@@ -734,12 +888,8 @@ class MessageAttachmentDeleteView(APIView):
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
 class ThreadActionView(APIView):
-    """
-    POST /api/inbox/threads/<pk>/actions/
-    Body: {"action": "accept" | "ignore" | "block" | "unblock" | "delete"}
-    Only participants (owner or client) may act.
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk, *args, **kwargs):
@@ -784,15 +934,9 @@ class ThreadActionView(APIView):
 # ---------------------------------------------------
 # BlockListView
 # ---------------------------------------------------
-
 class BlockListView(generics.ListAPIView):
-    """
-    GET /api/inbox/blocked/
-    Return the list of profiles the current user has blocked.
-    """
-
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = MessageThreadSerializer  # or a dedicated small serializer
+    serializer_class = MessageThreadSerializer
 
     def get_queryset(self):
         user = self.request.user
@@ -801,18 +945,13 @@ class BlockListView(generics.ListAPIView):
             | Q(client=user, client_blocked_owner=True)
         ).select_related("owner", "client", "owner__profile", "client__profile")
 
+
 # ---------------------------------------------------
 # Direct (non-project) messaging: start thread + messages
 # ---------------------------------------------------
-
 class DirectMessageStartView(MessageStartView):
-    """
-    Backward-compatible alias for direct message start.
-    """
     pass
 
+
 class DirectThreadMessageListCreateView(ThreadMessagesView):
-    """
-    Backward-compatible alias for direct thread messages.
-    """
     pass

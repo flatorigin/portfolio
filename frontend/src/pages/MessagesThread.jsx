@@ -11,11 +11,14 @@
 // - attachment rendering
 // - 1-minute delete window for messages/attachments
 // - consistent image sizing
+// - safer URL handling
+// - async cleanup guards
+// - optional bid badge support if backend provides it on inbox threads
 // =======================================
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { Card, Button } from "../ui";
+import { Card, Button, Badge } from "../ui";
 import MessageComposer from "../components/MessageComposer";
 
 function isWithinDeleteWindow(createdAt) {
@@ -23,6 +26,43 @@ function isWithinDeleteWindow(createdAt) {
   const created = new Date(createdAt).getTime();
   if (!Number.isFinite(created)) return false;
   return Date.now() - created <= 60 * 1000;
+}
+
+function toSafeUrl(raw) {
+  if (!raw) return "";
+  const value = String(raw).trim();
+
+  if (/^(blob:|data:)/i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
+  const isAllowedProtocol = /^(https?:|blob:|data:|mailto:)/i.test(value);
+  if (hasProtocol && !isAllowedProtocol) return "";
+
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+  const origin = base.replace(/\/api\/?$/, "");
+  return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
+}
+
+function getThreadBidMeta(thread) {
+  const unreadCount =
+    Number(
+      thread?.bid_unread_count ??
+        thread?.new_bid_count ??
+        thread?.unread_bid_count ??
+        0
+    ) || 0;
+
+  const hasNewBid =
+    !!thread?.has_new_bid ||
+    !!thread?.project_has_new_bid ||
+    unreadCount > 0;
+
+  return {
+    hasNewBid,
+    unreadCount,
+    projectTitle: thread?.project_title || "",
+  };
 }
 
 function MessageAttachments({
@@ -37,7 +77,7 @@ function MessageAttachments({
     <div className="mt-2 space-y-2">
       {attachments.map((att, idx) => {
         const key = att.id || `${att.kind}-${att.url || att.file_url || idx}`;
-        const fileUrl = att.file_url || att.url || "";
+        const fileUrl = toSafeUrl(att.file_url || att.url || "");
         const label = att.name || att.original_name || att.url || "Attachment";
 
         const isImage = att.kind === "image" || att.kind === "camera";
@@ -56,7 +96,7 @@ function MessageAttachments({
                   />
                 </div>
               </a>
-            ) : isLink ? (
+            ) : isLink && fileUrl ? (
               <a
                 href={fileUrl}
                 target="_blank"
@@ -70,7 +110,7 @@ function MessageAttachments({
               >
                 {label}
               </a>
-            ) : (
+            ) : fileUrl ? (
               <a
                 href={fileUrl}
                 target="_blank"
@@ -84,6 +124,17 @@ function MessageAttachments({
               >
                 {label}
               </a>
+            ) : (
+              <div
+                className={
+                  "block rounded-xl border px-3 py-2 text-xs " +
+                  (mine
+                    ? "border-slate-700 bg-slate-800 text-slate-100"
+                    : "border-slate-200 bg-white text-slate-700")
+                }
+              >
+                {label}
+              </div>
             )}
 
             {canDelete && att.id ? (
@@ -128,9 +179,17 @@ function ReplySnippet({ message, mine = false }) {
 export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
   const navigate = useNavigate();
+  const isMountedRef = useRef(false);
 
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!threadIdParam) {
@@ -153,19 +212,31 @@ export default function MessagesThread() {
   const [meUsername, setMeUsername] = useState("");
 
   useEffect(() => {
+    let active = true;
+
     (async () => {
       try {
         const { data } = await api.get("/auth/users/me/");
-        setMeUsername(data?.username || "");
+        if (active && isMountedRef.current) {
+          setMeUsername(data?.username || "");
+        }
       } catch {
         try {
           const { data } = await api.get("/users/me/");
-          setMeUsername(data?.username || data?.user?.username || "");
+          if (active && isMountedRef.current) {
+            setMeUsername(data?.username || data?.user?.username || "");
+          }
         } catch {
-          setMeUsername(localStorage.getItem("username") || "");
+          if (active && isMountedRef.current) {
+            setMeUsername(localStorage.getItem("username") || "");
+          }
         }
       }
     })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const meLower = (meUsername || "").toLowerCase();
@@ -216,13 +287,19 @@ export default function MessagesThread() {
     [activeThread, meLower]
   );
 
+  const activeThreadBidMeta = useMemo(
+    () => getThreadBidMeta(activeThread),
+    [activeThread]
+  );
+
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true);
     try {
       const { data } = await api.get("/inbox/threads/");
       const arr = Array.isArray(data) ? data : [];
-      setThreads(arr);
+      if (!isMountedRef.current) return;
 
+      setThreads(arr);
       setActiveThreadId((prev) => {
         if (threadIdParam) return Number(threadIdParam);
         if (prev) return prev;
@@ -230,9 +307,9 @@ export default function MessagesThread() {
       });
     } catch (err) {
       console.error("[MessagesThread] failed to load threads", err?.response || err);
-      setThreads([]);
+      if (isMountedRef.current) setThreads([]);
     } finally {
-      setLoadingThreads(false);
+      if (isMountedRef.current) setLoadingThreads(false);
     }
   }, [threadIdParam]);
 
@@ -243,7 +320,7 @@ export default function MessagesThread() {
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
       if (!activeThread?.id) {
-        setMessages([]);
+        if (isMountedRef.current) setMessages([]);
         return;
       }
 
@@ -254,6 +331,7 @@ export default function MessagesThread() {
           `/messages/threads/${activeThread.id}/messages/`
         );
         const arr = Array.isArray(data) ? data : [];
+        if (!isMountedRef.current) return;
 
         setMessages((prev) => {
           if (
@@ -269,9 +347,9 @@ export default function MessagesThread() {
           "[MessagesThread] failed to load messages",
           err?.response || err
         );
-        if (!silent) setMessages([]);
+        if (!silent && isMountedRef.current) setMessages([]);
       } finally {
-        if (!silent) setLoadingMessages(false);
+        if (!silent && isMountedRef.current) setLoadingMessages(false);
       }
     },
     [activeThread?.id]
@@ -366,6 +444,8 @@ export default function MessagesThread() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      if (!isMountedRef.current) return;
+
       setMessageText("");
       setComposerAttachments([]);
       setReplyTo(null);
@@ -379,7 +459,7 @@ export default function MessagesThread() {
         "Failed to send message.";
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
-      setSending(false);
+      if (isMountedRef.current) setSending(false);
     }
   };
 
@@ -419,6 +499,7 @@ export default function MessagesThread() {
               threads.map((t) => {
                 const cp = counterpartFor(t);
                 const name = cp?.display_name || cp?.username || "User";
+                const bidMeta = getThreadBidMeta(t);
 
                 const latest = t.latest_message || null;
                 const dateLabel = latest?.created_at
@@ -444,18 +525,37 @@ export default function MessagesThread() {
                       isActive ? "bg-slate-100" : "hover:bg-slate-50",
                     ].join(" ")}
                   >
-                    <div
-                      className={
-                        "truncate text-sm " +
-                        (isUnread
-                          ? "font-semibold text-slate-900"
-                          : "font-normal text-slate-800")
-                      }
-                    >
-                      {name}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">
-                      {dateLabel || "—"}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div
+                          className={
+                            "truncate text-sm " +
+                            (isUnread
+                              ? "font-semibold text-slate-900"
+                              : "font-normal text-slate-800")
+                          }
+                        >
+                          {name}
+                        </div>
+
+                        {bidMeta.projectTitle ? (
+                          <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                            {bidMeta.projectTitle}
+                          </div>
+                        ) : null}
+
+                        <div className="mt-0.5 text-[11px] text-slate-500">
+                          {dateLabel || "—"}
+                        </div>
+                      </div>
+
+                      {bidMeta.hasNewBid ? (
+                        <Badge className="shrink-0 bg-emerald-600 text-white">
+                          {bidMeta.unreadCount > 1
+                            ? `${bidMeta.unreadCount} bids`
+                            : "New Bid"}
+                        </Badge>
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -489,17 +589,34 @@ export default function MessagesThread() {
                       Back
                     </button>
 
-                    <div className="truncate text-sm font-semibold text-slate-900">
-                      {counterpart?.username ? (
-                        <Link
-                          to={`/profiles/${counterpart.username}`}
-                          className="text-slate-900 hover:underline"
-                        >
-                          {counterpart.display_name || counterpart.username}
-                        </Link>
-                      ) : (
-                        "Conversation"
-                      )}
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {counterpart?.username ? (
+                          <Link
+                            to={`/profiles/${counterpart.username}`}
+                            className="text-slate-900 hover:underline"
+                          >
+                            {counterpart.display_name || counterpart.username}
+                          </Link>
+                        ) : (
+                          "Conversation"
+                        )}
+                      </div>
+
+                      {activeThreadBidMeta.projectTitle ? (
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <span className="truncate text-[11px] text-slate-500">
+                            {activeThreadBidMeta.projectTitle}
+                          </span>
+                          {activeThreadBidMeta.hasNewBid ? (
+                            <Badge className="bg-emerald-600 text-white">
+                              {activeThreadBidMeta.unreadCount > 1
+                                ? `${activeThreadBidMeta.unreadCount} bids`
+                                : "New Bid"}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
