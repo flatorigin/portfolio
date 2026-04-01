@@ -8,6 +8,7 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
+import BidModule from "../components/bids/BidModule";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -914,6 +915,14 @@ export default function ProjectDetail() {
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
           )}
 
+          {project?.is_job_posting && project?.id ? (
+            <BidModule
+              projectId={project.id}
+              currentUserId={meUser?.id}
+              ownerId={project.owner}
+            />
+          ) : null}
+
           {/* OWNER-ONLY PROJECT EDIT CARD */}
           {isOwnerUser && isEditing && project && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0">
@@ -1310,3 +1319,4 @@ export default function ProjectDetail() {
     </div>
   );
 }
+

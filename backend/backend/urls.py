@@ -27,6 +27,7 @@ urlpatterns = [
     path("api/auth/", include("djoser.urls.jwt")),
     path("api/", include("accounts.urls")),
     path("api/", include("portfolio.urls")),
+    path("api/", include("apps.bids.urls")),
 ]
 
 # ✅ Always serve media BEFORE the catch-all
