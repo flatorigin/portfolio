@@ -1,6 +1,6 @@
 # file: backend/portfolio/views.py
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Q, OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from datetime import timedelta
@@ -161,8 +161,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(ser.data)
 
     def get_queryset(self):
-        qs = Project.objects.select_related("owner").all()
+        qs = Project.objects.select_related("owner").prefetch_related("images").all()
         request = self.request
+        owner_username = (request.query_params.get("owner") or "").strip()
+
+        if owner_username:
+            qs = qs.filter(owner__username=owner_username)
 
         # Only public projects for anonymous users
         if not request.user.is_authenticated:
@@ -488,10 +492,24 @@ class InboxThreadListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        latest_messages = PrivateMessage.objects.filter(thread=OuterRef("pk")).order_by("-created_at")
         qs = (
             MessageThread.objects
             .filter(Q(owner=user) | Q(client=user))
             .select_related("owner", "client", "owner__profile", "client__profile")
+            .annotate(
+                latest_message_id=Subquery(latest_messages.values("id")[:1]),
+                latest_message_text=Subquery(latest_messages.values("text")[:1]),
+                latest_message_attachment_name=Subquery(
+                    latest_messages.values("attachment_name")[:1]
+                ),
+                latest_message_created_at=Subquery(
+                    latest_messages.values("created_at")[:1]
+                ),
+                latest_message_sender_username=Subquery(
+                    latest_messages.values("sender__username")[:1]
+                ),
+            )
             .order_by("-updated_at")
         )
         # Serializer will decide if it's inbox vs request based on flags.

@@ -8,7 +8,7 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
-import BidModule from "../components/bids/BidModule";
+// import BidModule from "../components/bids/BidModule";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -89,7 +89,10 @@ export default function ProjectDetail() {
   const [editCoverImageId, setEditCoverImageId] = useState(null);
 
   // current user
-  const [meUser, setMeUser] = useState(null);
+  const [meUser, setMeUser] = useState(() => {
+    const username = localStorage.getItem("username") || "";
+    return username ? { username } : null;
+  });
   const authed = !!localStorage.getItem("access");
 
   // favorite state
@@ -115,27 +118,20 @@ export default function ProjectDetail() {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
   // ─────────────────────────────
-  // FETCH CURRENT USER
-  // ─────────────────────────────
   useEffect(() => {
-    if (!authed) {
-      setMeUser(null);
-      return;
-    }
-    (async () => {
-      try {
-        const { data } = await api.get("/auth/users/me/");
-        setMeUser(data);
-      } catch {
-        try {
-          const { data } = await api.get("/users/me/");
-          setMeUser(data);
-        } catch (err) {
-          console.warn("[ProjectDetail] failed to fetch meUser", err);
-          setMeUser(null);
-        }
-      }
-    })();
+    const syncMeUser = () => {
+      const username = localStorage.getItem("username") || "";
+      setMeUser(username ? { username } : null);
+    };
+
+    syncMeUser();
+    window.addEventListener("storage", syncMeUser);
+    window.addEventListener("auth:changed", syncMeUser);
+
+    return () => {
+      window.removeEventListener("storage", syncMeUser);
+      window.removeEventListener("auth:changed", syncMeUser);
+    };
   }, [authed]);
 
   const isOwnerUser =
@@ -915,13 +911,13 @@ export default function ProjectDetail() {
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
           )}
 
-          {project?.is_job_posting && project?.id ? (
+{/*          {project?.is_job_posting && project?.id ? (
             <BidModule
               projectId={project.id}
               currentUserId={meUser?.id}
               ownerId={project.owner}
             />
-          ) : null}
+          ) : null}*/}
 
           {/* OWNER-ONLY PROJECT EDIT CARD */}
           {isOwnerUser && isEditing && project && (
@@ -1319,4 +1315,3 @@ export default function ProjectDetail() {
     </div>
   );
 }
-

@@ -5,8 +5,6 @@ from datetime import timedelta
 
 from rest_framework import serializers
 from django.utils import timezone
-from accounts.serializers import ProfileSerializer
-
 from .models import (
     ProjectComment,
     Project,
@@ -359,14 +357,40 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
         return timezone.now() <= obj.created_at + timedelta(minutes=1)
 
 
+class ThreadParticipantProfileSerializer(serializers.Serializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    display_name = serializers.CharField(read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
+
+    def _build_abs_url(self, request, url: str):
+        if not url:
+            return None
+        return request.build_absolute_uri(url) if request else url
+
+    def get_avatar_url(self, obj):
+        request = self.context.get("request")
+        image = obj.avatar or obj.logo
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
+        return None
+
+    def get_logo_url(self, obj):
+        request = self.context.get("request")
+        image = obj.logo or obj.avatar
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
+        return None
+
+
 class MessageThreadSerializer(serializers.ModelSerializer):
     project_title = serializers.ReadOnlyField(source="project.title")
     owner_username = serializers.ReadOnlyField(source="owner.username")
     client_username = serializers.ReadOnlyField(source="client.username")
 
     latest_message = serializers.SerializerMethodField()
-    owner_profile = ProfileSerializer(source="owner.profile", read_only=True)
-    client_profile = ProfileSerializer(source="client.profile", read_only=True)
+    owner_profile = ThreadParticipantProfileSerializer(source="owner.profile", read_only=True)
+    client_profile = ThreadParticipantProfileSerializer(source="client.profile", read_only=True)
 
     is_request = serializers.SerializerMethodField()
     can_reply = serializers.SerializerMethodField()
@@ -402,10 +426,26 @@ class MessageThreadSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_latest_message(self, obj):
-        msg = obj.messages.order_by("-created_at").first()
-        if not msg:
-            return None
-        return PrivateMessageSerializer(msg, context=self.context).data
+        latest_id = getattr(obj, "latest_message_id", None)
+        if latest_id is None:
+            msg = obj.messages.order_by("-created_at").first()
+            if not msg:
+                return None
+            return {
+                "id": msg.id,
+                "sender_username": getattr(msg.sender, "username", ""),
+                "text": msg.text or "",
+                "attachment_name": msg.attachment_name or "",
+                "created_at": msg.created_at,
+            }
+
+        return {
+            "id": latest_id,
+            "sender_username": getattr(obj, "latest_message_sender_username", "") or "",
+            "text": getattr(obj, "latest_message_text", "") or "",
+            "attachment_name": getattr(obj, "latest_message_attachment_name", "") or "",
+            "created_at": getattr(obj, "latest_message_created_at", None),
+        }
 
     def _current_user(self):
         request = self.context.get("request")

@@ -150,22 +150,23 @@ export default function MessagesThread() {
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   const [readThreadIds, setReadThreadIds] = useState(new Set());
-  const [meUsername, setMeUsername] = useState("");
+  const [meUsername, setMeUsername] = useState(
+    localStorage.getItem("username") || ""
+  );
 
   useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/auth/users/me/");
-        setMeUsername(data?.username || "");
-      } catch {
-        try {
-          const { data } = await api.get("/users/me/");
-          setMeUsername(data?.username || data?.user?.username || "");
-        } catch {
-          setMeUsername(localStorage.getItem("username") || "");
-        }
-      }
-    })();
+    const syncUsername = () => {
+      setMeUsername(localStorage.getItem("username") || "");
+    };
+
+    syncUsername();
+    window.addEventListener("storage", syncUsername);
+    window.addEventListener("auth:changed", syncUsername);
+
+    return () => {
+      window.removeEventListener("storage", syncUsername);
+      window.removeEventListener("auth:changed", syncUsername);
+    };
   }, []);
 
   const meLower = (meUsername || "").toLowerCase();

@@ -116,6 +116,20 @@ export default function GlobalInbox() {
   );
   const meLower = useMemo(() => normalizeU(meUsername), [meUsername]);
 
+  useEffect(() => {
+    const syncUsername = () => {
+      setMeUsername(localStorage.getItem("username") || "");
+    };
+
+    window.addEventListener("storage", syncUsername);
+    window.addEventListener("auth:changed", syncUsername);
+
+    return () => {
+      window.removeEventListener("storage", syncUsername);
+      window.removeEventListener("auth:changed", syncUsername);
+    };
+  }, []);
+
   // ----- Click outside to close -----
   useEffect(() => {
     function handleClickOutside(e) {
@@ -149,24 +163,6 @@ export default function GlobalInbox() {
       setLoading(false);
     })();
   }, [open, authed, fetchThreads]);
-
-  // ----- Ensure correct logged-in username -----
-  useEffect(() => {
-    if (!authed) return;
-
-    (async () => {
-      try {
-        const { data } = await api.get("/users/me/");
-        const u = data?.username || data?.user?.username || "";
-        if (u) {
-          setMeUsername(u);
-          localStorage.setItem("username", u);
-        }
-      } catch {
-        // keep existing value
-      }
-    })();
-  }, [authed]);
 
   // ----- Background refresh for badge (poll + focus) -----
   useEffect(() => {

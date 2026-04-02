@@ -76,7 +76,6 @@ export default function PublicProfile() {
 
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [coversByProject, setCoversByProject] = useState({});
   const [loading, setLoading] = useState(true);
 
   const [msgOpen, setMsgOpen] = useState(false);
@@ -152,35 +151,6 @@ export default function PublicProfile() {
     return "—";
   }, [profile?.languages_display, profile?.languages]);
 
-  async function hydrateCovers(list) {
-    const entries = await Promise.all(
-      (Array.isArray(list) ? list : []).map(async (p) => {
-        try {
-          const { data } = await api.get(`/projects/${p.id}/images/`);
-          const imgs = Array.isArray(data) ? data : [];
-
-          const mapped = imgs
-            .map((it) => ({
-              url: toUrl(it.url || it.image || it.src || it.file || ""),
-              order: it.order ?? it.sort_order ?? null,
-            }))
-            .filter((x) => !!x.url);
-
-          const cover =
-            mapped.find((x) => Number(x.order) === 0)?.url ||
-            mapped[0]?.url ||
-            null;
-
-          return [p.id, cover];
-        } catch {
-          return [p.id, null];
-        }
-      })
-    );
-
-    setCoversByProject(Object.fromEntries(entries));
-  }
-
   // Load profile + projects
   useEffect(() => {
     let alive = true;
@@ -214,7 +184,6 @@ export default function PublicProfile() {
 
         setProfile(prof);
         setProjects(visibleProjects);
-        hydrateCovers(visibleProjects);
 
         // Seed like count from public serializer field
         setLikeCount(Number(prof?.like_count || 0));
@@ -223,7 +192,6 @@ export default function PublicProfile() {
         if (!alive) return;
         setProfile(null);
         setProjects([]);
-        setCoversByProject({});
         setLikeCount(0);
         setLiked(false);
       } finally {
@@ -578,7 +546,6 @@ export default function PublicProfile() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {projects.map((p) => {
                 const coverSrc =
-                  coversByProject[p.id] ||
                   toUrl(p.cover_image_url || "") ||
                   (p.cover_image ? toUrl(p.cover_image) : "");
 

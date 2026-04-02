@@ -369,122 +369,37 @@ export default function Dashboard() {
   const saveToastTimerRef = useRef(null);
   const collapseTimerRef = useRef(null);
 
-  // current user (ownership)
-  const [meUser, setMeUser] = useState({
-    username: localStorage.getItem("username") || "",
-  });
-
-  // myThumbs[projectId] = { cover: string|null }
-  const [myThumbs, setMyThumbs] = useState({});
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/auth/users/me/");
-        if (data?.username) setMeUser({ username: data.username });
-      } catch {
-        try {
-          const { data } = await api.get("/users/me/");
-          if (data?.username) setMeUser({ username: data.username });
-        } catch {
-          /* fallback */
-        }
-      }
-    })();
-  }, []);
-
   const [createErr, setCreateErr] = useState("");
   const [createOk, setCreateOk] = useState(false);
-
-  // ✅ define refreshMyThumbs BEFORE refreshProjects (avoids TDZ crash)
-  const refreshMyThumbs = useCallback(async (projList) => {
-    const list = Array.isArray(projList) ? projList : [];
-
-    const entries = await Promise.all(
-      list.map(async (p) => {
-        try {
-          const { data } = await api
-            .get(`/projects/${p.id}/images/`)
-            .catch(() => ({ data: [] }));
-          const imgs = Array.isArray(data) ? data : [];
-
-          const mapped = imgs
-            .map((it) => ({
-              url: toUrl(it.url || it.image || it.src || it.file || ""),
-              order: it.order ?? it.sort_order ?? null,
-            }))
-            .filter((x) => !!x.url);
-
-          const cover =
-            mapped.find((x) => Number(x.order) === 0)?.url ||
-            mapped[0]?.url ||
-            null;
-
-          return [p.id, { cover }];
-        } catch {
-          return [p.id, { cover: null }];
-        }
-      })
-    );
-
-    setMyThumbs(Object.fromEntries(entries));
-  }, []);
 
   // ---- Job posts for current user (job postings only) ----
   const [myJobPosts, setMyJobPosts] = useState([]);
 
-  const refreshMyJobPosts = useCallback(async () => {
-    try {
-      const { data } = await api.get("/projects/");
-      const mineJobs = Array.isArray(data)
-        ? data.filter(
-            (p) =>
-              (p.owner_username || "").toLowerCase() ===
-                (meUser.username || "").toLowerCase() &&
-              isJobPostingFlag(p.is_job_posting)
-          )
-        : [];
-      setMyJobPosts(mineJobs);
-    } catch {
-      setMyJobPosts([]);
-    }
-  }, [meUser.username]);
-
   // ---- Refresh my projects (all types) ----
   const refreshProjects = useCallback(async () => {
     try {
-      const { data } = await api.get("/projects/");
+      const { data } = await api.get("/projects/mine/");
       const all = Array.isArray(data) ? data : [];
-
-      const me = (meUser.username || "").toLowerCase();
-
-      // ✅ All owned items (projects + job posts)
-      const mineAll = all.filter((p) => {
-        const owner = (p.owner_username || p.owner?.username || "").toLowerCase();
-        return owner === me;
-      });
 
       // =========================
       // CHANGED: robust split for UI
       // =========================
-      const mineProjects = mineAll.filter((p) => !isJobPostingFlag(p?.is_job_posting));
-      const mineJobPosts = mineAll.filter((p) => isJobPostingFlag(p?.is_job_posting));
+      const mineProjects = all.filter((p) => !isJobPostingFlag(p?.is_job_posting));
+      const mineJobPosts = all.filter((p) => isJobPostingFlag(p?.is_job_posting));
       // =========================
       // END CHANGED
       // =========================
 
       setProjects(mineProjects);
       setMyJobPosts(mineJobPosts);
-
-      // ✅ thumbs for BOTH lists
-      await refreshMyThumbs(mineAll);
     } catch (err) {
       console.warn("[Dashboard] failed to load my projects", err);
       setProjects([]);
       setMyJobPosts([]);
-      setMyThumbs({});
     }
-  }, [meUser.username, refreshMyThumbs]);
+  }, []);
+
+  const refreshMyJobPosts = refreshProjects;
 
   useEffect(() => {
     refreshProjects();
@@ -800,8 +715,7 @@ export default function Dashboard() {
   function getProjectCover(p) {
     const fromUrl = p?.cover_image_url ? toUrl(p.cover_image_url) : "";
     const fromFile = p?.cover_image ? toUrl(p.cover_image) : "";
-    const fromThumbs = myThumbs?.[p?.id]?.cover || "";
-    return fromUrl || fromFile || fromThumbs || "";
+    return fromUrl || fromFile || "";
   }
 
   return (
