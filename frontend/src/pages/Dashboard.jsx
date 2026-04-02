@@ -2,7 +2,7 @@
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 
 import CreateProjectCard from "../components/CreateProjectCard";
@@ -102,6 +102,7 @@ function isJobPostingFlag(value) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const myUsername = localStorage.getItem("username") || "";
 
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
 
@@ -374,6 +375,7 @@ export default function Dashboard() {
 
   // ---- Job posts for current user (job postings only) ----
   const [myJobPosts, setMyJobPosts] = useState([]);
+  const [myBids, setMyBids] = useState([]);
 
   // ---- Refresh my projects (all types) ----
   const refreshProjects = useCallback(async () => {
@@ -404,6 +406,26 @@ export default function Dashboard() {
   useEffect(() => {
     refreshProjects();
   }, [refreshProjects]);
+
+  const refreshMyBids = useCallback(async () => {
+    try {
+      const { data } = await api.get("/bids/");
+      const all = Array.isArray(data) ? data : [];
+      const mine = all.filter(
+        (bid) =>
+          (bid?.contractor_username || "").toLowerCase() ===
+          myUsername.toLowerCase()
+      );
+      setMyBids(mine);
+    } catch (err) {
+      console.warn("[Dashboard] failed to load my bids", err);
+      setMyBids([]);
+    }
+  }, [myUsername]);
+
+  useEffect(() => {
+    refreshMyBids();
+  }, [refreshMyBids]);
 
   const list = projects;
 
@@ -806,6 +828,7 @@ export default function Dashboard() {
               .map((p) => {
                 const coverSrc = getProjectCover(p);
                 const isPublished = !!p.is_public;
+                const isAwarded = Number(p?.accepted_bid_count || 0) > 0;
 
                 return (
                   <Card
@@ -830,11 +853,16 @@ export default function Dashboard() {
 
                       <div className="absolute left-3 top-3 flex gap-2">
                         <Badge className="bg-slate-900 text-white">Job post</Badge>
-                        {isPublished ? (
+                        {isAwarded ? (
+                          <Badge className="!bg-indigo-600 !text-white">Awarded</Badge>
+                        ) : isPublished ? (
                           <Badge className="bg-slate-900 text-white">Published</Badge>
                         ) : (
                           <Badge className="bg-slate-200 text-slate-800">Draft</Badge>
                         )}
+                        {Number(p?.bid_count || 0) > 0 ? (
+                          <Badge className="!bg-indigo-600 !text-white">Bid</Badge>
+                        ) : null}
                       </div>
                     </div>
 
@@ -873,6 +901,104 @@ export default function Dashboard() {
                   </Card>
                 );
               })}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Your Bids</div>
+            <div className="text-xs text-slate-600">
+              Accepted bids stay visible here after the posting closes.
+            </div>
+          </div>
+          <Badge>{myBids.length} bids</Badge>
+        </div>
+
+        {myBids.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            You have not placed any bids yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+            {myBids.map((bid) => {
+              const status = (bid.status || "").toLowerCase();
+              const statusBadgeClass =
+                status === "accepted"
+                  ? "bg-emerald-600 text-white"
+                  : status === "declined"
+                  ? "bg-rose-100 text-rose-700"
+                  : status === "withdrawn"
+                  ? "bg-slate-200 text-slate-700"
+                  : status === "revision_requested"
+                  ? "bg-sky-100 text-sky-700"
+                  : "bg-amber-100 text-amber-800";
+
+              return (
+                <Card key={`bid-${bid.id}`} className="overflow-hidden border border-slate-200 bg-white">
+                  <div className="p-4">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">
+                          {bid.project_title || `Project #${bid.project}`}
+                        </div>
+                        {bid.project_owner_username ? (
+                          <div className="text-[11px] text-slate-500">
+                            by{" "}
+                            <Link
+                              to={`/profiles/${bid.project_owner_username}`}
+                              className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                            >
+                              {bid.project_owner_username}
+                            </Link>
+                          </div>
+                        ) : null}
+                      </div>
+                      <Badge className={statusBadgeClass}>
+                        {status === "accepted"
+                          ? "Accepted"
+                          : status === "declined"
+                          ? "Declined"
+                          : status === "withdrawn"
+                          ? "Withdrawn"
+                          : status === "revision_requested"
+                          ? "Revision Requested"
+                          : "Pending"}
+                      </Badge>
+                    </div>
+
+                    <div className="text-sm font-semibold text-slate-900">
+                      {bid.display_amount || "—"}
+                    </div>
+
+                    {bid.message ? (
+                      <div className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
+                        {bid.message}
+                      </div>
+                    ) : null}
+
+                    {bid.owner_response_note ? (
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Owner note
+                        </div>
+                        <div className="whitespace-pre-wrap">{bid.owner_response_note}</div>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <GhostButton
+                        className="w-full min-w-0"
+                        onClick={() => window.open(`/projects/${bid.project}`, "_self")}
+                      >
+                        Open Job
+                      </GhostButton>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </Card>

@@ -29,6 +29,19 @@ function getReadMap() {
 
 function setReadMap(next) {
   localStorage.setItem("inbox_read_map", JSON.stringify(next || {}));
+  window.dispatchEvent(new CustomEvent("inbox:read-map-changed"));
+}
+
+function markThreadLatestRead(thread) {
+  const latestId = thread?.latest_message?.id;
+  if (!latestId || !thread?.id) return false;
+  const map = getReadMap();
+  const key = String(thread.id);
+  const value = String(latestId);
+  if (String(map[key] || "") === value) return false;
+  map[key] = value;
+  setReadMap(map);
+  return true;
 }
 
 // Same counterpart logic pattern as MessagesThread.jsx
@@ -107,6 +120,7 @@ export default function GlobalInbox() {
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [readMap, setReadMapState] = useState(() => getReadMap());
   const panelRef = useRef(null);
 
   const authed = !!localStorage.getItem("access");
@@ -127,6 +141,20 @@ export default function GlobalInbox() {
     return () => {
       window.removeEventListener("storage", syncUsername);
       window.removeEventListener("auth:changed", syncUsername);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncReadMap = () => {
+      setReadMapState(getReadMap());
+    };
+
+    window.addEventListener("storage", syncReadMap);
+    window.addEventListener("inbox:read-map-changed", syncReadMap);
+
+    return () => {
+      window.removeEventListener("storage", syncReadMap);
+      window.removeEventListener("inbox:read-map-changed", syncReadMap);
     };
   }, []);
 
@@ -164,6 +192,22 @@ export default function GlobalInbox() {
     })();
   }, [open, authed, fetchThreads]);
 
+  useEffect(() => {
+    if (!open || threads.length === 0) return;
+
+    let changed = false;
+    for (const thread of threads) {
+      const latest = thread?.latest_message;
+      if (!latest?.id) continue;
+      if (normalizeU(latest.sender_username) === meLower) continue;
+      changed = markThreadLatestRead(thread) || changed;
+    }
+
+    if (changed) {
+      setReadMapState(getReadMap());
+    }
+  }, [open, threads, meLower]);
+
   // ----- Background refresh for badge (poll + focus) -----
   useEffect(() => {
     if (!authed) return;
@@ -190,16 +234,9 @@ export default function GlobalInbox() {
     };
   }, [authed, fetchThreads]);
 
-  // ----- PERF: compute readMap once per open/list change -----
-  const readMap = useMemo(() => getReadMap(), [open, threads.length]);
-
   // ----- Unread count (local) -----
   const unreadCount = useMemo(() => {
     return (threads || []).reduce((sum, t) => {
-      // If backend provides unread_count, use it
-      if (typeof t.unread_count === "number")
-        return sum + (t.unread_count > 0 ? t.unread_count : 0);
-
       const latest = t.latest_message || null;
       if (!latest?.id) return sum;
 
@@ -214,11 +251,9 @@ export default function GlobalInbox() {
   }, [threads, meLower, readMap]);
 
   const markThreadRead = useCallback((thread) => {
-    const latestId = thread?.latest_message?.id;
-    if (!latestId) return;
-    const map = getReadMap();
-    map[String(thread.id)] = String(latestId);
-    setReadMap(map);
+    if (markThreadLatestRead(thread)) {
+      setReadMapState(getReadMap());
+    }
   }, []);
 
   if (!authed) return null;
@@ -346,7 +381,16 @@ export default function GlobalInbox() {
             <Link
               to="/messages"
               className="underline"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                for (const thread of threads) {
+                  const latest = thread?.latest_message;
+                  if (!latest?.id) continue;
+                  if (normalizeU(latest.sender_username) === meLower) continue;
+                  markThreadLatestRead(thread);
+                }
+                setReadMapState(getReadMap());
+                setOpen(false);
+              }}
             >
               Open inbox
             </Link>

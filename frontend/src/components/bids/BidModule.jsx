@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../../api";
 
 function normalizeError(err, fallback) {
@@ -12,15 +13,116 @@ function normalizeError(err, fallback) {
     return data;
   }
 
+  if (data && typeof data === "object") {
+    const first = Object.values(data)[0];
+    if (Array.isArray(first) && first.length) return String(first[0]);
+    if (typeof first === "string") return first;
+  }
+
+  return data?.detail || data?.message || err?.message || fallback;
+}
+
+function statusLabel(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "revision_requested") return "Revision Requested";
+  if (!value) return "Pending";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function statusBadgeClass(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "accepted") return "bg-emerald-600 text-white";
+  if (value === "declined") return "bg-rose-100 text-rose-700";
+  if (value === "withdrawn") return "bg-slate-200 text-slate-700";
+  if (value === "revision_requested") return "bg-sky-100 text-sky-700";
+  return "bg-amber-100 text-amber-800";
+}
+
+function emptyForm() {
+  return {
+    price_type: "fixed",
+    amount: "",
+    amount_min: "",
+    amount_max: "",
+    timeline_text: "",
+    proposal_text: "",
+    included_text: "",
+    excluded_text: "",
+    payment_terms: "",
+    valid_until: "",
+    attachment: null,
+  };
+}
+
+function bidToForm(bid) {
+  return {
+    price_type: bid?.price_type || "fixed",
+    amount: bid?.amount == null ? "" : String(bid.amount),
+    amount_min: bid?.amount_min == null ? "" : String(bid.amount_min),
+    amount_max: bid?.amount_max == null ? "" : String(bid.amount_max),
+    timeline_text: bid?.timeline_text || "",
+    proposal_text: bid?.proposal_text || bid?.message || "",
+    included_text: bid?.included_text || "",
+    excluded_text: bid?.excluded_text || "",
+    payment_terms: bid?.payment_terms || "",
+    valid_until: bid?.valid_until || "",
+    attachment: null,
+  };
+}
+
+function Modal({ open, onClose, title, children }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
   return (
-    data?.detail ||
-    data?.message ||
-    err?.message ||
-    fallback
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+          <div className="text-lg font-semibold text-slate-900">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
   );
 }
 
-export default function BidModule({ projectId, currentUserId, ownerId }) {
+function Field({ label, helper, children }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-slate-800">{label}</label>
+      {children}
+      {helper ? <p className="text-xs text-slate-500">{helper}</p> : null}
+    </div>
+  );
+}
+
+export default function BidModule({ projectId, ownerUsername }) {
   const [bids, setBids] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -28,13 +130,14 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [editingBidId, setEditingBidId] = useState(null);
+  const [ownerNotes, setOwnerNotes] = useState({});
+  const [ownerAction, setOwnerAction] = useState({});
+  const [form, setForm] = useState(emptyForm());
 
-  const [form, setForm] = useState({
-    amount: "",
-    message: "",
-  });
-
-  const isOwner = String(currentUserId) === String(ownerId);
+  const authed = !!localStorage.getItem("access");
+  const myUsername = (localStorage.getItem("username") || "").toLowerCase();
+  const isOwner = (ownerUsername || "").toLowerCase() === myUsername;
 
   async function loadBids() {
     if (!projectId) return;
@@ -43,7 +146,17 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
 
     try {
       const { data } = await api.get(`/projects/${projectId}/bids/`);
-      setBids(Array.isArray(data) ? data : []);
+      const nextBids = Array.isArray(data) ? data : [];
+      setBids(nextBids);
+      setOwnerNotes((prev) => {
+        const next = { ...prev };
+        for (const bid of nextBids) {
+          if (next[String(bid.id)] === undefined) {
+            next[String(bid.id)] = bid.owner_response_note || "";
+          }
+        }
+        return next;
+      });
     } catch (err) {
       console.error("[BidModule] loadBids failed:", err?.response || err);
       setError(normalizeError(err, "Server error while loading bids."));
@@ -57,9 +170,42 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
   }, [projectId]);
 
   const myBid = useMemo(() => {
-    if (!currentUserId) return null;
-    return bids.find((b) => String(b.contractor) === String(currentUserId)) || null;
-  }, [bids, currentUserId]);
+    if (!myUsername) return null;
+    return (
+      bids.find(
+        (b) =>
+          (b.contractor_username || b.contractor_name || "").toLowerCase() ===
+          myUsername
+      ) || null
+    );
+  }, [bids, myUsername]);
+
+  const hasAcceptedBid = useMemo(
+    () => bids.some((bid) => (bid.status || "").toLowerCase() === "accepted"),
+    [bids]
+  );
+
+  function openCreateModal() {
+    setError("");
+    setSuccess("");
+    setEditingBidId(null);
+    setForm(emptyForm());
+    setFormOpen(true);
+  }
+
+  function openEditModal(bid) {
+    setError("");
+    setSuccess("");
+    setEditingBidId(bid.id);
+    setForm(bidToForm(bid));
+    setFormOpen(true);
+  }
+
+  function closeModal() {
+    setFormOpen(false);
+    setEditingBidId(null);
+    setForm(emptyForm());
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -71,25 +217,44 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
       return;
     }
 
-    if (!form.amount) {
-      setError("Amount is required.");
+    if (!authed) {
+      setError("Please log in to submit a bid.");
       return;
     }
 
     setSubmitting(true);
     try {
-      await api.post(`/projects/${projectId}/bids/`, {
-        amount: form.amount,
-        message: form.message,
-      });
+      const fd = new FormData();
+      fd.append("price_type", form.price_type);
+      if (form.price_type === "fixed") {
+        fd.append("amount", form.amount);
+      } else {
+        fd.append("amount_min", form.amount_min);
+        fd.append("amount_max", form.amount_max);
+      }
+      fd.append("timeline_text", form.timeline_text);
+      fd.append("proposal_text", form.proposal_text);
+      fd.append("included_text", form.included_text);
+      fd.append("excluded_text", form.excluded_text);
+      fd.append("payment_terms", form.payment_terms);
+      fd.append("valid_until", form.valid_until);
+      if (form.attachment) {
+        fd.append("attachment", form.attachment);
+      }
 
-      setSuccess("Bid submitted.");
-      setForm({
-        amount: "",
-        message: "",
-      });
-      setFormOpen(false);
+      if (editingBidId) {
+        await api.patch(`/bids/${editingBidId}/`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setSuccess("Bid updated.");
+      } else {
+        await api.post(`/projects/${projectId}/bids/`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setSuccess("Bid submitted.");
+      }
 
+      closeModal();
       await loadBids();
     } catch (err) {
       console.error("[BidModule] submit failed:", err?.response || err);
@@ -105,8 +270,15 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
     setActionBusyId(bidId);
 
     try {
-      await api.post(`/bids/${bidId}/${action}/`);
-      setSuccess(`Bid ${action}ed.`);
+      const note = ownerNotes[String(bidId)] || "";
+      let payload = {};
+      if (action === "accept") payload = { owner_response_note: note };
+      if (action === "decline") payload = { owner_response_note: note };
+      if (action === "request-revision") payload = { revision_note: note };
+      if (action === "reopen") payload = { reopen_note: note };
+      await api.post(`/bids/${bidId}/${action}/`, payload);
+      setSuccess("Bid updated.");
+      setOwnerAction((prev) => ({ ...prev, [String(bidId)]: "" }));
       await loadBids();
     } catch (err) {
       console.error(`[BidModule] ${action} failed:`, err?.response || err);
@@ -139,9 +311,7 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
         </button>
       </div>
 
-      {loading ? (
-        <div className="mb-4 text-sm text-slate-500">Loading bids...</div>
-      ) : null}
+      {loading ? <div className="mb-4 text-sm text-slate-500">Loading bids...</div> : null}
 
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -162,55 +332,261 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
               No bids submitted yet.
             </div>
           ) : (
-            bids.map((bid) => (
-              <div key={bid.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {bid.contractor_name || `Contractor #${bid.contractor}`}
+            bids.map((bid) => {
+              const actionState = ownerAction[String(bid.id)] || "";
+              const noteLabel =
+                actionState === "request-revision"
+                  ? "Revision note"
+                  : actionState === "reopen"
+                  ? "Reopen note"
+                  : "Reason (optional)";
+              const notePlaceholder =
+                actionState === "request-revision"
+                  ? "Explain what needs to be changed before you can review this bid again."
+                  : actionState === "reopen"
+                  ? "Explain why you are reopening this bid and what you want the contractor to review again."
+                  : "Add a short explanation for why this bid is being declined.";
+              const status = String(bid.status || "").toLowerCase();
+              const isActive = status === "pending" || status === "revision_requested";
+
+              return (
+                <div key={bid.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      {bid.contractor_username ? (
+                        <Link
+                          to={`/profiles/${bid.contractor_username}`}
+                          className="text-sm font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                        >
+                          {bid.contractor_name || bid.contractor_username}
+                        </Link>
+                      ) : (
+                        <div className="text-sm font-semibold text-slate-900">
+                          {bid.contractor_name || `Contractor #${bid.contractor}`}
+                        </div>
+                      )}
+                      <div className="mt-1">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(status)}`}>
+                          {statusLabel(status)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs capitalize text-slate-500">
-                      Status: {bid.status}
+
+                    <div className="text-right">
+                      <div className="text-sm text-slate-500">
+                        {bid.price_type === "range" ? "Estimate range" : "Fixed price"}
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {bid.display_amount || "—"}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-slate-900">
-                      ${bid.amount}
+                  {bid.timeline_text ? (
+                    <div className="mt-3 text-sm text-slate-700">
+                      <span className="font-medium text-slate-900">Estimated timeline:</span>{" "}
+                      {bid.timeline_text}
                     </div>
+                  ) : null}
+
+                  {bid.proposal_text ? (
+                    <div className="mt-3">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Proposal
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm text-slate-700">
+                        {bid.proposal_text}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {bid.included_text ? (
+                    <div className="mt-3">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        What’s included
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm text-slate-700">
+                        {bid.included_text}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {bid.excluded_text ? (
+                    <div className="mt-3">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        What’s excluded
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm text-slate-700">
+                        {bid.excluded_text}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {bid.payment_terms ? (
+                    <div className="mt-3">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Payment terms
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm text-slate-700">
+                        {bid.payment_terms}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-600">
+                    {bid.valid_until ? <div>Valid until: {bid.valid_until}</div> : null}
+                    {bid.attachment_url ? (
+                      <a
+                        href={bid.attachment_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sky-700 hover:text-sky-800 hover:underline"
+                      >
+                        View attachment
+                      </a>
+                    ) : null}
                   </div>
+
+                  {bid.owner_response_note ? (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Owner note
+                      </div>
+                      <div className="whitespace-pre-wrap">{bid.owner_response_note}</div>
+                    </div>
+                  ) : null}
+
+                  {status !== "accepted" && status !== "withdrawn" ? (
+                    <div className="mt-4 space-y-3">
+                      {actionState ? (
+                        <Field
+                          label={noteLabel}
+                          helper={
+                            actionState === "request-revision"
+                              ? "Ask the contractor to update pricing, timeline, scope, or terms."
+                              : actionState === "reopen"
+                              ? "Explain why you are reopening this bid."
+                              : ""
+                          }
+                        >
+                          <textarea
+                            rows={3}
+                            value={ownerNotes[String(bid.id)] || ""}
+                            onChange={(e) =>
+                              setOwnerNotes((prev) => ({
+                                ...prev,
+                                [String(bid.id)]: e.target.value,
+                              }))
+                            }
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                            placeholder={notePlaceholder}
+                          />
+                        </Field>
+                      ) : null}
+
+                      <div className="flex flex-wrap gap-2">
+                        {isActive ? (
+                          <button
+                            type="button"
+                            disabled={actionBusyId === bid.id}
+                            onClick={() => runAction(bid.id, "accept")}
+                            className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                          >
+                            {actionBusyId === bid.id ? "Working..." : "Accept"}
+                          </button>
+                        ) : null}
+
+                        {isActive ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOwnerAction((prev) => ({
+                                ...prev,
+                                [String(bid.id)]:
+                                  prev[String(bid.id)] === "request-revision" ? "" : "request-revision",
+                              }))
+                            }
+                            className="rounded-xl border border-sky-300 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
+                          >
+                            Request Revision
+                          </button>
+                        ) : null}
+
+                        {isActive ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOwnerAction((prev) => ({
+                                ...prev,
+                                [String(bid.id)]:
+                                  prev[String(bid.id)] === "decline" ? "" : "decline",
+                              }))
+                            }
+                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                          >
+                            Decline Bid
+                          </button>
+                        ) : null}
+
+                        {status === "declined" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOwnerAction((prev) => ({
+                                ...prev,
+                                [String(bid.id)]:
+                                  prev[String(bid.id)] === "reopen" ? "" : "reopen",
+                              }))
+                            }
+                            className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                          >
+                            Reopen Bid
+                          </button>
+                        ) : null}
+
+                        {actionState === "request-revision" ? (
+                          <button
+                            type="button"
+                            disabled={actionBusyId === bid.id}
+                            onClick={() => runAction(bid.id, "request-revision")}
+                            className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                          >
+                            {actionBusyId === bid.id ? "Working..." : "Send Revision Request"}
+                          </button>
+                        ) : null}
+
+                        {actionState === "decline" ? (
+                          <button
+                            type="button"
+                            disabled={actionBusyId === bid.id}
+                            onClick={() => runAction(bid.id, "decline")}
+                            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                          >
+                            {actionBusyId === bid.id ? "Working..." : "Confirm Decline"}
+                          </button>
+                        ) : null}
+
+                        {actionState === "reopen" ? (
+                          <button
+                            type="button"
+                            disabled={actionBusyId === bid.id}
+                            onClick={() => runAction(bid.id, "reopen")}
+                            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            {actionBusyId === bid.id ? "Working..." : "Confirm Reopen"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-
-                {bid.message ? (
-                  <div className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
-                    {bid.message}
-                  </div>
-                ) : null}
-
-                {["pending", "submitted"].includes((bid.status || "").toLowerCase()) ? (
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      type="button"
-                      disabled={actionBusyId === bid.id}
-                      onClick={() => runAction(bid.id, "accept")}
-                      className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-                    >
-                      {actionBusyId === bid.id ? "Working..." : "Accept"}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={actionBusyId === bid.id}
-                      onClick={() => runAction(bid.id, "decline")}
-                      className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-                    >
-                      {actionBusyId === bid.id ? "Working..." : "Decline"}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ))
+              );
+            })
           )}
+        </div>
+      ) : !authed ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          Log in to submit a bid for this job posting.
         </div>
       ) : (
         <div className="space-y-4">
@@ -218,29 +594,123 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">
-                    Your current bid
-                  </div>
-                  <div className="mt-1 text-xs capitalize text-slate-500">
-                    Status: {myBid.status}
+                  {ownerUsername ? (
+                    <div className="text-sm">
+                      <span className="text-slate-500">Owner: </span>
+                      <Link
+                        to={`/profiles/${ownerUsername}`}
+                        className="font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                      >
+                        {ownerUsername}
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="text-sm font-semibold text-slate-900">Your current bid</div>
+                  )}
+                  <div className="mt-1">
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(myBid.status)}`}>
+                      {statusLabel(myBid.status)}
+                    </span>
                   </div>
                 </div>
 
                 <div className="text-right">
+                  <div className="text-sm text-slate-500">
+                    {myBid.price_type === "range" ? "Estimate range" : "Fixed price"}
+                  </div>
                   <div className="text-lg font-bold text-slate-900">
-                    ${myBid.amount}
+                    {myBid.display_amount || "—"}
                   </div>
                 </div>
               </div>
 
-              {myBid.message ? (
-                <div className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
-                  {myBid.message}
+              {myBid.timeline_text ? (
+                <div className="mt-3 text-sm text-slate-700">
+                  <span className="font-medium text-slate-900">Estimated timeline:</span>{" "}
+                  {myBid.timeline_text}
                 </div>
               ) : null}
 
-              {myBid.status !== "accepted" && myBid.status !== "withdrawn" ? (
-                <div className="mt-4">
+              {myBid.proposal_text ? (
+                <div className="mt-3">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Proposal
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {myBid.proposal_text}
+                  </div>
+                </div>
+              ) : null}
+
+              {myBid.included_text ? (
+                <div className="mt-3">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    What’s included
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {myBid.included_text}
+                  </div>
+                </div>
+              ) : null}
+
+              {myBid.excluded_text ? (
+                <div className="mt-3">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    What’s excluded
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {myBid.excluded_text}
+                  </div>
+                </div>
+              ) : null}
+
+              {myBid.payment_terms ? (
+                <div className="mt-3">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Payment terms
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {myBid.payment_terms}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-600">
+                {myBid.valid_until ? <div>Valid until: {myBid.valid_until}</div> : null}
+                {myBid.attachment_url ? (
+                  <a
+                    href={myBid.attachment_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sky-700 hover:text-sky-800 hover:underline"
+                  >
+                    View attachment
+                  </a>
+                ) : null}
+              </div>
+
+              {myBid.owner_response_note ? (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Owner note
+                  </div>
+                  <div className="whitespace-pre-wrap">{myBid.owner_response_note}</div>
+                </div>
+              ) : null}
+
+              {["pending", "revision_requested"].includes(
+                String(myBid.status || "").toLowerCase()
+              ) ? (
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={actionBusyId === myBid.id}
+                    onClick={() => openEditModal(myBid)}
+                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    Revise Bid
+                  </button>
+
                   <button
                     type="button"
                     disabled={actionBusyId === myBid.id}
@@ -252,75 +722,246 @@ export default function BidModule({ projectId, currentUserId, ownerId }) {
                 </div>
               ) : null}
             </div>
-          ) : !formOpen ? (
+          ) : (
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => {
-                  setError("");
-                  setSuccess("");
-                  setFormOpen(true);
-                }}
-                className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"
+                onClick={openCreateModal}
+                disabled={hasAcceptedBid}
+                className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
               >
                 Send Bid
               </button>
             </div>
+          )}
+
+          {hasAcceptedBid && !myBid ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              This job posting has already been awarded and is closed to new bids.
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <Modal
+        open={formOpen}
+        onClose={closeModal}
+        title={editingBidId ? "Revise Your Bid" : "Submit Your Bid"}
+      >
+        <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="font-semibold">Important:</div>
+          <div>
+            Submitting a bid does not create a final legal contract. It is a proposal for review and agreement between both sides.
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <div className="text-sm text-slate-600">
+            Send a clear proposal for this job. Keep it specific, realistic, and easy for the owner to review.
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <Field label="Price type">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                <input
+                  type="radio"
+                  name="price_type"
+                  value="fixed"
+                  checked={form.price_type === "fixed"}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, price_type: e.target.value }))
+                  }
+                />
+                <span>Fixed price</span>
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm">
+                <input
+                  type="radio"
+                  name="price_type"
+                  value="range"
+                  checked={form.price_type === "range"}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, price_type: e.target.value }))
+                  }
+                />
+                <span>Estimate range</span>
+              </label>
+            </div>
+          </Field>
+
+          {form.price_type === "fixed" ? (
+            <Field
+              label="Bid amount"
+              helper="Enter the total amount you would charge for this job."
+            >
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.amount}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, amount: e.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Example: 4500"
+              />
+            </Field>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Amount
-                </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Minimum amount"
+                helper="Use a range if the final cost depends on site conditions, material choices, or hidden issues."
+              >
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={form.amount}
+                  value={form.amount_min}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, amount: e.target.value }))
+                    setForm((prev) => ({ ...prev, amount_min: e.target.value }))
                   }
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="5000"
+                  placeholder="Example: 4000"
                 />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Message
-                </label>
-                <textarea
-                  rows={4}
-                  value={form.message}
+              </Field>
+              <Field label="Maximum amount">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.amount_max}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, message: e.target.value }))
+                    setForm((prev) => ({ ...prev, amount_max: e.target.value }))
                   }
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="Write a short proposal..."
+                  placeholder="Example: 5500"
                 />
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(false)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-                >
-                  {submitting ? "Submitting..." : "Submit Bid"}
-                </button>
-              </div>
-            </form>
+              </Field>
+            </div>
           )}
-        </div>
-      )}
+
+          <Field
+            label="Estimated timeline"
+            helper="Give a realistic timeframe for completing the work."
+          >
+            <input
+              type="text"
+              value={form.timeline_text}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, timeline_text: e.target.value }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Example: 2–3 weeks"
+            />
+          </Field>
+
+          <Field
+            label="Proposal"
+            helper="This is your main message to the owner. Explain how you would handle the project."
+          >
+            <textarea
+              rows={5}
+              value={form.proposal_text}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, proposal_text: e.target.value }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Describe your approach, understanding of the job, and anything the owner should know before choosing your bid."
+            />
+          </Field>
+
+          <Field
+            label="What’s included"
+            helper="List the work, services, or materials covered by this bid."
+          >
+            <textarea
+              rows={4}
+              value={form.included_text}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, included_text: e.target.value }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Example: labor, installation, standard materials, site cleanup"
+            />
+          </Field>
+
+          <Field
+            label="What’s excluded"
+            helper="Clarify anything not covered so expectations are clear."
+          >
+            <textarea
+              rows={4}
+              value={form.excluded_text}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, excluded_text: e.target.value }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Example: permit fees, specialty finishes, hidden damage repair"
+            />
+          </Field>
+
+          <Field
+            label="Payment terms"
+            helper="Explain how and when payment would be handled."
+          >
+            <textarea
+              rows={4}
+              value={form.payment_terms}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, payment_terms: e.target.value }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Example: 30% deposit, 40% during work, 30% on completion"
+            />
+          </Field>
+
+          <Field label="Bid valid until" helper="Set the date until this bid remains valid.">
+            <input
+              type="date"
+              value={form.valid_until}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, valid_until: e.target.value }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            />
+          </Field>
+
+          <Field
+            label="Attachment (optional)"
+            helper="Upload a quote, estimate sheet, reference document, or supporting file."
+          >
+            <input
+              type="file"
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  attachment: e.target.files?.[0] || null,
+                }))
+              }
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            />
+          </Field>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={closeModal}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+            >
+              {submitting ? "Submitting..." : "Submit Bid"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

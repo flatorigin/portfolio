@@ -3,12 +3,13 @@
 // Project page + lightbox-style comments modal + project edit + extra links
 // + Comments: optional rating, disclaimer, stars placeholder, lock edit/delete when testimonial_published
 // =======================================
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, lazy, useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
-// import BidModule from "../components/bids/BidModule";
+
+const BidModule = lazy(() => import("../components/bids/BidModule"));
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -911,13 +912,14 @@ export default function ProjectDetail() {
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
           )}
 
-{/*          {project?.is_job_posting && project?.id ? (
-            <BidModule
-              projectId={project.id}
-              currentUserId={meUser?.id}
-              ownerId={project.owner}
-            />
-          ) : null}*/}
+          {project?.is_job_posting && project?.id ? (
+            <Suspense fallback={<div className="text-sm text-slate-500">Loading bids…</div>}>
+              <BidModule
+                projectId={project.id}
+                ownerUsername={project.owner_username}
+              />
+            </Suspense>
+          ) : null}
 
           {/* OWNER-ONLY PROJECT EDIT CARD */}
           {isOwnerUser && isEditing && project && (

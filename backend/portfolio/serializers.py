@@ -74,6 +74,8 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     cover_image_url = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
+    bid_count = serializers.IntegerField(read_only=True, default=0)
+    accepted_bid_count = serializers.IntegerField(read_only=True, default=0)
 
     cover_image_ref = serializers.PrimaryKeyRelatedField(
         queryset=ProjectImage.objects.all(),
@@ -117,6 +119,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             "private_contractor_username",
             "notify_by_email",
             "job_is_published",
+            "bid_count",
+            "accepted_bid_count",
             "cover_image_ref",
             "cover_image_file",
             "cover_image_url",

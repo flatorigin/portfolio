@@ -66,11 +66,18 @@ export function GhostButton({ className = "", ...props }) {
 }
 
 export function Badge({ children, className = "", ...props }) {
+  const hasCustomBg = /\b(?:!?)bg-[^\s]+/.test(className);
+  const hasCustomText = /\b(?:!?)text-[^\s]+/.test(className);
+  const hasCustomBorder = /\b(?:!?)border-[^\s]+/.test(className);
+
   return (
     <span
       {...props}
       className={
-        "inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs text-slate-700 " +
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs " +
+        (hasCustomBorder ? "" : "border-slate-200 ") +
+        (hasCustomBg ? "" : "bg-slate-50 ") +
+        (hasCustomText ? "" : "text-slate-700 ") +
         className
       }
     >

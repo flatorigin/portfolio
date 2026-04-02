@@ -1,6 +1,6 @@
 # file: backend/portfolio/views.py
 from django.db import models, transaction
-from django.db.models import Q, OuterRef, Subquery
+from django.db.models import Q, OuterRef, Subquery, Count
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from datetime import timedelta
@@ -25,6 +25,7 @@ from .models import (
     ProjectFavorite,
     MessageAttachment,
 )
+from apps.bids.models import Bid
 from .serializers import (
     ProjectSerializer,
     ProjectImageSerializer,
@@ -145,7 +146,14 @@ class UnpublishTestimonialView(APIView):
 # Projects + images + favorites
 # ---------------------------------------------------
 class ProjectViewSet(viewsets.ModelViewSet):
-    queryset = Project.objects.select_related("owner").all()
+    queryset = Project.objects.select_related("owner").annotate(
+        bid_count=Count("bids", distinct=True),
+        accepted_bid_count=Count(
+            "bids",
+            filter=Q(bids__status=Bid.STATUS_ACCEPTED),
+            distinct=True,
+        ),
+    ).all()
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
@@ -156,12 +164,37 @@ class ProjectViewSet(viewsets.ModelViewSet):
         GET /api/projects/mine/
         Returns ONLY projects owned by the current user.
         """
-        qs = Project.objects.select_related("owner").filter(owner=request.user).order_by("-updated_at")
+        qs = (
+            Project.objects.select_related("owner")
+            .prefetch_related("images")
+            .annotate(
+                bid_count=Count("bids", distinct=True),
+                accepted_bid_count=Count(
+                    "bids",
+                    filter=Q(bids__status=Bid.STATUS_ACCEPTED),
+                    distinct=True,
+                ),
+            )
+            .filter(owner=request.user)
+            .order_by("-updated_at")
+        )
         ser = self.get_serializer(qs, many=True, context={"request": request})
         return Response(ser.data)
 
     def get_queryset(self):
-        qs = Project.objects.select_related("owner").prefetch_related("images").all()
+        qs = (
+            Project.objects.select_related("owner")
+            .prefetch_related("images")
+            .annotate(
+                bid_count=Count("bids", distinct=True),
+                accepted_bid_count=Count(
+                    "bids",
+                    filter=Q(bids__status=Bid.STATUS_ACCEPTED),
+                    distinct=True,
+                ),
+            )
+            .all()
+        )
         request = self.request
         owner_username = (request.query_params.get("owner") or "").strip()
 
@@ -361,7 +394,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
         qs = (
             Project.objects.select_related("owner")
             .filter(is_job_posting=True, is_public=True, post_privacy="public")
+            .exclude(bids__status=Bid.STATUS_ACCEPTED)
             .order_by("-updated_at")
+            .distinct()
         )
         ser = self.get_serializer(qs, many=True, context={"request": request})
         return Response(ser.data)

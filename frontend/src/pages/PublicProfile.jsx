@@ -8,11 +8,12 @@
 // Contact card uses member-since + languages + filtered public contact info
 // =======================================
 import { useParams, Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
-import ServiceAreaMap from "../components/ServiceAreaMap";
-import QuickMessageDrawer from "../components/QuickMessageDrawer";
+
+const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
+const QuickMessageDrawer = lazy(() => import("../components/QuickMessageDrawer"));
 
 function DisabledActionWithTooltip({ label, message }) {
   return (
@@ -87,6 +88,8 @@ export default function PublicProfile() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
+
+  const shouldRenderMap = Boolean(profile?.service_location);
 
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
@@ -518,13 +521,23 @@ export default function PublicProfile() {
           </Card>
         </div>
 
-        <div className="mt-6">
-          <ServiceAreaMap
-            locationQuery={profile?.service_location || ""}
-            radiusMiles={profile?.coverage_radius_miles || ""}
-            heightClassName="h-64"
-          />
-        </div>
+        {shouldRenderMap ? (
+          <div className="mt-6">
+            <Suspense
+              fallback={
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                  Loading map…
+                </div>
+              }
+            >
+              <ServiceAreaMap
+                locationQuery={profile?.service_location || ""}
+                radiusMiles={profile?.coverage_radius_miles || ""}
+                heightClassName="h-64"
+              />
+            </Suspense>
+          </div>
+        ) : null}
 
         <div className="mt-10">
           <div className="mb-3 flex items-end justify-between gap-3">
@@ -593,12 +606,16 @@ export default function PublicProfile() {
         </div>
       </div>
 
-      <QuickMessageDrawer
-        open={msgOpen}
-        onClose={() => setMsgOpen(false)}
-        recipientUsername={profile?.username}
-        recipientDisplayName={displayName}
-      />
+      {msgOpen ? (
+        <Suspense fallback={null}>
+          <QuickMessageDrawer
+            open={msgOpen}
+            onClose={() => setMsgOpen(false)}
+            recipientUsername={profile?.username}
+            recipientDisplayName={displayName}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

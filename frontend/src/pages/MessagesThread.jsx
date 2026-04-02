@@ -171,6 +171,21 @@ export default function MessagesThread() {
 
   const meLower = (meUsername || "").toLowerCase();
 
+  const markThreadRead = useCallback((thread) => {
+    const latestId = thread?.latest_message?.id;
+    if (!thread?.id || !latestId) return;
+    const raw = localStorage.getItem("inbox_read_map") || "{}";
+    let next = {};
+    try {
+      next = JSON.parse(raw);
+    } catch {
+      next = {};
+    }
+    next[String(thread.id)] = String(latestId);
+    localStorage.setItem("inbox_read_map", JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent("inbox:read-map-changed"));
+  }, []);
+
   const activeThread = useMemo(
     () => threads.find((t) => String(t.id) === String(activeThreadId)) || null,
     [threads, activeThreadId]
@@ -179,14 +194,6 @@ export default function MessagesThread() {
   const threadIsRequest = !!activeThread?.is_request;
   const canReply =
     activeThread?.can_reply !== undefined ? !!activeThread.can_reply : true;
-
-  const markThreadRead = (id) => {
-    setReadThreadIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  };
 
   const counterpartFor = (thread) => {
     if (!thread) return null;
@@ -284,11 +291,18 @@ export default function MessagesThread() {
       return;
     }
 
+    markThreadRead(activeThread);
+    setReadThreadIds((prev) => {
+      const next = new Set(prev);
+      next.add(activeThread.id);
+      return next;
+    });
+
     fetchMessages({ silent: false });
 
     const timer = setInterval(() => fetchMessages({ silent: true }), 8000);
     return () => clearInterval(timer);
-  }, [activeThread?.id, fetchMessages]);
+  }, [activeThread, fetchMessages, markThreadRead]);
 
   async function threadAction(action) {
     if (!activeThread?.id) return;
@@ -386,7 +400,15 @@ export default function MessagesThread() {
 
   const openThread = (id) => {
     setActiveThreadId(id);
-    markThreadRead(id);
+    const thread = threads.find((t) => String(t.id) === String(id));
+    if (thread) {
+      markThreadRead(thread);
+    }
+    setReadThreadIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     navigate(`/messages/${id}`);
   };
 
