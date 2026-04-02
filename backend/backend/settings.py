@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts.apps.AccountsConfig",
     "anymail",
+    "apps.bids",
 ]
 
 MIDDLEWARE = [
