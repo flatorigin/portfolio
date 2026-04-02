@@ -199,8 +199,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ProjectComment.objects.filter(project=project).delete()
             ProjectFavorite.objects.filter(project=project).delete()
 
-            # ✅ Correct field name for your MessageThread model
-            MessageThread.objects.filter(origin_project=project).delete()
+            MessageThread.objects.filter(project=project).delete()
 
             project.delete()
 
