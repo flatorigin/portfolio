@@ -18,12 +18,6 @@ from .views import (
     UnpublishTestimonialView,
     MessageDetailView,
     MessageAttachmentDeleteView,
-    ProjectBidListCreateView,
-    ProjectBidDetailView,
-    ProjectBidReviseView,
-    ProjectBidAcceptView,
-    ProjectBidDeclineView,
-    ProjectBidWithdrawView,
 )
 
 router = DefaultRouter()
@@ -53,14 +47,6 @@ urlpatterns = [
         UnpublishTestimonialView.as_view(),
         name="unpublish-testimonial",
     ),
-
-    # Project bids
-    path("projects/<int:pk>/bids/", ProjectBidListCreateView.as_view(), name="project-bids"),
-    path("bids/<int:bid_id>/", ProjectBidDetailView.as_view(), name="project-bid-detail"),
-    path("bids/<int:bid_id>/revise/", ProjectBidReviseView.as_view(), name="project-bid-revise"),
-    path("bids/<int:bid_id>/accept/", ProjectBidAcceptView.as_view(), name="project-bid-accept"),
-    path("bids/<int:bid_id>/decline/", ProjectBidDeclineView.as_view(), name="project-bid-decline"),
-    path("bids/<int:bid_id>/withdraw/", ProjectBidWithdrawView.as_view(), name="project-bid-withdraw"),
 
     # Project-tied private threads (existing system)
     path("projects/<int:pk>/threads/", ProjectThreadCreateView.as_view(), name="project-thread"),

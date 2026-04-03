@@ -209,33 +209,20 @@ export default function MessagesThread() {
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   const [readThreadIds, setReadThreadIds] = useState(new Set());
-  const [meUsername, setMeUsername] = useState("");
+  const [meUsername, setMeUsername] = useState(() => localStorage.getItem("username") || "");
 
   useEffect(() => {
-    let active = true;
-
-    (async () => {
-      try {
-        const { data } = await api.get("/auth/users/me/");
-        if (active && isMountedRef.current) {
-          setMeUsername(data?.username || "");
-        }
-      } catch {
-        try {
-          const { data } = await api.get("/users/me/");
-          if (active && isMountedRef.current) {
-            setMeUsername(data?.username || data?.user?.username || "");
-          }
-        } catch {
-          if (active && isMountedRef.current) {
-            setMeUsername(localStorage.getItem("username") || "");
-          }
-        }
+    const syncUsername = () => {
+      if (isMountedRef.current) {
+        setMeUsername(localStorage.getItem("username") || "");
       }
-    })();
-
+    };
+    syncUsername();
+    window.addEventListener("storage", syncUsername);
+    window.addEventListener("auth:changed", syncUsername);
     return () => {
-      active = false;
+      window.removeEventListener("storage", syncUsername);
+      window.removeEventListener("auth:changed", syncUsername);
     };
   }, []);
 
@@ -451,7 +438,28 @@ export default function MessagesThread() {
       setReplyTo(null);
 
       await fetchMessages({ silent: false });
-      await fetchThreads();
+      const previewText = body || (composerAttachments.some((item) => item.kind === "link") ? "Link" : "Attachment");
+      const nowIso = new Date().toISOString();
+      setThreads((prev) => {
+        const next = [...prev];
+        const index = next.findIndex((thread) => String(thread.id) === String(activeThread.id));
+        if (index === -1) return prev;
+        const updated = {
+          ...next[index],
+          updated_at: nowIso,
+          latest_message: {
+            ...(next[index].latest_message || {}),
+            id: `local-${Date.now()}`,
+            sender_username: meUsername,
+            text: body,
+            attachment_name: !body && previewText === "Attachment" ? previewText : "",
+            created_at: nowIso,
+          },
+        };
+        next.splice(index, 1);
+        next.unshift(updated);
+        return next;
+      });
     } catch (err) {
       const msg =
         err?.response?.data?.detail ||

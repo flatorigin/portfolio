@@ -1,6 +1,6 @@
 # file: backend/portfolio/views.py
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from datetime import timedelta
@@ -25,6 +25,7 @@ from .models import (
     ProjectBid,
     ProjectBidVersion,
 )
+from apps.bids.models import Bid
 from .serializers import (
     ProjectSerializer,
     ProjectImageSerializer,
@@ -124,20 +125,54 @@ class UnpublishTestimonialView(APIView):
 # Projects + images + favorites
 # ---------------------------------------------------
 class ProjectViewSet(viewsets.ModelViewSet):
-    queryset = Project.objects.select_related("owner").all()
+    queryset = Project.objects.select_related("owner").annotate(
+        bid_count=Count("bids", distinct=True),
+        accepted_bid_count=Count(
+            "bids",
+            filter=Q(bids__status=Bid.STATUS_ACCEPTED),
+            distinct=True,
+        ),
+    ).all()
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated], url_path="mine")
     def mine(self, request):
-        qs = Project.objects.select_related("owner").filter(owner=request.user).order_by("-updated_at")
+        qs = (
+            Project.objects.select_related("owner")
+            .annotate(
+                bid_count=Count("bids", distinct=True),
+                accepted_bid_count=Count(
+                    "bids",
+                    filter=Q(bids__status=Bid.STATUS_ACCEPTED),
+                    distinct=True,
+                ),
+            )
+            .filter(owner=request.user)
+            .order_by("-updated_at")
+        )
         ser = self.get_serializer(qs, many=True, context={"request": request})
         return Response(ser.data)
 
     def get_queryset(self):
-        qs = Project.objects.select_related("owner").all()
+        qs = (
+            Project.objects.select_related("owner")
+            .annotate(
+                bid_count=Count("bids", distinct=True),
+                accepted_bid_count=Count(
+                    "bids",
+                    filter=Q(bids__status=Bid.STATUS_ACCEPTED),
+                    distinct=True,
+                ),
+            )
+            .all()
+        )
         request = self.request
+        owner_username = (request.query_params.get("owner") or "").strip()
+
+        if owner_username:
+            qs = qs.filter(owner__username=owner_username)
 
         if not request.user.is_authenticated:
             return qs.filter(is_public=True)
@@ -170,6 +205,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
             MessageThread.objects.filter(project=project).delete()
             ProjectBid.objects.filter(project=project).delete()
+            Bid.objects.filter(project=project).delete()
 
             project.delete()
 
@@ -671,10 +707,24 @@ class InboxThreadListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        latest_messages = PrivateMessage.objects.filter(thread=OuterRef("pk")).order_by("-created_at")
         return (
             MessageThread.objects
             .filter(Q(owner=user) | Q(client=user))
             .select_related("owner", "client", "owner__profile", "client__profile")
+            .annotate(
+                latest_message_id=Subquery(latest_messages.values("id")[:1]),
+                latest_message_text=Subquery(latest_messages.values("text")[:1]),
+                latest_message_attachment_name=Subquery(
+                    latest_messages.values("attachment_name")[:1]
+                ),
+                latest_message_created_at=Subquery(
+                    latest_messages.values("created_at")[:1]
+                ),
+                latest_message_sender_username=Subquery(
+                    latest_messages.values("sender__username")[:1]
+                ),
+            )
             .order_by("-updated_at")
         )
 

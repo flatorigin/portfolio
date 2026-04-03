@@ -10,6 +10,7 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea, Input } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
+import BidModule from "../components/bids/BidModule";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -1404,20 +1405,6 @@ export default function ProjectDetail() {
                 </Button>
               ) : null}
 
-              {authed && project && !isOwnerUser ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => {
-                    setBidError("");
-                    setBidSuccess("");
-                    setBidOpen(true);
-                  }}
-                  className="min-w-[110px] justify-center rounded-full bg-sky-500 px-6 text-sm font-semibold text-white shadow-sm hover:bg-sky-600 active:scale-[0.99]"
-                >
-                  Send Bid
-                </Button>
-              ) : null}
             </div>
           </div>
         </div>
@@ -1427,38 +1414,9 @@ export default function ProjectDetail() {
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
           )}
 
-          {authed && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {isOwnerUser ? "Incoming bids" : "Your bid"}
-                </div>
-                {loadingBids ? (
-                  <div className="text-[11px] text-slate-500">Loading…</div>
-                ) : null}
-              </div>
-
-              {isOwnerUser ? (
-                incomingBids.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                    No bids submitted yet.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {incomingBids.map((bid) =>
-                      renderBidCard(bid, { ownerView: true, compact: true })
-                    )}
-                  </div>
-                )
-              ) : myBid ? (
-                renderBidCard(myBid, { ownerView: false, compact: false })
-              ) : (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                  You have not submitted a bid for this project yet.
-                </div>
-              )}
-            </div>
-          )}
+          {project?.is_job_posting && project?.id ? (
+            <BidModule projectId={project.id} ownerUsername={project.owner_username} />
+          ) : null}
           {isOwnerUser && isEditing && project && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0">
               <ProjectEditorCard

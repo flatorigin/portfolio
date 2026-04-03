@@ -78,6 +78,8 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     cover_image_url = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
+    bid_count = serializers.IntegerField(read_only=True, default=0)
+    accepted_bid_count = serializers.IntegerField(read_only=True, default=0)
 
     cover_image_ref = serializers.PrimaryKeyRelatedField(
         queryset=ProjectImage.objects.all(),
@@ -121,6 +123,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             "private_contractor_username",
             "notify_by_email",
             "job_is_published",
+            "bid_count",
+            "accepted_bid_count",
             "cover_image_ref",
             "cover_image_file",
             "cover_image_url",
@@ -404,10 +408,26 @@ class MessageThreadSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_latest_message(self, obj):
-        msg = obj.messages.order_by("-created_at").first()
-        if not msg:
-            return None
-        return PrivateMessageSerializer(msg, context=self.context).data
+        latest_id = getattr(obj, "latest_message_id", None)
+        if latest_id is None:
+            msg = obj.messages.order_by("-created_at").first()
+            if not msg:
+                return None
+            return {
+                "id": msg.id,
+                "sender_username": getattr(msg.sender, "username", ""),
+                "text": msg.text or "",
+                "attachment_name": msg.attachment_name or "",
+                "created_at": msg.created_at,
+            }
+
+        return {
+            "id": latest_id,
+            "sender_username": getattr(obj, "latest_message_sender_username", "") or "",
+            "text": getattr(obj, "latest_message_text", "") or "",
+            "attachment_name": getattr(obj, "latest_message_attachment_name", "") or "",
+            "created_at": getattr(obj, "latest_message_created_at", None),
+        }
 
     def _current_user(self):
         request = self.context.get("request")

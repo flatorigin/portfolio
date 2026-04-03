@@ -2,7 +2,7 @@
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 
 import CreateProjectCard from "../components/CreateProjectCard";
@@ -104,11 +104,12 @@ function isJobPostingFlag(value) {
 function getBidSummaryMeta(bids) {
   const list = Array.isArray(bids) ? bids : [];
 
-  const openStatuses = new Set(["submitted", "revised"]);
+  const openStatuses = new Set(["pending", "revision_requested"]);
   const closedStatuses = new Set(["accepted", "declined", "withdrawn"]);
 
   let openCount = 0;
   let totalCount = list.length;
+  let acceptedCount = 0;
   let latestCreatedAt = null;
 
   for (const bid of list) {
@@ -116,6 +117,7 @@ function getBidSummaryMeta(bids) {
     const status = String(latest.status || bid?.status || "").toLowerCase();
 
     if (openStatuses.has(status)) openCount += 1;
+    if (status === "accepted") acceptedCount += 1;
 
     const createdAt =
       latest?.created_at ||
@@ -138,6 +140,7 @@ function getBidSummaryMeta(bids) {
   return {
     totalCount,
     openCount,
+    acceptedCount,
     hasNewBid: openCount > 0,
     latestCreatedAt,
   };
@@ -416,6 +419,8 @@ export default function Dashboard() {
   });
 
   const [myThumbs, setMyThumbs] = useState({});
+  const [myBids, setMyBids] = useState([]);
+  const [activeBidCard, setActiveBidCard] = useState(null);
 
   // NEW: bid summary per owned job/project
   const [jobBidMeta, setJobBidMeta] = useState({});
@@ -505,6 +510,7 @@ export default function Dashboard() {
             {
               totalCount: 0,
               openCount: 0,
+              acceptedCount: 0,
               hasNewBid: false,
               latestCreatedAt: null,
             },
@@ -520,6 +526,22 @@ export default function Dashboard() {
 
   // ---- Job posts for current user (job postings only) ----
   const [myJobPosts, setMyJobPosts] = useState([]);
+
+  const refreshMyBids = useCallback(async () => {
+    try {
+      const { data } = await api.get("/bids/");
+      const mine = Array.isArray(data)
+        ? data.filter(
+            (bid) =>
+              (bid.contractor_username || "").toLowerCase() ===
+              (meUser.username || "").toLowerCase()
+          )
+        : [];
+      if (isMountedRef.current) setMyBids(mine);
+    } catch {
+      if (isMountedRef.current) setMyBids([]);
+    }
+  }, [meUser.username]);
 
   const refreshMyJobPosts = useCallback(async () => {
     try {
@@ -579,6 +601,10 @@ export default function Dashboard() {
   useEffect(() => {
     refreshProjects();
   }, [refreshProjects]);
+
+  useEffect(() => {
+    refreshMyBids();
+  }, [refreshMyBids]);
 
   const list = projects;
 
@@ -993,8 +1019,11 @@ export default function Dashboard() {
                 const bidMeta = jobBidMeta?.[p.id] || {
                   totalCount: 0,
                   openCount: 0,
+                  acceptedCount: 0,
                   hasNewBid: false,
                 };
+                const isAwarded = Number(p?.accepted_bid_count || bidMeta.acceptedCount || 0) > 0;
+                const hasBids = Number(p?.bid_count || bidMeta.totalCount || 0) > 0;
 
                 return (
                   <Card
@@ -1019,24 +1048,14 @@ export default function Dashboard() {
 
                       <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                         <Badge className="bg-slate-900 text-white">Job post</Badge>
-                        {isPublished ? (
+                        {isAwarded ? (
+                          <Badge className="!bg-indigo-600 !text-white">Awarded</Badge>
+                        ) : isPublished ? (
                           <Badge className="bg-slate-900 text-white">Published</Badge>
                         ) : (
                           <Badge className="bg-slate-200 text-slate-800">Draft</Badge>
                         )}
-                        {bidMeta.hasNewBid ? (
-                          <div className="relative">
-                            {/* pill */}
-                            <div className="rounded-full border border-indigo-600 bg-white px-4 py-1 text-xs font-medium text-indigo-600 shadow-sm">
-                              New Bid
-                            </div>
-
-                            {/* counter bubble */}
-                            <div className="absolute -left-2 -top-2 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-semibold text-white shadow">
-                              {bidMeta.openCount}
-                            </div>
-                          </div>
-                        ) : null}
+                        {!isAwarded && hasBids ? <Badge className="!bg-indigo-600 !text-white">Bid</Badge> : null}
                       </div>
                     </div>
 
@@ -1066,10 +1085,16 @@ export default function Dashboard() {
                           <div
                             className={
                               "font-medium " +
-                              (bidMeta.openCount > 0 ? "text-emerald-700" : "text-slate-500")
+                              (isAwarded
+                                ? "text-indigo-700"
+                                : bidMeta.openCount > 0
+                                ? "text-emerald-700"
+                                : "text-slate-500")
                             }
                           >
-                            {bidMeta.openCount > 0
+                            {isAwarded
+                              ? "Awarded"
+                              : bidMeta.openCount > 0
                               ? `${bidMeta.openCount} open`
                               : "No open bids"}
                           </div>
@@ -1099,6 +1124,276 @@ export default function Dashboard() {
           </div>
         )}
       </Card>
+
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Your Bids</div>
+            <div className="text-xs text-slate-600">
+              Accepted bids stay visible here after the posting closes.
+            </div>
+          </div>
+          <Badge>{myBids.length} bids</Badge>
+        </div>
+
+        {myBids.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            You have not placed any bids yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+            {myBids.map((bid) => {
+              const status = (bid.status || "").toLowerCase();
+              const statusBadgeClass =
+                status === "accepted"
+                  ? "bg-emerald-600 text-white"
+                  : status === "declined"
+                  ? "bg-rose-100 text-rose-700"
+                  : status === "withdrawn"
+                  ? "bg-slate-200 text-slate-700"
+                  : status === "revision_requested"
+                  ? "bg-sky-100 text-sky-700"
+                  : "bg-amber-100 text-amber-800";
+
+              return (
+                <Card
+                  key={`bid-${bid.id}`}
+                  className="cursor-pointer overflow-hidden border border-slate-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
+                  onClick={() => setActiveBidCard(bid)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setActiveBidCard(bid);
+                    }
+                  }}
+                >
+                  <div className="p-4">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">
+                          {bid.project_title || `Project #${bid.project}`}
+                        </div>
+                        {bid.project_owner_username ? (
+                          <div className="text-[11px] text-slate-500">
+                            by{" "}
+                            <Link
+                              to={`/profiles/${bid.project_owner_username}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                            >
+                              {bid.project_owner_username}
+                            </Link>
+                          </div>
+                        ) : null}
+                      </div>
+                      <Badge className={statusBadgeClass}>
+                        {status === "accepted"
+                          ? "Accepted"
+                          : status === "declined"
+                          ? "Declined"
+                          : status === "withdrawn"
+                          ? "Withdrawn"
+                          : status === "revision_requested"
+                          ? "Revision Requested"
+                          : "Pending"}
+                      </Badge>
+                    </div>
+
+                    <div className="text-sm font-semibold text-slate-900">
+                      {bid.display_amount || "—"}
+                    </div>
+
+                    {bid.proposal_text || bid.message ? (
+                      <div className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
+                        {bid.proposal_text || bid.message}
+                      </div>
+                    ) : null}
+
+                    {bid.owner_response_note ? (
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Owner note
+                        </div>
+                        <div className="whitespace-pre-wrap">{bid.owner_response_note}</div>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 text-xs font-medium uppercase tracking-wide text-indigo-700">
+                      Click to view full bid
+                    </div>
+
+                    <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <GhostButton
+                        className="w-full min-w-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/projects/${bid.project}`, "_self");
+                        }}
+                      >
+                        Open Job
+                      </GhostButton>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {activeBidCard ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6" onClick={() => setActiveBidCard(null)}>
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">
+                  {activeBidCard.project_title || `Project #${activeBidCard.project}`}
+                </div>
+                {activeBidCard.project_owner_username ? (
+                  <div className="text-sm text-slate-500">
+                    by{" "}
+                    <Link
+                      to={`/profiles/${activeBidCard.project_owner_username}`}
+                      className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                    >
+                      {activeBidCard.project_owner_username}
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveBidCard(null)}
+                className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              {(() => {
+                const activeStatus = (activeBidCard.status || "").toLowerCase();
+                const activeStatusBadgeClass =
+                  activeStatus === "accepted"
+                    ? "bg-emerald-600 text-white"
+                    : activeStatus === "declined"
+                    ? "bg-rose-100 text-rose-700"
+                    : activeStatus === "withdrawn"
+                    ? "bg-slate-200 text-slate-700"
+                    : activeStatus === "revision_requested"
+                    ? "bg-sky-100 text-sky-700"
+                    : "bg-amber-100 text-amber-800";
+
+                return (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Badge className={activeStatusBadgeClass}>
+                  {activeStatus === "accepted"
+                    ? "Accepted"
+                    : activeStatus === "declined"
+                    ? "Declined"
+                    : activeStatus === "withdrawn"
+                    ? "Withdrawn"
+                    : activeStatus === "revision_requested"
+                    ? "Revision Requested"
+                    : "Pending"}
+                </Badge>
+                <div className="text-lg font-bold text-slate-900">
+                  {activeBidCard.display_amount || "—"}
+                </div>
+              </div>
+                );
+              })()}
+
+              {activeBidCard.timeline_text ? (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Estimated timeline
+                  </div>
+                  <div className="text-sm text-slate-700">{activeBidCard.timeline_text}</div>
+                </div>
+              ) : null}
+
+              {activeBidCard.proposal_text || activeBidCard.message ? (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Proposal
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {activeBidCard.proposal_text || activeBidCard.message}
+                  </div>
+                </div>
+              ) : null}
+
+              {activeBidCard.included_text ? (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    What’s included
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {activeBidCard.included_text}
+                  </div>
+                </div>
+              ) : null}
+
+              {activeBidCard.excluded_text ? (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    What’s excluded
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {activeBidCard.excluded_text}
+                  </div>
+                </div>
+              ) : null}
+
+              {activeBidCard.payment_terms ? (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Payment terms
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm text-slate-700">
+                    {activeBidCard.payment_terms}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                {activeBidCard.valid_until ? <div>Valid until: {activeBidCard.valid_until}</div> : null}
+                {activeBidCard.attachment_url ? (
+                  <a
+                    href={activeBidCard.attachment_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                  >
+                    View attachment
+                  </a>
+                ) : null}
+              </div>
+
+              {activeBidCard.owner_response_note ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Owner note
+                  </div>
+                  <div className="whitespace-pre-wrap">{activeBidCard.owner_response_note}</div>
+                </div>
+              ) : null}
+
+              <div className="flex justify-end">
+                <GhostButton onClick={() => window.open(`/projects/${activeBidCard.project}`, "_self")}>
+                  Open Job
+                </GhostButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">

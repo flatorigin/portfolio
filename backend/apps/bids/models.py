@@ -7,15 +7,24 @@ from portfolio.models import Project
 
 class Bid(models.Model):
     STATUS_PENDING = "pending"
+    STATUS_REVISION_REQUESTED = "revision_requested"
     STATUS_ACCEPTED = "accepted"
     STATUS_DECLINED = "declined"
     STATUS_WITHDRAWN = "withdrawn"
 
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
+        (STATUS_REVISION_REQUESTED, "Revision Requested"),
         (STATUS_ACCEPTED, "Accepted"),
         (STATUS_DECLINED, "Declined"),
         (STATUS_WITHDRAWN, "Withdrawn"),
+    ]
+
+    PRICE_TYPE_FIXED = "fixed"
+    PRICE_TYPE_RANGE = "range"
+    PRICE_TYPE_CHOICES = [
+        (PRICE_TYPE_FIXED, "Fixed price"),
+        (PRICE_TYPE_RANGE, "Estimate range"),
     ]
 
     project = models.ForeignKey(
@@ -29,7 +38,21 @@ class Bid(models.Model):
         related_name="submitted_bids",
     )
 
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    price_type = models.CharField(
+        max_length=20,
+        choices=PRICE_TYPE_CHOICES,
+        default=PRICE_TYPE_FIXED,
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    amount_min = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    amount_max = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    timeline_text = models.CharField(max_length=255, blank=True, default="")
+    proposal_text = models.TextField(blank=True, default="")
+    included_text = models.TextField(blank=True, default="")
+    excluded_text = models.TextField(blank=True, default="")
+    payment_terms = models.TextField(blank=True, default="")
+    valid_until = models.DateField(null=True, blank=True)
+    attachment = models.FileField(upload_to="bid_attachments/", blank=True, null=True)
     message = models.TextField(blank=True, default="")
 
     status = models.CharField(
@@ -38,6 +61,14 @@ class Bid(models.Model):
         default=STATUS_PENDING,
     )
 
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="accepted_project_bids",
+    )
+    accepted_at = models.DateTimeField(null=True, blank=True)
     owner_response_note = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)

@@ -268,7 +268,7 @@ class ProjectBid(models.Model):
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
-        related_name="bids",
+        related_name="legacy_project_bids",
     )
     contractor = models.ForeignKey(
         settings.AUTH_USER_MODEL,

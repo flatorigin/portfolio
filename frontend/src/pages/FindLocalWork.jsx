@@ -32,7 +32,7 @@ function pickCover(p) {
 function getBidSummaryMeta(bids) {
   const list = Array.isArray(bids) ? bids : [];
 
-  const openStatuses = new Set(["submitted", "revised"]);
+  const openStatuses = new Set(["pending", "revision_requested"]);
   const closedStatuses = new Set(["accepted", "declined", "withdrawn"]);
 
   let openCount = 0;
