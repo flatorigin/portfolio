@@ -219,19 +219,53 @@ class BidViewSet(viewsets.ModelViewSet):
         if bid.project.owner_id != request.user.id:
             raise PermissionDenied("Only the project owner can reopen a bid.")
 
-        if bid.status != Bid.STATUS_DECLINED:
-            raise ValidationError("Only declined bids can be reopened.")
-
         note = request.data.get("owner_response_note", "") or request.data.get("reopen_note", "") or ""
         if not str(note).strip():
             raise ValidationError({"owner_response_note": "Reopen note is required."})
 
-        if Bid.objects.filter(project=bid.project, status=Bid.STATUS_ACCEPTED).exclude(pk=bid.pk).exists():
-            raise ValidationError("This job posting already has an accepted bid and cannot be reopened.")
+        if bid.status == Bid.STATUS_DECLINED:
+            if Bid.objects.filter(project=bid.project, status=Bid.STATUS_ACCEPTED).exclude(pk=bid.pk).exists():
+                raise ValidationError("This job posting already has an accepted bid and cannot be reopened.")
 
-        bid.status = Bid.STATUS_REVISION_REQUESTED
-        bid.owner_response_note = note
-        bid.save(update_fields=["status", "owner_response_note"])
+            bid.status = Bid.STATUS_REVISION_REQUESTED
+            bid.owner_response_note = note
+            bid.save(update_fields=["status", "owner_response_note"])
+
+            serializer = self.get_serializer(bid)
+            return Response(serializer.data)
+
+        if bid.status != Bid.STATUS_ACCEPTED:
+            raise ValidationError("Only declined or accepted bids can be reopened.")
+
+        with transaction.atomic():
+            bid.status = Bid.STATUS_REVISION_REQUESTED
+            bid.accepted_at = None
+            bid.accepted_by = None
+            bid.owner_response_note = note
+            bid.save(update_fields=["status", "accepted_at", "accepted_by", "owner_response_note"])
+
+            thread, _ = MessageThread.get_or_create_dm(
+                bid.project.owner,
+                bid.contractor,
+                origin_project=bid.project,
+                initiated_by=bid.project.owner,
+            )
+            if not thread.owner_has_accepted or not thread.client_has_accepted:
+                thread.owner_has_accepted = True
+                thread.client_has_accepted = True
+                thread.save(update_fields=["owner_has_accepted", "client_has_accepted"])
+
+            text = f'The job posting for "{bid.project.title}" was reopened.'
+            if note:
+                text = f"{text}\n\nOwner note:\n{note}"
+
+            PrivateMessage.objects.create(
+                thread=thread,
+                sender=bid.project.owner,
+                text=text,
+            )
+            thread.updated_at = timezone.now()
+            thread.save(update_fields=["updated_at"])
 
         serializer = self.get_serializer(bid)
         return Response(serializer.data)

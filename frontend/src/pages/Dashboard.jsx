@@ -1146,7 +1146,7 @@ export default function Dashboard() {
               const status = (bid.status || "").toLowerCase();
               const statusBadgeClass =
                 status === "accepted"
-                  ? "bg-emerald-600 text-white"
+                  ? "bg-indigo-600 text-white"
                   : status === "declined"
                   ? "bg-rose-100 text-rose-700"
                   : status === "withdrawn"
@@ -1211,7 +1211,7 @@ export default function Dashboard() {
                       </div>
                     ) : null}
 
-                    {bid.owner_response_note ? (
+                    {status !== "accepted" && bid.owner_response_note ? (
                       <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                         <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
                           Owner note
@@ -1280,7 +1280,7 @@ export default function Dashboard() {
                 const activeStatus = (activeBidCard.status || "").toLowerCase();
                 const activeStatusBadgeClass =
                   activeStatus === "accepted"
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-indigo-600 text-white"
                     : activeStatus === "declined"
                     ? "bg-rose-100 text-rose-700"
                     : activeStatus === "withdrawn"
@@ -1290,22 +1290,45 @@ export default function Dashboard() {
                     : "bg-amber-100 text-amber-800";
 
                 return (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <Badge className={activeStatusBadgeClass}>
-                  {activeStatus === "accepted"
-                    ? "Accepted"
-                    : activeStatus === "declined"
-                    ? "Declined"
-                    : activeStatus === "withdrawn"
-                    ? "Withdrawn"
-                    : activeStatus === "revision_requested"
-                    ? "Revision Requested"
-                    : "Pending"}
-                </Badge>
-                <div className="text-lg font-bold text-slate-900">
-                  {activeBidCard.display_amount || "—"}
-                </div>
-              </div>
+                  <>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                        <div>
+                          Owner:{" "}
+                          {activeBidCard.project_owner_username ? (
+                            <Link
+                              to={`/profiles/${activeBidCard.project_owner_username}`}
+                              className="font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                            >
+                              {activeBidCard.project_owner_username}
+                            </Link>
+                          ) : (
+                            <span className="font-semibold">Project owner</span>
+                          )}
+                        </div>
+                        <div>
+                          Contractor: <span className="font-semibold">{localStorage.getItem("username") || "Contractor"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <Badge className={activeStatusBadgeClass}>
+                        {activeStatus === "accepted"
+                          ? "Accepted"
+                          : activeStatus === "declined"
+                          ? "Declined"
+                          : activeStatus === "withdrawn"
+                          ? "Withdrawn"
+                          : activeStatus === "revision_requested"
+                          ? "Revision Requested"
+                          : "Pending"}
+                      </Badge>
+                      <div className="text-lg font-bold text-slate-900">
+                        {activeBidCard.display_amount || "—"}
+                      </div>
+                    </div>
+                  </>
                 );
               })()}
 
@@ -1363,6 +1386,13 @@ export default function Dashboard() {
               ) : null}
 
               <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                {activeBidCard.project_created_at ? <div>Posted job: {new Date(activeBidCard.project_created_at).toLocaleString()}</div> : null}
+                {activeBidCard.accepted_at || activeStatus === "accepted" ? (
+                  <div>Accepted bid: {new Date(activeBidCard.accepted_at || activeBidCard.updated_at).toLocaleString()}</div>
+                ) : null}
+                {activeBidCard.accepted_by_username || (activeStatus === "accepted" && activeBidCard.project_owner_username) ? (
+                  <div>Accepted by: {activeBidCard.accepted_by_username || activeBidCard.project_owner_username}</div>
+                ) : null}
                 {activeBidCard.valid_until ? <div>Valid until: {activeBidCard.valid_until}</div> : null}
                 {activeBidCard.attachment_url ? (
                   <a
@@ -1376,7 +1406,7 @@ export default function Dashboard() {
                 ) : null}
               </div>
 
-              {activeBidCard.owner_response_note ? (
+              {activeStatus !== "accepted" && activeBidCard.owner_response_note ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Owner note
@@ -1384,6 +1414,24 @@ export default function Dashboard() {
                   <div className="whitespace-pre-wrap">{activeBidCard.owner_response_note}</div>
                 </div>
               ) : null}
+
+              <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 px-4 py-4 text-sm leading-relaxed text-indigo-950">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                  Acceptance Disclaimer
+                </div>
+                <p className="mb-2">
+                  By accepting this bid, you confirm that you agree to the general terms, scope, and pricing outlined by the contractor.
+                </p>
+                <p className="mb-2">
+                  This acceptance indicates your intent to proceed with the contractor; however, it does not constitute a legally binding contract. No formal agreement is created through this platform alone.
+                </p>
+                <p className="mb-2">
+                  Any final agreement, including detailed scope, payment terms, schedule, permits, and legal obligations, must be discussed and confirmed directly between the project owner and the contractor outside of this platform.
+                </p>
+                <p>
+                  The platform acts only as a facilitator for introductions and proposals and is not responsible for the execution, enforcement, or outcome of any agreement between the parties.
+                </p>
+              </div>
 
               <div className="flex justify-end">
                 <GhostButton onClick={() => window.open(`/projects/${activeBidCard.project}`, "_self")}>

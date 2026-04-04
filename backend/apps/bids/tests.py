@@ -128,3 +128,45 @@ class BidFlowTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_owner_can_reopen_accepted_job_post(self):
+        bid = Bid.objects.create(
+            project=self.project,
+            contractor=self.contractor,
+            price_type=Bid.PRICE_TYPE_FIXED,
+            amount="2500.00",
+            proposal_text="Accepted bid.",
+            message="Accepted bid.",
+            status=Bid.STATUS_ACCEPTED,
+            accepted_by=self.owner,
+            accepted_at=self.project.created_at,
+        )
+        other = User.objects.create_user(username="other", password="pw123456")
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.post(
+            f"/api/bids/{bid.id}/reopen/",
+            {"reopen_note": "We need to reopen the job and review fresh bids."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        bid.refresh_from_db()
+        self.assertEqual(bid.status, Bid.STATUS_REVISION_REQUESTED)
+        self.assertIsNone(bid.accepted_at)
+        self.assertIsNone(bid.accepted_by)
+        self.assertTrue(
+            PrivateMessage.objects.filter(
+                thread__project=self.project,
+                sender=self.owner,
+                text__icontains="was reopened",
+            ).exists()
+        )
+
+        self.client.force_authenticate(user=other)
+        submit_response = self.client.post(
+            f"/api/projects/{self.project.id}/bids/",
+            {"price_type": "fixed", "amount": "2800.00", "proposal_text": "Fresh bid."},
+            format="json",
+        )
+        self.assertEqual(submit_response.status_code, status.HTTP_201_CREATED)

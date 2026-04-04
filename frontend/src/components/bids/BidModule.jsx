@@ -300,6 +300,7 @@ export default function BidModule({ projectId, ownerUsername }) {
               const actionState = ownerAction[String(bid.id)] || "";
               const status = String(bid.status || "").toLowerCase();
               const isActive = status === "pending" || status === "revision_requested";
+              const isAccepted = status === "accepted";
               const noteLabel =
                 actionState === "request-revision" ? "Revision note" : actionState === "reopen" ? "Reopen note" : "Reason (optional)";
               const notePlaceholder =
@@ -356,34 +357,50 @@ export default function BidModule({ projectId, ownerUsername }) {
                     Click to view full bid
                   </div>
 
-                  {status !== "accepted" && status !== "withdrawn" ? (
+                  {status !== "withdrawn" ? (
                     <div
                       className="mt-4 space-y-3"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                     >
-                      <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                          Acceptance
+                      {!isAccepted ? (
+                        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                            Acceptance
+                          </div>
+                          <div className="mb-2">
+                            Accepted by: <span className="font-semibold">{ownerUsername || "Project owner"}</span>
+                          </div>
+                          <div className="space-y-2 text-[13px] leading-relaxed text-indigo-900">
+                            <p>
+                              By accepting this bid, you confirm that you agree to the general terms, scope, and pricing outlined by the contractor.
+                            </p>
+                            <p>
+                              This acceptance indicates your intent to proceed with the contractor; however, it does not constitute a legally binding contract. No formal agreement is created through this platform alone.
+                            </p>
+                            <p>
+                              Any final agreement, including detailed scope, payment terms, schedule, permits, and legal obligations, must be discussed and confirmed directly between the project owner and the contractor outside of this platform.
+                            </p>
+                            <p>
+                              The platform acts only as a facilitator for introductions and proposals and is not responsible for the execution, enforcement, or outcome of any agreement between the parties.
+                            </p>
+                          </div>
                         </div>
-                        <div className="mb-2">
-                          Accepted by: <span className="font-semibold">{ownerUsername || "Project owner"}</span>
+                      ) : (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                            Reopen Job Posting
+                          </div>
+                          <div className="space-y-2 text-[13px] leading-relaxed text-emerald-900">
+                            <p>
+                              Reopening this job posting removes the awarded state and makes the project open for bidding again.
+                            </p>
+                            <p>
+                              The accepted contractor will be notified and their bid will move back to revision requested.
+                            </p>
+                          </div>
                         </div>
-                        <div className="space-y-2 text-[13px] leading-relaxed text-indigo-900">
-                          <p>
-                            By accepting this bid, you confirm that you agree to the general terms, scope, and pricing outlined by the contractor.
-                          </p>
-                          <p>
-                            This acceptance indicates your intent to proceed with the contractor; however, it does not constitute a legally binding contract. No formal agreement is created through this platform alone.
-                          </p>
-                          <p>
-                            Any final agreement, including detailed scope, payment terms, schedule, permits, and legal obligations, must be discussed and confirmed directly between the project owner and the contractor outside of this platform.
-                          </p>
-                          <p>
-                            The platform acts only as a facilitator for introductions and proposals and is not responsible for the execution, enforcement, or outcome of any agreement between the parties.
-                          </p>
-                        </div>
-                      </div>
+                      )}
 
                       {actionState ? (
                         <Field label={noteLabel}>
@@ -418,6 +435,11 @@ export default function BidModule({ projectId, ownerUsername }) {
                             Reopen Bid
                           </button>
                         ) : null}
+                        {isAccepted ? (
+                          <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "reopen" ? "" : "reopen" }))} className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+                            Reopen Job Post
+                          </button>
+                        ) : null}
                         {actionState === "request-revision" ? (
                           <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "request-revision")} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60">
                             {actionBusyId === bid.id ? "Working..." : "Send Revision Request"}
@@ -430,7 +452,7 @@ export default function BidModule({ projectId, ownerUsername }) {
                         ) : null}
                         {actionState === "reopen" ? (
                           <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "reopen")} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">
-                            {actionBusyId === bid.id ? "Working..." : "Confirm Reopen"}
+                            {actionBusyId === bid.id ? "Working..." : isAccepted ? "Confirm Reopen Job Post" : "Confirm Reopen"}
                           </button>
                         ) : null}
                       </div>
