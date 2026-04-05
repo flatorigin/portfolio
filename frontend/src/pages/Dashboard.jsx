@@ -1028,7 +1028,16 @@ export default function Dashboard() {
                 return (
                   <Card
                     key={`job-${p.id}`}
-                    className="overflow-hidden border border-sky-200 bg-white"
+                    className="cursor-pointer overflow-hidden border border-sky-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
+                    onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        window.open(`/projects/${p.id}`, "_self");
+                      }
+                    }}
                   >
                     <div className="relative">
                       {coverSrc ? (
@@ -1104,7 +1113,10 @@ export default function Dashboard() {
                       <div className="mt-3 flex w-full flex-nowrap gap-2">
                         <GhostButton
                           className="w-1/2 min-w-0"
-                          onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/projects/${p.id}`, "_self");
+                          }}
                         >
                           Open
                         </GhostButton>
@@ -1112,7 +1124,10 @@ export default function Dashboard() {
                         <Button
                           className="w-1/2 min-w-0"
                           type="button"
-                          onClick={() => openEditProject(p)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditProject(p);
+                          }}
                         >
                           Edit
                         </Button>
@@ -1459,7 +1474,19 @@ export default function Dashboard() {
               const coverSrc = getProjectCover(p);
 
               return (
-                <Card key={p.id} className="overflow-hidden">
+                <Card
+                  key={p.id}
+                  className="cursor-pointer overflow-hidden transition hover:border-indigo-200 hover:shadow-md"
+                  onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      window.open(`/projects/${p.id}`, "_self");
+                    }
+                  }}
+                >
                   {coverSrc ? (
                     <img
                       src={coverSrc}
@@ -1517,12 +1544,21 @@ export default function Dashboard() {
                     <div className="mt-3 flex w-full flex-nowrap gap-2">
                       <GhostButton
                         className="w-1/2 min-w-0"
-                        onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/projects/${p.id}`, "_self");
+                        }}
                       >
                         Open
                       </GhostButton>
 
-                      <Button className="w-1/2 min-w-0" onClick={() => openEditProject(p)}>
+                      <Button
+                        className="w-1/2 min-w-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditProject(p);
+                        }}
+                      >
                         Edit
                       </Button>
                     </div>

@@ -151,11 +151,23 @@ export default function SavedProjectsGrid() {
                 <Card
                   key={fav.id ?? `p-${projectId ?? "unknown"}`}
                   className={
-                    "overflow-hidden border " +
+                    "cursor-pointer overflow-hidden border transition hover:border-indigo-200 hover:shadow-md " +
                     ((fav?.project?.is_job_posting || fav?.is_job_posting)
                       ? "border-[#49D7FF]"
                       : "border-slate-200")
                   }
+                  onClick={() => {
+                    if (projectId) window.open(`/projects/${projectId}`, "_self");
+                  }}
+                  role="button"
+                  tabIndex={projectId ? 0 : -1}
+                  onKeyDown={(e) => {
+                    if (!projectId) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      window.open(`/projects/${projectId}`, "_self");
+                    }
+                  }}
                 >
                   {coverSrc ? (
                     <img
@@ -214,7 +226,10 @@ export default function SavedProjectsGrid() {
                     <div className="mt-3 flex w-full flex-nowrap gap-2">
                       <GhostButton
                         className="w-1/2 min-w-0"
-                        onClick={() => window.open(`/projects/${projectId}`, "_self")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/projects/${projectId}`, "_self");
+                        }}
                         disabled={!projectId || removing}
                       >
                         Open
@@ -224,7 +239,10 @@ export default function SavedProjectsGrid() {
                         className="w-1/2 min-w-0"
                         type="button"
                         variant="outline"
-                        onClick={() => handleRemoveFavorite(fav)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveFavorite(fav);
+                        }}
                         disabled={removing}
                       >
                         {removing ? "Removing…" : "Remove"}
