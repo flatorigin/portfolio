@@ -8,11 +8,12 @@
 // Contact card uses member-since + languages + filtered public contact info
 // =======================================
 import { useParams, Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card } from "../ui";
-import ServiceAreaMap from "../components/ServiceAreaMap";
-import QuickMessageDrawer from "../components/QuickMessageDrawer";
+
+const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
+const QuickMessageDrawer = lazy(() => import("../components/QuickMessageDrawer"));
 
 function DisabledActionWithTooltip({ label, message }) {
   return (
@@ -76,7 +77,6 @@ export default function PublicProfile() {
 
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [coversByProject, setCoversByProject] = useState({});
   const [loading, setLoading] = useState(true);
 
   const [msgOpen, setMsgOpen] = useState(false);
@@ -88,6 +88,8 @@ export default function PublicProfile() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
+
+  const shouldRenderMap = Boolean(profile?.service_location);
 
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
@@ -152,35 +154,6 @@ export default function PublicProfile() {
     return "—";
   }, [profile?.languages_display, profile?.languages]);
 
-  async function hydrateCovers(list) {
-    const entries = await Promise.all(
-      (Array.isArray(list) ? list : []).map(async (p) => {
-        try {
-          const { data } = await api.get(`/projects/${p.id}/images/`);
-          const imgs = Array.isArray(data) ? data : [];
-
-          const mapped = imgs
-            .map((it) => ({
-              url: toUrl(it.url || it.image || it.src || it.file || ""),
-              order: it.order ?? it.sort_order ?? null,
-            }))
-            .filter((x) => !!x.url);
-
-          const cover =
-            mapped.find((x) => Number(x.order) === 0)?.url ||
-            mapped[0]?.url ||
-            null;
-
-          return [p.id, cover];
-        } catch {
-          return [p.id, null];
-        }
-      })
-    );
-
-    setCoversByProject(Object.fromEntries(entries));
-  }
-
   // Load profile + projects
   useEffect(() => {
     let alive = true;
@@ -214,7 +187,6 @@ export default function PublicProfile() {
 
         setProfile(prof);
         setProjects(visibleProjects);
-        hydrateCovers(visibleProjects);
 
         // Seed like count from public serializer field
         setLikeCount(Number(prof?.like_count || 0));
@@ -223,7 +195,6 @@ export default function PublicProfile() {
         if (!alive) return;
         setProfile(null);
         setProjects([]);
-        setCoversByProject({});
         setLikeCount(0);
         setLiked(false);
       } finally {
@@ -550,13 +521,23 @@ export default function PublicProfile() {
           </Card>
         </div>
 
-        <div className="mt-6">
-          <ServiceAreaMap
-            locationQuery={profile?.service_location || ""}
-            radiusMiles={profile?.coverage_radius_miles || ""}
-            heightClassName="h-64"
-          />
-        </div>
+        {shouldRenderMap ? (
+          <div className="mt-6">
+            <Suspense
+              fallback={
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                  Loading map…
+                </div>
+              }
+            >
+              <ServiceAreaMap
+                locationQuery={profile?.service_location || ""}
+                radiusMiles={profile?.coverage_radius_miles || ""}
+                heightClassName="h-64"
+              />
+            </Suspense>
+          </div>
+        ) : null}
 
         <div className="mt-10">
           <div className="mb-3 flex items-end justify-between gap-3">
@@ -578,7 +559,6 @@ export default function PublicProfile() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {projects.map((p) => {
                 const coverSrc =
-                  coversByProject[p.id] ||
                   toUrl(p.cover_image_url || "") ||
                   (p.cover_image ? toUrl(p.cover_image) : "");
 
@@ -626,12 +606,16 @@ export default function PublicProfile() {
         </div>
       </div>
 
-      <QuickMessageDrawer
-        open={msgOpen}
-        onClose={() => setMsgOpen(false)}
-        recipientUsername={profile?.username}
-        recipientDisplayName={displayName}
-      />
+      {msgOpen ? (
+        <Suspense fallback={null}>
+          <QuickMessageDrawer
+            open={msgOpen}
+            onClose={() => setMsgOpen(false)}
+            recipientUsername={profile?.username}
+            recipientDisplayName={displayName}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

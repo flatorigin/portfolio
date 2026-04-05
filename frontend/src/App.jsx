@@ -50,7 +50,13 @@ export default function App() {
     (async () => {
       try {
         const { data } = await api.get("/users/me/");
-        if (!cancelled) setMe(data);
+        if (!cancelled) {
+          setMe(data);
+          if (data?.username) {
+            localStorage.setItem("username", data.username);
+            window.dispatchEvent(new CustomEvent("auth:changed"));
+          }
+        }
       } catch (err) {
         console.warn("[App] /users/me/ failed", err?.response || err);
         if (!cancelled) setMe(null);

@@ -6,13 +6,25 @@ from pathlib import Path
 
 import dj_database_url
 
+
+def parse_csv_env(name, default=""):
+    raw = os.environ.get(name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "fallback-secret")
 DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
-ALLOWED_HOSTS = ["*"]  # tighten later
+ALLOWED_HOSTS = parse_csv_env(
+    "DJANGO_ALLOWED_HOSTS",
+    "localhost,127.0.0.1,portfolio-production-1b31.up.railway.app",
+)
+
+if not DEBUG and not ALLOWED_HOSTS:
+    raise RuntimeError("DJANGO_ALLOWED_HOSTS must be set when DJANGO_DEBUG is False.")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -62,14 +74,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "backend.wsgi.application"
 
-# DATABASES = {
-#     "default": dj_database_url.config(
-#         default=os.environ.get("DATABASE_URL"),
-#     )
-# }
-
 USE_SQLITE = os.getenv("USE_SQLITE", "").lower() in ("1", "true", "yes", "on")
 SQLITE_PATH = os.getenv("SQLITE_PATH", "db.sqlite3")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 if USE_SQLITE:
     DATABASES = {
@@ -79,9 +86,13 @@ if USE_SQLITE:
         }
     }
 else:
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL must be set unless USE_SQLITE is enabled."
+        )
     DATABASES = {
         "default": dj_database_url.config(
-            default=os.getenv("DATABASE_URL", ""),
+            default=DATABASE_URL,
             conn_max_age=600,
             ssl_require=False,
         )
@@ -129,15 +140,16 @@ MEDIA_ROOT = os.environ.get("MEDIA_ROOT", os.path.join(BASE_DIR, "media"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = [
-    "https://portfolio-production-1b31.up.railway.app",
-]
+CORS_ALLOWED_ORIGINS = parse_csv_env(
+    "CORS_ALLOWED_ORIGINS",
+    f"{FRONTEND_URL},https://portfolio-production-1b31.up.railway.app",
+)
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_TRUSTED_ORIGINS = [
+CSRF_TRUSTED_ORIGINS = parse_csv_env(
+    "CSRF_TRUSTED_ORIGINS",
     "https://portfolio-production-1b31.up.railway.app",
-]
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

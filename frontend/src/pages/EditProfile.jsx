@@ -5,11 +5,12 @@
 // Map updates ONLY after successful Save (not while typing)
 // Adds direct-message opt-out modal with reason capture
 // =======================================
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
-import ServiceAreaMap from "../components/ServiceAreaMap";
 import LanguageMultiSelect from "../components/LanguageMultiSelect";
+
+const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
 
 function getProfileComplete(form) {
   return Boolean(
@@ -654,14 +655,22 @@ export default function EditProfile() {
               Map updates only after Save (prevents jumping while typing).
             </p>
 
-            <ServiceAreaMap
-              deferUpdatesUntilSave={true}
-              locationQuery={form.service_location}
-              radiusMiles={form.coverage_radius_miles}
-              savedLocationQuery={savedMapModel.service_location}
-              savedRadiusMiles={savedMapModel.coverage_radius_miles}
-              heightClassName="h-64"
-            />
+            <Suspense
+              fallback={
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                  Loading map…
+                </div>
+              }
+            >
+              <ServiceAreaMap
+                deferUpdatesUntilSave={true}
+                locationQuery={form.service_location}
+                radiusMiles={form.coverage_radius_miles}
+                savedLocationQuery={savedMapModel.service_location}
+                savedRadiusMiles={savedMapModel.coverage_radius_miles}
+                heightClassName="h-64"
+              />
+            </Suspense>
           </Card>
         </div>
       )}

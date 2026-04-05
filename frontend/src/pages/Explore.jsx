@@ -24,16 +24,31 @@ function extractImageUrl(it) {
   return toUrl(it.url || it.src || it.image || it.file || "");
 }
 
-function extractImageId(it) {
-  if (!it || typeof it === "string") return null;
-  const raw = it.id ?? it.pk ?? it.image_id ?? null;
-  return raw == null ? null : Number(raw);
-}
-
 function extractOrder(it) {
   if (!it || typeof it === "string") return null;
   const raw = it.order ?? it.sort_order ?? null;
   return raw == null ? null : Number(raw);
+}
+
+function buildThumbPack(project) {
+  const images = Array.isArray(project?.images) ? project.images : [];
+  const mapped = images
+    .map((it) => ({
+      url: extractImageUrl(it),
+      order: extractOrder(it),
+    }))
+    .filter((x) => !!x.url);
+
+  const cover =
+    toUrl(project?.cover_image_url || "") ||
+    mapped.find((x) => Number(x.order) === 0)?.url ||
+    mapped[0]?.url ||
+    null;
+
+  return {
+    cover,
+    thumbs: mapped.slice(0, 3).map((x) => x.url),
+  };
 }
 
 // --- auth bridge ---
@@ -51,8 +66,6 @@ export default function Explore() {
   const navigate = useNavigate();
 
   const [projects, setProjects] = useState([]);
-  // thumbs[projectId] = { cover: string|null, thumbs: string[] }
-  const [thumbs, setThumbs] = useState({});
   const [loading, setLoading] = useState(true);
 
   // ✅ favorites state
@@ -184,56 +197,7 @@ export default function Explore() {
    };
  }, []);
 
-  // 2) Load thumbs when projects change
-  useEffect(() => {
-    let alive = true;
-
-    if (!projects.length) {
-      // if projects cleared, clear thumbs too
-      setThumbs({});
-      return;
-    }
-
-    (async () => {
-      const entries = await Promise.all(
-        projects.map(async (p) => {
-          try {
-            const { data: imgs } = await api
-              .get(`/projects/${p.id}/images/`)
-              .catch(() => ({ data: [] }));
-
-            const list = Array.isArray(imgs) ? imgs : [];
-            const mapped = list
-              .map((it) => ({
-                id: extractImageId(it),
-                url: extractImageUrl(it),
-                order: extractOrder(it),
-              }))
-              .filter((x) => !!x.url);
-
-            const cover =
-              mapped.find((x) => Number(x.order) === 0)?.url ||
-              mapped[0]?.url ||
-              null;
-
-            const thumbUrls = mapped.slice(0, 3).map((x) => x.url);
-
-            return [p.id, { cover, thumbs: thumbUrls }];
-          } catch {
-            return [p.id, { cover: null, thumbs: [] }];
-          }
-        })
-      );
-
-      if (alive) setThumbs(Object.fromEntries(entries));
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [projects]);
-
-  // 3) Favorites reactive: update when authed changes (and when projects list changes)
+  // 2) Favorites reactive: update when authed changes (and when projects list changes)
   useEffect(() => {
     let alive = true;
 
@@ -249,28 +213,36 @@ export default function Explore() {
     }
 
     (async () => {
-      const favPairs = await Promise.all(
-        projects.map(async (p) => {
-          if (!p?.id) return [null, false];
-          if (isOwner(p)) return [p.id, false];
-
-          try {
-            const { data: fav } = await api.get(`/projects/${p.id}/favorite/`);
-            const isFav = !!(fav?.is_favorited ?? fav?.favorited);
-            return [p.id, isFav];
-          } catch {
-            return [p.id, false];
-          }
-        })
-      );
-
       if (!alive) return;
 
-      const next = {};
-      for (const [pid, val] of favPairs) {
-        if (pid != null) next[pid] = !!val;
+      try {
+        const { data } = await api.get("/favorites/projects/");
+        if (!alive) return;
+
+        const next = {};
+        const favorites = Array.isArray(data) ? data : [];
+        for (const fav of favorites) {
+          const pid =
+            fav?.project?.id ??
+            fav?.project_id ??
+            (typeof fav?.project === "number" ? fav.project : null);
+          if (pid != null) next[pid] = true;
+        }
+
+        for (const project of projects) {
+          if (project?.id != null && isOwner(project)) {
+            next[project.id] = false;
+          }
+        }
+
+        setFavMap(next);
+      } catch {
+        const next = {};
+        for (const project of projects) {
+          if (project?.id != null) next[project.id] = false;
+        }
+        setFavMap(next);
       }
-      setFavMap(next);
     })();
 
     return () => {
@@ -441,7 +413,7 @@ export default function Explore() {
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
         {filteredProjects.map((p) => {
-          const pack = thumbs[p.id] || { cover: null, thumbs: [] };
+          const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
 
           const saved = !!favMap[p.id];

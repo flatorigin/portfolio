@@ -1,23 +1,32 @@
 import "./index.css";
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import App from "./App.jsx";
-import Explore from "./pages/Explore.jsx";
-import Login from "./pages/Login.jsx";
-import Register from "./pages/Register.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import EditProfile from "./pages/EditProfile.jsx";
-import ProjectDetail from "./pages/ProjectDetail.jsx";
-import PublicProfile from "./pages/PublicProfile.jsx";
-import ForgotPassword from "./pages/ForgotPassword.jsx";
-import ResetPassword from "./pages/ResetPassword.jsx";
-import MessagesThread from "./pages/MessagesThread.jsx";
-import NotFound from "./pages/NotFound";
-import FindLocalWork from "./pages/FindLocalWork";
-import DashboardProjectsPage from "./pages/DashboardProjectsPage";
-import ProjectEditPage from "./pages/ProjectEditPage";
+
+const Explore = lazy(() => import("./pages/Explore.jsx"));
+const Login = lazy(() => import("./pages/Login.jsx"));
+const Register = lazy(() => import("./pages/Register.jsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
+const EditProfile = lazy(() => import("./pages/EditProfile.jsx"));
+const ProjectDetail = lazy(() => import("./pages/ProjectDetail.jsx"));
+const PublicProfile = lazy(() => import("./pages/PublicProfile.jsx"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword.jsx"));
+const MessagesThread = lazy(() => import("./pages/MessagesThread.jsx"));
+const NotFound = lazy(() => import("./pages/NotFound.jsx"));
+const FindLocalWork = lazy(() => import("./pages/FindLocalWork.jsx"));
+const DashboardProjectsPage = lazy(() => import("./pages/DashboardProjectsPage.jsx"));
+const ProjectEditPage = lazy(() => import("./pages/ProjectEditPage.jsx"));
+
+function RouteFallback() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10 text-sm text-slate-500">
+      Loading…
+    </div>
+  );
+}
 
 function RequireAuth({ children }) {
   return localStorage.getItem("access") ? (
@@ -29,56 +38,58 @@ function RequireAuth({ children }) {
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
-    <Routes>
-      {/* Layout route with header/nav in <App /> */}
-      <Route path="/" element={<App />}>
-        {/* "/" → Explore */}
-        <Route index element={<Explore />} />
-        {/* Auth + public routes */}
-        <Route path="login" element={<Login />} />
-        <Route path="register" element={<Register />} />
-        <Route path="forgot-password" element={<ForgotPassword />} />
-        <Route path="reset-password" element={<ResetPassword />} />
-        <Route path="/work" element={<FindLocalWork />} />
-        <Route path="profiles/:username" element={<PublicProfile />} />
-        <Route path="projects/:id" element={<ProjectDetail />} />
-        <Route path="/dashboard/projects" element={<DashboardProjectsPage />} />
-        <Route path="/dashboard/projects/:projectId/edit" element={<ProjectEditPage />} />
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        {/* Layout route with header/nav in <App /> */}
+        <Route path="/" element={<App />}>
+          {/* "/" → Explore */}
+          <Route index element={<Explore />} />
+          {/* Auth + public routes */}
+          <Route path="login" element={<Login />} />
+          <Route path="register" element={<Register />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="reset-password" element={<ResetPassword />} />
+          <Route path="/work" element={<FindLocalWork />} />
+          <Route path="profiles/:username" element={<PublicProfile />} />
+          <Route path="projects/:id" element={<ProjectDetail />} />
+          <Route path="/dashboard/projects" element={<DashboardProjectsPage />} />
+          <Route path="/dashboard/projects/:projectId/edit" element={<ProjectEditPage />} />
 
-        {/* Protected routes */}
-        <Route
-          path="dashboard"
-          element={
-            <RequireAuth>
-              <Dashboard />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="profile/edit"
-          element={
-            <RequireAuth>
-              <EditProfile />
-            </RequireAuth>
-          }
-        />
+          {/* Protected routes */}
+          <Route
+            path="dashboard"
+            element={
+              <RequireAuth>
+                <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="profile/edit"
+            element={
+              <RequireAuth>
+                <EditProfile />
+              </RequireAuth>
+            }
+          />
 
-        {/* Messages (inbox) – protected */}
-        <Route
-          path="messages/:threadId?"
-          element={
-            <RequireAuth>
-              <MessagesThread />
-            </RequireAuth>
-          }
-        />
+          {/* Messages (inbox) – protected */}
+          <Route
+            path="messages/:threadId?"
+            element={
+              <RequireAuth>
+                <MessagesThread />
+              </RequireAuth>
+            }
+          />
 
-        {/* Catch-all inside layout */}
-        <Route path="*" element={<NotFound />} />
-      </Route>
+          {/* Catch-all inside layout */}
+          <Route path="*" element={<NotFound />} />
+        </Route>
 
-      {/* Extra catch-all just in case */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Extra catch-all just in case */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   </BrowserRouter>
 );
