@@ -1173,73 +1173,76 @@ export default function Dashboard() {
               return (
                 <Card
                   key={`bid-${bid.id}`}
-                  className="cursor-pointer overflow-hidden border border-slate-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
-                  onClick={() => setActiveBidCard(bid)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setActiveBidCard(bid);
-                    }
-                  }}
+                  className="overflow-hidden border border-slate-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
                 >
                   <div className="p-4">
-                    <div className="mb-2 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold">
-                          {bid.project_title || `Project #${bid.project}`}
-                        </div>
-                        {bid.project_owner_username ? (
-                          <div className="text-[11px] text-slate-500">
-                            by{" "}
-                            <Link
-                              to={`/profiles/${bid.project_owner_username}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
-                            >
-                              {bid.project_owner_username}
-                            </Link>
+                    <button
+                      type="button"
+                      onClick={() => setActiveBidCard(bid)}
+                      className="block w-full cursor-pointer text-left"
+                    >
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold">
+                            {bid.project_title || `Project #${bid.project}`}
                           </div>
-                        ) : null}
-                      </div>
-                      <Badge className={statusBadgeClass}>
-                        {status === "accepted"
-                          ? "Accepted"
-                          : status === "declined"
-                          ? "Declined"
-                          : status === "withdrawn"
-                          ? "Withdrawn"
-                          : status === "revision_requested"
-                          ? "Revision Requested"
-                          : "Pending"}
-                      </Badge>
-                    </div>
-
-                    <div className="text-sm font-semibold text-slate-900">
-                      {bid.display_amount || "—"}
-                    </div>
-
-                    {bid.proposal_text || bid.message ? (
-                      <div className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
-                        {bid.proposal_text || bid.message}
-                      </div>
-                    ) : null}
-
-                    {status !== "accepted" && bid.owner_response_note ? (
-                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Owner note
+                          {bid.project_owner_username ? (
+                            <div className="text-[11px] text-slate-500">
+                              by{" "}
+                              <Link
+                                to={`/profiles/${bid.project_owner_username}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                              >
+                                {bid.project_owner_username}
+                              </Link>
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="whitespace-pre-wrap">{bid.owner_response_note}</div>
+                        <Badge className={statusBadgeClass}>
+                          {status === "accepted"
+                            ? "Accepted"
+                            : status === "declined"
+                            ? "Declined"
+                            : status === "withdrawn"
+                            ? "Withdrawn"
+                            : status === "revision_requested"
+                            ? "Revision Requested"
+                            : "Pending"}
+                        </Badge>
                       </div>
-                    ) : null}
 
-                    <div className="mt-3 text-xs font-medium uppercase tracking-wide text-indigo-700">
-                      Click to view full bid
-                    </div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {bid.display_amount || "—"}
+                      </div>
+
+                      {bid.proposal_text || bid.message ? (
+                        <div className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
+                          {bid.proposal_text || bid.message}
+                        </div>
+                      ) : null}
+
+                      {status !== "accepted" && bid.owner_response_note ? (
+                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Owner note
+                          </div>
+                          <div className="whitespace-pre-wrap">{bid.owner_response_note}</div>
+                        </div>
+                      ) : null}
+                    </button>
 
                     <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <Button
+                        className="w-full min-w-0 !bg-indigo-600 !text-white hover:!bg-indigo-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveBidCard(bid);
+                        }}
+                      >
+                        View Bid
+                      </Button>
+
                       <GhostButton
                         className="w-full min-w-0"
                         onClick={(e) => {
@@ -1259,6 +1262,20 @@ export default function Dashboard() {
       </Card>
 
       {activeBidCard ? (
+        (() => {
+          const activeBidStatus = (activeBidCard.status || "").toLowerCase();
+          const activeBidStatusBadgeClass =
+            activeBidStatus === "accepted"
+              ? "bg-indigo-600 text-white"
+              : activeBidStatus === "declined"
+              ? "bg-rose-100 text-rose-700"
+              : activeBidStatus === "withdrawn"
+              ? "bg-slate-200 text-slate-700"
+              : activeBidStatus === "revision_requested"
+              ? "bg-sky-100 text-sky-700"
+              : "bg-amber-100 text-amber-800";
+
+          return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6" onClick={() => setActiveBidCard(null)}>
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
@@ -1291,61 +1308,45 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-4 px-6 py-5">
-              {(() => {
-                const activeStatus = (activeBidCard.status || "").toLowerCase();
-                const activeStatusBadgeClass =
-                  activeStatus === "accepted"
-                    ? "bg-indigo-600 text-white"
-                    : activeStatus === "declined"
-                    ? "bg-rose-100 text-rose-700"
-                    : activeStatus === "withdrawn"
-                    ? "bg-slate-200 text-slate-700"
-                    : activeStatus === "revision_requested"
-                    ? "bg-sky-100 text-sky-700"
-                    : "bg-amber-100 text-amber-800";
-
-                return (
-                  <>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                        <div>
-                          Owner:{" "}
-                          {activeBidCard.project_owner_username ? (
-                            <Link
-                              to={`/profiles/${activeBidCard.project_owner_username}`}
-                              className="font-semibold text-sky-700 hover:text-sky-800 hover:underline"
-                            >
-                              {activeBidCard.project_owner_username}
-                            </Link>
-                          ) : (
-                            <span className="font-semibold">Project owner</span>
-                          )}
-                        </div>
-                        <div>
-                          Contractor: <span className="font-semibold">{localStorage.getItem("username") || "Contractor"}</span>
-                        </div>
-                      </div>
+              <>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <div>
+                      Owner:{" "}
+                      {activeBidCard.project_owner_username ? (
+                        <Link
+                          to={`/profiles/${activeBidCard.project_owner_username}`}
+                          className="font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                        >
+                          {activeBidCard.project_owner_username}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold">Project owner</span>
+                      )}
                     </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Badge className={activeStatusBadgeClass}>
-                        {activeStatus === "accepted"
-                          ? "Accepted"
-                          : activeStatus === "declined"
-                          ? "Declined"
-                          : activeStatus === "withdrawn"
-                          ? "Withdrawn"
-                          : activeStatus === "revision_requested"
-                          ? "Revision Requested"
-                          : "Pending"}
-                      </Badge>
-                      <div className="text-lg font-bold text-slate-900">
-                        {activeBidCard.display_amount || "—"}
-                      </div>
+                    <div>
+                      Contractor: <span className="font-semibold">{localStorage.getItem("username") || "Contractor"}</span>
                     </div>
-                  </>
-                );
-              })()}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Badge className={activeBidStatusBadgeClass}>
+                    {activeBidStatus === "accepted"
+                      ? "Accepted"
+                      : activeBidStatus === "declined"
+                      ? "Declined"
+                      : activeBidStatus === "withdrawn"
+                      ? "Withdrawn"
+                      : activeBidStatus === "revision_requested"
+                      ? "Revision Requested"
+                      : "Pending"}
+                  </Badge>
+                  <div className="text-lg font-bold text-slate-900">
+                    {activeBidCard.display_amount || "—"}
+                  </div>
+                </div>
+              </>
 
               {activeBidCard.timeline_text ? (
                 <div>
@@ -1402,10 +1403,10 @@ export default function Dashboard() {
 
               <div className="flex flex-wrap gap-4 text-sm text-slate-600">
                 {activeBidCard.project_created_at ? <div>Posted job: {new Date(activeBidCard.project_created_at).toLocaleString()}</div> : null}
-                {activeBidCard.accepted_at || activeStatus === "accepted" ? (
+                {activeBidCard.accepted_at || activeBidStatus === "accepted" ? (
                   <div>Accepted bid: {new Date(activeBidCard.accepted_at || activeBidCard.updated_at).toLocaleString()}</div>
                 ) : null}
-                {activeBidCard.accepted_by_username || (activeStatus === "accepted" && activeBidCard.project_owner_username) ? (
+                {activeBidCard.accepted_by_username || (activeBidStatus === "accepted" && activeBidCard.project_owner_username) ? (
                   <div>Accepted by: {activeBidCard.accepted_by_username || activeBidCard.project_owner_username}</div>
                 ) : null}
                 {activeBidCard.valid_until ? <div>Valid until: {activeBidCard.valid_until}</div> : null}
@@ -1421,7 +1422,7 @@ export default function Dashboard() {
                 ) : null}
               </div>
 
-              {activeStatus !== "accepted" && activeBidCard.owner_response_note ? (
+              {activeBidStatus !== "accepted" && activeBidCard.owner_response_note ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Owner note
@@ -1456,6 +1457,8 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+          );
+        })()
       ) : null}
 
       <Card className="p-5">
