@@ -20,7 +20,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "fallback-secret")
 DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
 ALLOWED_HOSTS = parse_csv_env(
     "DJANGO_ALLOWED_HOSTS",
-    "localhost,127.0.0.1,portfolio-production-1b31.up.railway.app",
+    "localhost,127.0.0.1,flatorigin.com,www.flatorigin.com,portfolio-production-1b31.up.railway.app",
 )
 
 if not DEBUG and not ALLOWED_HOSTS:
@@ -98,7 +98,7 @@ else:
         )
     }
 
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://flatorigin.com")
 
 FRONTEND_DIR = BASE_DIR.parent / "frontend" / "dist"
 TEMPLATES[0]["DIRS"] = [FRONTEND_DIR]
@@ -142,13 +142,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = parse_csv_env(
     "CORS_ALLOWED_ORIGINS",
-    f"{FRONTEND_URL},https://portfolio-production-1b31.up.railway.app",
+    f"{FRONTEND_URL},https://www.flatorigin.com,https://portfolio-production-1b31.up.railway.app",
 )
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = parse_csv_env(
     "CSRF_TRUSTED_ORIGINS",
-    "https://portfolio-production-1b31.up.railway.app",
+    "https://flatorigin.com,https://www.flatorigin.com,https://portfolio-production-1b31.up.railway.app",
 )
 
 REST_FRAMEWORK = {
