@@ -98,7 +98,7 @@ else:
         )
     }
 
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://flatorigin.com")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 FRONTEND_DIR = BASE_DIR.parent / "frontend" / "dist"
 TEMPLATES[0]["DIRS"] = [FRONTEND_DIR]
@@ -142,13 +142,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = parse_csv_env(
     "CORS_ALLOWED_ORIGINS",
-    f"{FRONTEND_URL},https://www.flatorigin.com,https://portfolio-production-1b31.up.railway.app",
+    f"{FRONTEND_URL},https://flatorigin.com,https://www.flatorigin.com,https://portfolio-production-1b31.up.railway.app",
 )
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = parse_csv_env(
     "CSRF_TRUSTED_ORIGINS",
-    "https://flatorigin.com,https://www.flatorigin.com,https://portfolio-production-1b31.up.railway.app",
+    "http://localhost:5173,http://127.0.0.1:5173,https://flatorigin.com,https://www.flatorigin.com,https://portfolio-production-1b31.up.railway.app",
 )
 
 REST_FRAMEWORK = {
