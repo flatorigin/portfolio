@@ -16,6 +16,7 @@ from .models import (
     MessageThread,
     PrivateMessage,
     ProjectFavorite,
+    ProjectLike,
     MessageAttachment,
     ProjectInvite,
     ProjectBid,
@@ -98,6 +99,9 @@ class ProjectSerializer(serializers.ModelSerializer):
     viewer_is_invited = serializers.SerializerMethodField()
     bid_count = serializers.IntegerField(read_only=True, default=0)
     accepted_bid_count = serializers.IntegerField(read_only=True, default=0)
+    like_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
+    saved_by_me = serializers.SerializerMethodField()
 
     cover_image_ref = serializers.PrimaryKeyRelatedField(
         queryset=ProjectImage.objects.all(),
@@ -145,6 +149,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             "viewer_is_invited",
             "bid_count",
             "accepted_bid_count",
+            "like_count",
+            "liked_by_me",
+            "saved_by_me",
             "cover_image_ref",
             "cover_image_file",
             "cover_image_url",
@@ -255,6 +262,23 @@ class ProjectSerializer(serializers.ModelSerializer):
             contractor=user,
             status__in=[ProjectInvite.STATUS_INVITED, ProjectInvite.STATUS_ACCEPTED],
         ).exists()
+
+    def get_like_count(self, obj):
+        return ProjectLike.objects.filter(project=obj).count()
+
+    def get_liked_by_me(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        return ProjectLike.objects.filter(project=obj, user=user).exists()
+
+    def get_saved_by_me(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        return ProjectFavorite.objects.filter(project=obj, user=user).exists()
 
     def _sync_project_invites(self, project):
         if not project.is_job_posting or not project.is_private:

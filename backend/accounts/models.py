@@ -118,3 +118,28 @@ class ProfileLike(models.Model):
 
     def __str__(self):
         return f"{self.liker_id} -> {self.liked_user_id}"
+
+
+class ProfileSave(models.Model):
+    saver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile_saves_given",
+    )
+    saved_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile_saves_received",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["saver", "saved_user"],
+                name="unique_profile_save",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.saver_id} saved {self.saved_user_id}"

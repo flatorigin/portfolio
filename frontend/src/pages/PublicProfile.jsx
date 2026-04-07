@@ -88,6 +88,8 @@ export default function PublicProfile() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const shouldRenderMap = Boolean(profile?.service_location);
 
@@ -190,6 +192,8 @@ export default function PublicProfile() {
 
         // Seed like count from public serializer field
         setLikeCount(Number(prof?.like_count || 0));
+        setLiked(!!prof?.liked_by_me);
+        setSaved(!!prof?.saved_by_me);
       } catch (err) {
         console.error("[PublicProfile] failed to load", err);
         if (!alive) return;
@@ -197,6 +201,7 @@ export default function PublicProfile() {
         setProjects([]);
         setLikeCount(0);
         setLiked(false);
+        setSaved(false);
       } finally {
         if (alive) setLoading(false);
       }
@@ -237,6 +242,32 @@ export default function PublicProfile() {
     };
   }, [authed, profile?.username, isMine]);
 
+  useEffect(() => {
+    let alive = true;
+
+    if (!authed || !profile?.username || isMine) {
+      setSaved(false);
+      return () => {
+        alive = false;
+      };
+    }
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/profiles/${profile.username}/save/`);
+        if (!alive) return;
+        setSaved(!!data?.saved);
+      } catch {
+        if (!alive) return;
+        setSaved(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [authed, profile?.username, isMine]);
+
   async function toggleLike() {
     if (!authed || !profile?.username || likeBusy || isMine) return;
 
@@ -260,6 +291,26 @@ export default function PublicProfile() {
       alert(e?.response?.data?.detail || "Could not update like.");
     } finally {
       setLikeBusy(false);
+    }
+  }
+
+  async function toggleSave() {
+    if (!authed || !profile?.username || saveBusy || isMine) return;
+
+    setSaveBusy(true);
+    try {
+      if (saved) {
+        const { data } = await api.delete(`/profiles/${profile.username}/save/`);
+        setSaved(!!data?.saved);
+      } else {
+        const { data } = await api.post(`/profiles/${profile.username}/save/`);
+        setSaved(!!data?.saved);
+      }
+      window.dispatchEvent(new CustomEvent("profiles:saved_changed"));
+    } catch (e) {
+      alert(e?.response?.data?.detail || "Could not update saved state.");
+    } finally {
+      setSaveBusy(false);
     }
   }
 
@@ -341,32 +392,51 @@ export default function PublicProfile() {
               {/* RIGHT: actions */}
               <div className="flex flex-wrap items-center gap-2 sm:pb-1">
                 {!isMine ? (
-                  <button
-                    type="button"
-                    onClick={toggleLike}
-                    disabled={!authed || likeBusy}
-                    className={
-                      "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium backdrop-blur " +
-                      (liked
-                        ? "bg-white text-slate-900 hover:bg-slate-100"
-                        : "bg-white/10 text-white hover:bg-white/20") +
-                      (!authed ? " opacity-70" : "")
-                    }
-                    title={!authed ? "Log in to like profiles" : "Like this profile"}
-                  >
-                    <span aria-hidden>{liked ? "♥" : "♡"}</span>
-                    <span>{liked ? "Liked" : "Like"}</span>
-                    <span className={liked ? "text-slate-700" : "text-white/80"}>
-                      {Number.isFinite(likeCount) ? likeCount : 0}
-                    </span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleLike}
+                      disabled={!authed || likeBusy}
+                      className={
+                        "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium backdrop-blur " +
+                        (liked
+                          ? "bg-white text-slate-900 hover:bg-slate-100"
+                          : "bg-white/10 text-white hover:bg-white/20") +
+                        (!authed ? " opacity-70" : "")
+                      }
+                      title={!authed ? "Log in to like profiles" : "Like this profile"}
+                    >
+                      <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                      <span>{liked ? "Liked" : "Like"}</span>
+                      <span className={liked ? "text-slate-700" : "text-white/80"}>
+                        {Number.isFinite(likeCount) ? likeCount : 0}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={toggleSave}
+                      disabled={!authed || saveBusy}
+                      className={
+                        "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium backdrop-blur " +
+                        (saved
+                          ? "bg-white text-slate-900 hover:bg-slate-100"
+                          : "bg-white/10 text-white hover:bg-white/20") +
+                        (!authed ? " opacity-70" : "")
+                      }
+                      title={!authed ? "Log in to save profiles" : "Save this profile"}
+                    >
+                      <span aria-hidden>{saved ? "🔖" : "📑"}</span>
+                      <span>{saved ? "Saved" : "Save"}</span>
+                    </button>
+                  </>
                 ) : null}
               </div>
             </div>
 
             {!authed && !isMine ? (
               <div className="mt-3 text-[11px] text-white/80">
-                Log in to like this profile.
+                Log in to like or save this profile.
               </div>
             ) : null}
           </div>

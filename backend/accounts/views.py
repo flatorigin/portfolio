@@ -8,11 +8,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Profile, ProfileLike
+from .models import Profile, ProfileLike, ProfileSave
 from .serializers import (
     ProfileSerializer,
     PublicUserProfileSerializer,
     LikedProfileCardSerializer,
+    SavedProfileCardSerializer,
 )
 
 User = get_user_model()
@@ -122,4 +123,53 @@ class LikedProfilesView(APIView):
         )
 
         ser = LikedProfileCardSerializer(qs, many=True, context={"request": request})
+        return Response(ser.data, status=status.HTTP_200_OK)
+
+
+class ProfileSaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_target(self, username: str):
+        return get_object_or_404(User, username=username)
+
+    def get(self, request, username):
+        target = self.get_target(username)
+        saved = ProfileSave.objects.filter(saver=request.user, saved_user=target).exists()
+        return Response({"saved": saved}, status=status.HTTP_200_OK)
+
+    def post(self, request, username):
+        target = self.get_target(username)
+
+        if target.id == request.user.id:
+            return Response(
+                {"detail": "You cannot save your own profile."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ProfileSave.objects.get_or_create(saver=request.user, saved_user=target)
+        return Response({"saved": True}, status=status.HTTP_200_OK)
+
+    def delete(self, request, username):
+        target = self.get_target(username)
+        ProfileSave.objects.filter(saver=request.user, saved_user=target).delete()
+        return Response({"saved": False}, status=status.HTTP_200_OK)
+
+
+class SavedProfilesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        saved_user_ids = (
+            ProfileSave.objects
+            .filter(saver=request.user)
+            .values_list("saved_user_id", flat=True)
+        )
+
+        qs = (
+            Profile.objects
+            .filter(user_id__in=list(saved_user_ids))
+            .select_related("user")
+        )
+
+        ser = SavedProfileCardSerializer(qs, many=True, context={"request": request})
         return Response(ser.data, status=status.HTTP_200_OK)

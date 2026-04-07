@@ -22,6 +22,7 @@ from .models import (
     MessageThread,
     PrivateMessage,
     ProjectFavorite,
+    ProjectLike,
     MessageAttachment,
     ProjectBid,
     ProjectBidVersion,
@@ -209,6 +210,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
             ProjectComment.objects.filter(project=project).delete()
             ProjectFavorite.objects.filter(project=project).delete()
+            ProjectLike.objects.filter(project=project).delete()
 
             MessageThread.objects.filter(project=project).delete()
             ProjectBid.objects.filter(project=project).delete()
@@ -322,6 +324,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         user = request.user
 
+        if project.owner_id == user.id:
+            return Response(
+                {"detail": "You cannot save your own project."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         qs = ProjectFavorite.objects.filter(user=user, project=project)
 
         if request.method == "GET":
@@ -333,6 +341,46 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         qs.delete()
         return Response({"is_favorited": False}, status=status.HTTP_200_OK)
+
+    @action(
+        detail=True,
+        methods=["get", "post", "delete"],
+        permission_classes=[IsAuthenticated],
+        url_path="like",
+    )
+    def like(self, request, pk=None):
+        project = self.get_object()
+        user = request.user
+
+        if project.owner_id == user.id:
+            return Response(
+                {"detail": "You cannot like your own project."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = ProjectLike.objects.filter(user=user, project=project)
+
+        if request.method == "GET":
+            return Response(
+                {
+                    "liked": qs.exists(),
+                    "like_count": ProjectLike.objects.filter(project=project).count(),
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        if request.method == "POST":
+            ProjectLike.objects.get_or_create(user=user, project=project)
+            return Response(
+                {"liked": True, "like_count": ProjectLike.objects.filter(project=project).count()},
+                status=status.HTTP_200_OK,
+            )
+
+        qs.delete()
+        return Response(
+            {"liked": False, "like_count": ProjectLike.objects.filter(project=project).count()},
+            status=status.HTTP_200_OK,
+        )
 
     @action(
         detail=False,
