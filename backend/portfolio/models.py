@@ -71,6 +71,7 @@ class Project(models.Model):
     category = models.CharField(max_length=100, blank=True)
 
     is_job_posting = models.BooleanField(default=False)
+    is_private = models.BooleanField(default=False)
 
     # --- Job posting extensions (persisted) ---
     job_summary = models.TextField(blank=True, default="")
@@ -149,6 +150,10 @@ class Project(models.Model):
             convert_field_file_to_webp(self.cover_image_file, quality=80)
         super().save(*args, **kwargs)
 
+    @property
+    def is_private_job(self):
+        return bool(self.is_job_posting and (self.is_private or self.post_privacy == "private"))
+
 
 class ProjectFavorite(models.Model):
     user = models.ForeignKey(
@@ -168,6 +173,47 @@ class ProjectFavorite(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.project}"
+
+
+class ProjectInvite(models.Model):
+    STATUS_INVITED = "invited"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_DECLINED = "declined"
+
+    STATUS_CHOICES = [
+        (STATUS_INVITED, "Invited"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_DECLINED, "Declined"),
+    ]
+
+    project = models.ForeignKey(
+        "portfolio.Project",
+        related_name="invites",
+        on_delete=models.CASCADE,
+    )
+    contractor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="project_invites",
+        on_delete=models.CASCADE,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_INVITED,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "contractor"],
+                name="unique_project_invite_per_contractor",
+            )
+        ]
+
+    def __str__(self):
+        return f"Invite {self.project_id} -> {self.contractor_id} ({self.status})"
 
 
 class ProjectComment(models.Model):

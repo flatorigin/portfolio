@@ -420,6 +420,7 @@ export default function Dashboard() {
 
   const [myThumbs, setMyThumbs] = useState({});
   const [myBids, setMyBids] = useState([]);
+  const [invitedJobPosts, setInvitedJobPosts] = useState([]);
   const [activeBidCard, setActiveBidCard] = useState(null);
 
   // NEW: bid summary per owned job/project
@@ -579,10 +580,15 @@ export default function Dashboard() {
 
       const mineProjects = mineAll.filter((p) => !isJobPostingFlag(p?.is_job_posting));
       const mineJobPosts = mineAll.filter((p) => isJobPostingFlag(p?.is_job_posting));
+      const invitedPrivateJobs = all.filter((p) => {
+        const owner = (p.owner_username || p.owner?.username || "").toLowerCase();
+        return owner !== me && isJobPostingFlag(p?.is_job_posting) && !!p?.viewer_is_invited;
+      });
 
       if (isMountedRef.current) {
         setProjects(mineProjects);
         setMyJobPosts(mineJobPosts);
+        setInvitedJobPosts(invitedPrivateJobs);
       }
 
       await refreshMyThumbs(mineAll);
@@ -592,6 +598,7 @@ export default function Dashboard() {
       if (isMountedRef.current) {
         setProjects([]);
         setMyJobPosts([]);
+        setInvitedJobPosts([]);
         setMyThumbs({});
         setJobBidMeta({});
       }
@@ -803,8 +810,12 @@ export default function Dashboard() {
 
       setCover(null);
       setCreateOk(true);
+      if (data?.is_job_posting && (data?.post_privacy === "private" || data?.is_private) && data?.private_contractor_username) {
+        setSaveToast(`Private job sent to @${data.private_contractor_username}`);
+      }
       setCreateCloseSignal((n) => n + 1);
       setCreateOpen(false);
+      return data;
     } catch (err) {
       const data = err?.response?.data;
       const msg =
@@ -814,6 +825,7 @@ export default function Dashboard() {
         "Create failed";
       if (isMountedRef.current) setCreateErr(msg);
       console.error("[createProject] failed:", err?.response || err);
+      throw err;
     } finally {
       if (isMountedRef.current) setBusy(false);
     }
@@ -849,7 +861,11 @@ export default function Dashboard() {
 
       const title = (payload.title || "").trim();
       if (isMountedRef.current) {
-        setSaveToast(title ? `Saved ✓  “${title}”` : "Saved ✓  Your changes are live");
+        if (payload?.is_job_posting && payload?.post_privacy === "private" && (payload?.private_contractor_username || "").trim()) {
+          setSaveToast(`Private job updated for @${payload.private_contractor_username.trim()}`);
+        } else {
+          setSaveToast(title ? `Saved ✓  “${title}”` : "Saved ✓  Your changes are live");
+        }
       }
 
       if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
@@ -913,6 +929,16 @@ export default function Dashboard() {
   }
 
   const handleEditorSubmit = useCallback((e) => saveProjectInfo(e), [editingId, editForm]);
+
+  const handlePrivateInviteNotice = useCallback((username) => {
+    const next = (username || "").trim();
+    if (!next || !isMountedRef.current) return;
+    setSaveToast(`Private job sent to @${next}`);
+    if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+    saveToastTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) setSaveToast("");
+    }, 2200);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1573,6 +1599,99 @@ export default function Dashboard() {
         )}
       </Card>
 
+      <Card className="p-5 border border-emerald-200 bg-emerald-50/30">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Invited Job Posts</div>
+            <div className="text-xs text-slate-600">
+              Private jobs you were invited to review and bid on.
+            </div>
+          </div>
+          <Badge className="bg-white text-slate-700">{invitedJobPosts.length} invites</Badge>
+        </div>
+
+        {invitedJobPosts.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-emerald-200 bg-white p-4 text-sm text-slate-600">
+            No private job invites yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+            {invitedJobPosts.map((p) => {
+              const coverSrc = getProjectCover(p);
+              return (
+                <Card
+                  key={`invite-${p.id}`}
+                  className="cursor-pointer overflow-hidden border border-emerald-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
+                  onClick={() => window.open(`/projects/${p.id}`, "_self")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      window.open(`/projects/${p.id}`, "_self");
+                    }
+                  }}
+                >
+                  <div className="relative">
+                    {coverSrc ? (
+                      <img
+                        src={coverSrc}
+                        alt={p.title || "private job cover"}
+                        className="h-44 w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder.png";
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-44 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                        No image
+                      </div>
+                    )}
+
+                    <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+                      <Badge className="bg-emerald-600 text-white">Private invite</Badge>
+                      <Badge className="bg-white text-slate-700">Job post</Badge>
+                    </div>
+                  </div>
+
+                  <div className="p-4">
+                    <div className="truncate text-sm font-semibold text-slate-900">
+                      {p.title || `Job #${p.id}`}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                      {p.owner_username ? <span>by {p.owner_username}</span> : null}
+                      {p.location ? (
+                        <>
+                          <span className="mx-1 text-slate-300">•</span>
+                          <span>{p.location}</span>
+                        </>
+                      ) : null}
+                    </div>
+                    {(p.job_summary || p.summary) ? (
+                      <div className="mt-2 line-clamp-3 text-xs text-slate-600">
+                        {p.job_summary || p.summary}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <GhostButton
+                        className="w-full min-w-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/projects/${p.id}`, "_self");
+                        }}
+                      >
+                        Open Invite
+                      </GhostButton>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
       {saveToast ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           <div className="flex items-center gap-2">
@@ -1619,6 +1738,7 @@ export default function Dashboard() {
                 onDeleteProject={() => deleteProject(editingId)}
                 onClose={() => setEditingId("")}
                 onView={() => window.open(`/projects/${editingId}`, "_self")}
+                onSendPrivate={handlePrivateInviteNotice}
                 onAfterUpload={async () => {
                   await refreshImages(editingId);
                   await refreshProjects();
@@ -1655,6 +1775,7 @@ export default function Dashboard() {
                 error={createErr}
                 success={createOk}
                 onSubmit={createProject}
+                onSendPrivate={handlePrivateInviteNotice}
                 closeSignal={createCloseSignal}
                 defaultOpen
               />

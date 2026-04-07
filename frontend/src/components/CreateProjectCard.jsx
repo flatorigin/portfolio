@@ -1,7 +1,7 @@
 // ============================================================================
 // file: frontend/src/components/CreateProjectCard.jsx
 // Create Project + Job Posting form fields (Public vs Private draft)
-// Action menu: Save Draft / Publish / Send to Contractor (placeholder)
+// Action menu: Save Draft / Publish / Send to Contractor
 // ============================================================================
 
 import { useMemo, useState, useEffect } from "react";
@@ -69,9 +69,9 @@ export default function CreateProjectCard({
   const privateHelpText = useMemo(
     () =>
       [
-        "Private posts are drafts you can keep improving.",
-        "When ready, you can send the job post to a specific contractor username.",
-        "Limit: you can send to one contractor per day (enforced later).",
+        "Private posts are visible only to the owner and the invited contractor.",
+        "When ready, send the job post to a specific contractor username so they can review it and bid.",
+        "Private jobs do not appear in public listings or search.",
         "Optional: enable email notifications to get alerted when there’s activity on this post.",
       ].join("\n"),
     []
@@ -230,18 +230,18 @@ export default function CreateProjectCard({
 
   // IMPORTANT: we use flushSync so is_public/post_privacy changes are applied
   // before Dashboard reads `form` to create FormData.
-  const saveDraft = (e) => {
+  const saveDraft = async (e) => {
     e.preventDefault();
     flushSync(() => {
       ensureJobDefaults();
       setForm((p) => ({ ...p, is_public: false }));
     });
-    onSubmit?.(e, images);
+    await onSubmit?.(e, images);
     setIsOpen(false);
     resetLocalImages();
   };
 
-  const publishProject = (e) => {
+  const publishProject = async (e) => {
     e.preventDefault();
 
     const v = validatePublish();
@@ -252,12 +252,12 @@ export default function CreateProjectCard({
       setForm((p) => ({ ...p, is_public: true, post_privacy: "public" }));
     });
 
-    onSubmit?.(e, images);
+    await onSubmit?.(e, images);
     setIsOpen(false);
     resetLocalImages();
   };
 
-  const sendToContractor = (e) => {
+  const sendToContractor = async (e) => {
     e.preventDefault();
 
     const v = validateSendPrivate();
@@ -268,14 +268,15 @@ export default function CreateProjectCard({
       setForm((p) => ({ ...p, is_public: false, post_privacy: "private" }));
     });
 
-    onSubmit?.(e, images);
+    const result = await onSubmit?.(e, images);
 
     if (onSendPrivate) {
-      onSendPrivate(v.username, { ...form, is_public: false, post_privacy: "private" });
-    } else {
-      alert(
-        "Saved as Private draft. Sending/notification will be implemented next (contractor will be notified later)."
-      );
+      onSendPrivate(v.username, {
+        ...form,
+        is_public: false,
+        post_privacy: "private",
+        projectId: result?.id || null,
+      });
     }
 
     setIsOpen(false);

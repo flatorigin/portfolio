@@ -12,6 +12,9 @@ import { Badge, Card, Button, Textarea, Input } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import BidModule from "../components/bids/BidModule";
 
+const COMMENT_CHAR_LIMIT = 280;
+const COMMENT_LINK_PATTERN = /(https?:\/\/|www\.)/i;
+
 function toUrl(raw) {
   if (!raw) return "";
 
@@ -120,7 +123,8 @@ export default function ProjectDetail() {
   const [editingRating, setEditingRating] = useState(null);
   const [editBusy, setEditBusy] = useState(false);
 
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
   const [bidOpen, setBidOpen] = useState(false);
@@ -465,7 +469,7 @@ export default function ProjectDetail() {
   }, [images.length]);
 
   useEffect(() => {
-    if (!commentsOpen) return;
+    if (!imageLightboxOpen) return;
     const handler = (e) => {
       if (e.key === "ArrowRight") {
         e.preventDefault();
@@ -477,7 +481,7 @@ export default function ProjectDetail() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [commentsOpen, nextImage, prevImage]);
+  }, [imageLightboxOpen, nextImage, prevImage]);
 
   const roots = useMemo(() => comments.filter((c) => !c.in_reply_to), [comments]);
 
@@ -519,6 +523,14 @@ export default function ProjectDetail() {
     const trimmed = commentText.trim();
     if (!trimmed) {
       setCommentError("Comment cannot be empty.");
+      return;
+    }
+    if (trimmed.length > COMMENT_CHAR_LIMIT) {
+      setCommentError(`Comments must be ${COMMENT_CHAR_LIMIT} characters or fewer.`);
+      return;
+    }
+    if (COMMENT_LINK_PATTERN.test(trimmed)) {
+      setCommentError("Public comments cannot include links.");
       return;
     }
 
@@ -1453,35 +1465,6 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {(project?.location || project?.budget || project?.sqf || project?.highlights) && (
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Project details
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm text-slate-700 sm:grid-cols-4">
-                <div className="min-w-0">
-                  <div className="text-xs font-medium uppercase text-slate-500">Location</div>
-                  <div className="truncate text-lg font-semibold">{project?.location || "—"}</div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
-                  <div className="truncate text-lg font-semibold">{project?.budget ?? "—"}</div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
-                  <div className="truncate text-lg font-semibold">{project?.sqf ?? "—"}</div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
-                  <div className="truncate text-lg font-semibold">{project?.highlights || "—"}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {(project?.material_url ||
             project?.material_label ||
             (Array.isArray(project?.extra_links) && project.extra_links.length > 0)) && (
@@ -1591,7 +1574,7 @@ export default function ProjectDetail() {
                     key={img.url + i}
                     onClick={() => {
                       setActiveImageIdx(i);
-                      setCommentsOpen(true);
+                      setImageLightboxOpen(true);
                     }}
                     className="group w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
                   >
@@ -1607,60 +1590,161 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          {mapSrc && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Service area map
-                </div>
-                {project?.location && (
-                  <div className="text-[11px] text-slate-500">
-                    Centered on: <span className="font-medium">{project.location}</span>
-                  </div>
-                )}
+          <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Comments
               </div>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-                <iframe
-                  title="Project location map"
-                  src={mapSrc}
-                  className="h-64 w-full border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
+              <div className="text-[11px] text-slate-500">
+                {comments.length || 0} comment{comments.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {roots.length === 0 ? (
+                <p className="text-xs text-slate-500">No comments yet. Be the first to comment.</p>
+              ) : (
+                roots.map((c) => renderCommentBlock(c))
+              )}
+            </div>
+
+            <div className="border-t border-slate-200 pt-3">
+              {authed ? (
+                <form onSubmit={submitComment} className="space-y-2">
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                    Public comments are text-only. No links or media. Emoji is okay.
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] font-medium text-slate-600">Rating (optional)</div>
+                    <Stars value={commentRating || 0} onChange={setCommentRating} disabled={commentBusy} />
+                  </div>
+
+                  {replyingTo && (
+                    <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">
+                      <div>
+                        Replying to <span className="font-semibold">{replyingTo.author_username || "user"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReplyingTo(null)}
+                        className="ml-2 text-xs text-slate-500 hover:text-slate-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  <Textarea
+                    rows={3}
+                    maxLength={COMMENT_CHAR_LIMIT}
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Add a public comment…"
+                    className="min-h-[88px] bg-white"
+                  />
+
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[11px] text-slate-500">
+                      {commentText.trim().length}/{COMMENT_CHAR_LIMIT}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {commentError && <p className="text-[11px] text-red-600">{commentError}</p>}
+                      <Button type="submit" disabled={commentBusy || !commentText.trim() || commentText.trim().length > COMMENT_CHAR_LIMIT}>
+                        {commentBusy ? "Posting…" : "Post"}
+                      </Button>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <p className="text-xs text-slate-600">
+                  <span className="font-medium">Login</span> to add a comment.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {(project?.location || project?.budget || project?.sqf || project?.highlights) && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Project details
+              </div>
+              <div className="grid gap-4 text-sm text-slate-700 sm:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,1fr))]">
+                <div className="min-w-0 space-y-3">
+                  <div>
+                    <div className="text-xs font-medium uppercase text-slate-500">Location</div>
+                    <div className="truncate text-lg font-semibold">{project?.location || "—"}</div>
+                  </div>
+                  {mapSrc ? (
+                    <button
+                      type="button"
+                      onClick={() => setMapOpen(true)}
+                      className="block w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
+                    >
+                      <div className="aspect-[16/10] w-full overflow-hidden bg-slate-100">
+                        <iframe
+                          title="Project location map preview"
+                          src={mapSrc}
+                          className="pointer-events-none h-full w-full border-0"
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-600">
+                        <span>Open map</span>
+                        {project?.location ? <span className="truncate font-medium">{project.location}</span> : null}
+                      </div>
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
+                  <div className="truncate text-lg font-semibold">{project?.budget ?? "—"}</div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
+                  <div className="truncate text-lg font-semibold">{project?.sqf ?? "—"}</div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
+                  <div className="truncate text-lg font-semibold">{project?.highlights || "—"}</div>
+                </div>
               </div>
             </div>
           )}
         </div>
       </Card>
 
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setCommentsOpen(true)}
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50"
-        >
-          <span aria-hidden>💬</span>
-          <span>{comments.length || 0} comments</span>
-        </button>
-      </div>
-
-      {commentsOpen && (
+      {imageLightboxOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-2 sm:p-4">
-          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl md:h-[90vh] md:flex-row">
-            <div className="relative flex-1 bg-black md:min-w-[60%]">
+          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl md:h-[90vh]">
+            <div className="relative flex-1 bg-[rgba(43,55,73,0.9)]">
               {currentImage ? (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => setImageLightboxOpen(false)}
+                    className="absolute right-4 top-4 z-10 rounded-full bg-black/70 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-black/85"
+                    aria-label="Close image gallery"
+                  >
+                    ✕
+                  </button>
                   <div className="flex h-full flex-col">
-                    <div className="flex-1 bg-black">
-                      <img
-                        src={currentImage.url}
-                        alt={currentImage.caption || ""}
-                        className="h-full w-full object-contain"
-                      />
+                    <div className="flex h-[72vh] min-h-[440px] w-full items-center justify-center overflow-hidden bg-[rgba(43,55,73,0.9)] px-6 py-6 md:px-14">
+                      <div className="flex h-full w-full items-center justify-center overflow-hidden">
+                        <img
+                          src={currentImage.url}
+                          alt={currentImage.caption || ""}
+                          className="block h-full w-full object-contain"
+                        />
+                      </div>
                     </div>
 
                     {images.length > 1 && (
-                      <div className="flex items-center justify-center gap-1 bg-black/80 px-3 py-2 text-[11px] text-slate-100">
+                      <div className="flex items-center justify-center gap-1 bg-[rgba(43,55,73,0.96)] px-3 py-2 text-[11px] text-slate-100">
                         <button
                           type="button"
                           onClick={prevImage}
@@ -1699,14 +1783,14 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={prevImage}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-lg leading-none text-white hover:bg-black/80"
+                        className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-[rgba(43,55,73,0.96)] px-3 py-2 text-lg leading-none text-white shadow-sm hover:bg-[rgba(43,55,73,1)]"
                       >
                         ‹
                       </button>
                       <button
                         type="button"
                         onClick={nextImage}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-lg leading-none text-white hover:bg-black/80"
+                        className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-[rgba(43,55,73,0.96)] px-3 py-2 text-lg leading-none text-white shadow-sm hover:bg-[rgba(43,55,73,1)]"
                       >
                         ›
                       </button>
@@ -1718,87 +1802,56 @@ export default function ProjectDetail() {
               )}
             </div>
 
-            <div className="flex w-full max-w-sm flex-col border-t border-slate-200 bg-slate-50 md:h-full md:border-l md:border-t-0">
-              <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900">
-                    {project?.title || `Project #${id}`}
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    {comments.length || 0} comment{comments.length === 1 ? "" : "s"}
-                  </div>
+            <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-900">
+                  {project?.title || `Project #${id}`}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setCommentsOpen(false)}
-                  className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
-                >
-                  ✕
-                </button>
+                <div className="text-[11px] text-slate-500">
+                  {currentImage?.caption || `${activeImageIdx + 1} of ${images.length}`}
+                </div>
               </div>
-
-              <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-3 text-sm">
-                {roots.length === 0 ? (
-                  <p className="text-xs text-slate-500">No comments yet. Be the first to comment.</p>
-                ) : (
-                  roots.map((c) => renderCommentBlock(c))
-                )}
-              </div>
-
-              <div className="border-t border-slate-200 bg-white px-3 py-3">
-                {authed ? (
-                  <form onSubmit={submitComment} className="space-y-2">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-                      By commenting, you agree this comment may be used by the project owner as a public testimonial
-                      (with your username).
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="text-[11px] font-medium text-slate-600">Rating (optional)</div>
-                      <Stars value={commentRating || 0} onChange={setCommentRating} disabled={commentBusy} />
-                    </div>
-
-                    {replyingTo && (
-                      <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
-                        <div>
-                          Replying to <span className="font-semibold">{replyingTo.author_username || "user"}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setReplyingTo(null)}
-                          className="ml-2 text-xs text-slate-500 hover:text-slate-700"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )}
-
-                    <Textarea
-                      rows={2}
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="Add a public comment…"
-                      className="min-h-[60px]"
-                    />
-
-                    {commentError && <p className="text-[11px] text-red-600">{commentError}</p>}
-
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={commentBusy || !commentText.trim()}>
-                        {commentBusy ? "Posting…" : "Post"}
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <p className="text-xs text-slate-600">
-                    <span className="font-medium">Login</span> to add a comment.
-                  </p>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setImageLightboxOpen(false)}
+                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+              >
+                ✕
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {mapOpen && mapSrc ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setMapOpen(false)}>
+          <div
+            className="w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Project map</div>
+                {project?.location ? <div className="text-[11px] text-slate-500">{project.location}</div> : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMapOpen(false)}
+                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+            <iframe
+              title="Project location map"
+              src={mapSrc}
+              className="h-[420px] w-full border-0 md:h-[520px]"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </div>
+      ) : null}
 
       {bidOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">

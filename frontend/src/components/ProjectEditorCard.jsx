@@ -1,7 +1,7 @@
 // ============================================================================
 // file: frontend/src/components/ProjectEditorCard.jsx
 // Edit Project + Job Posting form fields (Public vs Private draft)
-// Action menu: Save Draft / Publish / Send to Contractor (placeholder)
+// Action menu: Save Draft / Publish / Send to Contractor
 // ============================================================================
 import { useMemo, useState } from "react";
 import ImageUploader from "./ImageUploader";
@@ -69,9 +69,9 @@ export default function ProjectEditorCard({
   const privateHelpText = useMemo(
     () =>
       [
-        "Private posts are drafts you can keep improving.",
-        "When ready, you can send the job post to a specific contractor username.",
-        "Limit: you can send to one contractor per day (enforced later).",
+        "Private posts are visible only to the owner and the invited contractor.",
+        "When ready, send the job post to a specific contractor username so they can review it and bid.",
+        "Private jobs do not appear in public listings or search.",
         "Optional: enable email notifications to get alerted when there’s activity on this post.",
       ].join("\n"),
     []
@@ -104,13 +104,18 @@ export default function ProjectEditorCard({
   };
 
   // NOTE: Dashboard saves using state; we set form first, then trigger save.
-  const saveDraft = () => {
+  const saveDraft = async () => {
     ensureJobDefaults();
     setForm((p) => ({ ...p, is_public: false }));
-    setTimeout(() => onSubmit?.(), 0);
+    await new Promise((resolve) => {
+      setTimeout(async () => {
+        await onSubmit?.();
+        resolve();
+      }, 0);
+    });
   };
 
-  const publishProject = () => {
+  const publishProject = async () => {
     ensureJobDefaults();
     if (isJobPosting && !form.compliance_confirmed) {
       alert("Please confirm compliance before publishing.");
@@ -121,10 +126,15 @@ export default function ProjectEditorCard({
       return;
     }
     setForm((p) => ({ ...p, is_public: true }));
-    setTimeout(() => onSubmit?.(), 0);
+    await new Promise((resolve) => {
+      setTimeout(async () => {
+        await onSubmit?.();
+        resolve();
+      }, 0);
+    });
   };
 
-  const sendToContractor = () => {
+  const sendToContractor = async () => {
     ensureJobDefaults();
     const u = (form.private_contractor_username || "").trim();
     if (!isJobPosting) return alert("Turn on Job Posting first.");
@@ -135,10 +145,14 @@ export default function ProjectEditorCard({
       return alert("Please confirm compliance before sending.");
 
     setForm((p) => ({ ...p, is_public: false, post_privacy: "private" }));
-    setTimeout(() => onSubmit?.(), 0);
+    await new Promise((resolve) => {
+      setTimeout(async () => {
+        await onSubmit?.();
+        resolve();
+      }, 0);
+    });
 
     if (onSendPrivate) onSendPrivate(u, { ...form, is_public: false, post_privacy: "private" });
-    else alert("Saved as Private draft. Sending/notification will be implemented next.");
   };
 
   return (
