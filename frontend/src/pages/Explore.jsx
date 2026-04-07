@@ -72,6 +72,9 @@ export default function Explore() {
   // favMap[projectId] = true/false
   const [favMap, setFavMap] = useState({});
   const [favBusyId, setFavBusyId] = useState(null);
+  const [likeMap, setLikeMap] = useState({});
+  const [likeCounts, setLikeCounts] = useState({});
+  const [likeBusyId, setLikeBusyId] = useState(null);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -164,6 +167,49 @@ export default function Explore() {
     [favBusyId, favMap, isOwner]
   );
 
+  const toggleLike = useCallback(
+    async (e, p) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!authRef.current.authed || !p?.id) return;
+      if (isOwner(p)) return;
+      if (likeBusyId === p.id) return;
+
+      const currently = !!likeMap[p.id];
+      const prevCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
+
+      setLikeBusyId(p.id);
+      setLikeMap((prev) => ({ ...prev, [p.id]: !currently }));
+      setLikeCounts((prev) => ({
+        ...prev,
+        [p.id]: Math.max(0, prevCount + (currently ? -1 : 1)),
+      }));
+
+      try {
+        const { data } = currently
+          ? await api.delete(`/projects/${p.id}/like/`)
+          : await api.post(`/projects/${p.id}/like/`);
+
+        setLikeMap((prev) => ({ ...prev, [p.id]: !!data?.liked }));
+        if (data?.like_count !== undefined) {
+          setLikeCounts((prev) => ({ ...prev, [p.id]: Number(data.like_count || 0) }));
+        }
+      } catch (err) {
+        console.error("[Explore] toggleLike failed", err?.response || err);
+        setLikeMap((prev) => ({ ...prev, [p.id]: currently }));
+        setLikeCounts((prev) => ({ ...prev, [p.id]: prevCount }));
+
+        const data = err?.response?.data;
+        const msg = data?.detail || data?.message || err?.message || "Could not update like.";
+        alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+      } finally {
+        setLikeBusyId(null);
+      }
+    },
+    [isOwner, likeBusyId, likeCounts, likeMap]
+  );
+
  // 1) Load projects once (stable)
  useEffect(() => {
    let alive = true;
@@ -184,6 +230,16 @@ export default function Explore() {
        );
 
        setProjects(exploreProjects);
+       setLikeCounts(
+         Object.fromEntries(
+           exploreProjects.map((p) => [p.id, Number(p?.like_count || 0)])
+         )
+       );
+       setLikeMap(
+         Object.fromEntries(
+           exploreProjects.map((p) => [p.id, !!p?.liked_by_me])
+         )
+       );
      } catch (e) {
        console.error("[Explore] projects fetch failed", e?.response || e);
        if (alive) setProjects([]);
@@ -418,6 +474,8 @@ export default function Explore() {
 
           const saved = !!favMap[p.id];
           const canSave = authed && !isOwner(p);
+          const liked = !!likeMap[p.id];
+          const likeCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
 
           const card = (
             <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
@@ -469,6 +527,18 @@ export default function Explore() {
                 </div>
 
                 <div className="mt-2 text-xs text-slate-500">by {p.owner_username}</div>
+
+                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-slate-100"
+                    onClick={(e) => toggleLike(e, p)}
+                    disabled={!canSave || likeBusyId === p.id}
+                  >
+                    <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                    <span>{likeCount}</span>
+                  </button>
+                </div>
 
                 {/* ✅ Bottom button row (consistent placement/style) */}
                 {authed && isOwner(p) ? (

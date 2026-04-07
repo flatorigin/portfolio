@@ -1,6 +1,6 @@
 // =======================================
 // file: frontend/src/components/SavedProfilesGrid.jsx
-// Dashboard section: Saved Profiles (liked public profiles)
+// Dashboard section: Saved Profiles
 // - 3 columns like Explore
 // - show max 6 cards
 // - delayed tooltip (1s) shows: name + location + first line of bio
@@ -31,7 +31,7 @@ export default function SavedProfilesGrid() {
   const timerRef = useRef(null);
 
   // Always use the correct backend path (accounts URLs are under /api/)
-  const API_PATH = "/profiles/liked/";
+  const API_PATH = "/profiles/saved/";
 
   // Re-fetch when likes change
   useEffect(() => {
@@ -46,8 +46,8 @@ export default function SavedProfilesGrid() {
         });
     };
 
-    window.addEventListener("profiles:liked_changed", handler);
-    return () => window.removeEventListener("profiles:liked_changed", handler);
+    window.addEventListener("profiles:saved_changed", handler);
+    return () => window.removeEventListener("profiles:saved_changed", handler);
   }, []);
 
   // Initial load
@@ -112,7 +112,7 @@ export default function SavedProfilesGrid() {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-800">Saved profiles</div>
-          <div className="text-xs text-slate-500">People you liked</div>
+          <div className="text-xs text-slate-500">People you may want to hire later</div>
         </div>
         <Badge className="text-[11px] text-slate-500">{profiles.length} saved</Badge>
       </div>
@@ -123,7 +123,7 @@ export default function SavedProfilesGrid() {
         <div className="text-sm text-red-600">{error}</div>
       ) : shown.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
-          No saved profiles yet. Like someone’s profile to pin them here.
+          No saved profiles yet. Save someone’s profile to pin them here.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

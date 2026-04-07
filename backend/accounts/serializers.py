@@ -1,7 +1,7 @@
 # backend/accounts/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Profile, ProfileLike
+from .models import Profile, ProfileLike, ProfileSave
 
 User = get_user_model()
 
@@ -38,6 +38,15 @@ class ProfileBaseMixin:
             liked_user=obj.user,
         ).exists()
 
+    def get_saved_by_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return ProfileSave.objects.filter(
+            saver=request.user,
+            saved_user=obj.user,
+        ).exists()
+
     def validate_service_location(self, value):
         value = (value or "").strip()
         if not value:
@@ -71,6 +80,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
 
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
+    saved_by_me = serializers.SerializerMethodField()
 
     is_profile_complete = serializers.ReadOnlyField()
     profile_status = serializers.ReadOnlyField()
@@ -96,6 +106,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "banner_url",
             "like_count",
             "liked_by_me",
+            "saved_by_me",
             "allow_direct_messages",
             "hero_headline",
             "hero_blurb",
@@ -115,6 +126,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "banner_url",
             "like_count",
             "liked_by_me",
+            "saved_by_me",
             "is_profile_complete",
             "profile_status",
         ]
@@ -173,6 +185,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
 
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
+    saved_by_me = serializers.SerializerMethodField()
 
     is_profile_complete = serializers.ReadOnlyField()
     profile_status = serializers.ReadOnlyField()
@@ -197,6 +210,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "banner_url",
             "like_count",
             "liked_by_me",
+            "saved_by_me",
             "allow_direct_messages",
             "hero_headline",
             "hero_blurb",
@@ -213,6 +227,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "banner_url",
             "like_count",
             "liked_by_me",
+            "saved_by_me",
             "is_profile_complete",
             "profile_status",
         )
@@ -275,6 +290,9 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
 
     badge = serializers.SerializerMethodField()
     profile_status = serializers.ReadOnlyField()
+    like_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
+    saved_by_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -298,6 +316,9 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "contact_phone",
             "badge",
             "profile_status",
+            "like_count",
+            "liked_by_me",
+            "saved_by_me",
             "languages",
             "languages_display",
             "member_since_label",
@@ -338,6 +359,27 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
     def get_badge(self, obj):
         return "Profile Complete" if obj.is_profile_complete else "Incomplete Profile"
 
+    def get_like_count(self, obj):
+        return ProfileLike.objects.filter(liked_user=obj.user).count()
+
+    def get_liked_by_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return ProfileLike.objects.filter(
+            liker=request.user,
+            liked_user=obj.user,
+        ).exists()
+
+    def get_saved_by_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return ProfileSave.objects.filter(
+            saver=request.user,
+            saved_user=obj.user,
+        ).exists()
+
 class LikedProfileCardSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     avatar_url = serializers.SerializerMethodField()
@@ -371,3 +413,7 @@ class LikedProfileCardSerializer(serializers.ModelSerializer):
     def get_bio_preview(self, obj):
         txt = (obj.bio or "").strip().splitlines()
         return (txt[0] if txt else "").strip()
+
+
+class SavedProfileCardSerializer(LikedProfileCardSerializer):
+    pass

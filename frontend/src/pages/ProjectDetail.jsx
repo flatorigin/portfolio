@@ -110,6 +110,9 @@ export default function ProjectDetail() {
 
   const [isSaved, setIsSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
 
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -389,6 +392,10 @@ export default function ProjectDetail() {
   }, [fetchBids]);
 
   useEffect(() => {
+    setLikeCount(Number(project?.like_count || 0));
+  }, [project?.like_count]);
+
+  useEffect(() => {
     if (!authed || !project || !meUser) {
       setIsSaved(false);
       return;
@@ -412,6 +419,41 @@ export default function ProjectDetail() {
       } catch {
         if (cancelled || !isMountedRef.current) return;
         setIsSaved(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed, project, meUser]);
+
+  useEffect(() => {
+    if (!authed || !project || !meUser) {
+      setIsLiked(false);
+      return;
+    }
+
+    const isOwner =
+      (project.owner_username || "").toLowerCase() === (meUser.username || "").toLowerCase();
+
+    if (isOwner) {
+      setIsLiked(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/projects/${project.id}/like/`);
+        if (cancelled || !isMountedRef.current) return;
+        setIsLiked(!!data?.liked);
+        if (data?.like_count !== undefined) {
+          setLikeCount(Number(data.like_count || 0));
+        }
+      } catch {
+        if (cancelled || !isMountedRef.current) return;
+        setIsLiked(false);
       }
     })();
 
@@ -455,6 +497,40 @@ export default function ProjectDetail() {
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       if (isMountedRef.current) setSaveBusy(false);
+    }
+  }
+
+  async function toggleLike() {
+    if (!authed || !project || likeBusy || isOwnerUser) return;
+    const projectId = project.id;
+    if (!projectId) return;
+
+    setLikeBusy(true);
+    try {
+      if (isLiked) {
+        const { data } = await api.delete(`/projects/${projectId}/like/`);
+        if (isMountedRef.current) {
+          setIsLiked(false);
+          if (data?.like_count !== undefined) {
+            setLikeCount(Number(data.like_count || 0));
+          }
+        }
+      } else {
+        const { data } = await api.post(`/projects/${projectId}/like/`);
+        if (isMountedRef.current) {
+          setIsLiked(true);
+          if (data?.like_count !== undefined) {
+            setLikeCount(Number(data.like_count || 0));
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[ProjectDetail] toggle like failed", err?.response || err);
+      const data = err?.response?.data;
+      const msg = data?.detail || data?.message || err?.message || "Failed to update like.";
+      alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      if (isMountedRef.current) setLikeBusy(false);
     }
   }
 
@@ -1390,6 +1466,28 @@ export default function ProjectDetail() {
             </div>
 
             <div className="flex items-start gap-2">
+              {authed && project && !isOwnerUser ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleLike}
+                  disabled={likeBusy}
+                  className={
+                    "min-w-[110px] justify-center rounded-full border border-white/40 " +
+                    "bg-white/10 px-6 text-sm font-semibold text-white shadow-sm " +
+                    "backdrop-blur-md hover:bg-white/20 active:scale-[0.99] " +
+                    (isLiked ? "opacity-95" : "")
+                  }
+                >
+                  {likeBusy ? "..." : `${isLiked ? "Liked" : "Like"} ${Number.isFinite(likeCount) ? `(${likeCount})` : ""}`}
+                </Button>
+              ) : (
+                <span className="inline-flex min-w-[110px] items-center justify-center rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">
+                  ♥ {Number.isFinite(likeCount) ? likeCount : 0}
+                </span>
+              )}
+
               {project?.owner_username ? (
                 <Link
                   to={`/profiles/${project.owner_username}`}
