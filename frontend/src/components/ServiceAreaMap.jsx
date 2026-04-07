@@ -16,10 +16,13 @@ function normalizeQuery(raw) {
   const v = (raw || "").trim();
   if (!v) return "";
 
-  const zip = /^\d{5}(-\d{4})?$/.test(v);
-  if (zip) return `${v}, USA`;
+  const usZip = /^\d{5}(-\d{4})?$/.test(v);
+  if (usZip) return `${v}, USA`;
 
-  return v.includes(",") ? v : `${v}, USA`;
+  const canadianPostal = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(v);
+  if (canadianPostal) return `${v}, Canada`;
+
+  return v;
 }
 
 function milesToMeters(miles) {
@@ -286,7 +289,7 @@ export default function ServiceAreaMap({
         <div ref={containerRef} className="h-full w-full" />
       </div>
       <div className="mt-2 text-[11px] text-slate-500">
-        ZIP geocoding requires{" "}
+        Geocoding requires{" "}
         <span className="font-medium">Geocoding API</span>, billing, and correct
         HTTP referrer restrictions.
       </div>

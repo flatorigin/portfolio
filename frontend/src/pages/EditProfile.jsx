@@ -480,18 +480,17 @@ export default function EditProfile() {
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">
-                      Location (city, state) or ZIP code
+                      Service area location
                     </label>
                     <Input
                       value={form.service_location}
                       onChange={updateField("service_location")}
-                      placeholder="City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
-                      pattern="^\\s*(\\d{5}(-\\d{4})?|[A-Za-z][A-Za-z .'-]*,\\s*[A-Za-z]{2})\\s*$"
-                      title="Enter City, ST (e.g. Media, PA) or ZIP (e.g. 19063)"
+                      placeholder="City, region, or postal code (e.g. Media, PA or M5V 2T6)"
+                      title="Enter a city, region, or postal code such as Media, PA, Toronto, ON, or M5V 2T6"
                       required
                     />
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Map updates only after Save. ZIP codes geocode as “ZIP, USA”.
+                      Map updates only after Save. U.S. ZIP codes and Canadian postal codes are supported.
                     </p>
                   </div>
 
@@ -527,9 +526,10 @@ export default function EditProfile() {
                       Contact phone
                     </label>
                     <Input
+                      type="tel"
                       value={form.contact_phone}
                       onChange={updateField("contact_phone")}
-                      placeholder="e.g. 215-555-1234"
+                      placeholder="e.g. +1 416-555-1234"
                       required
                     />
                   </div>
