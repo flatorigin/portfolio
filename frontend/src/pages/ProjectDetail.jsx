@@ -1719,39 +1719,21 @@ export default function ProjectDetail() {
       </Card>
 
       {imageLightboxOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 p-2 sm:p-4">
-          <div className="flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-[#f4f4f1] shadow-2xl md:h-[92vh]">
-            <div className="flex items-center justify-between border-b border-black/5 px-5 py-3">
-              <div className="min-w-0 pr-4">
-                <div className="truncate text-sm font-medium text-slate-900">
-                  {project?.title || `Project #${id}`}
-                </div>
-                <div className="truncate text-xs text-slate-500">
-                  {currentImage?.caption || "Project gallery"}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                {images.length > 0 ? (
-                  <div className="rounded-full bg-slate-500 px-3 py-1 text-xs font-semibold text-white">
-                    {activeImageIdx + 1}/{images.length}
-                  </div>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setImageLightboxOpen(false)}
-                  className="rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                  aria-label="Close image gallery"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="relative flex-1 bg-[#f4f4f1]">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-2 sm:p-4">
+          <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl md:h-[90vh]">
+            <div className="relative flex-1 bg-[rgba(43,55,73,0.9)]">
               {currentImage ? (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => setImageLightboxOpen(false)}
+                    className="absolute right-4 top-4 z-10 rounded-full bg-black/70 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-black/85"
+                    aria-label="Close image gallery"
+                  >
+                    ✕
+                  </button>
                   <div className="flex h-full flex-col">
-                    <div className="flex h-[72vh] min-h-[440px] w-full items-center justify-center overflow-hidden bg-[#f4f4f1] px-4 py-4 md:px-12">
+                    <div className="flex h-[72vh] min-h-[440px] w-full items-center justify-center overflow-hidden bg-[rgba(43,55,73,0.9)] px-6 py-6 md:px-14">
                       <div className="flex h-full w-full items-center justify-center overflow-hidden">
                         <img
                           src={currentImage.url}
@@ -1762,11 +1744,11 @@ export default function ProjectDetail() {
                     </div>
 
                     {images.length > 1 && (
-                      <div className="flex items-center justify-center gap-1 border-t border-black/5 bg-[#efefeb] px-3 py-2 text-[11px] text-slate-600">
+                      <div className="flex items-center justify-center gap-1 bg-[rgba(43,55,73,0.96)] px-3 py-2 text-[11px] text-slate-100">
                         <button
                           type="button"
                           onClick={prevImage}
-                          className="mr-1 rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
+                          className="mr-1 rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20"
                         >
                           ‹
                         </button>
@@ -1778,8 +1760,8 @@ export default function ProjectDetail() {
                             className={
                               "mx-[2px] rounded-full px-2 py-0.5 " +
                               (i === activeImageIdx
-                                ? "bg-slate-700 text-white"
-                                : "bg-white text-slate-600 shadow-sm hover:bg-slate-50")
+                                ? "bg-white text-black"
+                                : "bg-white/10 text-slate-100 hover:bg-white/20")
                             }
                           >
                             {i + 1}
@@ -1788,7 +1770,7 @@ export default function ProjectDetail() {
                         <button
                           type="button"
                           onClick={nextImage}
-                          className="ml-1 rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
+                          className="ml-1 rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20"
                         >
                           ›
                         </button>
@@ -1801,14 +1783,14 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={prevImage}
-                        className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/95 px-4 py-3 text-3xl leading-none text-slate-700 shadow-md hover:bg-white"
+                        className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-[rgba(43,55,73,0.96)] px-3 py-2 text-lg leading-none text-white shadow-sm hover:bg-[rgba(43,55,73,1)]"
                       >
                         ‹
                       </button>
                       <button
                         type="button"
                         onClick={nextImage}
-                        className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/95 px-4 py-3 text-3xl leading-none text-slate-700 shadow-md hover:bg-white"
+                        className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-[rgba(43,55,73,0.96)] px-3 py-2 text-lg leading-none text-white shadow-sm hover:bg-[rgba(43,55,73,1)]"
                       >
                         ›
                       </button>
@@ -1816,8 +1798,26 @@ export default function ProjectDetail() {
                   )}
                 </>
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-slate-500">No media</div>
+                <div className="flex h-full items-center justify-center text-sm text-slate-200">No media</div>
               )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-900">
+                  {project?.title || `Project #${id}`}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {currentImage?.caption || `${activeImageIdx + 1} of ${images.length}`}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImageLightboxOpen(false)}
+                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+              >
+                ✕
+              </button>
             </div>
           </div>
         </div>
