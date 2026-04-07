@@ -12,6 +12,7 @@ from .views import (
     ThreadActionView,
     BlockListView,
     FavoriteProjectListView,
+    LikedProjectListView,
     DirectMessageStartView,
     DirectThreadMessageListCreateView,
     PublishTestimonialView,
@@ -29,6 +30,7 @@ urlpatterns = [
 
     # Favorites list for current user
     path("favorites/projects/", FavoriteProjectListView.as_view(), name="favorite-projects"),
+    path("likes/projects/", LikedProjectListView.as_view(), name="liked-projects"),
 
     # Comments
     path("projects/<int:pk>/comments/", ProjectCommentListCreateView.as_view(), name="project-comments"),

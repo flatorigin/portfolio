@@ -195,6 +195,7 @@ export default function Explore() {
         if (data?.like_count !== undefined) {
           setLikeCounts((prev) => ({ ...prev, [p.id]: Number(data.like_count || 0) }));
         }
+        window.dispatchEvent(new CustomEvent("projects:liked_changed"));
       } catch (err) {
         console.error("[Explore] toggleLike failed", err?.response || err);
         setLikeMap((prev) => ({ ...prev, [p.id]: currently }));

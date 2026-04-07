@@ -36,6 +36,7 @@ from .serializers import (
     MessageThreadSerializer,
     PrivateMessageSerializer,
     ProjectFavoriteSerializer,
+    ProjectLikeSerializer,
     ProjectBidSerializer,
     ProjectBidVersionSerializer,
 )
@@ -410,6 +411,19 @@ class FavoriteProjectListView(generics.ListAPIView):
     def get_queryset(self):
         return (
             ProjectFavorite.objects
+            .filter(user=self.request.user)
+            .select_related("project", "project__owner")
+            .order_by("-created_at", "-id")
+        )
+
+
+class LikedProjectListView(generics.ListAPIView):
+    serializer_class = ProjectLikeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (
+            ProjectLike.objects
             .filter(user=self.request.user)
             .select_related("project", "project__owner")
             .order_by("-created_at", "-id")

@@ -358,6 +358,11 @@ class ProjectFavoriteSerializer(serializers.ModelSerializer):
         return None
 
 
+class ProjectLikeSerializer(ProjectFavoriteSerializer):
+    class Meta(ProjectFavoriteSerializer.Meta):
+        model = ProjectLike
+
+
 class MessageAttachmentSerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
