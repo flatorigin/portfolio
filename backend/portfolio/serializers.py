@@ -2,9 +2,11 @@
 # file: backend/portfolio/serializers.py
 # =============================================================================
 from datetime import timedelta
+import re
 
 from rest_framework import serializers
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 from accounts.serializers import ProfileSerializer
 
 from .models import (
@@ -15,9 +17,14 @@ from .models import (
     PrivateMessage,
     ProjectFavorite,
     MessageAttachment,
+    ProjectInvite,
     ProjectBid,
     ProjectBidVersion,
 )
+
+User = get_user_model()
+COMMENT_CHAR_LIMIT = 280
+URL_PATTERN = re.compile(r"(https?://|www\.)", re.IGNORECASE)
 
 
 class ProjectImageSerializer(serializers.ModelSerializer):
@@ -71,6 +78,16 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return bool(request and request.user.is_authenticated and request.user == obj.author)
 
+    def validate_text(self, value):
+        text = str(value or "").strip()
+        if not text:
+            raise serializers.ValidationError("Comment cannot be empty.")
+        if len(text) > COMMENT_CHAR_LIMIT:
+            raise serializers.ValidationError(f"Comments must be {COMMENT_CHAR_LIMIT} characters or fewer.")
+        if URL_PATTERN.search(text):
+            raise serializers.ValidationError("Public comments cannot include links.")
+        return text
+
 
 class ProjectSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="owner.username", read_only=True)
@@ -78,6 +95,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     cover_image_url = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
+    viewer_is_invited = serializers.SerializerMethodField()
     bid_count = serializers.IntegerField(read_only=True, default=0)
     accepted_bid_count = serializers.IntegerField(read_only=True, default=0)
 
@@ -100,6 +118,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "category",
             "is_public",
             "is_job_posting",
+            "is_private",
             "tech_stack",
             "location",
             "budget",
@@ -123,6 +142,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "private_contractor_username",
             "notify_by_email",
             "job_is_published",
+            "viewer_is_invited",
             "bid_count",
             "accepted_bid_count",
             "cover_image_ref",
@@ -158,6 +178,40 @@ class ProjectSerializer(serializers.ModelSerializer):
         )
 
         if is_job_posting:
+            post_privacy = attrs.get(
+                "post_privacy",
+                getattr(instance, "post_privacy", "public") if instance else "public",
+            )
+            is_private = attrs.get(
+                "is_private",
+                getattr(instance, "is_private", False) if instance else False,
+            )
+            if post_privacy == "private" or is_private:
+                attrs["is_private"] = True
+                attrs["post_privacy"] = "private"
+                username = (attrs.get("private_contractor_username", getattr(instance, "private_contractor_username", "")) or "").strip()
+                if not username:
+                    raise serializers.ValidationError(
+                        {"private_contractor_username": "Private jobs require an invited contractor username."}
+                    )
+                request = self.context.get("request")
+                owner = getattr(instance, "owner", None) or getattr(request, "user", None)
+                contractor = User.objects.filter(username=username).first()
+                if contractor is None:
+                    raise serializers.ValidationError(
+                        {"private_contractor_username": "No user found with that username."}
+                    )
+                if owner and contractor.id == owner.id:
+                    raise serializers.ValidationError(
+                        {"private_contractor_username": "You cannot invite yourself to your own job."}
+                    )
+                attrs["private_contractor_username"] = username
+                attrs["is_public"] = False
+            else:
+                attrs["is_private"] = False
+                attrs["post_privacy"] = "public"
+                attrs["private_contractor_username"] = ""
+
             incoming_job_summary = attrs.get("job_summary", None)
             incoming_summary = attrs.get("summary", None)
 
@@ -191,6 +245,48 @@ class ProjectSerializer(serializers.ModelSerializer):
         return bool(
             request and request.user.is_authenticated and obj.owner_id == request.user.id
         )
+
+    def get_viewer_is_invited(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        return obj.invites.filter(
+            contractor=user,
+            status__in=[ProjectInvite.STATUS_INVITED, ProjectInvite.STATUS_ACCEPTED],
+        ).exists()
+
+    def _sync_project_invites(self, project):
+        if not project.is_job_posting or not project.is_private:
+            ProjectInvite.objects.filter(project=project).delete()
+            return
+
+        username = (project.private_contractor_username or "").strip()
+        if not username:
+            ProjectInvite.objects.filter(project=project).delete()
+            return
+
+        contractor = User.objects.filter(username=username).first()
+        if contractor is None:
+            ProjectInvite.objects.filter(project=project).delete()
+            return
+
+        ProjectInvite.objects.update_or_create(
+            project=project,
+            contractor=contractor,
+            defaults={"status": ProjectInvite.STATUS_INVITED},
+        )
+        ProjectInvite.objects.filter(project=project).exclude(contractor=contractor).delete()
+
+    def create(self, validated_data):
+        project = super().create(validated_data)
+        self._sync_project_invites(project)
+        return project
+
+    def update(self, instance, validated_data):
+        project = super().update(instance, validated_data)
+        self._sync_project_invites(project)
+        return project
 
 
 class ProjectFavoriteSerializer(serializers.ModelSerializer):

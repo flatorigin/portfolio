@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from portfolio.models import MessageThread, PrivateMessage, Project
+from portfolio.models import MessageThread, PrivateMessage, Project, ProjectInvite
 
 from .models import Bid
 
@@ -170,3 +170,92 @@ class BidFlowTests(APITestCase):
             format="json",
         )
         self.assertEqual(submit_response.status_code, status.HTTP_201_CREATED)
+
+    def test_invited_contractor_can_bid_on_private_job(self):
+        private_project = Project.objects.create(
+            owner=self.owner,
+            title="Private kitchen remodel",
+            is_job_posting=True,
+            is_public=False,
+            is_private=True,
+            post_privacy="private",
+            private_contractor_username=self.contractor.username,
+        )
+        ProjectInvite.objects.create(
+            project=private_project,
+            contractor=self.contractor,
+            status=ProjectInvite.STATUS_INVITED,
+        )
+
+        self.client.force_authenticate(user=self.contractor)
+        response = self.client.post(
+            f"/api/projects/{private_project.id}/bids/",
+            {
+                "price_type": "fixed",
+                "amount": "4100.00",
+                "proposal_text": "Private invite bid.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_uninvited_contractor_cannot_bid_on_private_job(self):
+        private_project = Project.objects.create(
+            owner=self.owner,
+            title="Private bath remodel",
+            is_job_posting=True,
+            is_public=False,
+            is_private=True,
+            post_privacy="private",
+            private_contractor_username=self.contractor.username,
+        )
+        ProjectInvite.objects.create(
+            project=private_project,
+            contractor=self.contractor,
+            status=ProjectInvite.STATUS_INVITED,
+        )
+        other = User.objects.create_user(username="outsider", password="pw123456")
+
+        self.client.force_authenticate(user=other)
+        response = self.client.post(
+            f"/api/projects/{private_project.id}/bids/",
+            {
+                "price_type": "fixed",
+                "amount": "4200.00",
+                "proposal_text": "Let me in.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_seventh_active_bid_is_blocked(self):
+        extra_contractors = [
+            User.objects.create_user(username=f"contractor{i}", password="pw123456")
+            for i in range(1, 7)
+        ]
+        for index, user in enumerate(extra_contractors[:6], start=1):
+            Bid.objects.create(
+                project=self.project,
+                contractor=user,
+                price_type=Bid.PRICE_TYPE_FIXED,
+                amount=f"{2000 + index}.00",
+                proposal_text=f"Bid {index}",
+                message=f"Bid {index}",
+                status=Bid.STATUS_PENDING,
+            )
+
+        seventh = User.objects.create_user(username="contractor7", password="pw123456")
+        self.client.force_authenticate(user=seventh)
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/bids/",
+            {
+                "price_type": "fixed",
+                "amount": "5000.00",
+                "proposal_text": "Seventh bid",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

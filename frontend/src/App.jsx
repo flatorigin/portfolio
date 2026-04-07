@@ -141,7 +141,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#FBF9F7]">
       <header className="relative z-30 border-b border-slate-200 bg-white">
         <Container className="py-3">
           <nav className="flex items-center gap-2">

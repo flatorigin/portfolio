@@ -18,6 +18,7 @@ from .models import (
     Project,
     ProjectImage,
     ProjectComment,
+    ProjectInvite,
     MessageThread,
     PrivateMessage,
     ProjectFavorite,
@@ -26,6 +27,7 @@ from .models import (
     ProjectBidVersion,
 )
 from apps.bids.models import Bid
+from .access import can_access_job_interactions, can_view_project, visible_projects_q_for_user
 from .serializers import (
     ProjectSerializer,
     ProjectImageSerializer,
@@ -50,12 +52,18 @@ class ProjectCommentListCreateView(generics.ListCreateAPIView):
     serializer_class = ProjectCommentSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
+    def get_project(self):
+        project = get_object_or_404(Project.objects.select_related("owner").prefetch_related("invites"), pk=self.kwargs["pk"])
+        if not can_view_project(project, self.request.user):
+            raise PermissionDenied("You do not have access to this project.")
+        return project
+
     def get_queryset(self):
-        project_id = self.kwargs["pk"]
-        return ProjectComment.objects.filter(project_id=project_id).order_by("-created_at")
+        project = self.get_project()
+        return ProjectComment.objects.filter(project_id=project.id).order_by("-created_at")
 
     def perform_create(self, serializer):
-        project = get_object_or_404(Project, pk=self.kwargs["pk"])
+        project = self.get_project()
         serializer.save(project=project, author=self.request.user)
 
 
@@ -69,8 +77,10 @@ class ProjectCommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     lookup_url_kwarg = "comment_id"
 
     def get_queryset(self):
-        project_id = self.kwargs["pk"]
-        return ProjectComment.objects.filter(project_id=project_id)
+        project = get_object_or_404(Project.objects.select_related("owner").prefetch_related("invites"), pk=self.kwargs["pk"])
+        if not can_view_project(project, self.request.user):
+            raise PermissionDenied("You do not have access to this project.")
+        return ProjectComment.objects.filter(project_id=project.id)
 
     def perform_update(self, serializer):
         obj = self.get_object()
@@ -125,7 +135,7 @@ class UnpublishTestimonialView(APIView):
 # Projects + images + favorites
 # ---------------------------------------------------
 class ProjectViewSet(viewsets.ModelViewSet):
-    queryset = Project.objects.select_related("owner").annotate(
+    queryset = Project.objects.select_related("owner").prefetch_related("invites").annotate(
         bid_count=Count("bids", distinct=True),
         accepted_bid_count=Count(
             "bids",
@@ -140,7 +150,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated], url_path="mine")
     def mine(self, request):
         qs = (
-            Project.objects.select_related("owner")
+            Project.objects.select_related("owner").prefetch_related("invites")
             .annotate(
                 bid_count=Count("bids", distinct=True),
                 accepted_bid_count=Count(
@@ -157,7 +167,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = (
-            Project.objects.select_related("owner")
+            Project.objects.select_related("owner").prefetch_related("invites")
             .annotate(
                 bid_count=Count("bids", distinct=True),
                 accepted_bid_count=Count(
@@ -174,10 +184,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if owner_username:
             qs = qs.filter(owner__username=owner_username)
 
-        if not request.user.is_authenticated:
-            return qs.filter(is_public=True)
-
-        return qs.filter(Q(is_public=True) | Q(owner=request.user)).distinct()
+        return qs.filter(visible_projects_q_for_user(request.user)).distinct()
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -336,7 +343,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def job_postings(self, request):
         qs = (
             Project.objects.select_related("owner")
-            .filter(is_job_posting=True, is_public=True, post_privacy="public")
+            .filter(
+                is_job_posting=True,
+                is_public=True,
+                is_private=False,
+                post_privacy="public",
+            )
             .order_by("-updated_at")
         )
         ser = self.get_serializer(qs, many=True, context={"request": request})
@@ -368,7 +380,10 @@ class ProjectBidListCreateView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_project(self):
-        return get_object_or_404(Project.objects.select_related("owner"), pk=self.kwargs["pk"])
+        project = get_object_or_404(Project.objects.select_related("owner").prefetch_related("invites"), pk=self.kwargs["pk"])
+        if not can_view_project(project, self.request.user):
+            raise PermissionDenied("You do not have access to this project.")
+        return project
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -627,6 +642,8 @@ class ProjectThreadCreateView(generics.GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         project = get_object_or_404(Project, pk=kwargs.get("pk"))
+        if not can_access_job_interactions(project, request.user):
+            raise PermissionDenied("You do not have access to this private job.")
         sender = request.user
         receiver = project.owner
 
@@ -651,6 +668,8 @@ class ProjectThreadCreateView(generics.GenericAPIView):
 
     def get(self, request, *args, **kwargs):
         project = get_object_or_404(Project, pk=kwargs.get("pk"))
+        if not can_access_job_interactions(project, request.user):
+            raise PermissionDenied("You do not have access to this private job.")
         user = request.user
         if not user.is_authenticated:
             return Response(status=status.HTTP_401_UNAUTHORIZED)

@@ -9,6 +9,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from portfolio.models import MessageThread, PrivateMessage, Project
+from portfolio.access import can_access_job_interactions, can_view_project
 
 from .models import Bid
 from .serializers import BidSerializer
@@ -36,8 +37,22 @@ class BidViewSet(viewsets.ModelViewSet):
         if not getattr(project, "is_job_posting", False):
             raise ValidationError("This project is not open for bidding.")
 
+        if not can_access_job_interactions(project, self.request.user):
+            raise PermissionDenied("You do not have access to bid on this job.")
+
         if Bid.objects.filter(project=project, status=Bid.STATUS_ACCEPTED).exists():
             raise ValidationError("This job posting is closed to new bids.")
+
+        active_bid_count = Bid.objects.filter(
+            project=project,
+            status__in=[
+                Bid.STATUS_PENDING,
+                Bid.STATUS_REVISION_REQUESTED,
+                Bid.STATUS_ACCEPTED,
+            ],
+        ).count()
+        if active_bid_count >= 6:
+            raise ValidationError("This job posting already has the maximum of 6 active bids.")
 
         serializer.save(contractor=self.request.user)
 
@@ -54,7 +69,10 @@ class BidViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get", "post"], url_path=r"projects/(?P<project_id>\d+)/bids")
     def project_bids(self, request, project_id=None):
-        project = get_object_or_404(Project.objects.select_related("owner"), pk=project_id)
+        project = get_object_or_404(Project.objects.select_related("owner").prefetch_related("invites"), pk=project_id)
+
+        if not can_view_project(project, request.user):
+            raise PermissionDenied("You do not have access to this project.")
 
         if request.method == "GET":
             if project.owner_id == request.user.id:
@@ -72,8 +90,22 @@ class BidViewSet(viewsets.ModelViewSet):
         if not getattr(project, "is_job_posting", False):
             raise ValidationError("This project is not open for bidding.")
 
+        if not can_access_job_interactions(project, request.user):
+            raise PermissionDenied("You do not have access to bid on this job.")
+
         if Bid.objects.filter(project=project, status=Bid.STATUS_ACCEPTED).exists():
             raise ValidationError("This job posting is closed to new bids.")
+
+        active_bid_count = Bid.objects.filter(
+            project=project,
+            status__in=[
+                Bid.STATUS_PENDING,
+                Bid.STATUS_REVISION_REQUESTED,
+                Bid.STATUS_ACCEPTED,
+            ],
+        ).count()
+        if active_bid_count >= 6:
+            raise ValidationError("This job posting already has the maximum of 6 active bids.")
 
         existing = Bid.objects.filter(project=project, contractor=request.user).first()
         if existing:

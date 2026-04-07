@@ -280,7 +280,7 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white">
+    <div className="min-h-screen overflow-x-hidden bg-[#FBF9F7]">
       {/* FULL-WIDTH TOP BANNER */}
       <div className="relative w-full">
         <div
