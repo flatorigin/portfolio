@@ -7,9 +7,8 @@ import api from "../api";
 
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
+import SavedLikesCard from "../components/SavedLikesCard";
 import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
-import SavedProfilesGrid from "../components/SavedProfilesGrid";
-import SavedProjectsGrid from "../components/SavedProjectsGrid";
 
 // normalize media + safer protocol handling
 function toUrl(raw) {
@@ -1011,8 +1010,7 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      <SavedProjectsGrid />
-      <SavedProfilesGrid />
+      <SavedLikesCard />
 
       <Card className="p-5 border border-sky-200 bg-sky-50/40">
         <div className="mb-3 flex items-center justify-between">

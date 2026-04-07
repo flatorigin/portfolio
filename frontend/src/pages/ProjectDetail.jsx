@@ -282,6 +282,7 @@ export default function ProjectDetail() {
           }));
         }
       }
+      window.dispatchEvent(new CustomEvent("projects:liked_changed"));
     } catch (err) {
       console.error("[ProjectDetail] refreshImages failed:", err);
       if (!isMountedRef.current) return;
