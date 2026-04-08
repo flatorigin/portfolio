@@ -27,6 +27,7 @@ const ICONS = {
 export default function App() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const location = useLocation();
   const authed = !!localStorage.getItem("access");
 
   // Full-bleed layouts (e.g. profile hero full-width)
@@ -86,6 +87,18 @@ export default function App() {
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.gtag !== "function") {
+      return;
+    }
+
+    window.gtag("event", "page_view", {
+      page_title: document.title,
+      page_location: window.location.href,
+      page_path: `${location.pathname}${location.search}${location.hash}`,
+    });
+  }, [location]);
 
   const NavLink = ({ to, children, compact = false }) => {
     const active = pathname === to;
