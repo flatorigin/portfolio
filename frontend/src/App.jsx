@@ -93,10 +93,26 @@ export default function App() {
       return;
     }
 
+    const sanitizePath = (rawPathname) => {
+      if (!rawPathname) return "/";
+
+      if (rawPathname.startsWith("/profiles/")) return "/profiles/:username";
+      if (rawPathname.startsWith("/messages/")) return "/messages/:threadId";
+      if (/^\/projects\/[^/]+$/.test(rawPathname)) return "/projects/:id";
+      if (/^\/dashboard\/projects\/[^/]+\/edit$/.test(rawPathname)) {
+        return "/dashboard/projects/:projectId/edit";
+      }
+
+      return rawPathname;
+    };
+
+    const sanitizedPath = sanitizePath(location.pathname);
+    const pageUrl = `${window.location.origin}${sanitizedPath}`;
+
     window.gtag("event", "page_view", {
       page_title: document.title,
-      page_location: window.location.href,
-      page_path: `${location.pathname}${location.search}${location.hash}`,
+      page_location: pageUrl,
+      page_path: sanitizedPath,
     });
   }, [location]);
 
