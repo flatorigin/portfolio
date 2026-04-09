@@ -43,6 +43,30 @@ function statusBadgeClass(status) {
   return "bg-amber-100 text-amber-800";
 }
 
+function bidAmountLabel(bid) {
+  return bid?.display_amount || "—";
+}
+
+function compareFieldRows(leftBid, rightBid) {
+  return [
+    { label: "Contractor", render: (bid) => bid?.contractor_name || bid?.contractor_username || "Contractor" },
+    { label: "Status", render: (bid) => statusLabel(bid?.status) },
+    { label: "Price type", render: (bid) => (bid?.price_type === "range" ? "Estimate range" : "Fixed price") },
+    { label: "Amount", render: (bid) => bidAmountLabel(bid) },
+    { label: "Estimated timeline", render: (bid) => bid?.timeline_text || "—" },
+    { label: "Proposal", render: (bid) => bid?.proposal_text || bid?.message || "—" },
+    { label: "What’s included", render: (bid) => bid?.included_text || "—" },
+    { label: "What’s excluded", render: (bid) => bid?.excluded_text || "—" },
+    { label: "Payment terms", render: (bid) => bid?.payment_terms || "—" },
+    { label: "Valid until", render: (bid) => bid?.valid_until || "—" },
+    { label: "Submitted", render: (bid) => formatStamp(bid?.updated_at || bid?.created_at) || "—" },
+    { label: "Attachment", render: (bid) => (bid?.attachment_url ? "Available" : "—") },
+  ].map((row) => ({
+    ...row,
+    different: String(row.render(leftBid) || "") !== String(row.render(rightBid) || ""),
+  }));
+}
+
 function emptyForm() {
   return {
     price_type: "fixed",
@@ -134,6 +158,7 @@ export default function BidModule({ projectId, ownerUsername }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingBidId, setEditingBidId] = useState(null);
   const [detailBid, setDetailBid] = useState(null);
+  const [compareIds, setCompareIds] = useState([]);
   const [ownerNotes, setOwnerNotes] = useState({});
   const [ownerAction, setOwnerAction] = useState({});
   const [form, setForm] = useState(emptyForm());
@@ -177,6 +202,24 @@ export default function BidModule({ projectId, ownerUsername }) {
     () => bids.some((bid) => String(bid.status || "").toLowerCase() === "accepted"),
     [bids]
   );
+
+  const compareBids = useMemo(
+    () => compareIds.map((id) => bids.find((bid) => bid.id === id)).filter(Boolean).slice(0, 2),
+    [bids, compareIds]
+  );
+
+  const compareRows = useMemo(() => {
+    if (compareBids.length !== 2) return [];
+    return compareFieldRows(compareBids[0], compareBids[1]);
+  }, [compareBids]);
+
+  function toggleCompareBid(bidId) {
+    setCompareIds((prev) => {
+      if (prev.includes(bidId)) return prev.filter((id) => id !== bidId);
+      if (prev.length >= 2) return prev;
+      return [...prev, bidId];
+    });
+  }
 
   function openCreateModal() {
     setEditingBidId(null);
@@ -296,7 +339,161 @@ export default function BidModule({ projectId, ownerUsername }) {
               No bids submitted yet.
             </div>
           ) : (
-            bids.map((bid) => {
+            <>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Bid queue</div>
+                    <div className="text-sm text-slate-500">Select up to 2 bids to compare side by side. Up to 6 slots stay visible here.</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      {compareBids.length} of 2 selected
+                    </span>
+                    {compareIds.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setCompareIds([])}
+                        className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-white"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {bids.slice(0, 6).map((bid) => {
+                    const selected = compareIds.includes(bid.id);
+                    return (
+                      <button
+                        key={`compare-${bid.id}`}
+                        type="button"
+                        onClick={() => toggleCompareBid(bid.id)}
+                        className={
+                          "rounded-2xl border p-4 text-left transition " +
+                          (selected
+                            ? "border-indigo-400 bg-indigo-50 shadow-sm"
+                            : "border-slate-200 bg-white hover:border-slate-300")
+                        }
+                        aria-pressed={selected ? "true" : "false"}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-slate-900">
+                              {bid.contractor_name || bid.contractor_username || "Contractor"}
+                            </div>
+                            <div className="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-200">
+                              {statusLabel(bid.status)}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-slate-500">{bid.price_type === "range" ? "Range" : "Fixed"}</div>
+                            <div className="text-sm font-semibold text-slate-900">{bidAmountLabel(bid)}</div>
+                          </div>
+                        </div>
+                        <div className="mt-3 text-xs text-slate-500">
+                          {bid.timeline_text || "No timeline added"}
+                        </div>
+                        <div className="mt-2 text-xs font-medium uppercase tracking-wide text-indigo-700">
+                          {selected ? "Selected for compare" : "Select to compare"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {compareBids.length === 2 ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <div className="text-base font-semibold text-slate-900">Bid comparison</div>
+                      <div className="text-sm text-slate-500">Review both bids against the same fields before taking action.</div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="hidden lg:block" />
+                    {compareBids.map((bid) => (
+                      <div key={`compare-head-${bid.id}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-base font-semibold text-slate-900">
+                              {bid.contractor_name || bid.contractor_username || "Contractor"}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-500">{bidAmountLabel(bid)}</div>
+                          </div>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(bid.status)}`}>
+                            {statusLabel(bid.status)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {compareRows.map((row) => (
+                      <div key={row.label} className="contents">
+                        <div className="rounded-xl bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:bg-transparent lg:px-0">
+                          {row.label}
+                        </div>
+                        {compareBids.map((bid) => (
+                          <div
+                            key={`${row.label}-${bid.id}`}
+                            className={
+                              "rounded-xl border px-4 py-3 text-sm text-slate-700 " +
+                              (row.different ? "border-indigo-200 bg-indigo-50/60" : "border-slate-200 bg-white")
+                            }
+                          >
+                            {row.label === "Attachment" && bid?.attachment_url ? (
+                              <a href={bid.attachment_url} target="_blank" rel="noreferrer" className="font-medium text-sky-700 hover:underline">
+                                View attachment
+                              </a>
+                            ) : (
+                              <div className="whitespace-pre-wrap break-words">{row.render(bid)}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+
+                    <div className="hidden lg:block" />
+                    {compareBids.map((bid) => {
+                      const status = String(bid.status || "").toLowerCase();
+                      const isActive = status === "pending" || status === "revision_requested";
+                      return (
+                        <div key={`compare-actions-${bid.id}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="flex flex-wrap gap-2">
+                            {isActive ? (
+                              <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "accept")} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60">
+                                {actionBusyId === bid.id ? "Working..." : "Accept"}
+                              </button>
+                            ) : null}
+                            {isActive ? (
+                              <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "request-revision" ? "" : "request-revision" }))} className="rounded-xl border border-sky-300 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50">
+                                Request Revision
+                              </button>
+                            ) : null}
+                            {isActive ? (
+                              <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "decline" ? "" : "decline" }))} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                                Decline Bid
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => setDetailBid(bid)}
+                              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                            >
+                              View full bid
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {bids.map((bid) => {
               const actionState = ownerAction[String(bid.id)] || "";
               const status = String(bid.status || "").toLowerCase();
               const isActive = status === "pending" || status === "revision_requested";
@@ -460,7 +657,8 @@ export default function BidModule({ projectId, ownerUsername }) {
                   ) : null}
                 </div>
               );
-            })
+            })}
+            </>
           )}
         </div>
       ) : !authed ? (
