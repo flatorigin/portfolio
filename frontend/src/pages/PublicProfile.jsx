@@ -323,7 +323,7 @@ export default function PublicProfile() {
     return (
       <div className="text-sm text-slate-600">
         Profile not found.{" "}
-        <Link to="/" className="text-blue-600 hover:underline">
+        <Link to="/explore" className="text-blue-600 hover:underline">
           Back to Explore
         </Link>
       </div>
@@ -468,7 +468,7 @@ export default function PublicProfile() {
                     {profile.display_name || profile.username}
                   </h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    Member since {memberSince}
+                    Since {memberSince}
                   </p>
                 </div>
 

@@ -1475,7 +1475,7 @@ export default function ProjectDetail() {
             <span className="text-slate-700">Project</span>
           </div>
         </div>
-        <Link to="/" className="text-sm text-slate-600 hover:text-slate-900">
+        <Link to="/explore" className="text-sm text-slate-600 hover:text-slate-900">
           ← Back
         </Link>
       </div>

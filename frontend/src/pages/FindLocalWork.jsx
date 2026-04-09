@@ -171,7 +171,7 @@ export default function FindLocalWork() {
             Browse published <span className="font-medium">job postings</span>.
           </p>
         </div>
-        <Link to="/" className="text-xs text-slate-600 hover:text-slate-900">
+        <Link to="/explore" className="text-xs text-slate-600 hover:text-slate-900">
           ← Back to Explore
         </Link>
       </div>
