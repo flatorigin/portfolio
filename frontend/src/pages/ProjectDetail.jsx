@@ -74,6 +74,59 @@ function getInitials(name = "") {
   return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
 }
 
+function LikeCircleIcon({ active = false, className = "" }) {
+  return (
+    <svg
+      viewBox="0 0 29.153 29.153"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+    >
+      <path
+        d="M14.576,18.8c-1.829-.512-4.866-3.116-4.866-5.87,0-3.213,4.307-3.345,4.845-.821.013.061.028.061.041,0,.538-2.524,4.847-2.392,4.847.821,0,2.754-3.037,5.358-4.866,5.87Z"
+        stroke="currentColor"
+        strokeMiterlimit="10"
+        fill={active ? "currentColor" : "none"}
+        className={active ? "text-white" : ""}
+      />
+      <circle
+        cx="14.576"
+        cy="14.576"
+        r="14.076"
+        stroke="currentColor"
+        strokeMiterlimit="10"
+      />
+    </svg>
+  );
+}
+
+function SaveCircleIcon({ active = false, className = "" }) {
+  return (
+    <svg
+      viewBox="0 0 29.153 29.153"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+    >
+      <path
+        d="M17.616,18.8l-3.04-1.768-3.04,1.768v-7.77c0-.376.354-.681.791-.681h4.498c.437,0,.791.305.791.681v7.77Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill={active ? "currentColor" : "none"}
+        className={active ? "text-white" : ""}
+      />
+      <circle
+        cx="14.576"
+        cy="14.576"
+        r="14.076"
+        stroke="currentColor"
+        strokeMiterlimit="10"
+      />
+    </svg>
+  );
+}
+
 export default function ProjectDetail() {
   const { id } = useParams();
   const isMountedRef = useRef(false);
@@ -1439,12 +1492,12 @@ export default function ProjectDetail() {
           className={
             "border-b border-slate-100 px-5 py-4 text-white sm:px-6 " +
             (project?.is_job_posting
-              ? "bg-[#37C5F0]"
-              : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900")
+              ? "bg-[#37C5F0]/95"
+              : "bg-slate-900/95")
           }
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0 flex-1">
               <h1 className="truncate text-xl font-semibold sm:text-2xl">{project?.title || `Project #${id}`}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
                 {project?.category && (
@@ -1466,56 +1519,62 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            <div className="flex items-start gap-2">
-              {authed && project && !isOwnerUser ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleLike}
-                  disabled={likeBusy}
-                  className={
-                    "min-w-[110px] justify-center rounded-full border border-white/40 " +
-                    "bg-white/10 px-6 text-sm font-semibold text-white shadow-sm " +
-                    "backdrop-blur-md hover:bg-white/20 active:scale-[0.99] " +
-                    (isLiked ? "opacity-95" : "")
-                  }
-                >
-                  {likeBusy ? "..." : `${isLiked ? "Liked" : "Like"} ${Number.isFinite(likeCount) ? `(${likeCount})` : ""}`}
-                </Button>
-              ) : (
-                <span className="inline-flex min-w-[110px] items-center justify-center rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white/80">
-                  ♥ {Number.isFinite(likeCount) ? likeCount : 0}
-                </span>
-              )}
-
+            <div className="flex flex-wrap items-center gap-3 self-start sm:self-end">
               {project?.owner_username ? (
                 <Link
                   to={`/profiles/${project.owner_username}`}
-                  className="rounded-full border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm backdrop-blur-md hover:bg-white/20 active:scale-[0.99]"
+                  className="inline-flex min-h-[48px] items-center rounded-full border border-white/30 bg-white/10 px-6 text-base font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/18"
                 >
                   Visit website
                 </Link>
               ) : null}
 
-              {authed && project && !isOwnerUser ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleSave}
-                  disabled={saveBusy}
-                  className={
-                    "min-w-[110px] justify-center rounded-full border border-white/40 " +
-                    "bg-white/10 px-6 text-sm font-semibold text-white shadow-sm " +
-                    "backdrop-blur-md hover:bg-white/20 active:scale-[0.99] " +
-                    (isSaved ? "opacity-95" : "")
-                  }
-                >
-                  {saveBusy ? "Saving…" : isSaved ? "Saved" : "Save"}
-                </Button>
-              ) : null}
+              <div className="flex items-center gap-3 text-white">
+                <div className="flex items-center gap-1.5">
+                  <span className="min-w-[1ch] text-[18px] font-medium text-white/92">
+                    {Number.isFinite(likeCount) ? likeCount : 0}
+                  </span>
+                  {authed && project && !isOwnerUser ? (
+                    <button
+                      type="button"
+                      onClick={toggleLike}
+                      disabled={likeBusy}
+                      aria-label={isLiked ? "Unlike project" : "Like project"}
+                      title={isLiked ? "Unlike project" : "Like project"}
+                      className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10 disabled:opacity-60"
+                    >
+                      <LikeCircleIcon active={isLiked} className="h-[30px] w-[30px]" />
+                    </button>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white/90"
+                    >
+                      <LikeCircleIcon className="h-[30px] w-[30px]" />
+                    </span>
+                  )}
+                </div>
 
+                {authed && project && !isOwnerUser ? (
+                  <button
+                    type="button"
+                    onClick={toggleSave}
+                    disabled={saveBusy}
+                    aria-label={isSaved ? "Unsave project" : "Save project"}
+                    title={isSaved ? "Unsave project" : "Save project"}
+                    className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10 disabled:opacity-60"
+                  >
+                    <SaveCircleIcon active={isSaved} className="h-[30px] w-[30px]" />
+                  </button>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white/90"
+                  >
+                    <SaveCircleIcon className="h-[30px] w-[30px]" />
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
