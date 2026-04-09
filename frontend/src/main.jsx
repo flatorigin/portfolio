@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from "./App.jsx";
 
 const Explore = lazy(() => import("./pages/Explore.jsx"));
+const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const Register = lazy(() => import("./pages/Register.jsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
@@ -42,8 +43,9 @@ createRoot(document.getElementById("root")).render(
       <Routes>
         {/* Layout route with header/nav in <App /> */}
         <Route path="/" element={<App />}>
-          {/* "/" → Explore */}
-          <Route index element={<Explore />} />
+          {/* "/" → landing page */}
+          <Route index element={<LandingPage />} />
+          <Route path="explore" element={<Explore />} />
           {/* Auth + public routes */}
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />

@@ -86,7 +86,11 @@ class Profile(models.Model):
     def member_since_label(self):
         if not self.user or not self.user.date_joined:
             return ""
-        return self.user.date_joined.strftime("%B %Y")
+        joined = self.user.date_joined
+        now = timezone.now()
+        if (now - joined).days < 365:
+            return joined.strftime("%b %Y")
+        return joined.strftime("%Y")
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"
