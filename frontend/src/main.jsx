@@ -13,6 +13,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const EditProfile = lazy(() => import("./pages/EditProfile.jsx"));
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail.jsx"));
 const PublicProfile = lazy(() => import("./pages/PublicProfile.jsx"));
+const ProjectPrintView = lazy(() => import("./pages/ProjectPrintView.jsx"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword.jsx"));
 const MessagesThread = lazy(() => import("./pages/MessagesThread.jsx"));
@@ -41,6 +42,7 @@ createRoot(document.getElementById("root")).render(
   <BrowserRouter>
     <Suspense fallback={<RouteFallback />}>
       <Routes>
+        <Route path="projects/:id/print" element={<ProjectPrintView />} />
         {/* Layout route with header/nav in <App /> */}
         <Route path="/" element={<App />}>
           {/* "/" → landing page */}

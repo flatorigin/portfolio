@@ -212,6 +212,7 @@ export default function BidModule({ projectId, ownerUsername }) {
     if (compareBids.length !== 2) return [];
     return compareFieldRows(compareBids[0], compareBids[1]);
   }, [compareBids]);
+  const selectedSingleBid = compareBids.length === 1 ? compareBids[0] : null;
 
   function toggleCompareBid(bidId) {
     setCompareIds((prev) => {
@@ -311,40 +312,38 @@ export default function BidModule({ projectId, ownerUsername }) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-semibold text-slate-900">{isOwner ? "Project Bids" : "Your Bid"}</h3>
-          <p className="text-sm text-slate-500">
-            {isOwner ? "Review submitted bids for this project." : "Submit one bid for this project."}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={loadBids}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          Refresh
-        </button>
-      </div>
-
-      {loading ? <div className="mb-4 text-sm text-slate-500">Loading bids...</div> : null}
-      {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
-
+    <>
       {isOwner ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {bids.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-              No bids submitted yet.
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Project Bids</h3>
+                  <p className="text-sm text-slate-500">Review submitted bids for this project.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadBids}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Refresh
+                </button>
+              </div>
+              {loading ? <div className="mb-4 text-sm text-slate-500">Loading bids...</div> : null}
+              {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+              {success ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                No bids submitted yet.
+              </div>
             </div>
           ) : (
             <>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-slate-900">Bid queue</div>
-                    <div className="text-sm text-slate-500">Select up to 2 bids to compare side by side. Up to 6 slots stay visible here.</div>
+                    <div className="text-sm text-slate-500">Select one bid to review it below, or select two to compare them side by side.</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -396,7 +395,7 @@ export default function BidModule({ projectId, ownerUsername }) {
                           {bid.timeline_text || "No timeline added"}
                         </div>
                         <div className="mt-2 text-xs font-medium uppercase tracking-wide text-indigo-700">
-                          {selected ? "Selected for compare" : "Select to compare"}
+                          {selected ? "Selected" : "Select to review"}
                         </div>
                       </button>
                     );
@@ -404,8 +403,33 @@ export default function BidModule({ projectId, ownerUsername }) {
                 </div>
               </div>
 
-              {compareBids.length === 2 ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">Project Bids</h3>
+                    <p className="text-sm text-slate-500">
+                      {compareBids.length === 2
+                        ? "Compare the two selected bids below."
+                        : selectedSingleBid
+                        ? "Review the selected bid below."
+                        : "Choose a bid from the queue above to review it here."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadBids}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {loading ? <div className="mb-4 text-sm text-slate-500">Loading bids...</div> : null}
+                {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+                {success ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+
+                {compareBids.length === 2 ? (
+                  <div className="space-y-4">
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <div className="text-base font-semibold text-slate-900">Bid comparison</div>
@@ -490,184 +514,217 @@ export default function BidModule({ projectId, ownerUsername }) {
                       );
                     })}
                   </div>
-                </div>
-              ) : null}
-
-              {bids.map((bid) => {
-              const actionState = ownerAction[String(bid.id)] || "";
-              const status = String(bid.status || "").toLowerCase();
-              const isActive = status === "pending" || status === "revision_requested";
-              const isAccepted = status === "accepted";
-              const noteLabel =
-                actionState === "request-revision" ? "Revision note" : actionState === "reopen" ? "Reopen note" : "Reason (optional)";
-              const notePlaceholder =
-                actionState === "request-revision"
-                  ? "Explain what needs to be changed before you can review this bid again."
-                  : actionState === "reopen"
-                  ? "Explain why you are reopening this bid and what you want the contractor to review again."
-                  : "Add a short explanation for why this bid is being declined.";
-
-              return (
-                <div
-                  key={bid.id}
-                  className="cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-indigo-200 hover:shadow-sm"
-                  onClick={() => setDetailBid(bid)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setDetailBid(bid);
-                    }
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      {bid.contractor_username ? (
-                        <Link
-                          to={`/profiles/${bid.contractor_username}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-sm font-semibold text-sky-700 hover:underline"
-                        >
-                          {bid.contractor_name || bid.contractor_username}
-                        </Link>
-                      ) : (
-                        <div className="text-sm font-semibold text-slate-900">{bid.contractor_name || `Contractor #${bid.contractor}`}</div>
-                      )}
-                      <div className="mt-1">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(status)}`}>
-                          {statusLabel(status)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-sm text-slate-500">{bid.price_type === "range" ? "Estimate range" : "Fixed price"}</div>
-                      <div className="text-lg font-bold text-slate-900">{bid.display_amount || "—"}</div>
-                    </div>
                   </div>
+                ) : selectedSingleBid ? (
+                  (() => {
+                    const bid = selectedSingleBid;
+                    const actionState = ownerAction[String(bid.id)] || "";
+                    const status = String(bid.status || "").toLowerCase();
+                    const isActive = status === "pending" || status === "revision_requested";
+                    const isAccepted = status === "accepted";
+                    const noteLabel =
+                      actionState === "request-revision"
+                        ? "Revision note"
+                        : actionState === "reopen"
+                        ? "Reopen note"
+                        : "Reason (optional)";
+                    const notePlaceholder =
+                      actionState === "request-revision"
+                        ? "Explain what needs to be changed before you can review this bid again."
+                        : actionState === "reopen"
+                        ? "Explain why you are reopening this bid and what you want the contractor to review again."
+                        : "Add a short explanation for why this bid is being declined.";
 
-                  {bid.timeline_text ? <div className="mt-3 text-sm text-slate-700"><span className="font-medium text-slate-900">Estimated timeline:</span> {bid.timeline_text}</div> : null}
-                  {bid.proposal_text ? <div className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{bid.proposal_text}</div> : null}
-                  {bid.owner_response_note ? <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{bid.owner_response_note}</div> : null}
-                  <div className="mt-3 text-xs font-medium uppercase tracking-wide text-indigo-700">
-                    Click to view full bid
-                  </div>
+                    return (
+                      <div
+                        className="cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-indigo-200 hover:shadow-sm"
+                        onClick={() => setDetailBid(bid)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setDetailBid(bid);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            {bid.contractor_username ? (
+                              <Link
+                                to={`/profiles/${bid.contractor_username}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-sm font-semibold text-sky-700 hover:underline"
+                              >
+                                {bid.contractor_name || bid.contractor_username}
+                              </Link>
+                            ) : (
+                              <div className="text-sm font-semibold text-slate-900">{bid.contractor_name || `Contractor #${bid.contractor}`}</div>
+                            )}
+                            <div className="mt-1">
+                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusBadgeClass(status)}`}>
+                                {statusLabel(status)}
+                              </span>
+                            </div>
+                          </div>
 
-                  {status !== "withdrawn" ? (
-                    <div
-                      className="mt-4 space-y-3"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      {!isAccepted ? (
-                        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                            Acceptance
-                          </div>
-                          <div className="mb-2">
-                            Accepted by: <span className="font-semibold">{ownerUsername || "Project owner"}</span>
-                          </div>
-                          <div className="space-y-2 text-[13px] leading-relaxed text-indigo-900">
-                            <p>
-                              By accepting this bid, you confirm that you agree to the general terms, scope, and pricing outlined by the contractor.
-                            </p>
-                            <p>
-                              This acceptance indicates your intent to proceed with the contractor; however, it does not constitute a legally binding contract. No formal agreement is created through this platform alone.
-                            </p>
-                            <p>
-                              Any final agreement, including detailed scope, payment terms, schedule, permits, and legal obligations, must be discussed and confirmed directly between the project owner and the contractor outside of this platform.
-                            </p>
-                            <p>
-                              The platform acts only as a facilitator for introductions and proposals and is not responsible for the execution, enforcement, or outcome of any agreement between the parties.
-                            </p>
+                          <div className="text-right">
+                            <div className="text-sm text-slate-500">{bid.price_type === "range" ? "Estimate range" : "Fixed price"}</div>
+                            <div className="text-lg font-bold text-slate-900">{bid.display_amount || "—"}</div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                            Reopen Job Posting
-                          </div>
-                          <div className="space-y-2 text-[13px] leading-relaxed text-emerald-900">
-                            <p>
-                              Reopening this job posting removes the awarded state and makes the project open for bidding again.
-                            </p>
-                            <p>
-                              The accepted contractor will be notified and their bid will move back to revision requested.
-                            </p>
-                          </div>
+
+                        {bid.timeline_text ? <div className="mt-3 text-sm text-slate-700"><span className="font-medium text-slate-900">Estimated timeline:</span> {bid.timeline_text}</div> : null}
+                        {bid.proposal_text ? <div className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{bid.proposal_text}</div> : null}
+                        {bid.owner_response_note ? <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{bid.owner_response_note}</div> : null}
+                        <div className="mt-3 text-xs font-medium uppercase tracking-wide text-indigo-700">
+                          Click to view full bid
                         </div>
-                      )}
 
-                      {actionState ? (
-                        <Field label={noteLabel}>
-                          <textarea
-                            rows={3}
-                            value={ownerNotes[String(bid.id)] || ""}
-                            onChange={(e) => setOwnerNotes((prev) => ({ ...prev, [String(bid.id)]: e.target.value }))}
-                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                            placeholder={notePlaceholder}
-                          />
-                        </Field>
-                      ) : null}
+                        {status !== "withdrawn" ? (
+                          <div
+                            className="mt-4 space-y-3"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            {!isAccepted ? (
+                              <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                                  Acceptance
+                                </div>
+                                <div className="mb-2">
+                                  Accepted by: <span className="font-semibold">{ownerUsername || "Project owner"}</span>
+                                </div>
+                                <div className="space-y-2 text-[13px] leading-relaxed text-indigo-900">
+                                  <p>By accepting this bid, you confirm that you agree to the general terms, scope, and pricing outlined by the contractor.</p>
+                                  <p>This acceptance indicates your intent to proceed with the contractor; however, it does not constitute a legally binding contract. No formal agreement is created through this platform alone.</p>
+                                  <p>Any final agreement, including detailed scope, payment terms, schedule, permits, and legal obligations, must be discussed and confirmed directly between the project owner and the contractor outside of this platform.</p>
+                                  <p>The platform acts only as a facilitator for introductions and proposals and is not responsible for the execution, enforcement, or outcome of any agreement between the parties.</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                                  Reopen Job Posting
+                                </div>
+                                <div className="space-y-2 text-[13px] leading-relaxed text-emerald-900">
+                                  <p>Reopening this job posting removes the awarded state and makes the project open for bidding again.</p>
+                                  <p>The accepted contractor will be notified and their bid will move back to revision requested.</p>
+                                </div>
+                              </div>
+                            )}
 
-                      <div className="flex flex-wrap gap-2">
-                        {isActive ? (
-                          <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "accept")} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60">
-                            {actionBusyId === bid.id ? "Working..." : "Accept"}
-                          </button>
-                        ) : null}
-                        {isActive ? (
-                          <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "request-revision" ? "" : "request-revision" }))} className="rounded-xl border border-sky-300 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50">
-                            Request Revision
-                          </button>
-                        ) : null}
-                        {isActive ? (
-                          <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "decline" ? "" : "decline" }))} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                            Decline Bid
-                          </button>
-                        ) : null}
-                        {status === "declined" ? (
-                          <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "reopen" ? "" : "reopen" }))} className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
-                            Reopen Bid
-                          </button>
-                        ) : null}
-                        {isAccepted ? (
-                          <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "reopen" ? "" : "reopen" }))} className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
-                            Reopen Job Post
-                          </button>
-                        ) : null}
-                        {actionState === "request-revision" ? (
-                          <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "request-revision")} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60">
-                            {actionBusyId === bid.id ? "Working..." : "Send Revision Request"}
-                          </button>
-                        ) : null}
-                        {actionState === "decline" ? (
-                          <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "decline")} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60">
-                            {actionBusyId === bid.id ? "Working..." : "Confirm Decline"}
-                          </button>
-                        ) : null}
-                        {actionState === "reopen" ? (
-                          <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "reopen")} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">
-                            {actionBusyId === bid.id ? "Working..." : isAccepted ? "Confirm Reopen Job Post" : "Confirm Reopen"}
-                          </button>
+                            {actionState ? (
+                              <Field label={noteLabel}>
+                                <textarea
+                                  rows={3}
+                                  value={ownerNotes[String(bid.id)] || ""}
+                                  onChange={(e) => setOwnerNotes((prev) => ({ ...prev, [String(bid.id)]: e.target.value }))}
+                                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                                  placeholder={notePlaceholder}
+                                />
+                              </Field>
+                            ) : null}
+
+                            <div className="flex flex-wrap gap-2">
+                              {isActive ? (
+                                <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "accept")} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60">
+                                  {actionBusyId === bid.id ? "Working..." : "Accept"}
+                                </button>
+                              ) : null}
+                              {isActive ? (
+                                <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "request-revision" ? "" : "request-revision" }))} className="rounded-xl border border-sky-300 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50">
+                                  Request Revision
+                                </button>
+                              ) : null}
+                              {isActive ? (
+                                <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "decline" ? "" : "decline" }))} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                                  Decline Bid
+                                </button>
+                              ) : null}
+                              {status === "declined" ? (
+                                <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "reopen" ? "" : "reopen" }))} className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+                                  Reopen Bid
+                                </button>
+                              ) : null}
+                              {isAccepted ? (
+                                <button type="button" onClick={() => setOwnerAction((prev) => ({ ...prev, [String(bid.id)]: prev[String(bid.id)] === "reopen" ? "" : "reopen" }))} className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+                                  Reopen Job Post
+                                </button>
+                              ) : null}
+                              {actionState === "request-revision" ? (
+                                <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "request-revision")} className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60">
+                                  {actionBusyId === bid.id ? "Working..." : "Send Revision Request"}
+                                </button>
+                              ) : null}
+                              {actionState === "decline" ? (
+                                <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "decline")} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60">
+                                  {actionBusyId === bid.id ? "Working..." : "Confirm Decline"}
+                                </button>
+                              ) : null}
+                              {actionState === "reopen" ? (
+                                <button type="button" disabled={actionBusyId === bid.id} onClick={() => runAction(bid.id, "reopen")} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60">
+                                  {actionBusyId === bid.id ? "Working..." : isAccepted ? "Confirm Reopen Job Post" : "Confirm Reopen"}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
                         ) : null}
                       </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                    );
+                  })()
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+                    Select one bid from the queue to review it here, or select two to compare them in layers.
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
       ) : !authed ? (
-        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          Log in to submit a bid for this job posting.
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Your Bid</h3>
+              <p className="text-sm text-slate-500">Submit one bid for this project.</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadBids}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Refresh
+            </button>
+          </div>
+          {loading ? <div className="mb-4 text-sm text-slate-500">Loading bids...</div> : null}
+          {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+          {success ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            Log in to submit a bid for this job posting.
+          </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          {myBid ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Your Bid</h3>
+              <p className="text-sm text-slate-500">Submit one bid for this project.</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadBids}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {loading ? <div className="mb-4 text-sm text-slate-500">Loading bids...</div> : null}
+          {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+          {success ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
+          <div className="space-y-4">
+            {myBid ? (
             <button
               type="button"
               onClick={() => setDetailBid(myBid)}
@@ -750,11 +807,12 @@ export default function BidModule({ projectId, ownerUsername }) {
             </div>
           )}
 
-          {hasAcceptedBid && !myBid ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              This job posting has already been awarded and is closed to new bids.
-            </div>
-          ) : null}
+            {hasAcceptedBid && !myBid ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                This job posting has already been awarded and is closed to new bids.
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -968,6 +1026,6 @@ export default function BidModule({ projectId, ownerUsername }) {
           </div>
         ) : null}
       </Modal>
-    </div>
+    </>
   );
 }

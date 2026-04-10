@@ -46,6 +46,30 @@ function JobPostingHelp({ text }) {
   );
 }
 
+function ComplianceNotice({ checked, onChange, publishLabel = "publish" }) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+        Before You {publishLabel}
+      </div>
+      <div className="mt-2 text-sm leading-6 text-amber-950">
+        You are responsible for the accuracy, legality, and rights related to anything you publish on Portfolio, including text, photos, project details, and job requirements.
+      </div>
+      <label className="mt-3 flex items-start gap-3 text-sm text-amber-950">
+        <input
+          type="checkbox"
+          className="mt-1 h-4 w-4"
+          checked={!!checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span>
+          I understand that I am liable for the content I post and confirm it complies with Portfolio terms and applicable laws.
+        </span>
+      </label>
+    </div>
+  );
+}
+
 export default function CreateProjectCard({
   ownedCount = 0,
   form,
@@ -97,13 +121,11 @@ export default function CreateProjectCard({
   };
 
   const validatePublish = () => {
-    if (!jobOn) return { ok: true };
-
     if (!form.compliance_confirmed) {
       return { ok: false, msg: "Please confirm compliance before publishing." };
     }
 
-    if ((form.post_privacy || "public") !== "public") {
+    if (jobOn && (form.post_privacy || "public") !== "public") {
       return {
         ok: false,
         msg: "Private posts are not published. Use Send to Contractor.",
@@ -362,6 +384,12 @@ export default function CreateProjectCard({
           </div>
 
           <form onSubmit={(e) => onSubmit?.(e, images)} className="space-y-6">
+            <ComplianceNotice
+              checked={!!form.compliance_confirmed}
+              onChange={(checked) => setForm((p) => ({ ...p, compliance_confirmed: checked }))}
+              publishLabel={jobOn ? "publish this post" : "publish this project"}
+            />
+
             {/* Basics */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
@@ -610,20 +638,6 @@ export default function CreateProjectCard({
                         </label>
                       </div>
                     )}
-                  </div>
-
-                  <div className="mt-3">
-                    <label className="flex items-start gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={!!form.compliance_confirmed}
-                        onChange={(e) => setForm((p) => ({ ...p, compliance_confirmed: e.target.checked }))}
-                      />
-                      <span>
-                        I confirm this post complies with Portfolio Terms of Service, is not spam, and abides by all
-                        State and Federal laws.
-                      </span>
-                    </label>
                   </div>
                 </div>
 

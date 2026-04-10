@@ -179,10 +179,23 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         instance = getattr(self, "instance", None)
+        is_public = attrs.get(
+            "is_public",
+            getattr(instance, "is_public", True) if instance else True,
+        )
+        compliance_confirmed = attrs.get(
+            "compliance_confirmed",
+            getattr(instance, "compliance_confirmed", False) if instance else False,
+        )
         is_job_posting = attrs.get(
             "is_job_posting",
             getattr(instance, "is_job_posting", False) if instance else False,
         )
+
+        if is_public and not compliance_confirmed:
+            raise serializers.ValidationError(
+                {"compliance_confirmed": "Please confirm compliance before publishing."}
+            )
 
         if is_job_posting:
             post_privacy = attrs.get(

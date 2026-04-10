@@ -38,6 +38,17 @@ function buildMapSrc(location) {
   return `https://www.google.com/maps?q=${q}&z=11&output=embed`;
 }
 
+function formatPostedDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) {
   return (
     <div className="flex items-center gap-1">
@@ -157,6 +168,7 @@ export default function ProjectDetail() {
   const [savingEdits, setSavingEdits] = useState(false);
   const [editError, setEditError] = useState("");
   const [editCoverImageId, setEditCoverImageId] = useState(null);
+  const [unpublishModalOpen, setUnpublishModalOpen] = useState(false);
 
   const [meUser, setMeUser] = useState(null);
   const authed = !!localStorage.getItem("access");
@@ -166,6 +178,7 @@ export default function ProjectDetail() {
   const [isLiked, setIsLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [shareFeedback, setShareFeedback] = useState("");
 
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -257,6 +270,87 @@ export default function ProjectDetail() {
     meUser &&
     (project.owner_username || "").toLowerCase() ===
       (meUser.username || "").toLowerCase();
+
+  const canSharePublicJob = !!(
+    project?.is_job_posting &&
+    project?.is_public &&
+    !project?.is_private &&
+    project?.id
+  );
+  const publicProjectUrl =
+    typeof window !== "undefined" && project?.id
+      ? `${window.location.origin}/projects/${project.id}`
+      : "";
+  const jobSummaryText = (project?.job_summary || project?.summary || "").trim();
+  const serviceCategoryList = Array.isArray(project?.service_categories)
+    ? project.service_categories.filter((item) => String(item || "").trim())
+    : [];
+
+  async function shareProject() {
+    if (!canSharePublicJob || !publicProjectUrl) return;
+    setShareFeedback("");
+
+    const payload = {
+      title: project?.title || "Job posting",
+      text: jobSummaryText || "Take a look at this job posting.",
+      url: publicProjectUrl,
+    };
+
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share(payload);
+        setShareFeedback("Shared.");
+        return;
+      }
+
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(publicProjectUrl);
+        setShareFeedback("Link copied.");
+        return;
+      }
+
+      setShareFeedback(publicProjectUrl);
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      setShareFeedback("Could not share right now.");
+    }
+  }
+
+  function requestEditProject() {
+    if (!project?.id) return;
+
+    if (project.is_job_posting && project.is_public) {
+      setUnpublishModalOpen(true);
+      return;
+    }
+
+    setIsEditing(true);
+  }
+
+  async function unpublishAndEdit() {
+    if (!project?.id) return;
+
+    setSavingEdits(true);
+    try {
+      const { data } = await api.patch(`/projects/${project.id}/`, { is_public: false });
+      if (!isMountedRef.current) return;
+      setProject((prev) => ({ ...(prev || {}), ...(data || {}), is_public: false }));
+      setEditForm((prev) => ({ ...prev, is_public: false }));
+      setUnpublishModalOpen(false);
+      setIsEditing(true);
+    } catch (err) {
+      const data = err?.response?.data;
+      const msg =
+        data?.detail ||
+        data?.message ||
+        data?.non_field_errors ||
+        err?.message ||
+        "Failed to unpublish.";
+      alert(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
+    } finally {
+      if (isMountedRef.current) setSavingEdits(false);
+    }
+  }
 
   async function setCoverOnBackend(projectId, imgId) {
     const normalized = imgId == null ? null : Number(imgId);
@@ -399,6 +493,17 @@ export default function ProjectDetail() {
           material_url: meta.material_url || "",
           material_label: meta.material_label || "",
           cover_image_id: coverFromMeta,
+          compliance_confirmed: !!meta.compliance_confirmed,
+          post_privacy: meta.post_privacy || "public",
+          private_contractor_username: meta.private_contractor_username || "",
+          notify_by_email: !!meta.notify_by_email,
+          job_summary: meta.job_summary || "",
+          service_categories: Array.isArray(meta.service_categories) ? meta.service_categories : [],
+          part_of_larger_project: !!meta.part_of_larger_project,
+          larger_project_details: meta.larger_project_details || "",
+          required_expertise: meta.required_expertise || "",
+          permit_required: !!meta.permit_required,
+          permit_responsible_party: meta.permit_responsible_party || "",
         });
 
         setEditCoverFile(null);
@@ -413,11 +518,22 @@ export default function ProjectDetail() {
           location: "",
           budget: "",
           sqf: "",
-          highlights: "",
-          material_url: "",
-          material_label: "",
-          cover_image_id: null,
-        });
+    highlights: "",
+    material_url: "",
+    material_label: "",
+    cover_image_id: null,
+    compliance_confirmed: false,
+    post_privacy: "public",
+    private_contractor_username: "",
+    notify_by_email: false,
+    job_summary: "",
+    service_categories: [],
+    part_of_larger_project: false,
+    larger_project_details: "",
+    required_expertise: "",
+    permit_required: false,
+    permit_responsible_party: "",
+  });
 
         setEditCoverFile(null);
         setEditCoverImageId(null);
@@ -788,6 +904,17 @@ export default function ProjectDetail() {
         highlights: editForm.highlights || "",
         material_url: editForm.material_url || "",
         material_label: editForm.material_label || "",
+        compliance_confirmed: !!editForm.compliance_confirmed,
+        post_privacy: editForm.post_privacy || "public",
+        private_contractor_username: editForm.private_contractor_username || "",
+        notify_by_email: !!editForm.notify_by_email,
+        job_summary: editForm.job_summary || "",
+        service_categories: Array.isArray(editForm.service_categories) ? editForm.service_categories : [],
+        part_of_larger_project: !!editForm.part_of_larger_project,
+        larger_project_details: editForm.larger_project_details || "",
+        required_expertise: editForm.required_expertise || "",
+        permit_required: !!editForm.permit_required,
+        permit_responsible_party: editForm.permit_responsible_party || "",
       };
 
       let data;
@@ -832,6 +959,17 @@ export default function ProjectDetail() {
         highlights: data?.highlights ?? prev.highlights,
         material_url: data?.material_url ?? prev.material_url,
         material_label: data?.material_label ?? prev.material_label,
+        compliance_confirmed: !!(data?.compliance_confirmed ?? prev.compliance_confirmed),
+        post_privacy: data?.post_privacy ?? prev.post_privacy,
+        private_contractor_username: data?.private_contractor_username ?? prev.private_contractor_username,
+        notify_by_email: !!(data?.notify_by_email ?? prev.notify_by_email),
+        job_summary: data?.job_summary ?? prev.job_summary,
+        service_categories: Array.isArray(data?.service_categories) ? data.service_categories : prev.service_categories,
+        part_of_larger_project: !!(data?.part_of_larger_project ?? prev.part_of_larger_project),
+        larger_project_details: data?.larger_project_details ?? prev.larger_project_details,
+        required_expertise: data?.required_expertise ?? prev.required_expertise,
+        permit_required: !!(data?.permit_required ?? prev.permit_required),
+        permit_responsible_party: data?.permit_responsible_party ?? prev.permit_responsible_party,
         cover_image_id:
           normalizedCoverId != null ? Number(normalizedCoverId) : prev.cover_image_id,
       }));
@@ -1520,6 +1658,47 @@ export default function ProjectDetail() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 self-start sm:self-end">
+              {project?.id ? (
+                <Link
+                  to={`/projects/${project.id}/print`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-[48px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/18"
+                >
+                  Printable job post
+                </Link>
+              ) : null}
+
+              {isOwnerUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditing) {
+                      setIsEditing(false);
+                      return;
+                    }
+                    requestEditProject();
+                  }}
+                  className="inline-flex min-h-[48px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/18"
+                >
+                  {isEditing
+                    ? "Close editor"
+                    : project?.is_job_posting
+                    ? "Edit job post"
+                    : "Edit project"}
+                </button>
+              ) : null}
+
+              {canSharePublicJob ? (
+                <button
+                  type="button"
+                  onClick={shareProject}
+                  className="inline-flex min-h-[48px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/18"
+                >
+                  Share job
+                </button>
+              ) : null}
+
               {project?.owner_username ? (
                 <Link
                   to={`/profiles/${project.owner_username}`}
@@ -1577,12 +1756,100 @@ export default function ProjectDetail() {
               </div>
             </div>
           </div>
+          {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
         </div>
 
         <div className="space-y-6 p-4 sm:p-6">
-          {project?.summary && (
+          {project?.is_job_posting ? (
+            <div className="rounded-2xl border border-slate-200 bg-[#FCFBF8] p-5 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Job overview</div>
+              <div className="mt-3 text-sm leading-7 text-slate-700 sm:text-[15px]">
+                {jobSummaryText || "Project requirements will appear here."}
+              </div>
+
+              <div className="mt-6 grid gap-y-5 border-t border-slate-200 pt-5 sm:grid-cols-2 xl:grid-cols-6 xl:gap-x-0">
+                {[
+                  ["Location", project?.location || "—"],
+                  ["Budget", project?.budget ?? "—"],
+                  ["Sq Ft", project?.sqf ?? "—"],
+                  ["Posting type", project?.is_private ? "Private invite-only job" : "Public job posting"],
+                  [
+                    "Permits",
+                    project?.permit_required
+                      ? `Required${project?.permit_responsible_party ? ` · ${project.permit_responsible_party}` : ""}`
+                      : "Not specified",
+                  ],
+                  ["Posted", formatPostedDate(project?.created_at)],
+                ].map(([label, value], index) => (
+                  <div
+                    key={label}
+                    className={
+                      "min-w-0 xl:px-5 " +
+                      (index > 0 ? "xl:border-l xl:border-slate-200" : "")
+                    }
+                  >
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+                    {label === "Location" && mapSrc ? (
+                      <button
+                        type="button"
+                        onClick={() => setMapOpen(true)}
+                        className="mt-1 inline-flex text-xs font-medium text-sky-700 hover:underline"
+                      >
+                        Show map
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+
+              {(serviceCategoryList.length > 0 ||
+                project?.required_expertise ||
+                project?.highlights ||
+                project?.larger_project_details) ? (
+                <div className="mt-6 border-t border-slate-200 pt-5">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Requirements
+                  </div>
+
+                  {serviceCategoryList.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {serviceCategoryList.map((item) => (
+                        <span
+                          key={item}
+                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 grid gap-3 text-sm text-slate-700 lg:grid-cols-2">
+                    {project?.required_expertise ? (
+                      <div>
+                        <span className="font-semibold text-slate-900">Required expertise:</span> {project.required_expertise}
+                      </div>
+                    ) : null}
+
+                    {project?.highlights ? (
+                      <div>
+                        <span className="font-semibold text-slate-900">Highlights:</span> {project.highlights}
+                      </div>
+                    ) : null}
+
+                    {project?.larger_project_details ? (
+                      <div className="lg:col-span-2">
+                        <span className="font-semibold text-slate-900">Context:</span> {project.larger_project_details}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : project?.summary ? (
             <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
-          )}
+          ) : null}
 
           {project?.is_job_posting && project?.id ? (
             <BidModule projectId={project.id} ownerUsername={project.owner_username} />
@@ -1822,59 +2089,41 @@ export default function ProjectDetail() {
             </div>
           </div>
 
-          {(project?.location || project?.budget || project?.sqf || project?.highlights) && (
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Project details
-              </div>
-              <div className="grid gap-4 text-sm text-slate-700 sm:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,1fr))]">
-                <div className="min-w-0 space-y-3">
-                  <div>
-                    <div className="text-xs font-medium uppercase text-slate-500">Location</div>
-                    <div className="truncate text-lg font-semibold">{project?.location || "—"}</div>
-                  </div>
-                  {mapSrc ? (
-                    <button
-                      type="button"
-                      onClick={() => setMapOpen(true)}
-                      className="block w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
-                    >
-                      <div className="aspect-[16/10] w-full overflow-hidden bg-slate-100">
-                        <iframe
-                          title="Project location map preview"
-                          src={mapSrc}
-                          className="pointer-events-none h-full w-full border-0"
-                          loading="lazy"
-                          referrerPolicy="no-referrer-when-downgrade"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-600">
-                        <span>Open map</span>
-                        {project?.location ? <span className="truncate font-medium">{project.location}</span> : null}
-                      </div>
-                    </button>
-                  ) : null}
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-xs font-medium uppercase text-slate-500">Budget</div>
-                  <div className="truncate text-lg font-semibold">{project?.budget ?? "—"}</div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Sq Ft</div>
-                  <div className="truncate text-lg font-semibold">{project?.sqf ?? "—"}</div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Highlights</div>
-                  <div className="truncate text-lg font-semibold">{project?.highlights || "—"}</div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </Card>
+
+      {unpublishModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="text-sm font-semibold text-slate-900">
+              Unpublish this post to enable editing
+            </div>
+            <div className="mt-2 text-sm text-slate-700">
+              Warning: current post data may change while you edit. You can re-publish after reviewing the updates.
+            </div>
+
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setUnpublishModalOpen(false)}
+                disabled={savingEdits}
+              >
+                Keep it published
+              </Button>
+
+              <Button
+                type="button"
+                className="bg-red-600 text-white hover:bg-red-700"
+                onClick={unpublishAndEdit}
+                disabled={savingEdits}
+              >
+                {savingEdits ? "Unpublishing…" : "Unpublish & Edit"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {imageLightboxOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 p-2 sm:p-4">
