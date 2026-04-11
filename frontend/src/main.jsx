@@ -7,8 +7,11 @@ import App from "./App.jsx";
 
 const Explore = lazy(() => import("./pages/Explore.jsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
+const ProjectGuides = lazy(() => import("./pages/ProjectGuides.jsx"));
+const TermsAndSafety = lazy(() => import("./pages/TermsAndSafety.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const Register = lazy(() => import("./pages/Register.jsx"));
+const ActivateAccount = lazy(() => import("./pages/ActivateAccount.jsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const EditProfile = lazy(() => import("./pages/EditProfile.jsx"));
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail.jsx"));
@@ -48,9 +51,12 @@ createRoot(document.getElementById("root")).render(
           {/* "/" → landing page */}
           <Route index element={<LandingPage />} />
           <Route path="explore" element={<Explore />} />
+          <Route path="guides" element={<ProjectGuides />} />
+          <Route path="terms" element={<TermsAndSafety />} />
           {/* Auth + public routes */}
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
+          <Route path="activate/:uid/:token" element={<ActivateAccount />} />
           <Route path="forgot-password" element={<ForgotPassword />} />
           <Route path="reset-password" element={<ResetPassword />} />
           <Route path="/work" element={<FindLocalWork />} />

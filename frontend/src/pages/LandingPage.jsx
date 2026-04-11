@@ -276,6 +276,11 @@ export default function LandingPage() {
               </Card>
             ))}
           </div>
+          <div className="mt-8 text-center">
+            <Link to="/guides" className="text-sm font-medium text-[#4F5D83] underline decoration-[#B9C2D8] underline-offset-4 hover:text-slate-950">
+              Read the project guides before posting →
+            </Link>
+          </div>
         </Container>
       </section>
 
@@ -356,9 +361,10 @@ export default function LandingPage() {
           <div className="flex flex-wrap items-center gap-4">
             <a href="#showcase" className="hover:text-slate-900">About</a>
             <a href="#how-it-works" className="hover:text-slate-900">How it works</a>
+            <Link to="/guides" className="hover:text-slate-900">Guides</Link>
             <Link to="/register" className="hover:text-slate-900">Contact</Link>
-            <Link to="/register" className="hover:text-slate-900">Terms</Link>
-            <Link to="/register" className="hover:text-slate-900">Privacy</Link>
+            <Link to="/terms" className="hover:text-slate-900">Terms</Link>
+            <Link to="/terms" className="hover:text-slate-900">Privacy</Link>
           </div>
         </Container>
       </footer>
