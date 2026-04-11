@@ -1630,7 +1630,7 @@ export default function ProjectDetail() {
           className={
             "border-b border-slate-100 px-5 py-4 text-white sm:px-6 " +
             (project?.is_job_posting
-              ? "bg-[#37C5F0]/95"
+              ? "bg-[#CB633A]/95"
               : "bg-slate-900/95")
           }
         >
@@ -1650,7 +1650,7 @@ export default function ProjectDetail() {
                 )}
 
                 {project?.is_job_posting && (
-                  <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-semibold tracking-wide text-[#0A3443]">
+                  <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-semibold tracking-wide text-[#7D351C]">
                     JOB POSTING
                   </span>
                 )}

@@ -32,7 +32,12 @@ export default function App() {
 
   // Full-bleed layouts (e.g. profile hero full-width)
   const isFullBleed =
-    pathname === "/" || pathname.startsWith("/profiles/") || pathname.startsWith("/public/") || false;
+    pathname === "/" ||
+    pathname === "/guides" ||
+    pathname === "/terms" ||
+    pathname.startsWith("/profiles/") ||
+    pathname.startsWith("/public/") ||
+    false;
 
   // user + menu state
   const [me, setMe] = useState(null);
@@ -187,6 +192,9 @@ export default function App() {
               <NavLink to="/explore" compact>
                 Explore
               </NavLink>
+              <NavLink to="/guides" compact>
+                Guides
+              </NavLink>
               <NavLink to="/dashboard" compact>
                 Dashboard
               </NavLink>
@@ -195,6 +203,7 @@ export default function App() {
             {/* Desktop nav (Explore + Dashboard + Job Postings) */}
             <div className="ml-2 hidden items-center gap-2 md:flex">
               <NavLink to="/explore">Explore</NavLink>
+              <NavLink to="/guides">Guides</NavLink>
               <NavLink to="/dashboard">Dashboard</NavLink>
               <NavLink to="/work">Job Postings</NavLink>
             </div>

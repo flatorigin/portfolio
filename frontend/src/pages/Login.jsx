@@ -22,7 +22,12 @@ export default function Login() {
       localStorage.setItem("refresh", data.refresh);
       navigate("/dashboard");
     } catch (err) {
-      setError("Invalid username or password");
+      const detail = String(err?.response?.data?.detail || "").toLowerCase();
+      setError(
+        detail.includes("active")
+          ? "Please confirm your email before logging in."
+          : "Invalid username or password"
+      );
     }
   };
 

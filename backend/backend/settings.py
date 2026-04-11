@@ -3,6 +3,7 @@
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import dj_database_url
 
@@ -99,6 +100,9 @@ else:
     }
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_ORIGIN = urlparse(FRONTEND_URL)
+FRONTEND_EMAIL_DOMAIN = FRONTEND_ORIGIN.netloc or FRONTEND_ORIGIN.path
+FRONTEND_EMAIL_PROTOCOL = FRONTEND_ORIGIN.scheme or "http"
 
 FRONTEND_DIR = BASE_DIR.parent / "frontend" / "dist"
 TEMPLATES[0]["DIRS"] = [FRONTEND_DIR]
@@ -163,6 +167,15 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "AUTH_HEADER_TYPES": ("Bearer", "JWT"),
+}
+
+DJOSER = {
+    "SEND_ACTIVATION_EMAIL": True,
+    "SEND_CONFIRMATION_EMAIL": False,
+    "ACTIVATION_URL": "activate/{uid}/{token}",
+    "EMAIL_FRONTEND_DOMAIN": FRONTEND_EMAIL_DOMAIN,
+    "EMAIL_FRONTEND_PROTOCOL": FRONTEND_EMAIL_PROTOCOL,
+    "EMAIL_FRONTEND_SITE_NAME": "FlatOrigin",
 }
 
 LOGGING = {
