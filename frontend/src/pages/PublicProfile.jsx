@@ -393,6 +393,12 @@ export default function PublicProfile() {
               <div className="flex flex-wrap items-center gap-2 sm:pb-1">
                 {!isMine ? (
                   <>
+                    {memberSince && memberSince !== "—" ? (
+                      <div className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur">
+                        Since {memberSince}
+                      </div>
+                    ) : null}
+
                     <button
                       type="button"
                       onClick={toggleLike}
@@ -430,6 +436,10 @@ export default function PublicProfile() {
                       <span>{saved ? "Saved" : "Save"}</span>
                     </button>
                   </>
+                ) : memberSince && memberSince !== "—" ? (
+                  <div className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur">
+                    Since {memberSince}
+                  </div>
                 ) : null}
               </div>
             </div>

@@ -182,18 +182,16 @@ export default function LandingPage() {
 
       <section className="relative overflow-hidden border-b border-[#ECE7DF] bg-[radial-gradient(circle_at_top,#EEF3FF,transparent_42%),linear-gradient(180deg,#FBF9F7_0%,#F7F3EC_100%)]">
         <Container className="pt-12 pb-12 sm:pt-16 sm:pb-16">
-          <div className="mx-auto max-w-4xl text-center">
-            <Badge className="border-[#D9E2F4] bg-white/80 px-4 py-1 text-[#4F5D83] shadow-sm backdrop-blur-sm">
-              For homeowners and contractors working from real projects
-            </Badge>
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
-              Show your work. Compare bids. Hire with more clarity.
+          <div className="mx-auto max-w-4xl">
+            <h1 className="font-sans text-[1.2rem] leading-[1.25] tracking-tight text-black sm:text-[3.1rem] sm:leading-[1.24]">
+              <span className="font-extrabold">Homeowners:</span> Post a project. Compare real work. Receive bids. Stay private.
+              <br />
+              <span className="font-extrabold">Contractors:</span> Build your portfolio. Get discovered. Connect and bid on real jobs.
             </h1>
-            <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
-              Portfolio helps homeowners discover real project work, invite contractors, and compare structured bids
-              without jumping across disconnected tools.
+            <p className="mt-10 font-sans text-2xl font-semibold tracking-tight text-black sm:text-3xl">
+              Free, no middle man
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link to={authed ? "/dashboard" : "/register"}>
                 <Button className="min-w-[180px] rounded-full bg-[#4F5D83] px-8 py-3 text-base font-semibold hover:bg-[#445273]">
                   Get Started
