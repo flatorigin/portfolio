@@ -182,20 +182,18 @@ export default function LandingPage() {
 
       <section className="relative overflow-hidden border-b border-[#ECE7DF] bg-[radial-gradient(circle_at_top,#EEF3FF,transparent_42%),linear-gradient(180deg,#FBF9F7_0%,#F7F3EC_100%)]">
         <Container className="pt-12 pb-12 sm:pt-16 sm:pb-16">
-          <div className="mx-auto max-w-4xl">
-            <h1 className="font-sans text-[2.9rem] leading-[1.25] tracking-tight text-black sm:leading-[1.24]">
-              <p className="sm:text-[1.4rem] sm:leading-[1.5] tracking-normal text-slate-500">Homeowners:</p> 
-              Post a project. Compare real work. Receive bids. Stay private.
-              <br />
-              <p className="sm:text-[1.4rem] sm:leading-[1.24] tracking-normal text-slate-500">Contractor:</p> 
-              Build your portfolio. Get discovered. Connect and bid on real jobs.
+          <div className="mx-auto max-w-4xl text-center">
+            <Badge className="border-[#D9E2F4] bg-white/80 px-4 py-1 text-[#4F5D83] shadow-sm backdrop-blur-sm">
+              For homeowners and contractors working from real projects
+            </Badge>
+            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
+              Hire based on proof, not promises.
             </h1>
-            <p className="mt-10 font-sans text-2xl tracking-tight text-black sm:text-2xl">
-              Free, no middle man
+            <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
+              Homeowners discover pros through contractor-certified project portfolios. Contractors win jobs by showcasing their own real-world work.
             </p>
-            <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to={authed ? "/dashboard" : "/register"}>
-                {/* Ensure the button itself has a consistent height or use items-center on the link wrapper if needed */}
                 <Button className="min-w-[180px] rounded-full bg-[#4F5D83] px-8 py-3 text-base font-semibold hover:bg-[#445273]">
                   Get Started
                 </Button>
@@ -264,9 +262,9 @@ export default function LandingPage() {
 
           <div className="mt-8 grid gap-5 md:grid-cols-3">
             {[
-              ["01", "Create your profile", "Homeowners: Stay private or post projects to find pros.","Contractors: Show your work to get exposure. Build trust."],
-              ["02", "Invite contractors to bid", "Homeowners: Support both public and private project posting.", "Contractors: Find public projects or get invited to a posted project."],
-              ["03", "Receive bids and connect", "Homeowners: Compare bids, message contractors.", "Contractors: Get invited to a project privately."],
+              ["01", "Build Your Portfolio", "Contractors: Upload your best projects and self-certify your work history.","Homeowners: Access a gallery of real local projects, posted directly by the pros."],
+              ["02", "Structured Bidding", "Homeowners: Invite up to 6 contractors to submit side-by-side bids.", "Contractors: Respond to projects that match your specific portfolio expertise."],
+              ["03", "Direct Project Inbox", "Keep all questions, images, and bid revisions in one dedicated project thread.", "Message pros directly with no platform middleman."],
             ].map(([step, title, copy1, copy2]) => (
               <Card key={step} className="rounded-[1.75rem] border-[#E9E5DC] p-6">
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#EEF2FB] text-sm font-semibold text-[#4F5D83]">
@@ -286,31 +284,7 @@ export default function LandingPage() {
         </Container>
       </section>
 
-      <section className="border-y border-[#ECE7DF] bg-white/70 py-16 sm:py-20">
-        <Container>
-          <div className="max-w-2xl">
-            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">Core value</div>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-              Built for project decisions, not generic profiles
-            </h2>
-          </div>
-
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {[
-              ["Portfolio-first hiring", "No resumes. No guesswork. Just real work."],
-              ["Structured bidding", "Compare up to 6 serious contractors per project."],
-              ["Project-based communication", "Keep conversations tied to the project."],
-            ].map(([title, copy]) => (
-              <Card key={title} className="rounded-[1.75rem] border-[#E9E5DC] bg-white p-6">
-                <h3 className="text-xl font-semibold text-slate-900">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p>
-              </Card>
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      <section id="showcase" className="py-16 sm:py-20">
+      <section id="showcase" className="border-y border-[#ECE7DF] bg-white/70 py-16 sm:py-20">
         <Container>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl">
