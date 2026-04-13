@@ -182,19 +182,20 @@ export default function LandingPage() {
 
       <section className="relative overflow-hidden border-b border-[#ECE7DF] bg-[radial-gradient(circle_at_top,#EEF3FF,transparent_42%),linear-gradient(180deg,#FBF9F7_0%,#F7F3EC_100%)]">
         <Container className="pt-12 pb-12 sm:pt-16 sm:pb-16">
-          <div className="mx-auto max-w-4xl text-center">
-            <Badge className="border-[#D9E2F4] bg-white/80 px-4 py-1 text-[#4F5D83] shadow-sm backdrop-blur-sm">
-              For homeowners and contractors working from real projects
-            </Badge>
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
-              Show your work. Compare bids. Hire with more clarity.
+          <div className="mx-auto max-w-4xl">
+            <h1 className="font-sans text-[2.9rem] leading-[1.25] tracking-tight text-black sm:leading-[1.24]">
+              <p className="sm:text-[1.4rem] sm:leading-[1.5] tracking-normal text-slate-500">Homeowners:</p> 
+              Post a project. Compare real work. Receive bids. Stay private.
+              <br />
+              <p className="sm:text-[1.4rem] sm:leading-[1.24] tracking-normal text-slate-500">Contractor:</p> 
+              Build your portfolio. Get discovered. Connect and bid on real jobs.
             </h1>
-            <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
-              Portfolio helps homeowners discover real project work, invite contractors, and compare structured bids
-              without jumping across disconnected tools.
+            <p className="mt-10 font-sans text-2xl tracking-tight text-black sm:text-2xl">
+              Free, no middle man
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
               <Link to={authed ? "/dashboard" : "/register"}>
+                {/* Ensure the button itself has a consistent height or use items-center on the link wrapper if needed */}
                 <Button className="min-w-[180px] rounded-full bg-[#4F5D83] px-8 py-3 text-base font-semibold hover:bg-[#445273]">
                   Get Started
                 </Button>
@@ -263,16 +264,17 @@ export default function LandingPage() {
 
           <div className="mt-8 grid gap-5 md:grid-cols-3">
             {[
-              ["01", "Create your profile", "Show your work and build trust."],
-              ["02", "Get discovered or invite contractors", "Support both public and private job workflows."],
-              ["03", "Receive bids and connect", "Compare, message, and move forward."],
-            ].map(([step, title, copy]) => (
+              ["01", "Create your profile", "Homeowners: Stay private or post projects to find pros.","Contractors: Show your work to get exposure. Build trust."],
+              ["02", "Invite contractors to bid", "Homeowners: Support both public and private project posting.", "Contractors: Find public projects or get invited to a posted project."],
+              ["03", "Receive bids and connect", "Homeowners: Compare bids, message contractors.", "Contractors: Get invited to a project privately."],
+            ].map(([step, title, copy1, copy2]) => (
               <Card key={step} className="rounded-[1.75rem] border-[#E9E5DC] p-6">
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#EEF2FB] text-sm font-semibold text-[#4F5D83]">
                   {step}
                 </div>
                 <h3 className="mt-5 text-xl font-semibold text-slate-900">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{copy1}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{copy2}</p>
               </Card>
             ))}
           </div>
