@@ -430,15 +430,15 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const { data } = await api.get("/auth/users/me/");
+        const { data } = await api.get("/users/me/");
         if (active && data?.username && isMountedRef.current) {
-          setMeUser({ username: data.username });
+          setMeUser(data);
         }
       } catch {
         try {
-          const { data } = await api.get("/users/me/");
+          const { data } = await api.get("/auth/users/me/");
           if (active && data?.username && isMountedRef.current) {
-            setMeUser({ username: data.username });
+            setMeUser(data);
           }
         } catch {
           /* fallback */
@@ -953,6 +953,28 @@ export default function Dashboard() {
     return fromUrl || fromFile || fromThumbs || "";
   }
 
+  const isHomeownerAccount = meUser?.profile_type === "homeowner";
+  const homeownerHasNoJobPosts = isHomeownerAccount && myJobPosts.length === 0;
+  const primaryProjectTitle = isHomeownerAccount
+    ? homeownerHasNoJobPosts
+      ? "Post your first project"
+      : "Post another project"
+    : projects.length === 0
+    ? "No Project"
+    : "Add another project";
+  const primaryProjectHelper = isHomeownerAccount
+    ? homeownerHasNoJobPosts
+      ? "Describe the work you need done and invite contractors to review it."
+      : "Create a new job posting when you are ready to compare bids again."
+    : projects.length === 0
+    ? "Get started by creating a new project."
+    : "Create another project or switch to job posting.";
+  const primaryProjectButtonLabel = isHomeownerAccount
+    ? "Post Project"
+    : projects.length === 0
+    ? "New Project"
+    : "Add Project";
+
   return (
     <div className="space-y-8">
       <header className="mb-1">
@@ -981,13 +1003,11 @@ export default function Dashboard() {
           </div>
 
           <div className="text-[1.05rem] font-semibold tracking-[-0.02em] text-slate-900">
-            {projects.length === 0 ? "No Project" : "Add another project"}
+            {primaryProjectTitle}
           </div>
 
           <p className="mt-3 max-w-xl text-[1.05rem] text-slate-500">
-            {projects.length === 0
-              ? "Get started by creating a new project."
-              : "Create another project or switch to job posting."}
+            {primaryProjectHelper}
           </p>
 
           <Button
@@ -1005,7 +1025,7 @@ export default function Dashboard() {
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
             </svg>
-            {projects.length === 0 ? "New Project" : "Add Project"}
+            {primaryProjectButtonLabel}
           </Button>
         </div>
       </Card>
@@ -1775,6 +1795,7 @@ export default function Dashboard() {
                 onSubmit={createProject}
                 onSendPrivate={handlePrivateInviteNotice}
                 closeSignal={createCloseSignal}
+                forceJobPosting={isHomeownerAccount}
                 defaultOpen
               />
             </div>

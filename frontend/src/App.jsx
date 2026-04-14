@@ -2,7 +2,7 @@
 // file: frontend/src/App.jsx
 // Responsive nav:
 // - Mobile: Portfolio + Explore + Dashboard + Avatar (dropdown has Edit Profile/Inbox/Website/Logout)
-// - Desktop: Explore + Dashboard + Job Postings visible; bell + GlobalInbox visible; avatar dropdown
+// - Desktop: Explore + Dashboard + Job Postings visible; GlobalInbox visible; avatar dropdown
 // =======================================
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -12,13 +12,11 @@ import { logout } from "./auth";
 import GlobalInbox from "./components/GlobalInbox";
 
 // Icon assets (bundled by Vite)
-import bellIcon from "./assets/icons/bell.svg";
 import logoutIcon from "./assets/icons/logout.svg";
 import loginIcon from "./assets/icons/login.svg";
 import registerIcon from "./assets/icons/register.svg";
 
 const ICONS = {
-  bell: bellIcon,
   logout: logoutIcon,
   login: loginIcon,
   register: registerIcon,
@@ -142,13 +140,10 @@ export default function App() {
   // helpers for avatar & labels
   const username = me?.username || localStorage.getItem("username") || "";
   const displayName = me?.display_name || username || "My profile";
-  const locationLabel = me?.service_location || "";
   const profileTypeLabel =
     me?.profile_type === "homeowner"
       ? "Homeowner"
-      : me?.profile_type === "contractor"
-      ? "Contractor"
-      : "";
+      : "Contractor";
 
   const avatarInitial =
     displayName && typeof displayName === "string"
@@ -219,17 +214,9 @@ export default function App() {
               className="relative ml-auto flex items-center gap-3"
               ref={menuRef}
             >
-              {/* Desktop-only: bell + GlobalInbox */}
+              {/* Desktop-only: GlobalInbox */}
               {authed && (
                 <div className="hidden items-center gap-3 md:flex">
-                  <button
-                    type="button"
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200"
-                    aria-label="Notifications"
-                  >
-                    <img src={ICONS.bell} alt="" className="h-4 w-4" />
-                  </button>
-
                   <GlobalInbox />
                 </div>
               )}
@@ -264,11 +251,6 @@ export default function App() {
                           {profileTypeLabel ? (
                             <div className="truncate text-xs font-medium text-slate-600">
                               {profileTypeLabel}
-                            </div>
-                          ) : null}
-                          {locationLabel ? (
-                            <div className="truncate text-xs text-slate-500">
-                              {locationLabel}
                             </div>
                           ) : null}
                         </div>
