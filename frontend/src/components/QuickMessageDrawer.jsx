@@ -157,6 +157,7 @@ export default function QuickMessageDrawer({
   const [replyTo, setReplyTo] = useState(null);
 
   const scrollerRef = useRef(null);
+  const contextStampPendingRef = useRef(false);
 
   const authed = !!localStorage.getItem("access");
   const meUsername = localStorage.getItem("username") || "";
@@ -195,6 +196,7 @@ export default function QuickMessageDrawer({
       setMessageText("");
       setComposerAttachments([]);
       setReplyTo(null);
+      contextStampPendingRef.current = !!originProjectId;
 
       if (!authed) {
         setError("Please log in to send messages.");
@@ -289,6 +291,10 @@ export default function QuickMessageDrawer({
       sender_username: meUsername,
       text: body,
       created_at: new Date().toISOString(),
+      context_project: contextStampPendingRef.current ? originProjectId : null,
+      context_project_title: contextStampPendingRef.current
+        ? originProjectTitle || ""
+        : "",
       parent_message_id: replyTo?.id || null,
       parent_message_preview: replyTo
         ? {
@@ -318,6 +324,9 @@ export default function QuickMessageDrawer({
       formData.append("text", body);
       if (replyTo?.id) {
         formData.append("parent_message_id", String(replyTo.id));
+      }
+      if (contextStampPendingRef.current && originProjectId) {
+        formData.append("context_project_id", String(originProjectId));
       }
 
       const links = [];
@@ -351,6 +360,7 @@ export default function QuickMessageDrawer({
       setMessages((prev) =>
         prev.map((m) => (m.id === optimistic.id ? real || m : m))
       );
+      contextStampPendingRef.current = false;
 
       window.dispatchEvent(new CustomEvent("inbox:changed"));
     } catch (err) {
@@ -415,13 +425,6 @@ export default function QuickMessageDrawer({
               </div>
             ) : (
               <div className="space-y-3">
-                {originProjectTitle ? (
-                  <div className="rounded-xl border border-slate-200 bg-[#FBF9F7] px-3 py-2 text-xs text-slate-600">
-                    <span className="font-semibold text-slate-900">Project:</span>{" "}
-                    {originProjectTitle}
-                  </div>
-                ) : null}
-
                 {messages.map((m) => {
                   const mine =
                     (m.sender_username || "").toLowerCase() ===
@@ -442,6 +445,16 @@ export default function QuickMessageDrawer({
                       className={"flex " + (mine ? "justify-end" : "justify-start")}
                     >
                       <div className="max-w-[80%]">
+                        {m.context_project_title ? (
+                          <div
+                            className={
+                              "mb-1 border-b border-slate-300 pb-1 text-xs font-semibold text-slate-700 " +
+                              (mine ? "text-right" : "text-left")
+                            }
+                          >
+                            Project: {m.context_project_title}
+                          </div>
+                        ) : null}
                         <div
                           className={
                             "rounded-2xl px-3 py-2 text-sm leading-relaxed " +

@@ -143,6 +143,12 @@ export default function App() {
   const username = me?.username || localStorage.getItem("username") || "";
   const displayName = me?.display_name || username || "My profile";
   const locationLabel = me?.service_location || "";
+  const profileTypeLabel =
+    me?.profile_type === "homeowner"
+      ? "Homeowner"
+      : me?.profile_type === "contractor"
+      ? "Contractor"
+      : "";
 
   const avatarInitial =
     displayName && typeof displayName === "string"
@@ -255,6 +261,11 @@ export default function App() {
                           <div className="truncate text-sm font-semibold text-slate-900">
                             {displayName}
                           </div>
+                          {profileTypeLabel ? (
+                            <div className="truncate text-xs font-medium text-slate-600">
+                              {profileTypeLabel}
+                            </div>
+                          ) : null}
                           {locationLabel ? (
                             <div className="truncate text-xs text-slate-500">
                               {locationLabel}
@@ -265,7 +276,7 @@ export default function App() {
 
                       <div className="my-1 h-px bg-slate-100" />
 
-                      {/* Website (public profile) */}
+                      {/* Public profile */}
                       <button
                         type="button"
                         onClick={goWebsite}
@@ -297,7 +308,7 @@ export default function App() {
                             />
                           </svg>
                         </span>
-                        <span>Website</span>
+                        <span>Public Profile</span>
                       </button>
 
                       {/* Edit Profile */}

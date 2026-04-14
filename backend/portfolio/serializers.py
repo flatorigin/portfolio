@@ -421,6 +421,7 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.ReadOnlyField(source="sender.username")
     attachment_url = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
+    context_project_title = serializers.ReadOnlyField(source="context_project.title")
 
     parent_message_id = serializers.PrimaryKeyRelatedField(
         source="parent_message",
@@ -446,6 +447,8 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
             "attachment_url",
             "parent_message_id",
             "parent_message_preview",
+            "context_project",
+            "context_project_title",
             "created_at",
             "attachments",
             "can_delete",
@@ -457,6 +460,8 @@ class PrivateMessageSerializer(serializers.ModelSerializer):
             "sender_username",
             "attachment_url",
             "parent_message_preview",
+            "context_project",
+            "context_project_title",
             "created_at",
             "attachments",
             "can_delete",

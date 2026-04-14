@@ -692,6 +692,13 @@ class PrivateMessage(models.Model):
         on_delete=models.SET_NULL,
         related_name="replies",
     )
+    context_project = models.ForeignKey(
+        Project,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="context_messages",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { register } from "../auth";
-import { Card, Input, Button } from "../ui";
+import { Card, Input, PasswordInput, Button } from "../ui";
 
 export default function Register() {
   const [form, setForm] = useState({ username: "", email: "", password: "" });
@@ -95,8 +95,7 @@ export default function Register() {
                 <label className="mb-1 block text-sm font-medium text-slate-700">
                   Password
                 </label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   autoComplete="new-password"

@@ -762,7 +762,7 @@ class ThreadMessageListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         thread = self.get_thread()
-        return PrivateMessage.objects.filter(thread=thread).select_related("sender")
+        return PrivateMessage.objects.filter(thread=thread).select_related("sender", "context_project")
 
     def perform_create(self, serializer):
         thread = self.get_thread()
@@ -823,13 +823,12 @@ class MessageStartView(APIView):
             )
 
         target = get_object_or_404(get_user_model(), username=recipient_username)
-        origin_project = None
 
         if project_id:
-            origin_project = get_object_or_404(Project.objects.select_related("owner"), pk=project_id)
-            if not can_view_project(origin_project, request.user):
+            project = get_object_or_404(Project.objects.select_related("owner"), pk=project_id)
+            if not can_view_project(project, request.user):
                 raise PermissionDenied("You do not have access to this project.")
-            if origin_project.owner_id != target.id:
+            if project.owner_id != target.id:
                 return Response(
                     {"detail": "Project message recipient must be the project owner."},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -844,7 +843,7 @@ class MessageStartView(APIView):
         thread, created = MessageThread.get_or_create_dm(
             request.user,
             target,
-            origin_project=origin_project,
+            origin_project=None,
             initiated_by=request.user,
         )
 
@@ -876,7 +875,7 @@ class ThreadMessagesView(generics.ListCreateAPIView):
         return (
             PrivateMessage.objects
             .filter(thread=thread)
-            .select_related("sender", "parent_message")
+            .select_related("sender", "parent_message", "context_project")
             .prefetch_related("attachments")
         )
 
@@ -908,6 +907,22 @@ class ThreadMessagesView(generics.ListCreateAPIView):
         except PrivateMessage.DoesNotExist:
             raise ValidationError({"parent_message_id": "Invalid parent message."})
 
+    def _get_context_project(self, thread, request):
+        project_id = request.data.get("context_project_id")
+        if not project_id:
+            return None
+
+        project = get_object_or_404(Project.objects.select_related("owner"), pk=project_id)
+        user = request.user
+        other = thread.client if user.id == thread.owner_id else thread.owner
+
+        if project.owner_id != other.id:
+            raise ValidationError({"context_project_id": "Project context must belong to the other participant."})
+        if not can_view_project(project, user):
+            raise PermissionDenied("You do not have access to this project.")
+
+        return project
+
     def perform_create(self, serializer):
         thread = self.get_thread()
         user = self.request.user
@@ -916,11 +931,13 @@ class ThreadMessagesView(generics.ListCreateAPIView):
             raise PermissionDenied("Message request not accepted yet.")
 
         parent_message = self._get_parent_message(thread, self.request)
+        context_project = self._get_context_project(thread, self.request)
 
         msg = serializer.save(
             sender=user,
             thread=thread,
             parent_message=parent_message,
+            context_project=context_project,
         )
 
         image_files = self.request.FILES.getlist("images")
