@@ -11,6 +11,7 @@ import api from "../api";
 import { Badge, Card, Button, Textarea, Input } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import BidModule from "../components/bids/BidModule";
+import QuickMessageDrawer from "../components/QuickMessageDrawer";
 
 const COMMENT_CHAR_LIMIT = 280;
 const COMMENT_LINK_PATTERN = /(https?:\/\/|www\.)/i;
@@ -179,6 +180,7 @@ export default function ProjectDetail() {
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [shareFeedback, setShareFeedback] = useState("");
+  const [msgOpen, setMsgOpen] = useState(false);
 
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -1704,8 +1706,18 @@ export default function ProjectDetail() {
                   to={`/profiles/${project.owner_username}`}
                   className="inline-flex min-h-[48px] items-center rounded-full border border-white/30 bg-white/10 px-6 text-base font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/18"
                 >
-                  Visit website
+                  Public Profile
                 </Link>
+              ) : null}
+
+              {project?.owner_username && authed && !isOwnerUser ? (
+                <button
+                  type="button"
+                  onClick={() => setMsgOpen(true)}
+                  className="inline-flex min-h-[48px] items-center rounded-full border border-white/30 bg-white/10 px-6 text-base font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/18"
+                >
+                  Message
+                </button>
               ) : null}
 
               <div className="flex items-center gap-3 text-white">
@@ -2497,6 +2509,17 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {msgOpen ? (
+        <QuickMessageDrawer
+          open={msgOpen}
+          onClose={() => setMsgOpen(false)}
+          recipientUsername={project?.owner_username}
+          recipientDisplayName={project?.owner_username}
+          originProjectId={project?.id}
+          originProjectTitle={project?.title || `Project #${project?.id}`}
+        />
       ) : null}
     </div>
   );

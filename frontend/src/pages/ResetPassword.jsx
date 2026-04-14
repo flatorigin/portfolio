@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api";
-import { Card, Input, Button } from "../ui";
+import { Card, PasswordInput, Button } from "../ui";
 
 export default function ResetPassword() {
   const [params] = useSearchParams();
@@ -69,8 +69,7 @@ export default function ResetPassword() {
               <label className="mb-1 block text-sm font-medium text-slate-700">
                 New password
               </label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -80,8 +79,7 @@ export default function ResetPassword() {
               <label className="mb-1 block text-sm font-medium text-slate-700">
                 Confirm password
               </label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
                 required

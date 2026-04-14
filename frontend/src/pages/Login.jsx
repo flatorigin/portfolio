@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api";
-import { Card, Input, Button } from "../ui";
+import { Card, Input, PasswordInput, Button } from "../ui";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -60,8 +60,7 @@ export default function Login() {
                 Forgot password?
               </Link>
             </div>
-            <Input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"

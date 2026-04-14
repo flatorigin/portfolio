@@ -546,12 +546,6 @@ export default function MessagesThread() {
                           {name}
                         </div>
 
-                        {bidMeta.projectTitle ? (
-                          <div className="mt-0.5 truncate text-[11px] text-slate-500">
-                            {bidMeta.projectTitle}
-                          </div>
-                        ) : null}
-
                         <div className="mt-0.5 text-[11px] text-slate-500">
                           {dateLabel || "—"}
                         </div>
@@ -611,18 +605,13 @@ export default function MessagesThread() {
                         )}
                       </div>
 
-                      {activeThreadBidMeta.projectTitle ? (
+                      {activeThreadBidMeta.hasNewBid ? (
                         <div className="mt-0.5 flex items-center gap-2">
-                          <span className="truncate text-[11px] text-slate-500">
-                            {activeThreadBidMeta.projectTitle}
-                          </span>
-                          {activeThreadBidMeta.hasNewBid ? (
-                            <Badge className="bg-emerald-600 text-white">
-                              {activeThreadBidMeta.unreadCount > 1
-                                ? `${activeThreadBidMeta.unreadCount} bids`
-                                : "New Bid"}
-                            </Badge>
-                          ) : null}
+                          <Badge className="bg-emerald-600 text-white">
+                            {activeThreadBidMeta.unreadCount > 1
+                              ? `${activeThreadBidMeta.unreadCount} bids`
+                              : "New Bid"}
+                          </Badge>
                         </div>
                       ) : null}
                     </div>
@@ -672,13 +661,6 @@ export default function MessagesThread() {
                   <p className="text-xs text-slate-500">No messages yet.</p>
                 ) : (
                   <>
-                    {activeThreadBidMeta.projectTitle ? (
-                      <div className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                        <span className="font-semibold text-slate-900">Project:</span>{" "}
-                        {activeThreadBidMeta.projectTitle}
-                      </div>
-                    ) : null}
-
                     {messages.map((m) => {
                     const fromMe =
                       (m.sender_username || "").toLowerCase() === meLower;
@@ -707,6 +689,16 @@ export default function MessagesThread() {
                     return (
                       <div key={m.id} className={`mb-2 flex ${alignClass}`}>
                         <div className="max-w-[85%] md:max-w-[70%]">
+                          {m.context_project_title ? (
+                            <div
+                              className={
+                                "mb-1 border-b border-slate-300 pb-1 text-xs font-semibold text-slate-700 " +
+                                (fromMe ? "text-right" : "text-left")
+                              }
+                            >
+                              Project: {m.context_project_title}
+                            </div>
+                          ) : null}
                           <div
                             className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${bubbleClass}`}
                           >
