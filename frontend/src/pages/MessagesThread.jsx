@@ -671,7 +671,15 @@ export default function MessagesThread() {
                 ) : messages.length === 0 ? (
                   <p className="text-xs text-slate-500">No messages yet.</p>
                 ) : (
-                  messages.map((m) => {
+                  <>
+                    {activeThreadBidMeta.projectTitle ? (
+                      <div className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                        <span className="font-semibold text-slate-900">Project:</span>{" "}
+                        {activeThreadBidMeta.projectTitle}
+                      </div>
+                    ) : null}
+
+                    {messages.map((m) => {
                     const fromMe =
                       (m.sender_username || "").toLowerCase() === meLower;
 
@@ -754,7 +762,8 @@ export default function MessagesThread() {
                         </div>
                       </div>
                     );
-                  })
+                  })}
+                  </>
                 )}
               </div>
 

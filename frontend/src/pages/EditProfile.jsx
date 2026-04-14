@@ -47,6 +47,7 @@ function toUrl(raw) {
 
 export default function EditProfile() {
   const [form, setForm] = useState({
+    profile_type: "",
     display_name: "",
     hero_headline: "",
     hero_blurb: "",
@@ -76,6 +77,7 @@ export default function EditProfile() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingProfileType, setSavingProfileType] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -96,6 +98,7 @@ export default function EditProfile() {
         if (!alive) return;
 
         const nextForm = {
+          profile_type: data.profile_type || "",
           display_name: data.display_name || "",
           hero_headline: data.hero_headline || "",
           hero_blurb: data.hero_blurb || "",
@@ -220,6 +223,7 @@ export default function EditProfile() {
       const data = new FormData();
 
       data.append("display_name", form.display_name || "");
+      data.append("profile_type", form.profile_type || "");
       data.append("hero_headline", form.hero_headline || "");
       data.append("hero_blurb", form.hero_blurb || "");
       data.append("service_location", form.service_location || "");
@@ -254,6 +258,7 @@ export default function EditProfile() {
       setMessage("Profile updated.");
 
       const next = {
+        profile_type: updated.profile_type ?? form.profile_type,
         display_name: updated.display_name ?? form.display_name,
         hero_headline: updated.hero_headline ?? form.hero_headline,
         hero_blurb: updated.hero_blurb ?? form.hero_blurb,
@@ -314,6 +319,107 @@ export default function EditProfile() {
   };
 
   const bannerPreviewSafe = useMemo(() => toUrl(bannerPreview), [bannerPreview]);
+  const profileTypeLabel =
+    form.profile_type === "contractor"
+      ? "Contractor"
+      : form.profile_type === "homeowner"
+      ? "Homeowner"
+      : "";
+  const isHomeownerProfile = form.profile_type === "homeowner";
+
+  const needsProfileTypeSelection = !loading && !form.profile_type;
+
+  const chooseProfileType = async (profileType) => {
+    if (!profileType || savingProfileType) return;
+
+    setSavingProfileType(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const { data } = await api.patch("/users/me/", { profile_type: profileType });
+      setForm((prev) => ({
+        ...prev,
+        profile_type: data?.profile_type || profileType,
+      }));
+    } catch (err) {
+      console.error("[EditProfile] profile type save error", err?.response || err);
+      setError("Could not save your profile type. Please try again.");
+    } finally {
+      setSavingProfileType(false);
+    }
+  };
+
+  const renderContactVisibilitySection = () => (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mb-3">
+        <p className="text-sm font-semibold text-slate-900">
+          Public contact visibility
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Visitors can always contact you through platform messaging. Choose
+          whether your email or phone should also appear publicly.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+          <div>
+            <div className="text-sm font-medium text-slate-900">
+              Allow direct messages
+            </div>
+            <div className="text-xs text-slate-500">
+              Let other professionals contact you through the platform.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={!!form.allow_direct_messages}
+            onChange={handleDirectMessageToggle}
+          />
+        </label>
+
+        {!form.allow_direct_messages && form.dm_opt_out_until ? (
+          <p className="mt-2 text-xs text-amber-700">
+            Direct messages are paused until{" "}
+            {new Date(form.dm_opt_out_until).toLocaleDateString()}.
+          </p>
+        ) : null}
+
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+          <div>
+            <div className="text-sm font-medium text-slate-900">
+              Show email publicly
+            </div>
+            <div className="text-xs text-slate-500">
+              Display an email action on your public profile.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={!!form.show_contact_email}
+            onChange={updateToggle("show_contact_email")}
+          />
+        </label>
+
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+          <div>
+            <div className="text-sm font-medium text-slate-900">
+              Show phone publicly
+            </div>
+            <div className="text-xs text-slate-500">
+              Display a call action on your public profile.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={!!form.show_contact_phone}
+            onChange={updateToggle("show_contact_phone")}
+          />
+        </label>
+      </div>
+    </div>
+  );
 
   return (
     <div>
@@ -332,13 +438,29 @@ export default function EditProfile() {
                       Profile status
                     </p>
                     <p className="mt-1 text-xs text-slate-600">
-                      Complete profiles appear more credible to visitors.
+                      {profileTypeLabel
+                        ? `${profileTypeLabel} profile selected. Complete profiles appear more credible to visitors.`
+                        : "Complete profiles appear more credible to visitors."}
                     </p>
                   </div>
                   <ProfileStatusBadge complete={complete} />
                 </div>
               </div>
 
+              {isHomeownerProfile ? (
+                <div className="rounded-[1.5rem] border border-[#E6D8CC] bg-[#FBF9F7] p-5">
+                  <h2 className="text-2xl font-semibold leading-tight text-slate-950">
+                    Your homeowner profile stays private.
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    The information you provide here is used for account credibility
+                    and project communication only. You stay in control of what contact
+                    details are shown publicly.
+                  </p>
+                </div>
+              ) : null}
+
+              {!isHomeownerProfile ? (
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -392,7 +514,9 @@ export default function EditProfile() {
                   </button>
                 ) : null}
               </div>
+              ) : null}
 
+              {!isHomeownerProfile ? (
               <div className="flex items-center gap-3">
                 {avatarPreview ? (
                   <img
@@ -424,6 +548,7 @@ export default function EditProfile() {
                   </label>
                 </div>
               </div>
+              ) : null}
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
@@ -432,10 +557,13 @@ export default function EditProfile() {
                 <Input
                   value={form.display_name}
                   onChange={updateField("display_name")}
-                  placeholder="Business / owner name"
+                  placeholder={
+                    isHomeownerProfile ? "Homeowner name" : "Business / owner name"
+                  }
                 />
               </div>
 
+              {!isHomeownerProfile ? (
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">
@@ -465,6 +593,9 @@ export default function EditProfile() {
                   />
                 </div>
               </div>
+              ) : null}
+
+              {isHomeownerProfile ? renderContactVisibilitySection() : null}
 
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3">
@@ -494,6 +625,7 @@ export default function EditProfile() {
                     </p>
                   </div>
 
+                  {!isHomeownerProfile ? (
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">
                       Coverage radius (miles)
@@ -507,6 +639,7 @@ export default function EditProfile() {
                       placeholder="e.g. 10"
                     />
                   </div>
+                  ) : null}
 
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">
@@ -536,74 +669,7 @@ export default function EditProfile() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="mb-3">
-                  <p className="text-sm font-semibold text-slate-900">
-                    Public contact visibility
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Visitors can always contact you through platform messaging. Choose
-                    whether your email or phone should also appear publicly.
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">
-                        Allow direct messages
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Let other professionals contact you through the platform.
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={!!form.allow_direct_messages}
-                      onChange={handleDirectMessageToggle}
-                    />
-                  </label>
-
-                  {!form.allow_direct_messages && form.dm_opt_out_until ? (
-                    <p className="mt-2 text-xs text-amber-700">
-                      Direct messages are paused until{" "}
-                      {new Date(form.dm_opt_out_until).toLocaleDateString()}.
-                    </p>
-                  ) : null}
-
-                  <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">
-                        Show email publicly
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Display an email action on your public profile.
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={!!form.show_contact_email}
-                      onChange={updateToggle("show_contact_email")}
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">
-                        Show phone publicly
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Display a call action on your public profile.
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={!!form.show_contact_phone}
-                      onChange={updateToggle("show_contact_phone")}
-                    />
-                  </label>
-                </div>
-              </div>
+              {!isHomeownerProfile ? renderContactVisibilitySection() : null}
 
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3">
@@ -623,6 +689,7 @@ export default function EditProfile() {
                 />
               </div>
 
+              {!isHomeownerProfile ? (
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
                   Bio / about
@@ -635,6 +702,7 @@ export default function EditProfile() {
                   className="min-h-[140px]"
                 />
               </div>
+              ) : null}
 
               {error && (
                 <p className="whitespace-pre-wrap text-xs text-red-600">{error}</p>
@@ -672,6 +740,60 @@ export default function EditProfile() {
               />
             </Suspense>
           </Card>
+        </div>
+      )}
+
+      {needsProfileTypeSelection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="max-w-xl">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">
+                Profile setup
+              </div>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">
+                Are you a contractor or a homeowner?
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Choose the profile type that fits how you plan to use FlatOrigin. We will use this to shape the edit profile form next.
+              </p>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={savingProfileType}
+                onClick={() => chooseProfileType("contractor")}
+                className="rounded-2xl border border-slate-200 bg-[#FBF9F7] p-5 text-left transition hover:border-[#4F5D83] hover:bg-white disabled:opacity-60"
+              >
+                <div className="text-lg font-semibold text-slate-950">Contractor</div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Build a public portfolio, get discovered, respond to real job posts, and keep project conversations organized.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                disabled={savingProfileType}
+                onClick={() => chooseProfileType("homeowner")}
+                className="rounded-2xl border border-slate-200 bg-[#FBF9F7] p-5 text-left transition hover:border-[#4F5D83] hover:bg-white disabled:opacity-60"
+              >
+                <div className="text-lg font-semibold text-slate-950">Homeowner</div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Post projects, invite contractors, ask focused questions, compare bids, and keep your hiring process private.
+                </p>
+              </button>
+            </div>
+
+            {savingProfileType ? (
+              <p className="mt-4 text-sm text-slate-500">Saving selection…</p>
+            ) : null}
+
+            {error ? (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 

@@ -16,10 +16,20 @@ def avatar_upload_path(instance, filename):
     return logo_upload_path(instance, filename) 
     
 class Profile(models.Model):
+    class ProfileType(models.TextChoices):
+        CONTRACTOR = "contractor", "Contractor"
+        HOMEOWNER = "homeowner", "Homeowner"
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
 
     # Identity / company
     display_name = models.CharField(max_length=255, blank=True, default="")
+    profile_type = models.CharField(
+        max_length=20,
+        choices=ProfileType.choices,
+        blank=True,
+        default="",
+    )
 
     # Service
     service_location = models.CharField(max_length=255, blank=True, default="")

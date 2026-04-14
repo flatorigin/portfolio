@@ -80,6 +80,7 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true);
 
   const [msgOpen, setMsgOpen] = useState(false);
+  const [messageContext, setMessageContext] = useState(null);
 
   // Like state (MUST be above returns)
   const authed = !!localStorage.getItem("access");
@@ -92,6 +93,7 @@ export default function PublicProfile() {
   const [saveBusy, setSaveBusy] = useState(false);
 
   const shouldRenderMap = Boolean(profile?.service_location);
+  const isHomeownerProfile = profile?.profile_type === "homeowner";
 
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
@@ -147,6 +149,10 @@ export default function PublicProfile() {
       "—"
     );
   }, [profile?.member_since_label, profile?.member_since, profile?.joined_label]);
+
+  const jobPostingProjects = useMemo(() => {
+    return projects.filter((p) => !!p?.is_job_posting);
+  }, [projects]);
 
   const languagesDisplay = useMemo(() => {
     if (profile?.languages_display?.trim()) return profile.languages_display.trim();
@@ -326,6 +332,217 @@ export default function PublicProfile() {
         <Link to="/explore" className="text-blue-600 hover:underline">
           Back to Explore
         </Link>
+      </div>
+    );
+  }
+
+  if (isHomeownerProfile && jobPostingProjects.length === 0) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12 text-sm text-slate-600">
+        This homeowner profile is private until there is a public job posting.
+        {" "}
+        <Link to="/work" className="text-blue-600 hover:underline">
+          Browse job postings
+        </Link>
+      </div>
+    );
+  }
+
+  if (isHomeownerProfile) {
+    return (
+      <div className="min-h-screen bg-[#FBF9F7]">
+        <div className="mx-auto max-w-6xl px-4 py-10">
+          <div className="grid gap-6 md:grid-cols-[1.25fr_0.75fr]">
+            <Card className="rounded-2xl border border-slate-200 shadow-sm">
+              <div className="p-6">
+                <div className="mb-4 flex items-end justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold text-slate-900">
+                      Job Postings
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {jobPostingProjects.length} public job posting
+                      {jobPostingProjects.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  {jobPostingProjects.map((p) => {
+                    const coverSrc =
+                      toUrl(p.cover_image_url || "") ||
+                      (p.cover_image ? toUrl(p.cover_image) : "");
+
+                    return (
+                      <div
+                        key={p.id}
+                        className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                      >
+                        <Link to={`/projects/${p.id}`} className="block">
+                          <div className="h-44 bg-slate-100">
+                            {coverSrc ? (
+                              <img
+                                src={coverSrc}
+                                alt={p.title || "job posting cover"}
+                                className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                                onError={(e) => {
+                                  e.currentTarget.src = "/placeholder.png";
+                                }}
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                                No image
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-4">
+                            <div className="truncate text-sm font-semibold text-slate-900">
+                              {p.title || `Project #${p.id}`}
+                            </div>
+                            {p.summary || p.job_summary ? (
+                              <div className="mt-1 line-clamp-2 text-xs text-slate-600">
+                                {p.summary || p.job_summary}
+                              </div>
+                            ) : (
+                              <div className="mt-1 text-xs text-slate-500">
+                                View details →
+                              </div>
+                            )}
+                          </div>
+                        </Link>
+
+                        <div className="flex gap-2 border-t border-slate-100 p-4 pt-3">
+                          <Link
+                            to={`/projects/${p.id}`}
+                            className="flex-1 rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            View job
+                          </Link>
+                          {!isMine ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMessageContext({
+                                  projectId: p.id,
+                                  projectTitle: p.title || `Project #${p.id}`,
+                                });
+                                setMsgOpen(true);
+                              }}
+                              disabled={!profile.allow_direct_messages}
+                              className={[
+                                "flex-1 rounded-xl px-4 py-2 text-sm font-medium transition",
+                                profile.allow_direct_messages
+                                  ? "bg-sky-600 text-white hover:bg-sky-700"
+                                  : "cursor-not-allowed bg-slate-200 text-slate-400",
+                              ].join(" ")}
+                            >
+                              Message
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </Card>
+
+            <Card className="rounded-2xl border border-slate-200 shadow-sm">
+              <div className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Contact
+                    </div>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                      {profile.display_name || profile.username}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Since {memberSince}
+                    </p>
+                  </div>
+
+                  <span
+                    className={[
+                      "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
+                      profile.profile_status === "complete"
+                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                        : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+                    ].join(" ")}
+                  >
+                    {profile.profile_status === "complete"
+                      ? "Profile Complete"
+                      : "Incomplete Profile"}
+                  </span>
+                </div>
+
+                <div className="mt-5 overflow-hidden rounded-2xl bg-white">
+                  <div className="px-6 py-5">
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Languages
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900">
+                      {languagesDisplay}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (profile.allow_direct_messages) {
+                        setMessageContext(null);
+                        setMsgOpen(true);
+                      }
+                    }}
+                    disabled={!profile.allow_direct_messages || isMine}
+                    className={[
+                      "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
+                      profile.allow_direct_messages && !isMine
+                        ? "bg-sky-600 text-white hover:bg-sky-700"
+                        : "cursor-not-allowed bg-slate-200 text-slate-400",
+                    ].join(" ")}
+                  >
+                    Message
+                  </button>
+
+                  {profile.contact_email ? (
+                    <a
+                      href={`mailto:${profile.contact_email}`}
+                      className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Email
+                    </a>
+                  ) : null}
+
+                  {profile.contact_phone ? (
+                    <a
+                      href={`tel:${profile.contact_phone}`}
+                      className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Call
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        {msgOpen ? (
+          <Suspense fallback={null}>
+            <QuickMessageDrawer
+              open={msgOpen}
+              onClose={() => setMsgOpen(false)}
+              recipientUsername={profile?.username}
+              recipientDisplayName={displayName}
+              originProjectId={messageContext?.projectId}
+              originProjectTitle={messageContext?.projectTitle}
+            />
+          </Suspense>
+        ) : null}
       </div>
     );
   }
