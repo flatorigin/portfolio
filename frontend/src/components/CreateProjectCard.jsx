@@ -84,11 +84,12 @@ export default function CreateProjectCard({
   defaultOpen = false,
   hideLauncher = false,
   closeSignal = 0, // optional: increments when Dashboard wants this card to close + reset
+  forceJobPosting = false,
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [images, setImages] = useState([]);
 
-  const jobOn = !!form.is_job_posting;
+  const jobOn = forceJobPosting || !!form.is_job_posting;
 
   const privateHelpText = useMemo(
     () =>
@@ -179,7 +180,29 @@ export default function CreateProjectCard({
     }
   }, [defaultOpen]);
 
+  useEffect(() => {
+    if (!forceJobPosting) return;
+    setForm((prev) => {
+      if (prev.is_job_posting && prev.post_privacy) return prev;
+      return {
+        ...prev,
+        is_job_posting: true,
+        post_privacy: prev.is_public === false ? "private" : "public",
+      };
+    });
+  }, [forceJobPosting, setForm]);
+
+  const setPublicPosting = (isPublic) => {
+    setForm((p) => ({
+      ...p,
+      is_public: isPublic,
+      post_privacy: isPublic ? "public" : "private",
+      private_contractor_username: isPublic ? "" : p.private_contractor_username || "",
+    }));
+  };
+
   const toggleJobPosting = () => {
+    if (forceJobPosting) return;
     // single state update to avoid weird batching interactions
     setForm((prev) => {
       const next = { ...prev, is_job_posting: !prev.is_job_posting };
@@ -327,22 +350,28 @@ export default function CreateProjectCard({
             <div className="flex items-center justify-between gap-4">
               {/* LEFT: Job Posting toggle + title */}
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={toggleJobPosting}
-                  aria-pressed={jobOn}
-                  className={
-                    "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
-                    (jobOn ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
-                  }
-                >
-                  <span
+                {forceJobPosting ? (
+                  <span className="inline-flex items-center rounded-full bg-sky-500 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                    Active
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={toggleJobPosting}
+                    aria-pressed={jobOn}
                     className={
-                      "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
-                      (jobOn ? "translate-x-5" : "translate-x-1")
+                      "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+                      (jobOn ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
                     }
-                  />
-                </button>
+                  >
+                    <span
+                      className={
+                        "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
+                        (jobOn ? "translate-x-5" : "translate-x-1")
+                      }
+                    />
+                  </button>
+                )}
 
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
@@ -350,7 +379,9 @@ export default function CreateProjectCard({
                   </div>
                   <div className="mt-0.5 text-[11px] text-sky-800">
                     {jobOn
-                      ? "This project will be treated as a job post (homeowners posting jobs for pros)."
+                      ? forceJobPosting
+                        ? "Homeowner projects are posted as job posts for contractors to review."
+                        : "This project will be treated as a job post (homeowners posting jobs for pros)."
                       : "Turn this on when a homeowner is posting work for contractors."}
                   </div>
                 </div>
@@ -361,7 +392,7 @@ export default function CreateProjectCard({
                 <div className="text-[11px] font-semibold text-sky-900/80">Public</div>
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, is_public: !p.is_public }))}
+                  onClick={() => setPublicPosting(!form.is_public)}
                   aria-pressed={!!form.is_public}
                   className={
                     "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
@@ -377,6 +408,22 @@ export default function CreateProjectCard({
                 </button>
               </div>
             </div>
+
+            {jobOn && form.post_privacy === "private" ? (
+              <div className="mt-3 border-t border-sky-200 pt-3">
+                <label className="mb-1 block text-sm font-medium text-sky-950">
+                  Private contractor username
+                  <JobPostingHelp text={privateHelpText} />
+                </label>
+                <Input
+                  value={form.private_contractor_username || ""}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, private_contractor_username: e.target.value }))
+                  }
+                  placeholder="e.g. john-builder"
+                />
+              </div>
+            ) : null}
           </div>
 
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -410,14 +457,16 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm text-slate-600">Summary</label>
-              <Textarea
-                placeholder="One or two sentences…"
-                value={form.summary || ""}
-                onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
-              />
-            </div>
+            {!jobOn ? (
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Summary</label>
+                <Textarea
+                  placeholder="One or two sentences…"
+                  value={form.summary || ""}
+                  onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
+                />
+              </div>
+            ) : null}
 
             {/* Location / Budget / Sq Ft */}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -456,19 +505,6 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {/* Public checkbox (still used, but actions set it) */}
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4"
-                  checked={!!form.is_public}
-                  onChange={(e) => setForm((p) => ({ ...p, is_public: e.target.checked }))}
-                />
-                Public
-              </label>
-            </div>
-
             {/* Job Posting Extensions */}
             {jobOn && (
               <Card className="border border-slate-200 p-4">
@@ -485,7 +521,13 @@ export default function CreateProjectCard({
                     <Textarea
                       placeholder="e.g., Full kitchen remodel including custom cabinetry and island installation."
                       value={form.job_summary || ""}
-                      onChange={(e) => setForm((p) => ({ ...p, job_summary: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          job_summary: e.target.value,
+                          summary: jobOn ? e.target.value : p.summary,
+                        }))
+                      }
                     />
                   </div>
 
@@ -568,6 +610,7 @@ export default function CreateProjectCard({
                     <div className="flex flex-col gap-2 text-sm text-slate-700">
                       <label className="flex items-start gap-2">
                         <input
+                          className="mt-1"
                           type="radio"
                           name="expertise"
                           checked={form.required_expertise === "licensed_pro"}
@@ -582,6 +625,7 @@ export default function CreateProjectCard({
                       </label>
                       <label className="flex items-start gap-2">
                         <input
+                          className="mt-1"
                           type="radio"
                           name="expertise"
                           checked={form.required_expertise === "handyman"}
@@ -638,68 +682,6 @@ export default function CreateProjectCard({
                         </label>
                       </div>
                     )}
-                  </div>
-                </div>
-
-                {/* 4. Visibility & Media */}
-                <div className="mt-6">
-                  <div className="text-sm font-semibold text-slate-800">
-                    4. Visibility &amp; Media
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-4 text-sm text-slate-700">
-                    <div className="font-medium">Post Privacy</div>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="privacy"
-                        checked={(form.post_privacy || "public") === "public"}
-                        onChange={() =>
-                          setForm((p) => ({
-                            ...p,
-                            post_privacy: "public",
-                            private_contractor_username: "",
-                          }))
-                        }
-                      />
-                      Public
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="privacy"
-                        checked={form.post_privacy === "private"}
-                        onChange={() => setForm((p) => ({ ...p, post_privacy: "private" }))}
-                      />
-                      Private
-                      <JobPostingHelp text={privateHelpText} />
-                    </label>
-                  </div>
-
-                  {form.post_privacy === "private" && (
-                    <div className="mt-2">
-                      <label className="mb-1 block text-sm text-slate-600">
-                        Private contractor username
-                      </label>
-                      <Input
-                        value={form.private_contractor_username || ""}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, private_contractor_username: e.target.value }))
-                        }
-                        placeholder="e.g. john-builder"
-                      />
-                    </div>
-                  )}
-
-                  <div className="mt-3">
-                    <label className="flex items-start gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={!!form.notify_by_email}
-                        onChange={(e) => setForm((p) => ({ ...p, notify_by_email: e.target.checked }))}
-                      />
-                      <span>Email me when I receive a response and need to take action.</span>
-                    </label>
                   </div>
                 </div>
               </Card>
