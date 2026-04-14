@@ -596,6 +596,7 @@ export default function EditProfile() {
               ) : null}
 
               {isHomeownerProfile ? renderContactVisibilitySection() : null}
+              {!isHomeownerProfile ? renderContactVisibilitySection() : null}
 
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3">
@@ -668,8 +669,6 @@ export default function EditProfile() {
                   </div>
                 </div>
               </div>
-
-              {!isHomeownerProfile ? renderContactVisibilitySection() : null}
 
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3">
