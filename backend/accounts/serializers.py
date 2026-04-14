@@ -91,6 +91,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "id",
             "username",
             "email",
+            "profile_type",
             "display_name",
             "service_location",
             "coverage_radius_miles",
@@ -195,6 +196,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
         fields = (
             "id",
             "username",
+            "profile_type",
             "display_name",
             "service_location",
             "coverage_radius_miles",
@@ -245,6 +247,9 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
 
     def validate(self, attrs):
         instance = getattr(self, "instance", None)
+
+        if set(attrs.keys()) == {"profile_type"}:
+            return attrs
 
         service_location = attrs.get(
             "service_location",
@@ -299,6 +304,7 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "username",
+            "profile_type",
             "display_name",
             "service_location",
             "coverage_radius_miles",

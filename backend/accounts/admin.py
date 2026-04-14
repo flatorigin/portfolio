@@ -7,7 +7,8 @@ User = get_user_model()
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "avatar")
+    list_display = ("id", "user", "profile_type", "avatar")
+    list_filter = ("profile_type",)
     search_fields = ("user__username", "user__email")
 
 class UserAdmin(admin.ModelAdmin):

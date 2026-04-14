@@ -123,10 +123,13 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "no-reply@portfolio.local",
 )
 
-EMAIL_BACKEND = (
-    "anymail.backends.resend.EmailBackend"
-    if ANYMAIL["RESEND_API_KEY"]
-    else "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    (
+        "anymail.backends.resend.EmailBackend"
+        if ANYMAIL["RESEND_API_KEY"]
+        else "django.core.mail.backends.console.EmailBackend"
+    ),
 )
 
 AUTH_PASSWORD_VALIDATORS = []

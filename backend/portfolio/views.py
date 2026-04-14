@@ -815,6 +815,7 @@ class MessageStartView(APIView):
 
     def post(self, request, *args, **kwargs):
         recipient_username = (request.data.get("username") or "").strip()
+        project_id = request.data.get("project_id")
         if not recipient_username:
             return Response(
                 {"detail": "Missing username."},
@@ -822,6 +823,17 @@ class MessageStartView(APIView):
             )
 
         target = get_object_or_404(get_user_model(), username=recipient_username)
+        origin_project = None
+
+        if project_id:
+            origin_project = get_object_or_404(Project.objects.select_related("owner"), pk=project_id)
+            if not can_view_project(origin_project, request.user):
+                raise PermissionDenied("You do not have access to this project.")
+            if origin_project.owner_id != target.id:
+                return Response(
+                    {"detail": "Project message recipient must be the project owner."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         if target.id == request.user.id:
             return Response(
@@ -832,7 +844,7 @@ class MessageStartView(APIView):
         thread, created = MessageThread.get_or_create_dm(
             request.user,
             target,
-            origin_project=None,
+            origin_project=origin_project,
             initiated_by=request.user,
         )
 

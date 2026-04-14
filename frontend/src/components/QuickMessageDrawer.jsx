@@ -144,6 +144,8 @@ export default function QuickMessageDrawer({
   onClose,
   recipientUsername,
   recipientDisplayName,
+  originProjectId,
+  originProjectTitle,
 }) {
   const [threadId, setThreadId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -205,8 +207,13 @@ export default function QuickMessageDrawer({
 
       setLoading(true);
       try {
+        const payload = { username: recipientUsername };
+        if (originProjectId) {
+          payload.project_id = originProjectId;
+        }
+
         const startRes = await api.post("/messages/start/", {
-          username: recipientUsername,
+          ...payload,
         });
         if (cancelled) return;
 
@@ -230,7 +237,7 @@ export default function QuickMessageDrawer({
     return () => {
       cancelled = true;
     };
-  }, [open, authed, recipientUsername]);
+  }, [open, authed, recipientUsername, originProjectId]);
 
   useEffect(() => {
     if (!open) return;
@@ -408,6 +415,13 @@ export default function QuickMessageDrawer({
               </div>
             ) : (
               <div className="space-y-3">
+                {originProjectTitle ? (
+                  <div className="rounded-xl border border-slate-200 bg-[#FBF9F7] px-3 py-2 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-900">Project:</span>{" "}
+                    {originProjectTitle}
+                  </div>
+                ) : null}
+
                 {messages.map((m) => {
                   const mine =
                     (m.sender_username || "").toLowerCase() ===

@@ -239,12 +239,12 @@ export default function LandingPage() {
 
       <section className="border-b border-[#ECE7DF] py-6 sm:py-8">
         <Container>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-8 sm:grid-cols-3">
             {metrics.map((item) => (
-              <div key={item.label} className="rounded-[1.5rem] border border-[#E9E5DC] bg-white/80 px-5 py-5">
-                <div className="text-3xl font-semibold tracking-tight text-slate-950">{item.value}</div>
-                <div className="mt-1 text-sm font-semibold text-slate-700">{item.label}</div>
-                <div className="mt-1 text-sm text-slate-500">{item.note}</div>
+              <div key={item.label} className="px-1 py-5">
+                <div className="text-5xl font-semibold tracking-tight text-slate-950 sm:text-6xl">{item.value}</div>
+                <div className="mt-3 text-base font-semibold text-slate-700">{item.label}</div>
+                <div className="mt-2 max-w-xs text-base leading-7 text-slate-500">{item.note}</div>
               </div>
             ))}
           </div>
