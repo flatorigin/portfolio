@@ -9,6 +9,8 @@ from django.conf import settings
 from django.views.static import serve
 import os
 
+from accounts.views import SafeUserCreateViewSet
+
 
 class ReactAppView(View):
     def get(self, request):
@@ -23,6 +25,11 @@ class ReactAppView(View):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path(
+        "api/auth/users/",
+        SafeUserCreateViewSet.as_view({"post": "create"}),
+        name="safe-user-create",
+    ),
     path("api/auth/", include("djoser.urls")),
     path("api/auth/", include("djoser.urls.jwt")),
     path("api/", include("accounts.urls")),

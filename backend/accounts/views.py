@@ -1,8 +1,13 @@
 # backend/accounts/views.py
+import logging
+
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 
+from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -17,6 +22,38 @@ from .serializers import (
 )
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
+class RegistrationIncomplete(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = (
+        "Registration could not be completed because the activation email "
+        "could not be sent. No account was created. Please try again."
+    )
+    default_code = "registration_incomplete"
+
+
+class SafeUserCreateViewSet(DjoserUserViewSet):
+    """
+    Djoser creates the user before sending the activation email. If the email
+    provider fails, wrap creation in a transaction so retrying does not hit
+    "username already exists" from a half-created inactive user.
+    """
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            with transaction.atomic():
+                self.perform_create(serializer)
+        except Exception:
+            logger.exception("Registration failed after validation; rolled back user creation.")
+            raise RegistrationIncomplete()
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class MeView(APIView):

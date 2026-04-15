@@ -120,7 +120,7 @@ ANYMAIL = {
 
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
-    "no-reply@portfolio.local",
+    "FlatOrigin <no-reply@flatorigin.com>",
 )
 
 EMAIL_BACKEND = os.environ.get(
