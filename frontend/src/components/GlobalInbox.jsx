@@ -122,6 +122,8 @@ export default function GlobalInbox() {
   const [error, setError] = useState("");
   const [readMap, setReadMapState] = useState(() => getReadMap());
   const panelRef = useRef(null);
+  const fetchInFlightRef = useRef(false);
+  const lastFetchAtRef = useRef(0);
 
   const authed = !!localStorage.getItem("access");
 
@@ -170,8 +172,16 @@ export default function GlobalInbox() {
   }, [open]);
 
   // ----- Shared fetch function -----
-  const fetchThreads = useCallback(async () => {
+  const fetchThreads = useCallback(async ({ force = false } = {}) => {
     if (!authed) return;
+    if (!force && typeof document !== "undefined" && document.hidden) return;
+    if (fetchInFlightRef.current) return;
+
+    const now = Date.now();
+    if (!force && now - lastFetchAtRef.current < 30000) return;
+
+    fetchInFlightRef.current = true;
+    lastFetchAtRef.current = now;
     setError("");
     try {
       const { data } = await api.get("/inbox/threads/");
@@ -179,6 +189,8 @@ export default function GlobalInbox() {
     } catch {
       // PERF: keep existing threads if fetch fails (don't wipe UI)
       setError("Unable to load your inbox.");
+    } finally {
+      fetchInFlightRef.current = false;
     }
   }, [authed]);
 
@@ -187,7 +199,7 @@ export default function GlobalInbox() {
     if (!open || !authed) return;
     setLoading(true);
     (async () => {
-      await fetchThreads();
+      await fetchThreads({ force: true });
       setLoading(false);
     })();
   }, [open, authed, fetchThreads]);
@@ -222,14 +234,16 @@ export default function GlobalInbox() {
     // initial
     refresh();
 
-    const interval = setInterval(refresh, 15000);
+    const interval = setInterval(refresh, 60000);
     window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
     window.addEventListener("inbox:changed", refresh);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
       window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("inbox:changed", refresh);
     };
   }, [authed, fetchThreads]);
