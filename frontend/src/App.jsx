@@ -221,8 +221,8 @@ export default function App() {
                     aria-expanded={menuOpen ? "true" : "false"}
                   >
                     {avatarInitial || "U"}
-                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-slate-900 shadow">
-                      <SymbolIcon name="keyboard_arrow_down" className="text-[16px]" />
+                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-white text-slate-900 shadow">
+                      <SymbolIcon name="keyboard_arrow_down" className="text-[14px] leading-none" />
                     </span>
                   </button>
 
@@ -310,8 +310,8 @@ export default function App() {
                     aria-expanded={menuOpen ? "true" : "false"}
                   >
                     ?
-                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-slate-900 shadow">
-                      <SymbolIcon name="keyboard_arrow_down" className="text-[16px]" />
+                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-white text-slate-900 shadow">
+                      <SymbolIcon name="keyboard_arrow_down" className="text-[14px] leading-none" />
                     </span>
                   </button>
 
