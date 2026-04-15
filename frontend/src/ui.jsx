@@ -10,9 +10,34 @@ export function Container({ className = "", ...props }) {
 
 export function SectionTitle({ children, className = "", ...props }) {
   return (
-    <h2 {...props} className={"mb-4 text-2xl font-bold tracking-tight text-slate-900 " + className}>
+    <h2 {...props} className={"mb-0 text-2xl font-bold tracking-tight text-slate-900 " + className}>
       {children}
     </h2>
+  );
+}
+
+export function SymbolIcon({
+  name,
+  className = "",
+  fill = 0,
+  weight = 400,
+  grade = 0,
+  opticalSize = 24,
+  style,
+  ...props
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      {...props}
+      className={"material-symbols-rounded " + className}
+      style={{
+        fontVariationSettings: `"FILL" ${fill}, "wght" ${weight}, "GRAD" ${grade}, "opsz" ${opticalSize}`,
+        ...style,
+      }}
+    >
+      {name}
+    </span>
   );
 }
 

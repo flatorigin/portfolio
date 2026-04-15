@@ -976,13 +976,13 @@ export default function Dashboard() {
     : "Add Project";
 
   return (
-    <div className="space-y-8">
-      <header className="mb-1">
-        <SectionTitle>Dashboard</SectionTitle>
+    <div className="space-y-4">
+      <header className="flex min-h-14 items-center mb-1">
+        <SectionTitle className="!mb-0">Dashboard</SectionTitle>
       </header>
 
       <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
-        <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-6 text-center">
+        <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-0 text-center">
           <div className="mb-5 text-slate-400">
             <svg
               xmlns="http://www.w3.org/2000/svg"
