@@ -19,7 +19,9 @@ export default function Register() {
       setRegisteredEmail(form.email);
     } catch (err) {
       const data = err?.response?.data;
-      if (data && typeof data === "object") {
+      if (data?.detail) {
+        setError(String(data.detail));
+      } else if (data && typeof data === "object") {
         const msgs = Object.entries(data).map(([k, v]) => {
           const value = Array.isArray(v) ? v.join(", ") : String(v);
           return `${k}: ${value}`;
