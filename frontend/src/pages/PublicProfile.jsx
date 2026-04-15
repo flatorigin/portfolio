@@ -10,7 +10,7 @@
 import { useParams, Link } from "react-router-dom";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import api from "../api";
-import { Card } from "../ui";
+import { Card, SymbolIcon } from "../ui";
 
 const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
 const QuickMessageDrawer = lazy(() => import("../components/QuickMessageDrawer"));
@@ -629,7 +629,7 @@ export default function PublicProfile() {
                       }
                       title={!authed ? "Log in to like profiles" : "Like this profile"}
                     >
-                      <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[19px]" />
                       <span>{liked ? "Liked" : "Like"}</span>
                       <span className={liked ? "text-slate-700" : "text-white/80"}>
                         {Number.isFinite(likeCount) ? likeCount : 0}
@@ -649,7 +649,7 @@ export default function PublicProfile() {
                       }
                       title={!authed ? "Log in to save profiles" : "Save this profile"}
                     >
-                      <span aria-hidden>{saved ? "🔖" : "📑"}</span>
+                      <SymbolIcon name="bookmark" fill={saved ? 1 : 0} className="text-[19px]" />
                       <span>{saved ? "Saved" : "Save"}</span>
                     </button>
                   </>

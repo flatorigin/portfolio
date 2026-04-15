@@ -7,20 +7,9 @@
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import api from "./api";
-import { Container } from "./ui";
+import { Container, SymbolIcon } from "./ui";
 import { logout } from "./auth";
 import GlobalInbox from "./components/GlobalInbox";
-
-// Icon assets (bundled by Vite)
-import logoutIcon from "./assets/icons/logout.svg";
-import loginIcon from "./assets/icons/login.svg";
-import registerIcon from "./assets/icons/register.svg";
-
-const ICONS = {
-  logout: logoutIcon,
-  login: loginIcon,
-  register: registerIcon,
-};
 
 export default function App() {
   const navigate = useNavigate();
@@ -232,8 +221,8 @@ export default function App() {
                     aria-expanded={menuOpen ? "true" : "false"}
                   >
                     {avatarInitial || "U"}
-                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-slate-900 shadow">
-                      ▾
+                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-white text-slate-900 shadow">
+                      <SymbolIcon name="keyboard_arrow_down" className="text-[14px] leading-none" />
                     </span>
                   </button>
 
@@ -265,30 +254,7 @@ export default function App() {
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          {/* globe */}
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10Z"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            />
-                            <path
-                              d="M2 12h20"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            />
-                            <path
-                              d="M12 2c3 3 3 17 0 20"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            />
-                          </svg>
+                          <SymbolIcon name="public" className="text-[18px]" />
                         </span>
                         <span>Public Profile</span>
                       </button>
@@ -300,27 +266,7 @@ export default function App() {
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          {/* pencil */}
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M12 20h9"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                            />
-                            <path
-                              d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+                          <SymbolIcon name="edit" className="text-[18px]" />
                         </span>
                         <span>Edit Profile</span>
                       </button>
@@ -332,21 +278,7 @@ export default function App() {
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          {/* chat bubble */}
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+                          <SymbolIcon name="forum" className="text-[18px]" />
                         </span>
                         <span>Inbox</span>
                       </button>
@@ -360,7 +292,7 @@ export default function App() {
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          <img src={ICONS.logout} alt="" className="h-4 w-4" />
+                          <SymbolIcon name="logout" className="text-[18px]" />
                         </span>
                         <span>Log out</span>
                       </button>
@@ -378,8 +310,8 @@ export default function App() {
                     aria-expanded={menuOpen ? "true" : "false"}
                   >
                     ?
-                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] text-slate-900 shadow">
-                      ▾
+                    <span className="pointer-events-none absolute -bottom-1 right-0 flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-white text-slate-900 shadow">
+                      <SymbolIcon name="keyboard_arrow_down" className="text-[14px] leading-none" />
                     </span>
                   </button>
 
@@ -403,7 +335,7 @@ export default function App() {
                         }}
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          <img src={ICONS.login} alt="" className="h-4 w-4" />
+                          <SymbolIcon name="login" className="text-[18px]" />
                         </span>
                         <span>Login</span>
                       </button>
@@ -417,11 +349,7 @@ export default function App() {
                         }}
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
-                          <img
-                            src={ICONS.register}
-                            alt=""
-                            className="h-4 w-4"
-                          />
+                          <SymbolIcon name="person_add" className="text-[18px]" />
                         </span>
                         <span>Register</span>
                       </button>

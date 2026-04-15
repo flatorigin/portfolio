@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import MessageComposer from "./MessageComposer";
+import { SymbolIcon } from "../ui";
 
 function toInitial(nameOrUsername) {
   const s = (nameOrUsername || "").trim();
@@ -405,9 +406,9 @@ export default function QuickMessageDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100"
+            className="inline-flex items-center justify-center rounded-lg px-2 py-1 text-slate-600 hover:bg-slate-100"
           >
-            ✕
+            <SymbolIcon name="close" className="text-[20px]" />
           </button>
         </div>
 

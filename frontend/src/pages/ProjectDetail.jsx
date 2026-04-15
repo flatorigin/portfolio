@@ -8,7 +8,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api";
-import { Badge, Card, Button, Textarea, Input } from "../ui";
+import { Badge, Card, Button, Textarea, Input, SymbolIcon } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import BidModule from "../components/bids/BidModule";
 import QuickMessageDrawer from "../components/QuickMessageDrawer";
@@ -71,7 +71,11 @@ function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) 
             aria-label={`${titlePrefix} ${n} stars`}
             title={`${titlePrefix} ${n} stars`}
           >
-            <span className={filled ? "text-amber-500" : "text-slate-300"}>★</span>
+            <SymbolIcon
+              name="star"
+              fill={filled ? 1 : 0}
+              className={filled ? "text-[22px] text-amber-500" : "text-[22px] text-slate-300"}
+            />
           </button>
         );
       })}
@@ -88,54 +92,21 @@ function getInitials(name = "") {
 
 function LikeCircleIcon({ active = false, className = "" }) {
   return (
-    <svg
-      viewBox="0 0 29.153 29.153"
-      aria-hidden="true"
-      className={className}
-      fill="none"
-    >
-      <path
-        d="M14.576,18.8c-1.829-.512-4.866-3.116-4.866-5.87,0-3.213,4.307-3.345,4.845-.821.013.061.028.061.041,0,.538-2.524,4.847-2.392,4.847.821,0,2.754-3.037,5.358-4.866,5.87Z"
-        stroke="currentColor"
-        strokeMiterlimit="10"
-        fill={active ? "currentColor" : "none"}
-        className={active ? "text-white" : ""}
-      />
-      <circle
-        cx="14.576"
-        cy="14.576"
-        r="14.076"
-        stroke="currentColor"
-        strokeMiterlimit="10"
-      />
-    </svg>
+    <SymbolIcon
+      name="favorite"
+      fill={active ? 1 : 0}
+      className={"text-[30px] " + className}
+    />
   );
 }
 
 function SaveCircleIcon({ active = false, className = "" }) {
   return (
-    <svg
-      viewBox="0 0 29.153 29.153"
-      aria-hidden="true"
-      className={className}
-      fill="none"
-    >
-      <path
-        d="M17.616,18.8l-3.04-1.768-3.04,1.768v-7.77c0-.376.354-.681.791-.681h4.498c.437,0,.791.305.791.681v7.77Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill={active ? "currentColor" : "none"}
-        className={active ? "text-white" : ""}
-      />
-      <circle
-        cx="14.576"
-        cy="14.576"
-        r="14.076"
-        stroke="currentColor"
-        strokeMiterlimit="10"
-      />
-    </svg>
+    <SymbolIcon
+      name="bookmark"
+      fill={active ? 1 : 0}
+      className={"text-[30px] " + className}
+    />
   );
 }
 
@@ -1522,9 +1493,12 @@ export default function ProjectDetail() {
 
         <div className="mb-1 flex items-center gap-1 text-[12px]">
           {[1, 2, 3, 4, 5].map((n) => (
-            <span key={n} className={(c.rating || 0) >= n ? "text-amber-500" : "text-slate-300"}>
-              ★
-            </span>
+            <SymbolIcon
+              key={n}
+              name="star"
+              fill={(c.rating || 0) >= n ? 1 : 0}
+              className={(c.rating || 0) >= n ? "text-[15px] text-amber-500" : "text-[15px] text-slate-300"}
+            />
           ))}
         </div>
 
@@ -1608,7 +1582,7 @@ export default function ProjectDetail() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-0 flex items-center min-h-14 justify-between">
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
             <span className="mx-1">/</span>
@@ -1734,7 +1708,7 @@ export default function ProjectDetail() {
                       title={isLiked ? "Unlike project" : "Like project"}
                       className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10 disabled:opacity-60"
                     >
-                      <LikeCircleIcon active={isLiked} className="h-[30px] w-[30px]" />
+                      <LikeCircleIcon active={isLiked} className="h-[20px] w-[30px]" />
                     </button>
                   ) : (
                     <span
@@ -1755,7 +1729,7 @@ export default function ProjectDetail() {
                     title={isSaved ? "Unsave project" : "Save project"}
                     className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10 disabled:opacity-60"
                   >
-                    <SaveCircleIcon active={isSaved} className="h-[30px] w-[30px]" />
+                    <SaveCircleIcon active={isSaved} className="h-[20px] w-[30px]" />
                   </button>
                 ) : (
                   <span
@@ -2065,9 +2039,9 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={() => setReplyingTo(null)}
-                        className="ml-2 text-xs text-slate-500 hover:text-slate-700"
+                        className="ml-2 inline-flex items-center text-slate-500 hover:text-slate-700"
                       >
-                        ✕
+                        <SymbolIcon name="close" className="text-[16px]" />
                       </button>
                     </div>
                   )}
@@ -2158,10 +2132,10 @@ export default function ProjectDetail() {
                 <button
                   type="button"
                   onClick={() => setImageLightboxOpen(false)}
-                  className="rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-3 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
                   aria-label="Close image gallery"
                 >
-                  ✕
+                  <SymbolIcon name="close" className="text-[20px]" />
                 </button>
               </div>
             </div>
@@ -2185,9 +2159,9 @@ export default function ProjectDetail() {
                         <button
                           type="button"
                           onClick={prevImage}
-                          className="mr-1 rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
+                          className="mr-1 inline-flex items-center justify-center rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
                         >
-                          ‹
+                          <SymbolIcon name="chevron_left" className="text-[18px]" />
                         </button>
                         {images.map((img, i) => (
                           <button
@@ -2207,9 +2181,9 @@ export default function ProjectDetail() {
                         <button
                           type="button"
                           onClick={nextImage}
-                          className="ml-1 rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
+                          className="ml-1 inline-flex items-center justify-center rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
                         >
-                          ›
+                          <SymbolIcon name="chevron_right" className="text-[18px]" />
                         </button>
                       </div>
                     )}
@@ -2220,16 +2194,16 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={prevImage}
-                        className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/95 px-4 py-3 text-3xl leading-none text-slate-700 shadow-md hover:bg-white"
+                        className="absolute left-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
                       >
-                        ‹
+                        <SymbolIcon name="chevron_left" className="text-[36px]" />
                       </button>
                       <button
                         type="button"
                         onClick={nextImage}
-                        className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/95 px-4 py-3 text-3xl leading-none text-slate-700 shadow-md hover:bg-white"
+                        className="absolute right-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
                       >
-                        ›
+                        <SymbolIcon name="chevron_right" className="text-[36px]" />
                       </button>
                     </>
                   )}
@@ -2257,9 +2231,9 @@ export default function ProjectDetail() {
               <button
                 type="button"
                 onClick={() => setMapOpen(false)}
-                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-slate-600 hover:bg-slate-200"
               >
-                ✕
+                <SymbolIcon name="close" className="text-[16px]" />
               </button>
             </div>
             <iframe
@@ -2292,9 +2266,9 @@ export default function ProjectDetail() {
                   setBidOpen(false);
                   setBidError("");
                 }}
-                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-slate-600 hover:bg-slate-200"
               >
-                ✕
+                <SymbolIcon name="close" className="text-[16px]" />
               </button>
             </div>
 
@@ -2498,9 +2472,9 @@ export default function ProjectDetail() {
               <button
                 type="button"
                 onClick={() => setActiveBid(null)}
-                className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-slate-200"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-slate-600 hover:bg-slate-200"
               >
-                ✕
+                <SymbolIcon name="close" className="text-[16px]" />
               </button>
             </div>
 

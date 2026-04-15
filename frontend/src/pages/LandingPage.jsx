@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
-import { Badge, Button, Card, Container } from "../ui";
+import { Badge, Button, Card, Container, SymbolIcon } from "../ui";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -82,7 +82,7 @@ function TutorialModal({ open, onClose }) {
             className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900"
             aria-label="Close video tutorial"
           >
-            ×
+            <SymbolIcon name="close" className="text-[22px]" />
           </button>
         </div>
         <div className="p-6">

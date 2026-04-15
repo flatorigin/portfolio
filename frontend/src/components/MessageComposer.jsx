@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Button, Textarea, Input } from "../ui";
+import { Button, Textarea, Input, SymbolIcon } from "../ui";
 
 function AttachmentChip({ item, onRemove }) {
   const label =
@@ -13,10 +13,10 @@ function AttachmentChip({ item, onRemove }) {
       <button
         type="button"
         onClick={onRemove}
-        className="text-slate-400 hover:text-slate-700"
+        className="inline-flex items-center text-slate-400 hover:text-slate-700"
         aria-label="Remove attachment"
       >
-        ×
+        <SymbolIcon name="close" className="text-[16px]" />
       </button>
     </div>
   );
@@ -41,10 +41,10 @@ function ReplyPreview({ replyTo, onCancel }) {
         <button
           type="button"
           onClick={onCancel}
-          className="shrink-0 text-slate-400 hover:text-slate-700"
+          className="inline-flex shrink-0 items-center text-slate-400 hover:text-slate-700"
           aria-label="Cancel reply"
         >
-          ×
+          <SymbolIcon name="close" className="text-[18px]" />
         </button>
       </div>
     </div>

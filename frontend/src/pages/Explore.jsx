@@ -7,7 +7,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { SectionTitle, Badge, Card, Button, Input, GhostButton } from "../ui";
+import { SectionTitle, Badge, Card, Button, Input, GhostButton, SymbolIcon } from "../ui";
 
 // normalize urls (same spirit as ProjectDetail)
 function toUrl(raw) {
@@ -536,42 +536,54 @@ export default function Explore() {
                 <div className="mt-2 text-xs text-slate-500">by {p.owner_username}</div>
 
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-slate-100"
-                    onClick={(e) => toggleLike(e, p)}
-                    disabled={!canSave || likeBusyId === p.id}
-                  >
-                    <span aria-hidden>{liked ? "♥" : "♡"}</span>
-                    <span>{likeCount}</span>
-                  </button>
-                </div>
+                  {canSave ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                      onClick={(e) => toggleLike(e, p)}
+                      disabled={likeBusyId === p.id}
+                      aria-label={liked ? "Unlike project" : "Like project"}
+                      title={liked ? "Unlike project" : "Like project"}
+                    >
+                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
+                      <span>{likeCount}</span>
+                    </button>
+                  ) : (
+                    <div className="inline-flex items-center gap-1 rounded-full px-2 py-1">
+                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
+                      <span>{likeCount}</span>
+                    </div>
+                  )}
 
-                {/* ✅ Bottom button row (consistent placement/style) */}
-                {authed && isOwner(p) ? (
-                  <div className="mt-3">
-                    <GhostButton
-                      className="w-full justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        navigate(`/dashboard?edit=${p.id}`);
-                      }}
-                    >
-                      Edit in Dashboard
-                    </GhostButton>
+                  <div className="inline-flex items-center gap-1.5">
+                    {authed && isOwner(p) ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                        aria-label="Edit project"
+                        title="Edit project"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigate(`/dashboard?edit=${p.id}`);
+                        }}
+                      >
+                        <SymbolIcon name="edit" className="text-[20px]" />
+                      </button>
+                    ) : canSave ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                        onClick={(e) => toggleFavorite(e, p)}
+                        disabled={favBusyId === p.id}
+                        aria-label={saved ? "Unsave project" : "Save project"}
+                        title={saved ? "Unsave project" : "Save project"}
+                      >
+                        <SymbolIcon name="bookmark" fill={saved ? 1 : 0} className="text-[20px]" />
+                      </button>
+                    ) : null}
                   </div>
-                ) : canSave ? (
-                  <div className="mt-3">
-                    <GhostButton
-                      className="w-full justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60"
-                      onClick={(e) => toggleFavorite(e, p)}
-                      disabled={favBusyId === p.id}
-                    >
-                      {favBusyId === p.id ? "Saving…" : saved ? "Saved" : "Save"}
-                    </GhostButton>
-                  </div>
-                ) : null}
+                </div>
               </div>
             </Card>
           );

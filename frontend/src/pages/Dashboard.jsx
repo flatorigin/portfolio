@@ -8,7 +8,7 @@ import api from "../api";
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import SavedLikesCard from "../components/SavedLikesCard";
-import { SectionTitle, Card, Button, GhostButton, Badge } from "../ui";
+import { SectionTitle, Card, Button, GhostButton, Badge, SymbolIcon } from "../ui";
 
 // normalize media + safer protocol handling
 function toUrl(raw) {
@@ -984,22 +984,7 @@ export default function Dashboard() {
       <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
         <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-0 text-center">
           <div className="mb-5 text-slate-400">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              className="h-12 w-12"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M20.25 7.5v9.75A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6.75A2.25 2.25 0 0 1 6 4.5h4.19a2.25 2.25 0 0 1 1.59.66l.87.88a2.25 2.25 0 0 0 1.6.66H18A2.25 2.25 0 0 1 20.25 7.5Z"
-              />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75v4.5" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 12h4.5" />
-            </svg>
+            <SymbolIcon name="create_new_folder" className="text-[52px]" weight={300} />
           </div>
 
           <div className="text-[1.05rem] font-semibold tracking-[-0.02em] text-slate-900">
@@ -1015,16 +1000,7 @@ export default function Dashboard() {
             onClick={() => setCreateOpen(true)}
             className="mt-8 inline-flex h-14 items-center gap-3 rounded-xl !bg-indigo-600 px-8 text-[1.05rem] font-semibold !text-white shadow-sm hover:!bg-indigo-700"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              className="h-5 w-5"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-            </svg>
+            <SymbolIcon name="add" className="text-[24px]" weight={400} />
             {primaryProjectButtonLabel}
           </Button>
         </div>
