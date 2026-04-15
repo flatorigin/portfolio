@@ -2,9 +2,12 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 
+from djoser import signals
+from djoser.serializers import ActivationSerializer
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import status
 from rest_framework.exceptions import APIException
@@ -54,6 +57,36 @@ class SafeUserCreateViewSet(DjoserUserViewSet):
 
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class ActivationRedirectView(APIView):
+    """
+    Email links are GET requests. Activate directly here, then send the user to
+    the login page so production does not depend on the React route loading first.
+    """
+    permission_classes = [AllowAny]
+    token_generator = default_token_generator
+
+    def get(self, request, uid, token, *args, **kwargs):
+        serializer = ActivationSerializer(
+            data={"uid": uid, "token": token},
+            context={"request": request, "view": self},
+        )
+
+        try:
+            serializer.is_valid(raise_exception=True)
+            user = serializer.user
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+            signals.user_activated.send(
+                sender=self.__class__,
+                user=user,
+                request=request,
+            )
+            return redirect("/login?activated=1")
+        except Exception:
+            logger.exception("Activation link failed.")
+            return redirect("/login?activation_error=1")
 
 
 class MeView(APIView):

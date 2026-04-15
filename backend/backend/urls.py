@@ -9,7 +9,7 @@ from django.conf import settings
 from django.views.static import serve
 import os
 
-from accounts.views import SafeUserCreateViewSet
+from accounts.views import ActivationRedirectView, SafeUserCreateViewSet
 
 
 class ReactAppView(View):
@@ -25,6 +25,16 @@ class ReactAppView(View):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path(
+        "activate/<str:uid>/<str:token>",
+        ActivationRedirectView.as_view(),
+        name="activation-redirect",
+    ),
+    path(
+        "activate/<str:uid>/<str:token>/",
+        ActivationRedirectView.as_view(),
+        name="activation-redirect-slash",
+    ),
     path(
         "api/auth/users/",
         SafeUserCreateViewSet.as_view({"post": "create"}),
