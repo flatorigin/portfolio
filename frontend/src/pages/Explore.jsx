@@ -7,7 +7,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { SectionTitle, Badge, Card, Button, Input, GhostButton } from "../ui";
+import { SectionTitle, Badge, Card, Button, Input, GhostButton, SymbolIcon } from "../ui";
 
 // normalize urls (same spirit as ProjectDetail)
 function toUrl(raw) {
@@ -542,7 +542,7 @@ export default function Explore() {
                     onClick={(e) => toggleLike(e, p)}
                     disabled={!canSave || likeBusyId === p.id}
                   >
-                    <span aria-hidden>{liked ? "♥" : "♡"}</span>
+                    <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
                     <span>{likeCount}</span>
                   </button>
                 </div>

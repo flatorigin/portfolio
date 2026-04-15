@@ -10,7 +10,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import api from "../api";
-import { Button } from "../ui";
+import { Button, SymbolIcon } from "../ui";
 
 function extractProjectId(fav) {
   return (
@@ -108,8 +108,14 @@ export default function FavoriteProjectButton({
       onClick={toggle}
       className={className}
     >
-      {busy ? "Saving…" : isSaved ? "★ Saved" : "☆ Save project"}
+      {busy ? (
+        "Saving…"
+      ) : (
+        <>
+          <SymbolIcon name="star" fill={isSaved ? 1 : 0} className="mr-1 text-[18px]" />
+          {isSaved ? "Saved" : "Save project"}
+        </>
+      )}
     </Button>
   );
 }
-

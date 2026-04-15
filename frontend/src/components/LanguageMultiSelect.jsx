@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SymbolIcon } from "../ui";
 
 const DEFAULT_OPTIONS = [
   "English",
@@ -66,7 +67,7 @@ export default function LanguageMultiSelect({
         <span className={selected.length ? "text-slate-900" : "text-slate-400"}>
           {summary}
         </span>
-        <span className="ml-3 text-slate-400">▾</span>
+        <SymbolIcon name="keyboard_arrow_down" className="ml-3 text-[20px] text-slate-400" />
       </button>
 
       {open && (
