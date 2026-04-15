@@ -161,7 +161,7 @@ export default function FindLocalWork() {
   }, []);
 
   return (
-    <div className="py-6">
+    <div className="py-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">

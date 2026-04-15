@@ -342,7 +342,9 @@ export default function Explore() {
   if (loading) {
     return (
       <div>
-        <SectionTitle>Explore</SectionTitle>
+        <header className="flex min-h-14 items-center mb-1">
+          <SectionTitle className="!mb-0">Explore</SectionTitle>
+        </header>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
           {[...Array(6)].map((_, i) => (
             <Card key={i} className="overflow-hidden animate-pulse">
@@ -362,7 +364,9 @@ export default function Explore() {
   if (!projects.length) {
     return (
       <div>
-        <SectionTitle>Explore</SectionTitle>
+        <header className="flex min-h-14 items-center mb-1">
+          <SectionTitle className="!mb-0">Explore</SectionTitle>
+        </header>
         <Card className="p-6 text-center">
           <p className="text-slate-600">No projects yet.</p>
           {authed && (
@@ -379,7 +383,9 @@ export default function Explore() {
 
   return (
     <div>
-      <SectionTitle>Explore</SectionTitle>
+      <header className="flex min-h-14 items-center mb-1">
+        <SectionTitle className="!mb-0">Explore</SectionTitle>
+      </header>
 
       {/* 🔍 Filter bar */}
       <Card className="mb-4 p-4">

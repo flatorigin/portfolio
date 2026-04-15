@@ -204,7 +204,6 @@ export default function App() {
             {/* Desktop nav (Explore + Dashboard + Job Postings) */}
             <div className="ml-2 hidden items-center gap-2 md:flex">
               <NavLink to="/explore">Explore</NavLink>
-              <NavLink to="/guides">Guides</NavLink>
               <NavLink to="/dashboard">Dashboard</NavLink>
               <NavLink to="/work">Job Postings</NavLink>
             </div>
@@ -217,6 +216,7 @@ export default function App() {
               {/* Desktop-only: GlobalInbox */}
               {authed && (
                 <div className="hidden items-center gap-3 md:flex">
+                  <NavLink to="/guides">Guides</NavLink>
                   <GlobalInbox />
                 </div>
               )}
