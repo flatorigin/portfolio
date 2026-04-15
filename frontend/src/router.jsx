@@ -7,6 +7,7 @@ import ProfileEdit from "./pages/EditProfile";
 import ProjectDetail from "./pages/ProjectDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ActivateAccount from "./pages/ActivateAccount";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
       { path: "profiles/:username", element: <PublicProfile /> },
       { path: "login", element: <Login /> },
       { path: "register", element: <Register /> },
+      { path: "activate/:uid/:token", element: <ActivateAccount /> },
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "reset-password", element: <ResetPassword /> },
       { path: "*", element: <NotFound /> },
