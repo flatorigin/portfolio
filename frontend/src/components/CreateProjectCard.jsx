@@ -113,6 +113,50 @@ function ServiceCategoryDropdown({ value = [], onChange }) {
   );
 }
 
+function ProjectReadinessGuide({ show = false }) {
+  if (!show) return null;
+
+  const items = [
+    {
+      label: "Active registration or license",
+      detail: "Useful when permits or regulated work may be involved.",
+    },
+    {
+      label: "Insurance confirmation",
+      detail: "Helps both sides understand coverage before work starts.",
+    },
+    {
+      label: "Written scope and timeline",
+      detail: "Keeps pricing, milestones, and responsibilities clear.",
+    },
+  ];
+
+  return (
+    <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-5">
+      <div className="text-sm font-semibold uppercase tracking-wide text-blue-900">
+        Project Readiness Guide
+      </div>
+      <p className="mt-2 text-sm leading-6 text-blue-950">
+        For licensed or permitted work, it is reasonable to ask for standard project paperwork
+        before the job begins. This is not a platform investigation or a background check. It is a
+        simple safety step that helps homeowners and contractors stay aligned.
+      </p>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {items.map((item) => (
+          <div key={item.label} className="rounded-xl border border-blue-100 bg-white/75 p-4">
+            <div className="text-sm font-semibold text-slate-950">{item.label}</div>
+            <div className="mt-1 text-xs leading-5 text-slate-600">{item.detail}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-blue-900/80">
+        FlatOrigin helps organize project information, but final verification, agreements, permits,
+        and legal obligations remain between the homeowner and contractor.
+      </p>
+    </div>
+  );
+}
+
 const CONTRACTOR_SEARCH_MODES = [
   { value: "all", label: "All", placeholder: "Search contractors, project titles, categories..." },
   { value: "username", label: "Username", placeholder: "Search by contractor username or name..." },
@@ -922,6 +966,10 @@ export default function CreateProjectCard({
                       </div>
                     )}
                   </div>
+
+                  <ProjectReadinessGuide
+                    show={form.required_expertise === "licensed_pro" || !!form.permit_required}
+                  />
                 </div>
               </Card>
             )}
