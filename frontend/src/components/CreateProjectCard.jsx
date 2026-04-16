@@ -71,16 +71,90 @@ function ComplianceNotice({ checked, onChange, publishLabel = "publish" }) {
   );
 }
 
-function buildProjectSearchContext(form) {
-  const parts = [
-    form?.title,
-    form?.category,
-    form?.summary,
-    form?.job_summary,
-    Array.isArray(form?.service_categories) ? form.service_categories.join(" ") : "",
-    form?.required_expertise,
+function ServiceCategoryDropdown({ value = [], onChange }) {
+  const [open, setOpen] = useState(false);
+  const options = ["Plumbing", "Carpentry", "Electrical", "General", "Masonry"];
+  const selected = Array.isArray(value) ? value : [];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex min-h-14 w-full items-center justify-between rounded-2xl border border-slate-300 bg-white px-5 py-3 text-left text-base text-slate-800 shadow-sm transition hover:border-slate-400"
+      >
+        <span className={selected.length ? "font-medium text-slate-900" : "text-slate-400"}>
+          {selected.length ? selected.join(", ") : "Select service categories"}
+        </span>
+        <span className="ml-4 text-lg text-slate-500">{open ? "−" : "+"}</span>
+      </button>
+
+      {open ? (
+        <div className="absolute z-40 mt-2 w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {options.map((option) => (
+              <label
+                key={option}
+                className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-base text-slate-800 hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-slate-950"
+                  checked={selected.includes(option)}
+                  onChange={() => onChange?.(toggleInArray(selected, option))}
+                />
+                <span>{option}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ProjectReadinessGuide({ show = false }) {
+  if (!show) return null;
+
+  const items = [
+    {
+      label: "Active registration or license",
+      detail: "Useful when permits or regulated work may be involved.",
+    },
+    {
+      label: "Insurance confirmation",
+      detail: "Helps both sides understand coverage before work starts.",
+    },
+    {
+      label: "Written scope and timeline",
+      detail: "Keeps pricing, milestones, and responsibilities clear.",
+    },
   ];
-  return parts.filter(Boolean).join(" ").trim();
+
+  return (
+    <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-5">
+      <div className="text-sm font-semibold uppercase tracking-wide text-blue-900">
+        Project Readiness Guide
+      </div>
+      <p className="mt-2 text-sm leading-6 text-blue-950">
+        For licensed or permitted work, it is reasonable to ask for standard project paperwork
+        before the job begins. This is not a platform investigation or a background check. It is a
+        simple safety step that helps homeowners and contractors stay aligned.
+      </p>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {items.map((item) => (
+          <div key={item.label} className="rounded-xl border border-blue-100 bg-white/75 p-4">
+            <div className="text-sm font-semibold text-slate-950">{item.label}</div>
+            <div className="mt-1 text-xs leading-5 text-slate-600">{item.detail}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-blue-900/80">
+        FlatOrigin helps organize project information, but final verification, agreements, permits,
+        and legal obligations remain between the homeowner and contractor.
+      </p>
+    </div>
+  );
 }
 
 const CONTRACTOR_SEARCH_MODES = [
@@ -723,18 +797,19 @@ export default function CreateProjectCard({
 
             {/* Job Posting Extensions */}
             {jobOn && (
-              <Card className="border border-slate-200 p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <Card className="border border-slate-200 p-6 sm:p-8">
+                <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">
                   Job Posting Details
                 </div>
 
                 {/* 1. Project Overview */}
-                <div className="mt-4">
-                  <div className="text-sm font-semibold text-slate-800">1. Project Overview</div>
+                <div className="mt-8">
+                  <div className="text-lg font-semibold text-slate-900">1. Project Overview</div>
 
-                  <div className="mt-3">
-                    <label className="mb-1 block text-sm text-slate-600">Project Summary</label>
+                  <div className="mt-5">
+                    <label className="mb-2 block text-lg text-slate-700">Project Summary</label>
                     <Textarea
+                      className="min-h-44 rounded-2xl px-5 py-4 text-base"
                       placeholder="e.g., Full kitchen remodel including custom cabinetry and island installation."
                       value={form.job_summary || ""}
                       onChange={(e) =>
@@ -747,35 +822,22 @@ export default function CreateProjectCard({
                     />
                   </div>
 
-                  <div className="mt-3">
-                    <div className="mb-1 text-sm text-slate-600">Service Category</div>
-                    <div className="flex flex-wrap gap-3 text-sm text-slate-700">
-                      {["Plumbing", "Carpentry", "Electrical", "General", "Masonry"].map((c) => (
-                        <label key={c} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={
-                              Array.isArray(form.service_categories) &&
-                              form.service_categories.includes(c)
-                            }
-                            onChange={() =>
-                              setForm((p) => ({
-                                ...p,
-                                service_categories: toggleInArray(p.service_categories, c),
-                              }))
-                            }
-                          />
-                          {c}
-                        </label>
-                      ))}
-                    </div>
+                  <div className="mt-6">
+                    <div className="mb-2 text-lg text-slate-700">Service Category</div>
+                    <ServiceCategoryDropdown
+                      value={form.service_categories}
+                      onChange={(service_categories) =>
+                        setForm((p) => ({ ...p, service_categories }))
+                      }
+                    />
                   </div>
 
-                  <div className="mt-3">
-                    <div className="mb-1 text-sm text-slate-600">Part of Larger Project</div>
-                    <div className="flex items-center gap-4 text-sm text-slate-700">
-                      <label className="flex items-center gap-2">
+                  <div className="mt-6">
+                    <div className="mb-3 text-lg text-slate-700">Part of Larger Project</div>
+                    <div className="flex items-center gap-6 text-base text-slate-800">
+                      <label className="flex items-center gap-3">
                         <input
+                          className="h-5 w-5 accent-slate-950"
                           type="radio"
                           name="larger_project"
                           checked={!!form.part_of_larger_project}
@@ -783,8 +845,9 @@ export default function CreateProjectCard({
                         />
                         Yes
                       </label>
-                      <label className="flex items-center gap-2">
+                      <label className="flex items-center gap-3">
                         <input
+                          className="h-5 w-5 accent-slate-950"
                           type="radio"
                           name="larger_project"
                           checked={!form.part_of_larger_project}
@@ -801,9 +864,10 @@ export default function CreateProjectCard({
                     </div>
 
                     {form.part_of_larger_project && (
-                      <div className="mt-2">
-                        <label className="mb-1 block text-sm text-slate-600">If yes, specify</label>
+                      <div className="mt-4">
+                        <label className="mb-2 block text-base text-slate-700">If yes, specify</label>
                         <Input
+                          className="min-h-14 rounded-2xl px-5 text-base"
                           value={form.larger_project_details || ""}
                           onChange={(e) =>
                             setForm((p) => ({ ...p, larger_project_details: e.target.value }))
@@ -816,17 +880,17 @@ export default function CreateProjectCard({
                 </div>
 
                 {/* 2. Professional & Legal Requirements */}
-                <div className="mt-6">
-                  <div className="text-sm font-semibold text-slate-800">
+                <div className="mt-10">
+                  <div className="text-lg font-semibold text-slate-900">
                     2. Professional &amp; Legal Requirements
                   </div>
 
-                  <div className="mt-3">
-                    <div className="mb-1 text-sm text-slate-600">Required Expertise</div>
-                    <div className="flex flex-col gap-2 text-sm text-slate-700">
-                      <label className="flex items-start gap-2">
+                  <div className="mt-5">
+                    <div className="mb-3 text-lg text-slate-700">Required Expertise</div>
+                    <div className="flex flex-col gap-4 text-base text-slate-800">
+                      <label className="flex items-start gap-3">
                         <input
-                          className="mt-1"
+                          className="mt-1 h-5 w-5 accent-slate-950"
                           type="radio"
                           name="expertise"
                           checked={form.required_expertise === "licensed_pro"}
@@ -834,14 +898,14 @@ export default function CreateProjectCard({
                         />
                         <span>
                           <span className="font-medium">Licensed Professional</span>{" "}
-                          <span className="text-xs text-slate-500">
+                          <span className="text-sm text-slate-500">
                             (requires verified credentials/insurance)
                           </span>
                         </span>
                       </label>
-                      <label className="flex items-start gap-2">
+                      <label className="flex items-start gap-3">
                         <input
-                          className="mt-1"
+                          className="mt-1 h-5 w-5 accent-slate-950"
                           type="radio"
                           name="expertise"
                           checked={form.required_expertise === "handyman"}
@@ -849,7 +913,7 @@ export default function CreateProjectCard({
                         />
                         <span>
                           <span className="font-medium">Handyman / Expert Help</span>{" "}
-                          <span className="text-xs text-slate-500">
+                          <span className="text-sm text-slate-500">
                             (general labor/skilled assistance)
                           </span>
                         </span>
@@ -857,10 +921,11 @@ export default function CreateProjectCard({
                     </div>
                   </div>
 
-                  <div className="mt-3">
-                    <div className="mb-1 text-sm text-slate-600">Permitting</div>
-                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <div className="mt-6">
+                    <div className="mb-3 text-lg text-slate-700">Permitting</div>
+                    <label className="flex items-center gap-3 text-base text-slate-800">
                       <input
+                        className="h-5 w-5 accent-slate-950"
                         type="checkbox"
                         checked={!!form.permit_required}
                         onChange={(e) =>
@@ -877,9 +942,10 @@ export default function CreateProjectCard({
                     </label>
 
                     {form.permit_required && (
-                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <label className="flex items-center gap-3 text-base text-slate-800">
                           <input
+                            className="h-5 w-5 accent-slate-950"
                             type="radio"
                             name="permit_party"
                             checked={form.permit_responsible_party === "contractor"}
@@ -887,8 +953,9 @@ export default function CreateProjectCard({
                           />
                           Contractor handles filing
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <label className="flex items-center gap-3 text-base text-slate-800">
                           <input
+                            className="h-5 w-5 accent-slate-950"
                             type="radio"
                             name="permit_party"
                             checked={form.permit_responsible_party === "homeowner"}
@@ -899,6 +966,10 @@ export default function CreateProjectCard({
                       </div>
                     )}
                   </div>
+
+                  <ProjectReadinessGuide
+                    show={form.required_expertise === "licensed_pro" || !!form.permit_required}
+                  />
                 </div>
               </Card>
             )}
