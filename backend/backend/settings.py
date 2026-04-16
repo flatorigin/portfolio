@@ -76,27 +76,32 @@ TEMPLATES = [
 WSGI_APPLICATION = "backend.wsgi.application"
 
 USE_SQLITE = os.getenv("USE_SQLITE", "").lower() in ("1", "true", "yes", "on")
-SQLITE_PATH = os.getenv("SQLITE_PATH", "db.sqlite3")
+SQLITE_PATH = os.getenv("SQLITE_PATH", str(BASE_DIR / "db.sqlite3"))
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+RUNNING_ON_RAILWAY = any(
+    os.getenv(name)
+    for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID")
+)
 
-if USE_SQLITE:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": os.path.abspath(SQLITE_PATH),
-        }
-    }
-else:
-    if not DATABASE_URL:
-        raise RuntimeError(
-            "DATABASE_URL must be set unless USE_SQLITE is enabled."
-        )
+if DATABASE_URL and not USE_SQLITE:
     DATABASES = {
         "default": dj_database_url.config(
             default=DATABASE_URL,
             conn_max_age=600,
             ssl_require=False,
         )
+    }
+else:
+    if RUNNING_ON_RAILWAY and not USE_SQLITE:
+        raise RuntimeError(
+            "DATABASE_URL must be set on Railway unless USE_SQLITE is explicitly enabled."
+        )
+    sqlite_name = SQLITE_PATH if os.path.isabs(SQLITE_PATH) else str(BASE_DIR / SQLITE_PATH)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": sqlite_name,
+        }
     }
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
