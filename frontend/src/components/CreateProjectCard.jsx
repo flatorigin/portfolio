@@ -601,6 +601,32 @@ export default function CreateProjectCard({
               </div>
             </div>
 
+            {jobOn && form.post_privacy === "private" ? (
+              <div className="mt-3 border-t border-sky-200 pt-3">
+                <div className="mb-1 text-sm font-medium text-sky-950">
+                  Private contractor search
+                  <JobPostingHelp text={privateHelpText} />
+                </div>
+                <ContractorInvitePicker
+                  projectContext={buildProjectSearchContext(form)}
+                  selected={
+                    Array.isArray(form.private_contractor_usernames)
+                      ? form.private_contractor_usernames
+                      : form.private_contractor_username
+                        ? [form.private_contractor_username]
+                        : []
+                  }
+                  onChange={(usernames) =>
+                    setForm((p) => ({
+                      ...p,
+                      private_contractor_usernames: usernames,
+                      private_contractor_username: usernames[0] || "",
+                    }))
+                  }
+                />
+              </div>
+            ) : null}
+
           </div>
 
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -731,32 +757,6 @@ export default function CreateProjectCard({
                       ))}
                     </div>
                   </div>
-
-                  {form.post_privacy === "private" ? (
-                    <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
-                      <div className="mb-2 text-sm font-medium text-sky-950">
-                        Private contractor search
-                        <JobPostingHelp text={privateHelpText} />
-                      </div>
-                      <ContractorInvitePicker
-                        projectContext={buildProjectSearchContext(form)}
-                        selected={
-                          Array.isArray(form.private_contractor_usernames)
-                            ? form.private_contractor_usernames
-                            : form.private_contractor_username
-                              ? [form.private_contractor_username]
-                              : []
-                        }
-                        onChange={(usernames) =>
-                          setForm((p) => ({
-                            ...p,
-                            private_contractor_usernames: usernames,
-                            private_contractor_username: usernames[0] || "",
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : null}
 
                   <div className="mt-3">
                     <div className="mb-1 text-sm text-slate-600">Part of Larger Project</div>
