@@ -5,4 +5,4 @@ SCRIPT_DIR=${0:A:h}
 cd "$SCRIPT_DIR"
 
 source ./use_postgres_env.sh
-python manage.py runserver
+python manage.py migrate "$@"

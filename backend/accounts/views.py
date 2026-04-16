@@ -131,6 +131,14 @@ class PublicProfileView(APIView):
     def get(self, request, username, *args, **kwargs):
         user = get_object_or_404(User, username=username)
         profile, _ = Profile.objects.get_or_create(user=user)
+
+        can_view_frozen = (
+            request.user.is_authenticated
+            and (request.user.is_staff or request.user.id == user.id)
+        )
+        if profile.is_frozen and not can_view_frozen:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
         serializer = PublicUserProfileSerializer(profile, context={"request": request})
         return Response(serializer.data)
 
@@ -189,6 +197,7 @@ class LikedProfilesView(APIView):
         qs = (
             Profile.objects
             .filter(user_id__in=list(liked_user_ids))
+            .filter(is_frozen=False)
             .select_related("user")
         )
 
@@ -238,6 +247,7 @@ class SavedProfilesView(APIView):
         qs = (
             Profile.objects
             .filter(user_id__in=list(saved_user_ids))
+            .filter(is_frozen=False)
             .select_related("user")
         )
 

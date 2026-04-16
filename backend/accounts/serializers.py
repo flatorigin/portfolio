@@ -221,6 +221,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "languages",
             "languages_display",
             "member_since_label",
+            "is_frozen",
         )
         read_only_fields = (
             "id",
@@ -232,6 +233,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "saved_by_me",
             "is_profile_complete",
             "profile_status",
+            "is_frozen",
         )
 
     def validate_languages(self, value):

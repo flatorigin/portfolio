@@ -25,6 +25,12 @@ def is_user_invited_to_project(project, user):
 def can_view_project(project, user):
     if getattr(user, "is_authenticated", False) and project.owner_id == user.id:
         return True
+    if getattr(user, "is_authenticated", False) and getattr(user, "is_staff", False):
+        return True
+
+    owner_profile = getattr(project.owner, "profile", None)
+    if owner_profile and getattr(owner_profile, "is_frozen", False):
+        return False
 
     if is_private_job(project):
         return is_user_invited_to_project(project, user)
@@ -43,10 +49,21 @@ def can_access_job_interactions(project, user):
 
 
 def visible_projects_q_for_user(user):
+    public_visible = Q(
+        is_public=True,
+        is_private=False,
+        post_privacy="public",
+        owner__profile__is_frozen=False,
+    )
+
     if user and getattr(user, "is_authenticated", False):
         return (
             Q(owner=user)
-            | Q(is_public=True, is_private=False, post_privacy="public")
-            | Q(invites__contractor=user, invites__status__in=VISIBLE_INVITE_STATUSES)
+            | public_visible
+            | Q(
+                invites__contractor=user,
+                invites__status__in=VISIBLE_INVITE_STATUSES,
+                owner__profile__is_frozen=False,
+            )
         )
-    return Q(is_public=True, is_private=False, post_privacy="public")
+    return public_visible
