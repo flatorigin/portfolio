@@ -75,6 +75,12 @@ class Profile(models.Model):
 
     dm_opt_out_until = models.DateTimeField(null=True, blank=True)
 
+    # Moderation. Frozen profiles keep all data but are hidden from public
+    # discovery until an admin unfreezes them.
+    is_frozen = models.BooleanField(default=False)
+    frozen_at = models.DateTimeField(null=True, blank=True)
+    frozen_reason = models.TextField(blank=True, default="")
+
     @property
     def is_profile_complete(self):
         return bool(
@@ -101,6 +107,13 @@ class Profile(models.Model):
         if (now - joined).days < 365:
             return joined.strftime("%b %Y")
         return joined.strftime("%Y")
+
+    def save(self, *args, **kwargs):
+        if self.is_frozen and not self.frozen_at:
+            self.frozen_at = timezone.now()
+        if not self.is_frozen:
+            self.frozen_at = None
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"Profile<{self.user_id}>"
