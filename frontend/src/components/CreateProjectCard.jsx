@@ -83,7 +83,20 @@ function buildProjectSearchContext(form) {
   return parts.filter(Boolean).join(" ").trim();
 }
 
-function ContractorInvitePicker({ selected = [], onChange, projectContext = "" }) {
+function buildProjectFilterLabels(form) {
+  const labels = [];
+  if ((form?.title || "").trim()) labels.push(`Project: ${form.title.trim()}`);
+  if ((form?.category || "").trim()) labels.push(`Category: ${form.category.trim()}`);
+  if (Array.isArray(form?.service_categories)) {
+    form.service_categories
+      .filter(Boolean)
+      .slice(0, 3)
+      .forEach((category) => labels.push(category));
+  }
+  return labels;
+}
+
+function ContractorInvitePicker({ selected = [], onChange, projectContext = "", projectLabels = [] }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -146,6 +159,28 @@ function ContractorInvitePicker({ selected = [], onChange, projectContext = "" }
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search contractors..."
       />
+
+      {projectLabels.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900">
+            Filtering by this job
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {projectLabels.map((label) => (
+              <span
+                key={label}
+                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-sky-950 ring-1 ring-sky-100"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Add a project title or category above to filter contractors by the job type.
+        </div>
+      )}
 
       {selectedList.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -588,6 +623,7 @@ export default function CreateProjectCard({
                 </div>
                 <ContractorInvitePicker
                   projectContext={buildProjectSearchContext(form)}
+                  projectLabels={buildProjectFilterLabels(form)}
                   selected={
                     Array.isArray(form.private_contractor_usernames)
                       ? form.private_contractor_usernames
