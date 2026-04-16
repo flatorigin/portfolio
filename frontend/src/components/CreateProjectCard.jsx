@@ -83,35 +83,28 @@ function buildProjectSearchContext(form) {
   return parts.filter(Boolean).join(" ").trim();
 }
 
-function buildProjectFilterLabels(form) {
-  const labels = [];
-  if ((form?.title || "").trim()) labels.push(`Project: ${form.title.trim()}`);
-  if ((form?.category || "").trim()) labels.push(`Category: ${form.category.trim()}`);
-  if (Array.isArray(form?.service_categories)) {
-    form.service_categories
-      .filter(Boolean)
-      .slice(0, 3)
-      .forEach((category) => labels.push(category));
-  }
-  return labels;
-}
-
-function ContractorInvitePicker({ selected = [], onChange, projectContext = "", projectLabels = [] }) {
+function ContractorInvitePicker({ selected = [], onChange, projectContext = "" }) {
   const [query, setQuery] = useState("");
+  const [projectKeywords, setProjectKeywords] = useState(projectContext);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const selectedList = Array.isArray(selected) ? selected : [];
   const selectedSet = new Set(selectedList.map((username) => String(username).toLowerCase()));
 
   useEffect(() => {
+    setProjectKeywords(projectContext);
+  }, [projectContext]);
+
+  useEffect(() => {
     let active = true;
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
+        const keywordText = projectKeywords.trim();
         const { data } = await api.get("/profiles/contractors/search/", {
           params: {
             ...(query.trim() ? { q: query.trim() } : {}),
-            ...(projectContext.trim() ? { project_q: projectContext.trim() } : {}),
+            ...(keywordText ? { project_q: keywordText } : {}),
           },
         });
         if (active) setResults(Array.isArray(data) ? data : []);
@@ -126,7 +119,7 @@ function ContractorInvitePicker({ selected = [], onChange, projectContext = "", 
       active = false;
       clearTimeout(timer);
     };
-  }, [query, projectContext]);
+  }, [query, projectKeywords]);
 
   const addContractor = (username) => {
     const value = String(username || "").trim();
@@ -160,27 +153,20 @@ function ContractorInvitePicker({ selected = [], onChange, projectContext = "", 
         placeholder="Search contractors..."
       />
 
-      {projectLabels.length > 0 ? (
-        <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900">
-            Filtering by this job
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {projectLabels.map((label) => (
-              <span
-                key={label}
-                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-sky-950 ring-1 ring-sky-100"
-              >
-                {label}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Add a project title or category above to filter contractors by the job type.
-        </div>
-      )}
+      <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
+        <label className="block text-[11px] font-semibold uppercase tracking-wide text-sky-900">
+          Project keywords used for filtering
+        </label>
+        <Input
+          className="mt-2 border-sky-200 bg-white text-sm"
+          value={projectKeywords}
+          onChange={(e) => setProjectKeywords(e.target.value)}
+          placeholder="Example: deck repair, exterior carpentry, pergola"
+        />
+        <p className="mt-1 text-xs text-sky-800">
+          This starts from the project title/category/summary. Edit it if you want broader or narrower contractor results.
+        </p>
+      </div>
 
       {selectedList.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -615,32 +601,6 @@ export default function CreateProjectCard({
               </div>
             </div>
 
-            {jobOn && form.post_privacy === "private" ? (
-              <div className="mt-3 border-t border-sky-200 pt-3">
-                <div className="mb-1 text-sm font-medium text-sky-950">
-                  Private contractor search
-                  <JobPostingHelp text={privateHelpText} />
-                </div>
-                <ContractorInvitePicker
-                  projectContext={buildProjectSearchContext(form)}
-                  projectLabels={buildProjectFilterLabels(form)}
-                  selected={
-                    Array.isArray(form.private_contractor_usernames)
-                      ? form.private_contractor_usernames
-                      : form.private_contractor_username
-                        ? [form.private_contractor_username]
-                        : []
-                  }
-                  onChange={(usernames) =>
-                    setForm((p) => ({
-                      ...p,
-                      private_contractor_usernames: usernames,
-                      private_contractor_username: usernames[0] || "",
-                    }))
-                  }
-                />
-              </div>
-            ) : null}
           </div>
 
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -771,6 +731,32 @@ export default function CreateProjectCard({
                       ))}
                     </div>
                   </div>
+
+                  {form.post_privacy === "private" ? (
+                    <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-sky-950">
+                        Private contractor search
+                        <JobPostingHelp text={privateHelpText} />
+                      </div>
+                      <ContractorInvitePicker
+                        projectContext={buildProjectSearchContext(form)}
+                        selected={
+                          Array.isArray(form.private_contractor_usernames)
+                            ? form.private_contractor_usernames
+                            : form.private_contractor_username
+                              ? [form.private_contractor_username]
+                              : []
+                        }
+                        onChange={(usernames) =>
+                          setForm((p) => ({
+                            ...p,
+                            private_contractor_usernames: usernames,
+                            private_contractor_username: usernames[0] || "",
+                          }))
+                        }
+                      />
+                    </div>
+                  ) : null}
 
                   <div className="mt-3">
                     <div className="mb-1 text-sm text-slate-600">Part of Larger Project</div>
