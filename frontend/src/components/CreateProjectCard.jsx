@@ -71,7 +71,19 @@ function ComplianceNotice({ checked, onChange, publishLabel = "publish" }) {
   );
 }
 
-function ContractorInvitePicker({ selected = [], onChange }) {
+function buildProjectSearchContext(form) {
+  const parts = [
+    form?.title,
+    form?.category,
+    form?.summary,
+    form?.job_summary,
+    Array.isArray(form?.service_categories) ? form.service_categories.join(" ") : "",
+    form?.required_expertise,
+  ];
+  return parts.filter(Boolean).join(" ").trim();
+}
+
+function ContractorInvitePicker({ selected = [], onChange, projectContext = "" }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -84,7 +96,10 @@ function ContractorInvitePicker({ selected = [], onChange }) {
       setLoading(true);
       try {
         const { data } = await api.get("/profiles/contractors/search/", {
-          params: query.trim() ? { q: query.trim() } : {},
+          params: {
+            ...(query.trim() ? { q: query.trim() } : {}),
+            ...(projectContext.trim() ? { project_q: projectContext.trim() } : {}),
+          },
         });
         if (active) setResults(Array.isArray(data) ? data : []);
       } catch {
@@ -98,7 +113,7 @@ function ContractorInvitePicker({ selected = [], onChange }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, projectContext]);
 
   const addContractor = (username) => {
     const value = String(username || "").trim();
@@ -119,7 +134,7 @@ function ContractorInvitePicker({ selected = [], onChange }) {
             Invite contractors
           </label>
           <p className="mt-1 text-xs text-slate-500">
-            Search contractors by name, username, service area, or profile text. Invite up to 6.
+            Results use this job’s title, category, and summary first. You can still search by name, area, or profile text. Invite up to 6.
           </p>
         </div>
         <Badge>{selectedList.length}/6 selected</Badge>
@@ -572,6 +587,7 @@ export default function CreateProjectCard({
                   <JobPostingHelp text={privateHelpText} />
                 </div>
                 <ContractorInvitePicker
+                  projectContext={buildProjectSearchContext(form)}
                   selected={
                     Array.isArray(form.private_contractor_usernames)
                       ? form.private_contractor_usernames

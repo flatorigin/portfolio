@@ -1,5 +1,6 @@
 # backend/accounts/views.py
 import logging
+import re
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -28,6 +29,23 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+PROJECT_SEARCH_STOPWORDS = {
+    "and",
+    "the",
+    "job",
+    "post",
+    "work",
+    "need",
+    "needs",
+    "project",
+    "repair",
+    "replace",
+    "install",
+    "build",
+    "fix",
+    "new",
+    "old",
+}
 
 
 class RegistrationIncomplete(APIException):
@@ -154,6 +172,7 @@ class ContractorSearchView(APIView):
 
     def get(self, request, *args, **kwargs):
         query = (request.query_params.get("q") or "").strip()
+        project_query = (request.query_params.get("project_q") or "").strip()
         qs = (
             Profile.objects
             .filter(
@@ -174,6 +193,23 @@ class ContractorSearchView(APIView):
                 | Q(bio__icontains=query)
                 | Q(hero_headline__icontains=query)
             )
+
+        if project_query:
+            terms = [
+                term.lower()
+                for term in re.split(r"[\s,;/|]+", project_query)
+                if len(term) >= 3 and term.lower() not in PROJECT_SEARCH_STOPWORDS
+            ]
+            project_filter = Q()
+            for term in terms[:8]:
+                project_filter |= (
+                    Q(display_name__icontains=term)
+                    | Q(service_location__icontains=term)
+                    | Q(bio__icontains=term)
+                    | Q(hero_headline__icontains=term)
+                )
+            if project_filter:
+                qs = qs.filter(project_filter)
 
         serializer = ContractorSearchResultSerializer(
             qs[:20],
