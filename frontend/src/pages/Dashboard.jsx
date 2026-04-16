@@ -50,6 +50,7 @@ function buildProjectFormData(form, cover) {
 
   const JSON_KEYS = new Set([
     "service_categories",
+    "private_contractor_usernames",
     "tech_stack",
     "extra_links",
   ]);
@@ -361,6 +362,7 @@ export default function Dashboard() {
     compliance_confirmed: false,
     post_privacy: "public",
     private_contractor_username: "",
+    private_contractor_usernames: [],
     notify_by_email: false,
   });
   const [cover, setCover] = useState(null);
@@ -405,6 +407,7 @@ export default function Dashboard() {
     compliance_confirmed: false,
     post_privacy: "public",
     private_contractor_username: "",
+    private_contractor_usernames: [],
     notify_by_email: false,
   });
   const [editImgs, setEditImgs] = useState([]);
@@ -699,6 +702,11 @@ export default function Dashboard() {
         compliance_confirmed: !!meta?.compliance_confirmed,
         post_privacy: meta?.post_privacy || "public",
         private_contractor_username: meta?.private_contractor_username || "",
+        private_contractor_usernames: Array.isArray(meta?.invited_contractors)
+          ? meta.invited_contractors.map((invite) => invite.username).filter(Boolean)
+          : meta?.private_contractor_username
+            ? [meta.private_contractor_username]
+            : [],
         notify_by_email: !!meta?.notify_by_email,
       });
 
@@ -801,6 +809,7 @@ export default function Dashboard() {
         compliance_confirmed: false,
         post_privacy: "public",
         private_contractor_username: "",
+        private_contractor_usernames: [],
         notify_by_email: false,
 
         tech_stack: null,

@@ -8,6 +8,7 @@ from .views import (
     LikedProfilesView,
     ProfileSaveView,
     SavedProfilesView,
+    ContractorSearchView,
 )
 from .password_views import PasswordResetRequestView, PasswordResetConfirmView
 
@@ -21,6 +22,7 @@ urlpatterns = [
     # ✅ put fixed/static routes FIRST
     path("profiles/liked/", LikedProfilesView.as_view(), name="liked-profiles"),
     path("profiles/saved/", SavedProfilesView.as_view(), name="saved-profiles"),
+    path("profiles/contractors/search/", ContractorSearchView.as_view(), name="contractor-search"),
 
     # ✅ keep like route before/after public profile (either is fine)
     path("profiles/<str:username>/like/", ProfileLikeView.as_view(), name="profile-like"),

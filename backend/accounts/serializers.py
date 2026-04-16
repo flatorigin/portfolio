@@ -425,3 +425,31 @@ class LikedProfileCardSerializer(serializers.ModelSerializer):
 
 class SavedProfileCardSerializer(LikedProfileCardSerializer):
     pass
+
+
+class ContractorSearchResultSerializer(ProfileBaseMixin, serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
+    member_since_label = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "username",
+            "display_name",
+            "service_location",
+            "bio",
+            "hero_headline",
+            "avatar_url",
+            "logo_url",
+            "member_since_label",
+        ]
+
+    def get_logo_url(self, obj):
+        request = self.context.get("request")
+        image = obj.logo or obj.avatar
+        if image and hasattr(image, "url"):
+            return self._build_abs_url(request, image.url)
+        return None

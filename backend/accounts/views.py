@@ -3,6 +3,7 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.db.models import Q
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 
@@ -22,6 +23,7 @@ from .serializers import (
     PublicUserProfileSerializer,
     LikedProfileCardSerializer,
     SavedProfileCardSerializer,
+    ContractorSearchResultSerializer,
 )
 
 User = get_user_model()
@@ -141,6 +143,44 @@ class PublicProfileView(APIView):
 
         serializer = PublicUserProfileSerializer(profile, context={"request": request})
         return Response(serializer.data)
+
+
+class ContractorSearchView(APIView):
+    """
+    Search active contractor profiles for private job invites.
+    GET /api/profiles/contractors/search/?q=term
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        query = (request.query_params.get("q") or "").strip()
+        qs = (
+            Profile.objects
+            .filter(
+                profile_type=Profile.ProfileType.CONTRACTOR,
+                is_frozen=False,
+                user__is_active=True,
+            )
+            .exclude(user=request.user)
+            .select_related("user")
+            .order_by("display_name", "user__username")
+        )
+
+        if query:
+            qs = qs.filter(
+                Q(user__username__icontains=query)
+                | Q(display_name__icontains=query)
+                | Q(service_location__icontains=query)
+                | Q(bio__icontains=query)
+                | Q(hero_headline__icontains=query)
+            )
+
+        serializer = ContractorSearchResultSerializer(
+            qs[:20],
+            many=True,
+            context={"request": request},
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ProfileLikeView(APIView):

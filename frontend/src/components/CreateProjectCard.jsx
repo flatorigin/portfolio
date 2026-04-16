@@ -6,6 +6,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { flushSync } from "react-dom";
+import api from "../api";
 import { Card, Input, Textarea, Button, Badge } from "../ui";
 
 function toggleInArray(arr, value) {
@@ -70,6 +71,140 @@ function ComplianceNotice({ checked, onChange, publishLabel = "publish" }) {
   );
 }
 
+function ContractorInvitePicker({ selected = [], onChange }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const selectedList = Array.isArray(selected) ? selected : [];
+  const selectedSet = new Set(selectedList.map((username) => String(username).toLowerCase()));
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const { data } = await api.get("/profiles/contractors/search/", {
+          params: query.trim() ? { q: query.trim() } : {},
+        });
+        if (active) setResults(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) setResults([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  const addContractor = (username) => {
+    const value = String(username || "").trim();
+    if (!value || selectedSet.has(value.toLowerCase()) || selectedList.length >= 6) return;
+    onChange?.([...selectedList, value]);
+  };
+
+  const removeContractor = (username) => {
+    const key = String(username || "").toLowerCase();
+    onChange?.(selectedList.filter((item) => String(item).toLowerCase() !== key));
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-sky-100 bg-white p-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <label className="block text-sm font-semibold text-sky-950">
+            Invite contractors
+          </label>
+          <p className="mt-1 text-xs text-slate-500">
+            Search contractors by name, username, service area, or profile text. Invite up to 6.
+          </p>
+        </div>
+        <Badge>{selectedList.length}/6 selected</Badge>
+      </div>
+
+      <Input
+        className="mt-3"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search contractors..."
+      />
+
+      {selectedList.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {selectedList.map((username) => (
+            <button
+              key={username}
+              type="button"
+              onClick={() => removeContractor(username)}
+              className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white"
+              title="Remove invite"
+            >
+              @{username} ×
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+        {loading ? (
+          <div className="rounded-xl border border-slate-100 p-3 text-sm text-slate-500">
+            Searching contractors...
+          </div>
+        ) : results.length === 0 ? (
+          <div className="rounded-xl border border-slate-100 p-3 text-sm text-slate-500">
+            No contractors found.
+          </div>
+        ) : (
+          results.map((profile) => {
+            const username = profile.username || "";
+            const selectedAlready = selectedSet.has(username.toLowerCase());
+            const image = profile.avatar_url || profile.logo_url || "";
+            return (
+              <div
+                key={username}
+                className="flex items-center gap-3 rounded-xl border border-slate-100 p-3"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                  {image ? (
+                    <img src={image} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    (profile.display_name || username || "?").slice(0, 1).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-slate-900">
+                    {profile.display_name || username}
+                  </div>
+                  <div className="truncate text-xs text-slate-500">
+                    @{username}
+                    {profile.service_location ? ` · ${profile.service_location}` : ""}
+                  </div>
+                  {profile.hero_headline || profile.bio ? (
+                    <div className="mt-1 line-clamp-1 text-xs text-slate-500">
+                      {profile.hero_headline || profile.bio}
+                    </div>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  className={selectedAlready ? "border border-slate-300 bg-white text-slate-700" : ""}
+                  disabled={selectedAlready || selectedList.length >= 6}
+                  onClick={() => addContractor(username)}
+                >
+                  {selectedAlready ? "Invited" : "Invite"}
+                </Button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CreateProjectCard({
   ownedCount = 0,
   form,
@@ -95,7 +230,7 @@ export default function CreateProjectCard({
     () =>
       [
         "Private posts are visible only to the owner and the invited contractor.",
-        "When ready, send the job post to a specific contractor username so they can review it and bid.",
+        "When ready, search and invite contractors so they can review it and bid.",
         "Private jobs do not appear in public listings or search.",
         "Optional: enable email notifications to get alerted when there’s activity on this post.",
       ].join("\n"),
@@ -117,6 +252,11 @@ export default function CreateProjectCard({
       compliance_confirmed: !!prev.compliance_confirmed,
       post_privacy: prev.post_privacy || "public",
       private_contractor_username: prev.private_contractor_username || "",
+      private_contractor_usernames: Array.isArray(prev.private_contractor_usernames)
+        ? prev.private_contractor_usernames
+        : prev.private_contractor_username
+          ? [prev.private_contractor_username]
+          : [],
       notify_by_email: !!prev.notify_by_email,
     }));
   };
@@ -141,12 +281,16 @@ export default function CreateProjectCard({
     if ((form.post_privacy || "public") !== "private") {
       return { ok: false, msg: "Set Post Privacy to Private to send to a contractor." };
     }
-    const u = (form.private_contractor_username || "").trim();
-    if (!u) return { ok: false, msg: "Enter a contractor username to send this private post." };
+    const selected = Array.isArray(form.private_contractor_usernames)
+      ? form.private_contractor_usernames.filter(Boolean)
+      : [];
+    const legacy = (form.private_contractor_username || "").trim();
+    const invites = selected.length > 0 ? selected : legacy ? [legacy] : [];
+    if (invites.length === 0) return { ok: false, msg: "Select at least one contractor to invite." };
     if (!form.compliance_confirmed) {
       return { ok: false, msg: "Please confirm compliance before sending." };
     }
-    return { ok: true, username: u };
+    return { ok: true, username: invites[0], usernames: invites };
   };
 
   const resetLocalImages = () => {
@@ -198,6 +342,7 @@ export default function CreateProjectCard({
       is_public: isPublic,
       post_privacy: isPublic ? "public" : "private",
       private_contractor_username: isPublic ? "" : p.private_contractor_username || "",
+      private_contractor_usernames: isPublic ? [] : p.private_contractor_usernames || [],
     }));
   };
 
@@ -220,6 +365,11 @@ export default function CreateProjectCard({
         compliance_confirmed: !!next.compliance_confirmed,
         post_privacy: next.post_privacy || "public",
         private_contractor_username: next.private_contractor_username || "",
+        private_contractor_usernames: Array.isArray(next.private_contractor_usernames)
+          ? next.private_contractor_usernames
+          : next.private_contractor_username
+            ? [next.private_contractor_username]
+            : [],
         notify_by_email: !!next.notify_by_email,
       };
     });
@@ -310,7 +460,13 @@ export default function CreateProjectCard({
 
     flushSync(() => {
       ensureJobDefaults();
-      setForm((p) => ({ ...p, is_public: false, post_privacy: "private" }));
+      setForm((p) => ({
+        ...p,
+        is_public: false,
+        post_privacy: "private",
+        private_contractor_username: v.usernames[0] || "",
+        private_contractor_usernames: v.usernames,
+      }));
     });
 
     const result = await onSubmit?.(e, images);
@@ -411,16 +567,25 @@ export default function CreateProjectCard({
 
             {jobOn && form.post_privacy === "private" ? (
               <div className="mt-3 border-t border-sky-200 pt-3">
-                <label className="mb-1 block text-sm font-medium text-sky-950">
-                  Private contractor username
+                <div className="mb-1 text-sm font-medium text-sky-950">
+                  Private contractor search
                   <JobPostingHelp text={privateHelpText} />
-                </label>
-                <Input
-                  value={form.private_contractor_username || ""}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, private_contractor_username: e.target.value }))
+                </div>
+                <ContractorInvitePicker
+                  selected={
+                    Array.isArray(form.private_contractor_usernames)
+                      ? form.private_contractor_usernames
+                      : form.private_contractor_username
+                        ? [form.private_contractor_username]
+                        : []
                   }
-                  placeholder="e.g. john-builder"
+                  onChange={(usernames) =>
+                    setForm((p) => ({
+                      ...p,
+                      private_contractor_usernames: usernames,
+                      private_contractor_username: usernames[0] || "",
+                    }))
+                  }
                 />
               </div>
             ) : null}
@@ -779,7 +944,7 @@ export default function CreateProjectCard({
 
                 {jobOn && form.post_privacy === "private" ? (
                   <Button type="button" disabled={busy} onClick={sendToContractor}>
-                    Send to Contractor
+                    Send Invites
                   </Button>
                 ) : (
                   <Button type="button" disabled={busy} onClick={publishProject}>

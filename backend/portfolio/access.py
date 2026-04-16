@@ -49,21 +49,23 @@ def can_access_job_interactions(project, user):
 
 
 def visible_projects_q_for_user(user):
+    owner_not_frozen = Q(owner__profile__is_frozen=False) | Q(owner__profile__isnull=True)
     public_visible = Q(
         is_public=True,
         is_private=False,
         post_privacy="public",
-        owner__profile__is_frozen=False,
-    )
+    ) & owner_not_frozen
 
     if user and getattr(user, "is_authenticated", False):
         return (
             Q(owner=user)
             | public_visible
-            | Q(
-                invites__contractor=user,
-                invites__status__in=VISIBLE_INVITE_STATUSES,
-                owner__profile__is_frozen=False,
+            | (
+                Q(
+                    invites__contractor=user,
+                    invites__status__in=VISIBLE_INVITE_STATUSES,
+                )
+                & owner_not_frozen
             )
         )
     return public_visible

@@ -2,6 +2,7 @@
 # file: backend/portfolio/serializers.py
 # =============================================================================
 from datetime import timedelta
+import json
 import re
 
 from rest_framework import serializers
@@ -97,6 +98,8 @@ class ProjectSerializer(serializers.ModelSerializer):
     cover_image_url = serializers.SerializerMethodField()
     is_owner = serializers.SerializerMethodField()
     viewer_is_invited = serializers.SerializerMethodField()
+    invited_contractors = serializers.SerializerMethodField()
+    private_contractor_usernames = serializers.JSONField(write_only=True, required=False)
     bid_count = serializers.IntegerField(read_only=True, default=0)
     accepted_bid_count = serializers.IntegerField(read_only=True, default=0)
     like_count = serializers.SerializerMethodField()
@@ -144,6 +147,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             "compliance_confirmed",
             "post_privacy",
             "private_contractor_username",
+            "private_contractor_usernames",
+            "invited_contractors",
             "notify_by_email",
             "job_is_published",
             "viewer_is_invited",
@@ -164,7 +169,30 @@ class ProjectSerializer(serializers.ModelSerializer):
             "updated_at",
             "images",
             "cover_image_url",
+            "invited_contractors",
         ]
+
+    def _normalize_invite_usernames(self, value):
+        if value in (None, ""):
+            return []
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                value = parsed
+            except (TypeError, ValueError):
+                value = [value]
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Invited contractors must be a list.")
+
+        cleaned = []
+        seen = set()
+        for item in value:
+            username = str(item or "").strip()
+            key = username.lower()
+            if username and key not in seen:
+                cleaned.append(username)
+                seen.add(key)
+        return cleaned
 
     def validate_service_categories(self, value):
         if value is None:
@@ -209,28 +237,57 @@ class ProjectSerializer(serializers.ModelSerializer):
             if post_privacy == "private" or is_private:
                 attrs["is_private"] = True
                 attrs["post_privacy"] = "private"
-                username = (attrs.get("private_contractor_username", getattr(instance, "private_contractor_username", "")) or "").strip()
-                if not username:
+                invite_usernames = self._normalize_invite_usernames(
+                    attrs.get("private_contractor_usernames", None)
+                )
+                legacy_username = (
+                    attrs.get(
+                        "private_contractor_username",
+                        getattr(instance, "private_contractor_username", "") if instance else "",
+                    )
+                    or ""
+                ).strip()
+                if not invite_usernames and legacy_username:
+                    invite_usernames = [legacy_username]
+
+                if not invite_usernames:
                     raise serializers.ValidationError(
-                        {"private_contractor_username": "Private jobs require an invited contractor username."}
+                        {"private_contractor_usernames": "Private jobs require at least one invited contractor."}
+                    )
+                if len(invite_usernames) > 6:
+                    raise serializers.ValidationError(
+                        {"private_contractor_usernames": "Invite up to 6 contractors per private job."}
                     )
                 request = self.context.get("request")
                 owner = getattr(instance, "owner", None) or getattr(request, "user", None)
-                contractor = User.objects.filter(username=username).first()
-                if contractor is None:
-                    raise serializers.ValidationError(
-                        {"private_contractor_username": "No user found with that username."}
+                contractors = list(
+                    User.objects
+                    .filter(
+                        username__in=invite_usernames,
+                        is_active=True,
+                        profile__profile_type="contractor",
+                        profile__is_frozen=False,
                     )
-                if owner and contractor.id == owner.id:
+                    .select_related("profile")
+                )
+                found = {user.username.lower(): user for user in contractors}
+                missing = [username for username in invite_usernames if username.lower() not in found]
+                if missing:
                     raise serializers.ValidationError(
-                        {"private_contractor_username": "You cannot invite yourself to your own job."}
+                        {"private_contractor_usernames": f"No active contractor found for: {', '.join(missing)}."}
                     )
-                attrs["private_contractor_username"] = username
+                if owner and any(user.id == owner.id for user in contractors):
+                    raise serializers.ValidationError(
+                        {"private_contractor_usernames": "You cannot invite yourself to your own job."}
+                    )
+                attrs["private_contractor_usernames"] = [found[username.lower()].username for username in invite_usernames]
+                attrs["private_contractor_username"] = attrs["private_contractor_usernames"][0]
                 attrs["is_public"] = False
             else:
                 attrs["is_private"] = False
                 attrs["post_privacy"] = "public"
                 attrs["private_contractor_username"] = ""
+                attrs["private_contractor_usernames"] = []
 
             incoming_job_summary = attrs.get("job_summary", None)
             incoming_summary = attrs.get("summary", None)
@@ -276,6 +333,23 @@ class ProjectSerializer(serializers.ModelSerializer):
             status__in=[ProjectInvite.STATUS_INVITED, ProjectInvite.STATUS_ACCEPTED],
         ).exists()
 
+    def get_invited_contractors(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return []
+        if obj.owner_id != user.id and not getattr(user, "is_staff", False):
+            return []
+        return [
+            {
+                "username": invite.contractor.username,
+                "display_name": getattr(invite.contractor.profile, "display_name", "") or invite.contractor.username,
+                "status": invite.status,
+                "created_at": invite.created_at,
+            }
+            for invite in obj.invites.select_related("contractor", "contractor__profile").order_by("contractor__username")
+        ]
+
     def get_like_count(self, obj):
         return ProjectLike.objects.filter(project=obj).count()
 
@@ -293,36 +367,43 @@ class ProjectSerializer(serializers.ModelSerializer):
             return False
         return ProjectFavorite.objects.filter(project=obj, user=user).exists()
 
-    def _sync_project_invites(self, project):
+    def _sync_project_invites(self, project, invite_usernames=None):
         if not project.is_job_posting or not project.is_private:
             ProjectInvite.objects.filter(project=project).delete()
             return
 
-        username = (project.private_contractor_username or "").strip()
-        if not username:
+        usernames = self._normalize_invite_usernames(invite_usernames)
+        if not usernames:
+            username = (project.private_contractor_username or "").strip()
+            usernames = [username] if username else []
+
+        if not usernames:
             ProjectInvite.objects.filter(project=project).delete()
             return
 
-        contractor = User.objects.filter(username=username).first()
-        if contractor is None:
+        contractors = list(User.objects.filter(username__in=usernames))
+        if not contractors:
             ProjectInvite.objects.filter(project=project).delete()
             return
 
-        ProjectInvite.objects.update_or_create(
-            project=project,
-            contractor=contractor,
-            defaults={"status": ProjectInvite.STATUS_INVITED},
-        )
-        ProjectInvite.objects.filter(project=project).exclude(contractor=contractor).delete()
+        for contractor in contractors:
+            ProjectInvite.objects.update_or_create(
+                project=project,
+                contractor=contractor,
+                defaults={"status": ProjectInvite.STATUS_INVITED},
+            )
+        ProjectInvite.objects.filter(project=project).exclude(contractor__in=contractors).delete()
 
     def create(self, validated_data):
+        invite_usernames = validated_data.pop("private_contractor_usernames", None)
         project = super().create(validated_data)
-        self._sync_project_invites(project)
+        self._sync_project_invites(project, invite_usernames)
         return project
 
     def update(self, instance, validated_data):
+        invite_usernames = validated_data.pop("private_contractor_usernames", None)
         project = super().update(instance, validated_data)
-        self._sync_project_invites(project)
+        self._sync_project_invites(project, invite_usernames)
         return project
 
 
