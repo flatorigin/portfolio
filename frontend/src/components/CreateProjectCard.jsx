@@ -172,6 +172,9 @@ function ContractorInvitePicker({ selected = [], onChange }) {
   const [loading, setLoading] = useState(false);
   const selectedList = Array.isArray(selected) ? selected : [];
   const selectedSet = new Set(selectedList.map((username) => String(username).toLowerCase()));
+  const availableResults = results.filter(
+    (profile) => !selectedSet.has(String(profile.username || "").toLowerCase()),
+  );
   const activeMode =
     CONTRACTOR_SEARCH_MODES.find((mode) => mode.value === searchMode) || CONTRACTOR_SEARCH_MODES[0];
 
@@ -277,14 +280,13 @@ function ContractorInvitePicker({ selected = [], onChange }) {
           <div className="rounded-xl border border-slate-100 p-3 text-sm text-slate-500">
             Searching contractors...
           </div>
-        ) : results.length === 0 ? (
+        ) : availableResults.length === 0 ? (
           <div className="rounded-xl border border-slate-100 p-3 text-sm text-slate-500">
-            No contractors found.
+            {selectedList.length > 0 ? "No more matching contractors found." : "No contractors found."}
           </div>
         ) : (
-          results.map((profile) => {
+          availableResults.map((profile) => {
             const username = profile.username || "";
-            const selectedAlready = selectedSet.has(username.toLowerCase());
             const image = profile.avatar_url || profile.logo_url || "";
             return (
               <div
@@ -314,11 +316,10 @@ function ContractorInvitePicker({ selected = [], onChange }) {
                 </div>
                 <Button
                   type="button"
-                  className={selectedAlready ? "border border-slate-300 bg-white text-slate-700" : ""}
-                  disabled={selectedAlready || selectedList.length >= 6}
+                  disabled={selectedList.length >= 6}
                   onClick={() => addContractor(username)}
                 >
-                  {selectedAlready ? "Invited" : "Invite"}
+                  Invite
                 </Button>
               </div>
             );
