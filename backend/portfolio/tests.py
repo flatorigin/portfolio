@@ -1,7 +1,9 @@
 from django.contrib.auth import get_user_model
+import json
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import Profile
 from .models import Project, ProjectInvite
 
 
@@ -44,3 +46,111 @@ class PrivateProjectAccessTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ids = [item["id"] for item in response.data]
         self.assertNotIn(self.private_job.id, ids)
+
+    def test_contractor_search_filters_to_active_unfrozen_contractors(self):
+        contractor = User.objects.create_user(username="deckpro", password="pw123456")
+        Profile.objects.create(
+            user=contractor,
+            profile_type=Profile.ProfileType.CONTRACTOR,
+            display_name="Deck Pro",
+            service_location="Media, PA",
+            contact_email="deck@example.com",
+            contact_phone="555-111-2222",
+        )
+        homeowner = User.objects.create_user(username="homeowner", password="pw123456")
+        Profile.objects.create(
+            user=homeowner,
+            profile_type=Profile.ProfileType.HOMEOWNER,
+            display_name="Home Owner",
+            service_location="Media, PA",
+            contact_email="home@example.com",
+            contact_phone="555-111-3333",
+        )
+        frozen = User.objects.create_user(username="frozenpro", password="pw123456")
+        Profile.objects.create(
+            user=frozen,
+            profile_type=Profile.ProfileType.CONTRACTOR,
+            display_name="Frozen Pro",
+            service_location="Media, PA",
+            contact_email="frozen@example.com",
+            contact_phone="555-111-4444",
+            is_frozen=True,
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.get("/api/profiles/contractors/search/?q=Media")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [item["username"] for item in response.data]
+        self.assertIn("deckpro", usernames)
+        self.assertNotIn("homeowner", usernames)
+        self.assertNotIn("frozenpro", usernames)
+
+    def test_private_job_creation_accepts_multiple_invited_contractors(self):
+        first = User.objects.create_user(username="firstpro", password="pw123456")
+        second = User.objects.create_user(username="secondpro", password="pw123456")
+        for user in (first, second):
+            Profile.objects.create(
+                user=user,
+                profile_type=Profile.ProfileType.CONTRACTOR,
+                display_name=user.username,
+                service_location="Media, PA",
+                contact_email=f"{user.username}@example.com",
+                contact_phone="555-111-5555",
+            )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.post(
+            "/api/projects/",
+            {
+                "title": "Private bath repair",
+                "summary": "Fix the bath.",
+                "is_job_posting": True,
+                "is_public": False,
+                "post_privacy": "private",
+                "compliance_confirmed": True,
+                "private_contractor_usernames": ["firstpro", "secondpro"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        project = Project.objects.get(id=response.data["id"])
+        self.assertTrue(project.is_private)
+        self.assertEqual(project.private_contractor_username, "firstpro")
+        self.assertEqual(project.invites.count(), 2)
+        self.assertEqual(
+            set(project.invites.values_list("contractor__username", flat=True)),
+            {"firstpro", "secondpro"},
+        )
+
+    def test_private_job_multipart_creation_accepts_invited_contractors_json(self):
+        contractor = User.objects.create_user(username="formpro", password="pw123456")
+        Profile.objects.create(
+            user=contractor,
+            profile_type=Profile.ProfileType.CONTRACTOR,
+            display_name="Form Pro",
+            service_location="Media, PA",
+            contact_email="formpro@example.com",
+            contact_phone="555-111-6666",
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.post(
+            "/api/projects/",
+            {
+                "title": "Multipart private job",
+                "summary": "Private form data post.",
+                "is_job_posting": "true",
+                "is_public": "false",
+                "post_privacy": "private",
+                "compliance_confirmed": "true",
+                "private_contractor_usernames": json.dumps(["formpro"]),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        project = Project.objects.get(id=response.data["id"])
+        self.assertEqual(project.private_contractor_username, "formpro")
+        self.assertTrue(project.invites.filter(contractor=contractor).exists())
