@@ -116,6 +116,43 @@ class PrivateProjectAccessTests(APITestCase):
         self.assertIn("deckbuilder", usernames)
         self.assertNotIn("painter", usernames)
 
+    def test_contractor_search_matches_contractor_project_titles(self):
+        deck_contractor = User.objects.create_user(username="outdoorpro", password="pw123456")
+        Profile.objects.create(
+            user=deck_contractor,
+            profile_type=Profile.ProfileType.CONTRACTOR,
+            display_name="Outdoor Structure Co",
+            service_location="Media, PA",
+            bio="Exterior work.",
+            contact_email="outdoorpro@example.com",
+            contact_phone="555-111-7777",
+        )
+        Project.objects.create(
+            owner=deck_contractor,
+            title="Cedar deck replacement",
+            category="Outdoor",
+            summary="Completed raised deck project.",
+            is_public=True,
+        )
+        painter = User.objects.create_user(username="paintonly", password="pw123456")
+        Profile.objects.create(
+            user=painter,
+            profile_type=Profile.ProfileType.CONTRACTOR,
+            display_name="Interior Paint Co",
+            service_location="Media, PA",
+            bio="Interior painting only.",
+            contact_email="paintonly@example.com",
+            contact_phone="555-111-8888",
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.get("/api/profiles/contractors/search/?q=deck&search_by=job_title")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [item["username"] for item in response.data]
+        self.assertIn("outdoorpro", usernames)
+        self.assertNotIn("paintonly", usernames)
+
     def test_private_job_creation_accepts_multiple_invited_contractors(self):
         first = User.objects.create_user(username="firstpro", password="pw123456")
         second = User.objects.create_user(username="secondpro", password="pw123456")
