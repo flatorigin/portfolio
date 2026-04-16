@@ -59,6 +59,40 @@ const FALLBACK_PROJECTS = [
   },
 ];
 
+const PATHS = [
+  {
+    label: "Need work done?",
+    title: "Post a project and compare bids.",
+    copy: "Share what you need, keep questions attached to the project, and review serious contractor proposals in one place.",
+    cta: "Post a project",
+    to: "/dashboard",
+    icon: "home_repair_service",
+  },
+  {
+    label: "Show your work?",
+    title: "Build a portfolio that helps you get found.",
+    copy: "Keep your finished work in one focused public profile instead of scattering proof across social media.",
+    cta: "Create profile",
+    to: "/register",
+    icon: "badge",
+  },
+];
+
+const GUIDE_PREVIEWS = [
+  {
+    title: "What to ask before hiring",
+    copy: "Use a few clear questions to understand scope, schedule, and responsibility before anyone travels for an inspection.",
+  },
+  {
+    title: "How to compare bids",
+    copy: "Look beyond the number. Compare timeline, exclusions, payment terms, and what each contractor actually includes.",
+  },
+  {
+    title: "What contractors should include",
+    copy: "A useful proposal should make pricing, materials, assumptions, and next steps easy for the owner to review.",
+  },
+];
+
 function TutorialModal({ open, onClose }) {
   if (!open) return null;
 
@@ -184,13 +218,13 @@ export default function LandingPage() {
         <Container className="pt-12 pb-12 sm:pt-16 sm:pb-16">
           <div className="mx-auto max-w-4xl text-center">
             <Badge className="border-[#D9E2F4] bg-white/80 px-4 py-1 text-[#4F5D83] shadow-sm backdrop-blur-sm">
-              For homeowners and contractors working from real projects
+              Project-based hiring for homeowners and contractors
             </Badge>
             <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
-              Hire based on proof, not promises.
+              Post real projects. See real work. Connect directly.
             </h1>
             <p className="mx-auto mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
-              Homeowners discover pros through contractor-certified project portfolios. Contractors win jobs by showcasing their own real-world work.
+              FlatOrigin helps homeowners post projects, compare bids, and discover contractors through portfolios built around finished work.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to={authed ? "/dashboard" : "/register"}>
@@ -198,13 +232,19 @@ export default function LandingPage() {
                   Get Started
                 </Button>
               </Link>
+              <Link
+                to="/explore"
+                className="inline-flex min-w-[180px] items-center justify-center rounded-full border border-slate-300 bg-white/80 px-8 py-3 text-base font-semibold text-slate-800 shadow-sm transition hover:bg-white"
+              >
+                Browse Projects
+              </Link>
               <button
                 type="button"
                 onClick={() => setVideoOpen(true)}
                 className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-white/60"
               >
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-900">
-                  ▶
+                  <SymbolIcon name="play_arrow" fill={1} className="text-[22px]" />
                 </span>
                 Watch a video tutorial
               </button>
@@ -251,6 +291,33 @@ export default function LandingPage() {
         </Container>
       </section>
 
+      <section className="py-14 sm:py-18">
+        <Container>
+          <div className="grid gap-5 md:grid-cols-2">
+            {PATHS.map((path) => (
+              <Card key={path.label} className="rounded-[2rem] border-[#E9E5DC] bg-white/80 p-7 shadow-none">
+                <div className="flex items-start gap-4">
+                  <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#EEF2FB] text-[#4F5D83]">
+                    <SymbolIcon name={path.icon} className="text-[26px]" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.16em] text-[#4F5D83]">{path.label}</div>
+                    <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-950">{path.title}</h2>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">{path.copy}</p>
+                    <Link
+                      to={authed ? path.to : "/register"}
+                      className="mt-5 inline-flex text-sm font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 hover:text-[#4F5D83]"
+                    >
+                      {path.cta}
+                    </Link>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Container>
+      </section>
+
       <section id="how-it-works" className="py-16 sm:py-20">
         <Container>
           <div className="max-w-2xl">
@@ -262,24 +329,18 @@ export default function LandingPage() {
 
           <div className="mt-8 grid gap-5 md:grid-cols-3">
             {[
-              ["01", "Build Your Portfolio", "Contractors: Upload your best projects and self-certify your work history.","Homeowners: Access a gallery of real local projects, posted directly by the pros."],
-              ["02", "Structured Bidding", "Homeowners: Invite up to 6 contractors to submit side-by-side bids.", "Contractors: Respond to projects that match your specific portfolio expertise."],
-              ["03", "Direct Project Inbox", "Keep all questions, images, and bid revisions in one dedicated project thread.", "Message pros directly with no platform middleman."],
-            ].map(([step, title, copy1, copy2]) => (
-              <Card key={step} className="rounded-[1.75rem] border-[#E9E5DC] p-6">
+              ["01", "Create a profile or post a project", "Start with a public portfolio, a job post, or a private invite-only project."],
+              ["02", "Share it or get discovered", "Homeowners can invite contractors. Contractors can be found through real project work."],
+              ["03", "Compare bids and connect directly", "Questions, bids, and follow-up stay tied to the project so decisions are easier."],
+            ].map(([step, title, copy]) => (
+              <div key={step} className="rounded-[1.75rem] border border-[#E9E5DC] bg-white/50 p-6">
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#EEF2FB] text-sm font-semibold text-[#4F5D83]">
                   {step}
                 </div>
                 <h3 className="mt-5 text-xl font-semibold text-slate-900">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{copy1}</p>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{copy2}</p>
-              </Card>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p>
+              </div>
             ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Link to="/guides" className="text-sm font-medium text-[#4F5D83] underline decoration-[#B9C2D8] underline-offset-4 hover:text-slate-950">
-              Read the project guides before posting →
-            </Link>
           </div>
         </Container>
       </section>
@@ -301,6 +362,38 @@ export default function LandingPage() {
           <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             {showcaseProjects.slice(0, 4).map((project, idx) => (
               <ShowcaseCard key={project.id || idx} project={project} />
+            ))}
+          </div>
+        </Container>
+      </section>
+
+      <section className="border-b border-[#ECE7DF] py-16 sm:py-20">
+        <Container>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">Useful before you sign up</div>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                Guides that make project decisions easier
+              </h2>
+            </div>
+            <Link to="/guides" className="text-sm font-medium text-slate-600 hover:text-slate-950">
+              Explore all guides →
+            </Link>
+          </div>
+
+          <div className="mt-8 grid gap-5 md:grid-cols-3">
+            {GUIDE_PREVIEWS.map((guide) => (
+              <Link
+                key={guide.title}
+                to="/guides"
+                className="rounded-[1.75rem] border border-[#E9E5DC] bg-white/70 p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#F1ECE4] text-[#4F5D83]">
+                  <SymbolIcon name="menu_book" className="text-[22px]" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900">{guide.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{guide.copy}</p>
+              </Link>
             ))}
           </div>
         </Container>
