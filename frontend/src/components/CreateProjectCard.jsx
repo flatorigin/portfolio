@@ -83,28 +83,33 @@ function buildProjectSearchContext(form) {
   return parts.filter(Boolean).join(" ").trim();
 }
 
-function ContractorInvitePicker({ selected = [], onChange, projectContext = "" }) {
+const CONTRACTOR_SEARCH_MODES = [
+  { value: "all", label: "All", placeholder: "Search contractors, project titles, categories..." },
+  { value: "username", label: "Username", placeholder: "Search by contractor username or name..." },
+  { value: "job_title", label: "Job title", placeholder: "Search by project title, e.g. deck, kitchen..." },
+  { value: "project_type", label: "Project type", placeholder: "Search by work type, e.g. pergola, painting..." },
+  { value: "category", label: "Category", placeholder: "Search by category, e.g. carpentry, renovation..." },
+];
+
+function ContractorInvitePicker({ selected = [], onChange }) {
   const [query, setQuery] = useState("");
-  const [projectKeywords, setProjectKeywords] = useState(projectContext);
+  const [searchMode, setSearchMode] = useState("all");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const selectedList = Array.isArray(selected) ? selected : [];
   const selectedSet = new Set(selectedList.map((username) => String(username).toLowerCase()));
-
-  useEffect(() => {
-    setProjectKeywords(projectContext);
-  }, [projectContext]);
+  const activeMode =
+    CONTRACTOR_SEARCH_MODES.find((mode) => mode.value === searchMode) || CONTRACTOR_SEARCH_MODES[0];
 
   useEffect(() => {
     let active = true;
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const keywordText = projectKeywords.trim();
         const { data } = await api.get("/profiles/contractors/search/", {
           params: {
             ...(query.trim() ? { q: query.trim() } : {}),
-            ...(keywordText ? { project_q: keywordText } : {}),
+            search_by: searchMode,
           },
         });
         if (active) setResults(Array.isArray(data) ? data : []);
@@ -119,7 +124,7 @@ function ContractorInvitePicker({ selected = [], onChange, projectContext = "" }
       active = false;
       clearTimeout(timer);
     };
-  }, [query, projectKeywords]);
+  }, [query, searchMode]);
 
   const addContractor = (username) => {
     const value = String(username || "").trim();
@@ -140,33 +145,42 @@ function ContractorInvitePicker({ selected = [], onChange, projectContext = "" }
             Invite contractors
           </label>
           <p className="mt-1 text-xs text-slate-500">
-            Results use this job’s title, category, and summary first. You can still search by name, area, or profile text. Invite up to 6.
+            Pick what you want to search, then type in one box. Results can match contractor profiles or their posted portfolio project work. Invite up to 6.
           </p>
         </div>
         <Badge>{selectedList.length}/6 selected</Badge>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {CONTRACTOR_SEARCH_MODES.map((mode) => (
+          <button
+            key={mode.value}
+            type="button"
+            onClick={() => setSearchMode(mode.value)}
+            className={
+              "rounded-full border px-3 py-1 text-xs font-semibold transition " +
+              (searchMode === mode.value
+                ? "border-slate-950 bg-slate-950 text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-950")
+            }
+          >
+            {mode.label}
+          </button>
+        ))}
       </div>
 
       <Input
         className="mt-3"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search contractors..."
+        placeholder={activeMode.placeholder}
       />
 
-      <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
-        <label className="block text-[11px] font-semibold uppercase tracking-wide text-sky-900">
-          Project keywords used for filtering
-        </label>
-        <Input
-          className="mt-2 border-sky-200 bg-white text-sm"
-          value={projectKeywords}
-          onChange={(e) => setProjectKeywords(e.target.value)}
-          placeholder="Example: deck repair, exterior carpentry, pergola"
-        />
-        <p className="mt-1 text-xs text-sky-800">
-          This starts from the project title/category/summary. Edit it if you want broader or narrower contractor results.
-        </p>
-      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        Use <span className="font-semibold text-slate-700">Job title</span> for examples like
+        {" "}“deck” or “bathroom”, <span className="font-semibold text-slate-700">Category</span>
+        {" "}for trades, or <span className="font-semibold text-slate-700">All</span> when you are not sure.
+      </p>
 
       {selectedList.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -608,7 +622,6 @@ export default function CreateProjectCard({
                   <JobPostingHelp text={privateHelpText} />
                 </div>
                 <ContractorInvitePicker
-                  projectContext={buildProjectSearchContext(form)}
                   selected={
                     Array.isArray(form.private_contractor_usernames)
                       ? form.private_contractor_usernames

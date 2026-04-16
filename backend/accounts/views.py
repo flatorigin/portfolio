@@ -173,6 +173,9 @@ class ContractorSearchView(APIView):
     def get(self, request, *args, **kwargs):
         query = (request.query_params.get("q") or "").strip()
         project_query = (request.query_params.get("project_q") or "").strip()
+        search_by = (request.query_params.get("search_by") or "all").strip().lower()
+        if search_by not in {"all", "username", "job_title", "project_type", "category"}:
+            search_by = "all"
         qs = (
             Profile.objects
             .filter(
@@ -186,13 +189,31 @@ class ContractorSearchView(APIView):
         )
 
         if query:
-            qs = qs.filter(
+            profile_filter = (
                 Q(user__username__icontains=query)
                 | Q(display_name__icontains=query)
                 | Q(service_location__icontains=query)
                 | Q(bio__icontains=query)
                 | Q(hero_headline__icontains=query)
             )
+            project_filter = Q()
+            if search_by in {"all", "job_title"}:
+                project_filter |= Q(user__projects__title__icontains=query)
+            if search_by in {"all", "project_type", "category"}:
+                project_filter |= (
+                    Q(user__projects__category__icontains=query)
+                    | Q(user__projects__service_categories__icontains=query)
+                    | Q(user__projects__summary__icontains=query)
+                    | Q(user__projects__job_summary__icontains=query)
+                    | Q(user__projects__highlights__icontains=query)
+                )
+
+            if search_by == "username":
+                qs = qs.filter(Q(user__username__icontains=query) | Q(display_name__icontains=query))
+            elif search_by in {"job_title", "project_type", "category"}:
+                qs = qs.filter(project_filter)
+            else:
+                qs = qs.filter(profile_filter | project_filter)
 
         if project_query:
             terms = [
@@ -207,12 +228,18 @@ class ContractorSearchView(APIView):
                     | Q(service_location__icontains=term)
                     | Q(bio__icontains=term)
                     | Q(hero_headline__icontains=term)
+                    | Q(user__projects__title__icontains=term)
+                    | Q(user__projects__category__icontains=term)
+                    | Q(user__projects__service_categories__icontains=term)
+                    | Q(user__projects__summary__icontains=term)
+                    | Q(user__projects__job_summary__icontains=term)
+                    | Q(user__projects__highlights__icontains=term)
                 )
             if project_filter:
                 qs = qs.filter(project_filter)
 
         serializer = ContractorSearchResultSerializer(
-            qs[:20],
+            qs.distinct()[:20],
             many=True,
             context={"request": request},
         )
