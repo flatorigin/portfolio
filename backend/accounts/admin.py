@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from .models import Profile
+from .models import HomeownerReferenceImage, Profile
 
 User = get_user_model()
 
@@ -14,12 +14,13 @@ class ProfileAdmin(admin.ModelAdmin):
         "user",
         "email",
         "profile_type",
+        "public_profile_enabled",
         "is_frozen",
         "frozen_at",
         "is_user_active",
     )
-    list_editable = ("profile_type", "is_frozen")
-    list_filter = ("profile_type", "is_frozen", "user__is_active")
+    list_editable = ("profile_type", "public_profile_enabled", "is_frozen")
+    list_filter = ("profile_type", "public_profile_enabled", "is_frozen", "user__is_active")
     search_fields = ("user__username", "user__email")
     readonly_fields = ("frozen_at",)
     actions = (
@@ -53,6 +54,7 @@ class ProfileAdmin(admin.ModelAdmin):
                 "contact_phone",
                 "show_contact_email",
                 "show_contact_phone",
+                "public_profile_enabled",
                 "allow_direct_messages",
                 "dm_opt_out_reason",
                 "dm_opt_out_until",
@@ -189,3 +191,11 @@ class UserAdmin(DjangoUserAdmin):
         self._profiles_for_users(queryset).update(
             profile_type=Profile.ProfileType.HOMEOWNER,
         )
+
+
+@admin.register(HomeownerReferenceImage)
+class HomeownerReferenceImageAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "caption", "is_public", "order", "created_at")
+    list_filter = ("is_public", "created_at")
+    search_fields = ("user__username", "caption")
+    list_editable = ("is_public", "order")

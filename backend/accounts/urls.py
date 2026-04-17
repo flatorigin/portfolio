@@ -9,6 +9,8 @@ from .views import (
     ProfileSaveView,
     SavedProfilesView,
     ContractorSearchView,
+    HomeownerReferenceGalleryView,
+    HomeownerReferenceGalleryItemView,
 )
 from .password_views import PasswordResetRequestView, PasswordResetConfirmView
 
@@ -16,6 +18,8 @@ app_name = "accounts"
 
 urlpatterns = [
     path("users/me/", MeView.as_view(), name="users-me"),
+    path("users/me/reference-gallery/", HomeownerReferenceGalleryView.as_view(), name="reference-gallery"),
+    path("users/me/reference-gallery/<int:pk>/", HomeownerReferenceGalleryItemView.as_view(), name="reference-gallery-item"),
     path("auth/password-reset/", PasswordResetRequestView.as_view(), name="password-reset"),
     path("auth/password-reset-confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
 

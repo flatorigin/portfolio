@@ -542,6 +542,9 @@ export default function Dashboard() {
 
   // ---- Job posts for current user (job postings only) ----
   const [myJobPosts, setMyJobPosts] = useState([]);
+  const [referenceGallery, setReferenceGallery] = useState([]);
+  const [referenceGalleryBusy, setReferenceGalleryBusy] = useState(false);
+  const referenceUploadRef = useRef(null);
 
   const refreshMyBids = useCallback(async () => {
     try {
@@ -627,6 +630,23 @@ export default function Dashboard() {
   useEffect(() => {
     refreshMyBids();
   }, [refreshMyBids]);
+
+  const refreshReferenceGallery = useCallback(async () => {
+    try {
+      const { data } = await api.get("/users/me/reference-gallery/");
+      if (isMountedRef.current) {
+        setReferenceGallery(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.warn("[Dashboard] failed to load reference gallery", err?.response || err);
+      if (isMountedRef.current) setReferenceGallery([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (meUser?.profile_type !== "homeowner") return;
+    refreshReferenceGallery();
+  }, [meUser?.profile_type, refreshReferenceGallery]);
 
   const list = projects;
 
@@ -999,6 +1019,92 @@ export default function Dashboard() {
   const primaryProjectIcon = isHomeownerAccount ? "post_add" : "add_home_work";
   const primaryProjectButtonIcon = isHomeownerAccount ? "add" : "add_home_work";
 
+  async function handleReferenceUpload(files) {
+    const list = Array.from(files || []).filter(Boolean);
+    if (!list.length) return;
+    setReferenceGalleryBusy(true);
+    try {
+      for (const file of list) {
+        const fd = new FormData();
+        fd.append("image", file);
+        fd.append("caption", "");
+        await api.post("/users/me/reference-gallery/", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+      await refreshReferenceGallery();
+    } catch (err) {
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to upload reference images."
+      );
+    } finally {
+      if (referenceUploadRef.current) referenceUploadRef.current.value = "";
+      if (isMountedRef.current) setReferenceGalleryBusy(false);
+    }
+  }
+
+  async function saveReferenceCaption(item) {
+    if (!item?.id) return;
+    try {
+      await api.patch(`/users/me/reference-gallery/${item.id}/`, {
+        caption: item._localCaption ?? item.caption ?? "",
+      });
+      await refreshReferenceGallery();
+    } catch (err) {
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to save caption."
+      );
+    }
+  }
+
+  async function deleteReferenceItem(itemId) {
+    if (!itemId) return;
+    if (!window.confirm("Delete this reference image?")) return;
+    try {
+      await api.delete(`/users/me/reference-gallery/${itemId}/`);
+      await refreshReferenceGallery();
+    } catch (err) {
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to delete reference image."
+      );
+    }
+  }
+
+  async function toggleHomeownerPublicProfile() {
+    try {
+      const { data } = await api.patch("/users/me/", {
+        public_profile_enabled: !meUser?.public_profile_enabled,
+      });
+      if (isMountedRef.current) {
+        setMeUser((prev) => ({ ...prev, ...data }));
+      }
+    } catch (err) {
+      const data = err?.response?.data;
+      alert(
+        data?.detail ||
+          data?.message ||
+          (data ? JSON.stringify(data) : "") ||
+          err?.message ||
+          "Failed to update public profile setting."
+      );
+    }
+  }
+
   return (
     <div className="space-y-4">
       <header className="flex min-h-14 items-center mb-1">
@@ -1188,6 +1294,7 @@ export default function Dashboard() {
         )}
       </Card>
 
+      {!isHomeownerAccount ? (
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -1308,6 +1415,7 @@ export default function Dashboard() {
           </div>
         )}
       </Card>
+      ) : null}
 
       {activeBidCard ? (
         (() => {
@@ -1509,6 +1617,138 @@ export default function Dashboard() {
         })()
       ) : null}
 
+      {isHomeownerAccount ? (
+      <Card className="p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-800">Your Reference Gallery</div>
+            <div className="text-xs text-slate-600">
+              Upload sample inspiration to show the style and quality you want. These images can appear on your public profile when you choose to make it visible.
+            </div>
+          </div>
+          <Badge>{referenceGallery.length} images</Badge>
+        </div>
+
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Homeowner public profile</div>
+              <div className="mt-1 text-xs text-slate-600">
+                Keep this off to stay private unless a public job post is live. Turn it on when you want your reference gallery and contact page discoverable from your own profile link.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={toggleHomeownerPublicProfile}
+              className={
+                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition " +
+                (meUser?.public_profile_enabled
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-slate-200 text-slate-700")
+              }
+            >
+              <span
+                className={
+                  "inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] " +
+                  (meUser?.public_profile_enabled
+                    ? "bg-emerald-600 text-white"
+                    : "bg-white text-slate-500")
+                }
+              >
+                {meUser?.public_profile_enabled ? "On" : "Off"}
+              </span>
+              Public profile
+            </button>
+          </div>
+        </div>
+
+        <input
+          ref={referenceUploadRef}
+          type="file"
+          multiple
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => handleReferenceUpload(e.target.files)}
+        />
+
+        {referenceGallery.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => referenceUploadRef.current?.click()}
+            className="flex min-h-[240px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-slate-400 hover:bg-white"
+          >
+            <SymbolIcon name="add_photo_alternate" className="mb-4 text-[42px] text-slate-400" />
+            <div className="text-base font-semibold text-slate-900">Add sample images</div>
+            <div className="mt-2 max-w-lg text-sm text-slate-600">
+              Show examples of the style and quality you’re looking for. These are reference images, not completed contractor projects.
+            </div>
+            <div className="mt-5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+              {referenceGalleryBusy ? "Uploading..." : "Upload references"}
+            </div>
+          </button>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                onClick={() => referenceUploadRef.current?.click()}
+                className="gap-2"
+              >
+                <SymbolIcon name="add_photo_alternate" className="text-[18px]" />
+                {referenceGalleryBusy ? "Uploading..." : "Add photos"}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+              {referenceGallery.map((item) => {
+                const imageSrc = toUrl(item.image_url || item.image || "");
+                return (
+                  <Card key={item.id} className="overflow-hidden border border-slate-200">
+                    <div className="h-44 bg-slate-100">
+                      {imageSrc ? (
+                        <img src={imageSrc} alt={item.caption || "Reference image"} className="h-full w-full object-cover" />
+                      ) : null}
+                    </div>
+                    <div className="space-y-3 p-4">
+                      <input
+                        type="text"
+                        value={item._localCaption ?? item.caption ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setReferenceGallery((prev) =>
+                            prev.map((entry) =>
+                              entry.id === item.id ? { ...entry, _localCaption: value } : entry
+                            )
+                          );
+                        }}
+                        onBlur={() => saveReferenceCaption(item)}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="Short caption or style note (optional)"
+                      />
+                      <div className="flex justify-between gap-2">
+                        <GhostButton
+                          className="w-full"
+                          onClick={() => window.open(`/profiles/${meUser.username}`, "_self")}
+                        >
+                          View profile
+                        </GhostButton>
+                        <Button
+                          type="button"
+                          className="w-full !bg-rose-600 hover:!bg-rose-700"
+                          onClick={() => deleteReferenceItem(item.id)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </Card>
+      ) : (
       <Card className="p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-800">Your Projects</div>
@@ -1620,6 +1860,7 @@ export default function Dashboard() {
           </div>
         )}
       </Card>
+      )}
 
       <Card className="p-5 border border-emerald-200 bg-emerald-50/30">
         <div className="mb-3 flex items-center justify-between">

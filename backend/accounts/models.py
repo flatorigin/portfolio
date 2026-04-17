@@ -14,6 +14,10 @@ def logo_upload_path(instance, filename):
 def avatar_upload_path(instance, filename):
     # alias kept so existing migrations referencing this still work
     return logo_upload_path(instance, filename) 
+
+
+def homeowner_reference_upload_path(instance, filename):
+    return f"homeowner_references/user_{instance.user_id}/{filename}"
     
 class Profile(models.Model):
     class ProfileType(models.TextChoices):
@@ -44,6 +48,7 @@ class Profile(models.Model):
 
     show_contact_email = models.BooleanField(default=False)
     show_contact_phone = models.BooleanField(default=False)
+    public_profile_enabled = models.BooleanField(default=False)
     
     # Media
     logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
@@ -170,3 +175,22 @@ class ProfileSave(models.Model):
 
     def __str__(self):
         return f"{self.saver_id} saved {self.saved_user_id}"
+
+
+class HomeownerReferenceImage(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="homeowner_reference_images",
+    )
+    image = models.ImageField(upload_to=homeowner_reference_upload_path)
+    caption = models.CharField(max_length=160, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    order = models.PositiveIntegerField(default=0)
+    is_public = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "-created_at", "-id"]
+
+    def __str__(self):
+        return f"HomeownerReferenceImage<{self.user_id}:{self.id}>"
