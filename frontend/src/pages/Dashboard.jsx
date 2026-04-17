@@ -1166,6 +1166,7 @@ export default function Dashboard() {
               .map((p) => {
                 const coverSrc = getProjectCover(p);
                 const isPublished = !!p.is_public;
+                const isPrivateJob = !!(p.is_private || p.post_privacy === "private");
                 const bidMeta = jobBidMeta?.[p.id] || {
                   totalCount: 0,
                   openCount: 0,
@@ -1207,6 +1208,12 @@ export default function Dashboard() {
 
                       <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                         <Badge className="bg-slate-900 text-white">Job post</Badge>
+                        {isPrivateJob ? (
+                          <Badge className="inline-flex items-center gap-1 bg-[#ABBED1] text-[#27384A]">
+                            <SymbolIcon name="lock" className="text-[14px]" weight={500} />
+                            Private
+                          </Badge>
+                        ) : null}
                         {isAwarded ? (
                           <AwardedIcon />
                         ) : isPublished ? (
@@ -1862,6 +1869,7 @@ export default function Dashboard() {
       </Card>
       )}
 
+      {!isHomeownerAccount ? (
       <Card className="p-5 border border-emerald-200 bg-emerald-50/30">
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -1954,6 +1962,7 @@ export default function Dashboard() {
           </div>
         )}
       </Card>
+      ) : null}
 
       {saveToast ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
