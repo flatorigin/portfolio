@@ -1636,36 +1636,56 @@ export default function Dashboard() {
           <Badge>{referenceGallery.length} images</Badge>
         </div>
 
-        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+        <div
+          className={
+            "mb-4 rounded-2xl border px-4 py-4 transition " +
+            (meUser?.public_profile_enabled
+              ? "border-emerald-300 bg-emerald-50"
+              : "border-slate-200 bg-slate-50")
+          }
+        >
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            
+            {/* Left content */}
             <div>
-              <div className="text-sm font-semibold text-slate-900">Homeowner public profile</div>
+              <div className="text-sm font-semibold text-slate-900">
+                Homeowner public profile
+              </div>
               <div className="mt-1 text-xs text-slate-600">
                 Keep this off to stay private unless a public job post is live. Turn it on when you want your reference gallery and contact page discoverable from your own profile link.
               </div>
             </div>
-            <button
-              type="button"
-              onClick={toggleHomeownerPublicProfile}
-              className={
-                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition " +
-                (meUser?.public_profile_enabled
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-slate-200 text-slate-700")
-              }
-            >
-              <span
+
+            {/* Right toggle */}
+            <div className="flex items-center gap-3">
+              
+              <button
+                type="button"
+                onClick={toggleHomeownerPublicProfile}
+                aria-pressed={!!meUser?.public_profile_enabled}
+                aria-label="Toggle public profile"
                 className={
-                  "inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] " +
+                  "relative inline-flex h-5 w-10 items-center rounded-full border transition focus:outline-none focus:ring-1 focus:ring-slate-300 focus:ring-offset-1 " +
                   (meUser?.public_profile_enabled
-                    ? "bg-emerald-600 text-white"
-                    : "bg-white text-slate-500")
+                    ? "border-emerald-500 bg-emerald-500 justify-end"
+                    : "border-slate-300 bg-slate-300 justify-start")
                 }
               >
-                {meUser?.public_profile_enabled ? "On" : "Off"}
-              </span>
-              Public profile
-            </button>
+                <span
+                  className={
+                    "mx-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[8px] font-semibold transition " +
+                    (meUser?.public_profile_enabled ? "text-emerald-600" : "text-slate-500")
+                  }
+                >
+                  {meUser?.public_profile_enabled ? "ON" : "OFF"}
+                </span>
+              </button>
+
+              <div className="text-xs font-semibold text-slate-900">
+                Public
+              </div>
+
+            </div>
           </div>
         </div>
 
@@ -1682,7 +1702,7 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => referenceUploadRef.current?.click()}
-            className="flex min-h-[240px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-slate-400 hover:bg-white"
+            className="flex min-h-[240px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-slate-400 hover:bg-white"
           >
             <SymbolIcon name="add_photo_alternate" className="mb-4 text-[42px] text-slate-400" />
             <div className="text-base font-semibold text-slate-900">Add sample images</div>

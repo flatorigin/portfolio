@@ -7,7 +7,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { flushSync } from "react-dom";
 import api from "../api";
-import { Card, Input, Textarea, Button, Badge } from "../ui";
+import { Card, Input, Textarea, Button, Badge, SymbolIcon } from "../ui";
 
 function toggleInArray(arr, value) {
   const list = Array.isArray(arr) ? arr : [];
@@ -1036,9 +1036,12 @@ export default function CreateProjectCard({
               </div>
 
               <div
-                className="mt-1 flex min-h-[120px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 text-center text-sm text-slate-500"
+                className="mt-1 flex min-h-[240px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-slate-400 hover:bg-white"
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
+                onClick={() =>
+                  document.getElementById("create-project-add-images-input")?.click()
+                }
               >
                 <input
                   type="file"
@@ -1048,9 +1051,22 @@ export default function CreateProjectCard({
                   id="create-project-add-images-input"
                   onChange={(e) => handleAddImages(e.target.files)}
                 />
-                <label htmlFor="create-project-add-images-input" className="cursor-pointer">
-                  <div>Drag &amp; drop images here</div>
-                  <div className="mt-1 text-xs text-slate-400">or click to browse</div>
+                <label
+                  htmlFor="create-project-add-images-input"
+                  className="flex cursor-pointer flex-col items-center text-center"
+                >
+                  <SymbolIcon
+                    name="add_photo_alternate"
+                    className="mb-4 text-[42px] text-slate-400"
+                    weight={300}
+                  />
+                  <div className="text-base font-semibold text-slate-900">Add project images</div>
+                  <div className="mt-2 max-w-lg text-sm text-slate-600">
+                    Upload project images, add captions, and organize the work you want shown on your project card.
+                  </div>
+                  <div className="mt-5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+                    Browse images
+                  </div>
                 </label>
               </div>
             </div>

@@ -1,6 +1,7 @@
 // frontend/src/components/ImageUploader.jsx
 import { useState, useRef, useCallback } from "react";
 import api from "../api";
+import { Button, SymbolIcon } from "../ui";
 
 export default function ImageUploader({ projectId, onUploaded }) {
   const [files, setFiles] = useState([]); // [{ file, url, caption }]
@@ -38,6 +39,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="mb-2 font-semibold text-slate-700">Add Images</div>
+      <div className="mb-2 text-xs text-slate-600">Drag &amp; drop or click; add captions; upload.</div>
 
       <div
         role="button"
@@ -46,12 +48,36 @@ export default function ImageUploader({ projectId, onUploaded }) {
         onDragOver={(e)=>{e.preventDefault(); setOver(true);}}
         onDragLeave={()=>setOver(false)}
         onDrop={onDrop}
-        className={`mb-3 flex h-36 w-full cursor-pointer items-center justify-center rounded-xl border-2 border-dashed p-4 text-slate-500
-          ${over ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:bg-slate-50"}`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        className={`mb-3 flex min-h-[240px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-8 text-center transition
+          ${over ? "border-slate-400 bg-white" : "border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-white"}`}
       >
         <div className="text-center">
-          <div className="text-sm">Drag & drop images here</div>
-          <div className="text-xs">or click to browse</div>
+          <SymbolIcon
+            name="add_photo_alternate"
+            className="mb-4 text-[42px] text-slate-400"
+            weight={300}
+          />
+          <div className="text-base font-semibold text-slate-900">Add sample images</div>
+          <div className="mt-2 max-w-lg text-sm text-slate-600">
+            Upload project images, add captions, and organize the work you want shown on your project card.
+          </div>
+          <div className="mt-5">
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                inputRef.current?.click();
+              }}
+            >
+              Browse images
+            </Button>
+          </div>
         </div>
         <input
           ref={inputRef}
