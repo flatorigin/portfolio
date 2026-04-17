@@ -2,6 +2,7 @@
 from django.urls import path
 
 from .views import (
+    AIAssistView,
     MeView,
     PublicProfileView,
     ProfileLikeView,
@@ -18,6 +19,7 @@ app_name = "accounts"
 
 urlpatterns = [
     path("users/me/", MeView.as_view(), name="users-me"),
+    path("ai/assist/", AIAssistView.as_view(), name="ai-assist"),
     path("users/me/reference-gallery/", HomeownerReferenceGalleryView.as_view(), name="reference-gallery"),
     path("users/me/reference-gallery/<int:pk>/", HomeownerReferenceGalleryItemView.as_view(), name="reference-gallery-item"),
     path("auth/password-reset/", PasswordResetRequestView.as_view(), name="password-reset"),

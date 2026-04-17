@@ -2,11 +2,13 @@
 import logging
 import re
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.db.models import Q
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import timezone
 
 from djoser import signals
 from djoser.serializers import ActivationSerializer
@@ -18,8 +20,10 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
+from .ai import AIServiceError, generate_text
+from .models import AIConfiguration, AIUsageEvent, HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
 from .serializers import (
+    AIAssistSerializer,
     HomeownerReferenceImageSerializer,
     ProfileSerializer,
     PublicUserProfileSerializer,
@@ -46,6 +50,24 @@ PROJECT_SEARCH_STOPWORDS = {
     "fix",
     "new",
     "old",
+}
+
+AI_FEATURE_ROLE_RULES = {
+    "project_summary": None,
+    "project_checklist": None,
+    "bid_proposal": Profile.ProfileType.CONTRACTOR,
+    "profile_headline": Profile.ProfileType.CONTRACTOR,
+    "profile_blurb": Profile.ProfileType.CONTRACTOR,
+    "profile_bio": None,
+}
+
+AI_FEATURE_FLAG_MAP = {
+    "project_summary": "project_helper_enabled",
+    "project_checklist": "project_helper_enabled",
+    "bid_proposal": "bid_helper_enabled",
+    "profile_headline": "profile_helper_enabled",
+    "profile_blurb": "profile_helper_enabled",
+    "profile_bio": "profile_helper_enabled",
 }
 
 
@@ -78,6 +100,190 @@ class SafeUserCreateViewSet(DjoserUserViewSet):
 
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class AIAssistView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_profile(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        return profile
+
+    def _get_config(self):
+        config = AIConfiguration.get_solo()
+        if not config.daily_limit_per_user:
+            config.daily_limit_per_user = settings.AI_DAILY_LIMIT_PER_USER
+        return config
+
+    def _feature_allowed(self, profile, feature):
+        required_role = AI_FEATURE_ROLE_RULES.get(feature)
+        if required_role and profile.profile_type != required_role:
+            raise PermissionDenied("This AI helper is not available for your account type.")
+
+    def _feature_enabled(self, config, feature):
+        attr = AI_FEATURE_FLAG_MAP.get(feature)
+        return bool(attr and getattr(config, attr, False))
+
+    def _remaining_today(self, request, config):
+        used = AIUsageEvent.objects.filter(
+            user=request.user,
+            request_day=timezone.localdate(),
+            status=AIUsageEvent.Status.SUCCESS,
+        ).count()
+        return max(0, int(config.daily_limit_per_user) - used)
+
+    def _build_prompts(self, feature, data, profile):
+        if feature == "project_summary":
+            system = (
+                "You are helping a homeowner or contractor write a short, clear project summary "
+                "for a construction and remodeling platform. Keep it specific, practical, and honest. "
+                "Do not invent facts, credentials, permits, pricing, or timelines."
+            )
+            user = (
+                f"Role: {profile.profile_type or 'user'}\n"
+                f"Project title: {data.get('title', '')}\n"
+                f"Category: {data.get('category', '')}\n"
+                f"Location: {data.get('location', '')}\n"
+                f"Budget: {data.get('budget', '')}\n"
+                f"Timeline: {data.get('timeline', '')}\n"
+                f"Notes: {data.get('notes', '')}\n"
+                f"Current draft: {data.get('current_text', '')}\n\n"
+                "Write one tight project summary in 2 to 4 sentences."
+            )
+            return system, user
+        if feature == "project_checklist":
+            system = (
+                "You are a lightweight construction project intake assistant. "
+                "Return concise missing-detail prompts. Do not write marketing copy."
+            )
+            user = (
+                f"Project title: {data.get('title', '')}\n"
+                f"Category: {data.get('category', '')}\n"
+                f"Current draft: {data.get('current_text', '')}\n"
+                f"Notes: {data.get('notes', '')}\n\n"
+                "List up to 5 short missing details the user should clarify before posting."
+            )
+            return system, user
+        if feature == "bid_proposal":
+            system = (
+                "You are helping a contractor draft a professional bid proposal. "
+                "Keep it specific, realistic, and easy for a homeowner to review. "
+                "Do not invent scope, pricing, materials, or promises beyond the supplied notes."
+            )
+            user = (
+                f"Project title: {data.get('title', '')}\n"
+                f"Category: {data.get('category', '')}\n"
+                f"Timeline: {data.get('timeline', '')}\n"
+                f"Price type: {data.get('price_type', '')}\n"
+                f"Included: {data.get('included_text', '')}\n"
+                f"Excluded: {data.get('excluded_text', '')}\n"
+                f"Payment terms: {data.get('payment_terms', '')}\n"
+                f"Notes: {data.get('notes', '')}\n"
+                f"Current draft: {data.get('current_text', '')}\n\n"
+                "Write a concise bid proposal in 1 to 3 short paragraphs."
+            )
+            return system, user
+        if feature == "profile_headline":
+            system = (
+                "You are helping a contractor write a short public profile headline. "
+                "It should sound credible, clear, and grounded. No hype."
+            )
+            user = (
+                f"Display name: {profile.display_name}\n"
+                f"Service area: {profile.service_location}\n"
+                f"Bio notes: {data.get('notes', '')}\n"
+                f"Current draft: {data.get('current_text', '')}\n\n"
+                "Write one headline under 120 characters."
+            )
+            return system, user
+        if feature == "profile_blurb":
+            system = (
+                "You are helping a contractor write a short public profile blurb. "
+                "Keep it direct, professional, and local. No buzzwords."
+            )
+            user = (
+                f"Display name: {profile.display_name}\n"
+                f"Service area: {profile.service_location}\n"
+                f"Notes: {data.get('notes', '')}\n"
+                f"Current draft: {data.get('current_text', '')}\n\n"
+                "Write a short profile blurb in 2 to 4 sentences."
+            )
+            return system, user
+        system = (
+            "You are helping a user write a professional profile bio for a contractor/homeowner platform. "
+            "Keep the tone practical and credible. Do not invent credentials."
+        )
+        user = (
+            f"Role: {profile.profile_type or 'user'}\n"
+            f"Display name: {profile.display_name}\n"
+            f"Service area: {profile.service_location}\n"
+            f"Audience: {data.get('audience', '')}\n"
+            f"Notes: {data.get('notes', '')}\n"
+            f"Current draft: {data.get('current_text', '')}\n\n"
+            "Write a short profile bio in 1 to 3 paragraphs."
+        )
+        return system, user
+
+    def post(self, request, *args, **kwargs):
+        serializer = AIAssistSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        feature = data["feature"]
+
+        profile = self._get_profile(request)
+        config = self._get_config()
+
+        if not settings.AI_ENABLED and not config.enabled:
+            raise PermissionDenied("AI helpers are currently paused.")
+        if not self._feature_enabled(config, feature):
+            raise PermissionDenied("This AI helper is currently turned off.")
+
+        self._feature_allowed(profile, feature)
+
+        remaining_before = self._remaining_today(request, config)
+        if remaining_before <= 0:
+            return Response(
+                {"detail": "You have reached your AI helper limit for today.", "remaining_today": 0},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        system_prompt, user_prompt = self._build_prompts(feature, data, profile)
+        model_name = ""
+        try:
+            result = generate_text(
+                feature=feature,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
+            model_name = result["model"]
+            AIUsageEvent.objects.create(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                status=AIUsageEvent.Status.SUCCESS,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=len(result["text"]),
+            )
+        except AIServiceError as exc:
+            AIUsageEvent.objects.create(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                status=AIUsageEvent.Status.ERROR,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=0,
+            )
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        remaining_after = self._remaining_today(request, config)
+        return Response(
+            {
+                "text": result["text"],
+                "model": model_name,
+                "remaining_today": remaining_after,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ActivationRedirectView(APIView):

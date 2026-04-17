@@ -1838,7 +1838,13 @@ export default function ProjectDetail() {
           ) : null}
 
           {project?.is_job_posting && project?.id ? (
-            <BidModule projectId={project.id} ownerUsername={project.owner_username} />
+            <BidModule
+              projectId={project.id}
+              ownerUsername={project.owner_username}
+              projectTitle={project.title || ""}
+              projectCategory={project.category || ""}
+              projectSummary={project.job_summary || project.summary || ""}
+            />
           ) : null}
           {isOwnerUser && isEditing && project && (
             <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0">

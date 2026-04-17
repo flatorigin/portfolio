@@ -7,6 +7,7 @@
 // =======================================
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import api from "../api";
+import AiWriteButton from "../components/AiWriteButton";
 import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
 import LanguageMultiSelect from "../components/LanguageMultiSelect";
 
@@ -575,6 +576,16 @@ export default function EditProfile() {
                     placeholder="We’re changing the way contractors connect"
                     maxLength={120}
                   />
+                  <AiWriteButton
+                    className="mt-2"
+                    feature="profile_headline"
+                    payload={{
+                      current_text: form.hero_headline,
+                      notes: form.bio,
+                    }}
+                    label="Draft headline with AI"
+                    onApply={(text) => setForm((prev) => ({ ...prev, hero_headline: text }))}
+                  />
                   <p className="mt-1 text-[11px] text-slate-500">
                     Short, bold line shown on your public profile hero.
                   </p>
@@ -590,6 +601,16 @@ export default function EditProfile() {
                     onChange={updateField("hero_blurb")}
                     placeholder="Connect directly with local pros who let their craftsmanship do the talking…"
                     className="min-h-[110px]"
+                  />
+                  <AiWriteButton
+                    className="mt-2"
+                    feature="profile_blurb"
+                    payload={{
+                      current_text: form.hero_blurb,
+                      notes: form.bio,
+                    }}
+                    label="Draft blurb with AI"
+                    onApply={(text) => setForm((prev) => ({ ...prev, hero_blurb: text }))}
                   />
                 </div>
               </div>
@@ -699,6 +720,17 @@ export default function EditProfile() {
                   onChange={updateField("bio")}
                   placeholder="Tell homeowners what you do and how you work…"
                   className="min-h-[140px]"
+                />
+                <AiWriteButton
+                  className="mt-2"
+                  feature="profile_bio"
+                  payload={{
+                    current_text: form.bio,
+                    notes: `${form.display_name}\n${form.service_location}`,
+                    audience: "homeowners",
+                  }}
+                  label="Draft bio with AI"
+                  onApply={(text) => setForm((prev) => ({ ...prev, bio: text }))}
                 />
               </div>
               ) : null}

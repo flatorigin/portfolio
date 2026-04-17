@@ -7,6 +7,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { flushSync } from "react-dom";
 import api from "../api";
+import AiWriteButton from "./AiWriteButton";
 import { Card, Input, Textarea, Button, Badge, SymbolIcon } from "../ui";
 
 function toggleInArray(arr, value) {
@@ -818,6 +819,26 @@ export default function CreateProjectCard({
                           ...p,
                           job_summary: e.target.value,
                           summary: jobOn ? e.target.value : p.summary,
+                        }))
+                      }
+                    />
+                    <AiWriteButton
+                      className="mt-3"
+                      feature="project_summary"
+                      payload={{
+                        title: form.title || "",
+                        category: form.category || "",
+                        location: form.location || "",
+                        budget: String(form.budget || ""),
+                        notes: form.summary || "",
+                        current_text: form.job_summary || "",
+                      }}
+                      label="Draft summary with AI"
+                      onApply={(text) =>
+                        setForm((p) => ({
+                          ...p,
+                          job_summary: text,
+                          summary: jobOn ? text : p.summary,
                         }))
                       }
                     />

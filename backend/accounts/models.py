@@ -194,3 +194,69 @@ class HomeownerReferenceImage(models.Model):
 
     def __str__(self):
         return f"HomeownerReferenceImage<{self.user_id}:{self.id}>"
+
+
+class AIConfiguration(models.Model):
+    enabled = models.BooleanField(default=False)
+    project_helper_enabled = models.BooleanField(default=True)
+    bid_helper_enabled = models.BooleanField(default=True)
+    profile_helper_enabled = models.BooleanField(default=True)
+    daily_limit_per_user = models.PositiveIntegerField(default=10)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ai_config_updates",
+    )
+
+    class Meta:
+        verbose_name = "AI configuration"
+        verbose_name_plural = "AI configuration"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "AI configuration"
+
+
+class AIUsageEvent(models.Model):
+    class Feature(models.TextChoices):
+        PROJECT_SUMMARY = "project_summary", "Project summary"
+        PROJECT_CHECKLIST = "project_checklist", "Project checklist"
+        BID_PROPOSAL = "bid_proposal", "Bid proposal"
+        PROFILE_HEADLINE = "profile_headline", "Profile headline"
+        PROFILE_BLURB = "profile_blurb", "Profile blurb"
+        PROFILE_BIO = "profile_bio", "Profile bio"
+
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Success"
+        REJECTED = "rejected", "Rejected"
+        ERROR = "error", "Error"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ai_usage_events",
+    )
+    feature = models.CharField(max_length=40, choices=Feature.choices)
+    model_name = models.CharField(max_length=64, blank=True, default="")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCESS)
+    prompt_chars = models.PositiveIntegerField(default=0)
+    response_chars = models.PositiveIntegerField(default=0)
+    request_day = models.DateField(default=timezone.localdate, db_index=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"AIUsageEvent<{self.user_id}:{self.feature}:{self.status}>"
