@@ -4,7 +4,12 @@ import { register } from "../auth";
 import { Card, Input, PasswordInput, Button } from "../ui";
 
 export default function Register() {
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
+  const [form, setForm] = useState({
+    username: "",
+    email: "",
+    password: "",
+    profile_type: "",
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
@@ -103,6 +108,59 @@ export default function Register() {
                   autoComplete="new-password"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  I’m joining as
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label
+                    className={[
+                      "cursor-pointer rounded-2xl border px-4 py-4 transition",
+                      form.profile_type === "homeowner"
+                        ? "border-slate-900 bg-slate-50"
+                        : "border-slate-200 bg-white hover:border-slate-300",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="radio"
+                      name="profile_type"
+                      value="homeowner"
+                      checked={form.profile_type === "homeowner"}
+                      onChange={(e) => setForm({ ...form, profile_type: e.target.value })}
+                      className="sr-only"
+                      required
+                    />
+                    <div className="text-sm font-semibold text-slate-900">Homeowner</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-600">
+                      Post projects, compare bids, and keep a private or public homeowner profile.
+                    </div>
+                  </label>
+
+                  <label
+                    className={[
+                      "cursor-pointer rounded-2xl border px-4 py-4 transition",
+                      form.profile_type === "contractor"
+                        ? "border-slate-900 bg-slate-50"
+                        : "border-slate-200 bg-white hover:border-slate-300",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="radio"
+                      name="profile_type"
+                      value="contractor"
+                      checked={form.profile_type === "contractor"}
+                      onChange={(e) => setForm({ ...form, profile_type: e.target.value })}
+                      className="sr-only"
+                      required
+                    />
+                    <div className="text-sm font-semibold text-slate-900">Contractor</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-600">
+                      Build a public profile, showcase work, and bid on posted jobs.
+                    </div>
+                  </label>
+                </div>
               </div>
 
               {error ? (
