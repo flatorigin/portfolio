@@ -176,6 +176,103 @@ function ReplySnippet({ message, mine = false }) {
   );
 }
 
+function normalizeError(err, fallback) {
+  const data = err?.response?.data;
+
+  if (typeof data === "string") return data || fallback;
+  if (data?.detail) return data.detail;
+
+  if (data && typeof data === "object") {
+    const first = Object.values(data)[0];
+    if (Array.isArray(first) && first.length) return String(first[0]);
+    if (typeof first === "string") return first;
+  }
+
+  return err?.message || fallback;
+}
+
+function emptyBidDraftForm() {
+  return {
+    price_type: "fixed",
+    amount: "",
+    amount_min: "",
+    amount_max: "",
+    timeline_text: "",
+    proposal_text: "",
+    included_text: "",
+    excluded_text: "",
+    payment_terms: "",
+    valid_until: "",
+    attachment: null,
+  };
+}
+
+function emptyProjectDraftForm() {
+  return {
+    title: "",
+    summary: "",
+    job_summary: "",
+    category: "",
+    location: "",
+    budget: "",
+    sqf: "",
+    post_privacy: "public",
+    compliance_confirmed: false,
+  };
+}
+
+function Modal({ open, title, onClose, children }) {
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose?.();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+          <div className="text-lg font-semibold text-slate-950">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function DraftField({ label, helper, children }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-slate-800">{label}</label>
+      {children}
+      {helper ? <p className="text-xs text-slate-500">{helper}</p> : null}
+    </div>
+  );
+}
+
 export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
   const navigate = useNavigate();
@@ -210,6 +307,17 @@ export default function MessagesThread() {
 
   const [readThreadIds, setReadThreadIds] = useState(new Set());
   const [meUsername, setMeUsername] = useState(() => localStorage.getItem("username") || "");
+  const [meProfileType, setMeProfileType] = useState("");
+  const [draftError, setDraftError] = useState("");
+  const [convertingMessageId, setConvertingMessageId] = useState(null);
+  const [bidDraftOpen, setBidDraftOpen] = useState(false);
+  const [bidDraftContext, setBidDraftContext] = useState(null);
+  const [bidDraftForm, setBidDraftForm] = useState(emptyBidDraftForm());
+  const [bidSubmitting, setBidSubmitting] = useState(false);
+  const [projectDraftOpen, setProjectDraftOpen] = useState(false);
+  const [projectDraftContext, setProjectDraftContext] = useState(null);
+  const [projectDraftForm, setProjectDraftForm] = useState(emptyProjectDraftForm());
+  const [projectSubmitting, setProjectSubmitting] = useState(false);
 
   useEffect(() => {
     const syncUsername = () => {
@@ -223,6 +331,31 @@ export default function MessagesThread() {
     return () => {
       window.removeEventListener("storage", syncUsername);
       window.removeEventListener("auth:changed", syncUsername);
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const token = localStorage.getItem("access");
+
+    if (!token) {
+      setMeProfileType("");
+      return () => {
+        alive = false;
+      };
+    }
+
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (alive) setMeProfileType(data?.profile_type || "");
+      } catch {
+        if (alive) setMeProfileType("");
+      }
+    })();
+
+    return () => {
+      alive = false;
     };
   }, []);
 
@@ -278,6 +411,8 @@ export default function MessagesThread() {
     () => getThreadBidMeta(activeThread),
     [activeThread]
   );
+  const canUseBidConversion = meProfileType === "contractor" && !!activeThread?.project;
+  const canUseProjectConversion = meProfileType === "homeowner" && !activeThread?.project;
 
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true);
@@ -389,6 +524,137 @@ export default function MessagesThread() {
     }
   }
 
+  function closeBidDraftModal() {
+    setBidDraftOpen(false);
+    setBidDraftContext(null);
+    setBidDraftForm(emptyBidDraftForm());
+    setDraftError("");
+  }
+
+  function closeProjectDraftModal() {
+    setProjectDraftOpen(false);
+    setProjectDraftContext(null);
+    setProjectDraftForm(emptyProjectDraftForm());
+    setDraftError("");
+  }
+
+  async function handlePrefillBid(message) {
+    if (!message?.id) return;
+    setDraftError("");
+    setConvertingMessageId(message.id);
+    try {
+      const { data } = await api.post(`/messages/${message.id}/prefill-bid/`);
+      setBidDraftContext(data);
+      setBidDraftForm({
+        ...emptyBidDraftForm(),
+        ...(data?.prefill || {}),
+      });
+      setBidDraftOpen(true);
+    } catch (err) {
+      setDraftError(normalizeError(err, "Could not prepare a bid draft from this message."));
+    } finally {
+      if (isMountedRef.current) setConvertingMessageId(null);
+    }
+  }
+
+  async function handlePrefillProject(message) {
+    if (!message?.id) return;
+    setDraftError("");
+    setConvertingMessageId(message.id);
+    try {
+      const { data } = await api.post(`/messages/${message.id}/prefill-project/`);
+      setProjectDraftContext(data);
+      setProjectDraftForm({
+        ...emptyProjectDraftForm(),
+        ...(data?.prefill || {}),
+      });
+      setProjectDraftOpen(true);
+    } catch (err) {
+      setDraftError(normalizeError(err, "Could not prepare a project draft from this message."));
+    } finally {
+      if (isMountedRef.current) setConvertingMessageId(null);
+    }
+  }
+
+  async function submitBidDraft(event) {
+    event.preventDefault();
+    if (!bidDraftContext?.project_id) return;
+
+    setBidSubmitting(true);
+    setDraftError("");
+    try {
+      const fd = new FormData();
+      fd.append("price_type", bidDraftForm.price_type);
+      if (bidDraftForm.price_type === "fixed") {
+        fd.append("amount", bidDraftForm.amount);
+      } else {
+        fd.append("amount_min", bidDraftForm.amount_min);
+        fd.append("amount_max", bidDraftForm.amount_max);
+      }
+      fd.append("timeline_text", bidDraftForm.timeline_text || "");
+      fd.append("proposal_text", bidDraftForm.proposal_text || "");
+      fd.append("included_text", bidDraftForm.included_text || "");
+      fd.append("excluded_text", bidDraftForm.excluded_text || "");
+      fd.append("payment_terms", bidDraftForm.payment_terms || "");
+      fd.append("valid_until", bidDraftForm.valid_until || "");
+      if (bidDraftForm.attachment) fd.append("attachment", bidDraftForm.attachment);
+
+      await api.post(`/projects/${bidDraftContext.project_id}/bids/`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      closeBidDraftModal();
+      await fetchThreads();
+      navigate(`/projects/${bidDraftContext.project_id}`);
+    } catch (err) {
+      setDraftError(normalizeError(err, "Could not submit this bid."));
+    } finally {
+      if (isMountedRef.current) setBidSubmitting(false);
+    }
+  }
+
+  async function submitProjectDraft(mode = "draft") {
+    setProjectSubmitting(true);
+    setDraftError("");
+    try {
+      const postPrivacy = projectDraftForm.post_privacy || "public";
+      const inviteUsername = projectDraftContext?.suggested_private_invite_username || "";
+
+      if (mode === "publish" && !projectDraftForm.compliance_confirmed) {
+        throw new Error("Please confirm compliance before publishing.");
+      }
+
+      if (postPrivacy === "private" && !inviteUsername) {
+        throw new Error("A private project from chat needs a contractor in this conversation to invite.");
+      }
+
+      const payload = {
+        title: projectDraftForm.title || "New project draft",
+        summary: projectDraftForm.summary || "",
+        job_summary: projectDraftForm.job_summary || projectDraftForm.summary || "",
+        category: projectDraftForm.category || "",
+        location: projectDraftForm.location || "",
+        budget: projectDraftForm.budget || null,
+        sqf: projectDraftForm.sqf || null,
+        is_job_posting: true,
+        is_public: mode === "publish" && postPrivacy === "public",
+        is_private: postPrivacy === "private",
+        post_privacy: postPrivacy,
+        compliance_confirmed: !!projectDraftForm.compliance_confirmed,
+        private_contractor_usernames:
+          postPrivacy === "private" && inviteUsername ? [inviteUsername] : [],
+      };
+
+      const { data } = await api.post("/projects/", payload);
+      closeProjectDraftModal();
+      navigate(`/projects/${data.id}`);
+    } catch (err) {
+      setDraftError(normalizeError(err, "Could not create this project draft."));
+    } finally {
+      if (isMountedRef.current) setProjectSubmitting(false);
+    }
+  }
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!activeThread?.id) return;
@@ -484,6 +750,7 @@ export default function MessagesThread() {
   };
 
   return (
+    <>
     <div className="flex items-start gap-4">
       <div
         className={[
@@ -652,6 +919,12 @@ export default function MessagesThread() {
                     </div>
                   </div>
                 )}
+
+                {draftError ? (
+                  <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {draftError}
+                  </div>
+                ) : null}
               </div>
 
               <div className="mb-3 flex-1 overflow-y-auto rounded-xl bg-slate-50 p-3">
@@ -741,6 +1014,28 @@ export default function MessagesThread() {
                               Reply
                             </button>
 
+                            {canUseBidConversion && (m.text || "").trim() ? (
+                              <button
+                                type="button"
+                                onClick={() => handlePrefillBid(m)}
+                                disabled={convertingMessageId === m.id}
+                                className="text-[11px] font-medium text-sky-700 hover:text-sky-900 disabled:opacity-60"
+                              >
+                                {convertingMessageId === m.id ? "Preparing..." : "Convert to Bid"}
+                              </button>
+                            ) : null}
+
+                            {canUseProjectConversion && (m.text || "").trim() ? (
+                              <button
+                                type="button"
+                                onClick={() => handlePrefillProject(m)}
+                                disabled={convertingMessageId === m.id}
+                                className="text-[11px] font-medium text-sky-700 hover:text-sky-900 disabled:opacity-60"
+                              >
+                                {convertingMessageId === m.id ? "Preparing..." : "Create Project from Chat"}
+                              </button>
+                            ) : null}
+
                             {fromMe && canDelete && m.id ? (
                               <button
                                 type="button"
@@ -780,5 +1075,413 @@ export default function MessagesThread() {
         </Card>
       </div>
     </div>
+
+    <Modal
+      open={bidDraftOpen}
+      onClose={closeBidDraftModal}
+      title="Convert Message to Bid"
+    >
+      <form className="space-y-4" onSubmit={submitBidDraft}>
+        <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">
+            Pre-filled from conversation message
+          </div>
+          <div className="mt-1">
+            This bid will be created for:{" "}
+            <span className="font-semibold">{bidDraftContext?.project_title || "Project"}</span>
+          </div>
+        </div>
+
+        {bidDraftContext?.source_text ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Source message
+            </div>
+            <div className="mt-1 whitespace-pre-wrap">{bidDraftContext.source_text}</div>
+          </div>
+        ) : null}
+
+        {draftError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {draftError}
+          </div>
+        ) : null}
+
+        <DraftField label="Project">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            {bidDraftContext?.project_title || "Project"}
+          </div>
+        </DraftField>
+
+        <DraftField label="Price type">
+          <div className="flex flex-wrap gap-4">
+            {[
+              { value: "fixed", label: "Fixed price" },
+              { value: "range", label: "Estimate range" },
+            ].map((option) => (
+              <label key={option.value} className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="price_type"
+                  value={option.value}
+                  checked={bidDraftForm.price_type === option.value}
+                  onChange={(event) =>
+                    setBidDraftForm((prev) => ({ ...prev, price_type: event.target.value }))
+                  }
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </DraftField>
+
+        {bidDraftForm.price_type === "fixed" ? (
+          <DraftField
+            label="Bid amount"
+            helper="Enter the total amount you would charge for this job."
+          >
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={bidDraftForm.amount}
+              onChange={(event) =>
+                setBidDraftForm((prev) => ({ ...prev, amount: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              placeholder="Example: 4500"
+            />
+          </DraftField>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <DraftField label="Minimum amount">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={bidDraftForm.amount_min}
+                onChange={(event) =>
+                  setBidDraftForm((prev) => ({ ...prev, amount_min: event.target.value }))
+                }
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+                placeholder="Example: 4000"
+              />
+            </DraftField>
+            <DraftField label="Maximum amount">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={bidDraftForm.amount_max}
+                onChange={(event) =>
+                  setBidDraftForm((prev) => ({ ...prev, amount_max: event.target.value }))
+                }
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+                placeholder="Example: 5500"
+              />
+            </DraftField>
+          </div>
+        )}
+
+        <DraftField label="Estimated timeline">
+          <input
+            type="text"
+            value={bidDraftForm.timeline_text}
+            onChange={(event) =>
+              setBidDraftForm((prev) => ({ ...prev, timeline_text: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Example: 2–3 weeks"
+          />
+        </DraftField>
+
+        <DraftField
+          label="Proposal"
+          helper="This is your main message to the owner. Explain how you would handle the project."
+        >
+          <textarea
+            rows={6}
+            value={bidDraftForm.proposal_text}
+            onChange={(event) =>
+              setBidDraftForm((prev) => ({ ...prev, proposal_text: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Describe your approach, understanding of the job, and anything the owner should know before choosing your bid."
+          />
+        </DraftField>
+
+        <DraftField label="What’s included">
+          <textarea
+            rows={4}
+            value={bidDraftForm.included_text}
+            onChange={(event) =>
+              setBidDraftForm((prev) => ({ ...prev, included_text: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Example: labor, installation, standard materials, site cleanup"
+          />
+        </DraftField>
+
+        <DraftField label="What’s excluded">
+          <textarea
+            rows={4}
+            value={bidDraftForm.excluded_text}
+            onChange={(event) =>
+              setBidDraftForm((prev) => ({ ...prev, excluded_text: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Example: permit fees, specialty finishes, hidden damage repair"
+          />
+        </DraftField>
+
+        <DraftField label="Payment terms">
+          <textarea
+            rows={3}
+            value={bidDraftForm.payment_terms}
+            onChange={(event) =>
+              setBidDraftForm((prev) => ({ ...prev, payment_terms: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Example: 30% deposit, 40% during work, 30% on completion"
+          />
+        </DraftField>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DraftField label="Bid valid until">
+            <input
+              type="date"
+              value={bidDraftForm.valid_until}
+              onChange={(event) =>
+                setBidDraftForm((prev) => ({ ...prev, valid_until: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            />
+          </DraftField>
+          <DraftField label="Attachment (optional)">
+            <input
+              type="file"
+              onChange={(event) =>
+                setBidDraftForm((prev) => ({
+                  ...prev,
+                  attachment: event.target.files?.[0] || null,
+                }))
+              }
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            />
+          </DraftField>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <Button type="button" variant="outline" onClick={closeBidDraftModal}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={bidSubmitting}>
+            {bidSubmitting ? "Sending..." : "Send Bid"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+
+    <Modal
+      open={projectDraftOpen}
+      onClose={closeProjectDraftModal}
+      title="Create Project from Chat"
+    >
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">
+            Pre-filled from conversation message
+          </div>
+          <div className="mt-1">
+            Review this draft before saving or publishing. It will not be created until you confirm.
+          </div>
+        </div>
+
+        {projectDraftContext?.source_text ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Source message
+            </div>
+            <div className="mt-1 whitespace-pre-wrap">{projectDraftContext.source_text}</div>
+          </div>
+        ) : null}
+
+        {draftError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {draftError}
+          </div>
+        ) : null}
+
+        <DraftField label="Project title">
+          <input
+            type="text"
+            value={projectDraftForm.title}
+            onChange={(event) =>
+              setProjectDraftForm((prev) => ({ ...prev, title: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Example: Kitchen cabinet refinish"
+          />
+        </DraftField>
+
+        <DraftField label="Summary">
+          <textarea
+            rows={4}
+            value={projectDraftForm.summary}
+            onChange={(event) =>
+              setProjectDraftForm((prev) => ({
+                ...prev,
+                summary: event.target.value,
+                job_summary: prev.job_summary || event.target.value,
+              }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Short project summary"
+          />
+        </DraftField>
+
+        <DraftField label="Detailed description">
+          <textarea
+            rows={6}
+            value={projectDraftForm.job_summary}
+            onChange={(event) =>
+              setProjectDraftForm((prev) => ({ ...prev, job_summary: event.target.value }))
+            }
+            className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+            placeholder="Project details, scope, constraints, and notes"
+          />
+        </DraftField>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DraftField label="Category">
+            <input
+              type="text"
+              value={projectDraftForm.category}
+              onChange={(event) =>
+                setProjectDraftForm((prev) => ({ ...prev, category: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              placeholder="Example: Renovation"
+            />
+          </DraftField>
+          <DraftField label="Location">
+            <input
+              type="text"
+              value={projectDraftForm.location}
+              onChange={(event) =>
+                setProjectDraftForm((prev) => ({ ...prev, location: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              placeholder="City, State"
+            />
+          </DraftField>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DraftField label="Budget">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={projectDraftForm.budget}
+              onChange={(event) =>
+                setProjectDraftForm((prev) => ({ ...prev, budget: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              placeholder="Example: 25000"
+            />
+          </DraftField>
+          <DraftField label="Square feet">
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={projectDraftForm.sqf}
+              onChange={(event) =>
+                setProjectDraftForm((prev) => ({ ...prev, sqf: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm"
+              placeholder="Example: 1800"
+            />
+          </DraftField>
+        </div>
+
+        <DraftField label="Privacy">
+          <div className="flex flex-wrap gap-4">
+            {[
+              { value: "public", label: "Public project" },
+              { value: "private", label: "Private invite" },
+            ].map((option) => (
+              <label key={option.value} className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="post_privacy"
+                  value={option.value}
+                  checked={projectDraftForm.post_privacy === option.value}
+                  onChange={(event) =>
+                    setProjectDraftForm((prev) => ({ ...prev, post_privacy: event.target.value }))
+                  }
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+          {projectDraftForm.post_privacy === "private" ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              {projectDraftContext?.suggested_private_invite_username ? (
+                <>
+                  This private job will invite{" "}
+                  <span className="font-semibold">
+                    @{projectDraftContext.suggested_private_invite_username}
+                  </span>
+                  {" "}from this conversation.
+                </>
+              ) : (
+                "This conversation does not include a contractor account to invite yet."
+              )}
+            </div>
+          ) : null}
+        </DraftField>
+
+        <label className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4"
+            checked={!!projectDraftForm.compliance_confirmed}
+            onChange={(event) =>
+              setProjectDraftForm((prev) => ({
+                ...prev,
+                compliance_confirmed: event.target.checked,
+              }))
+            }
+          />
+          <span>
+            I understand that I am liable for the content I post and confirm it complies with platform terms and applicable laws.
+          </span>
+        </label>
+
+        <div className="flex justify-end gap-3">
+          <Button type="button" variant="outline" onClick={closeProjectDraftModal}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={projectSubmitting}
+            onClick={() => submitProjectDraft("draft")}
+          >
+            {projectSubmitting ? "Saving..." : "Save Draft"}
+          </Button>
+          <Button
+            type="button"
+            disabled={projectSubmitting}
+            onClick={() => submitProjectDraft("publish")}
+          >
+            {projectSubmitting ? "Publishing..." : "Publish Project"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+    </>
   );
 }

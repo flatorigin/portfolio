@@ -4,7 +4,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import Profile
-from .models import Project, ProjectInvite
+from .models import Project, ProjectInvite, MessageThread, PrivateMessage
+from apps.bids.models import Bid
 
 
 User = get_user_model()
@@ -221,3 +222,113 @@ class PrivateProjectAccessTests(APITestCase):
         project = Project.objects.get(id=response.data["id"])
         self.assertEqual(project.private_contractor_username, "formpro")
         self.assertTrue(project.invites.filter(contractor=contractor).exists())
+
+
+class MessagePrefillTests(APITestCase):
+    def setUp(self):
+        self.homeowner = User.objects.create_user(username="homeowner", password="pw123456")
+        self.contractor = User.objects.create_user(username="contractor", password="pw123456")
+        self.contractor_two = User.objects.create_user(username="contractortwo", password="pw123456")
+        self.other_homeowner = User.objects.create_user(username="otherhome", password="pw123456")
+
+        Profile.objects.create(user=self.homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
+        Profile.objects.create(user=self.contractor, profile_type=Profile.ProfileType.CONTRACTOR)
+        Profile.objects.create(user=self.contractor_two, profile_type=Profile.ProfileType.CONTRACTOR)
+        Profile.objects.create(user=self.other_homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
+
+        self.project = Project.objects.create(
+            owner=self.homeowner,
+            title="Cabinet refinish",
+            summary="Kitchen cabinet job.",
+            is_job_posting=True,
+            is_public=True,
+        )
+
+        self.project_thread, _ = MessageThread.get_or_create_dm(
+            self.homeowner,
+            self.contractor,
+            origin_project=self.project,
+            initiated_by=self.homeowner,
+        )
+        self.project_thread.owner_has_accepted = True
+        self.project_thread.client_has_accepted = True
+        self.project_thread.save(update_fields=["owner_has_accepted", "client_has_accepted"])
+
+        self.project_message = PrivateMessage.objects.create(
+            thread=self.project_thread,
+            sender=self.contractor,
+            text="I can handle this for 4500 and finish in two weeks.",
+        )
+
+        self.direct_thread, _ = MessageThread.get_or_create_dm(
+            self.homeowner,
+            self.contractor_two,
+            initiated_by=self.homeowner,
+        )
+        self.direct_thread.owner_has_accepted = True
+        self.direct_thread.client_has_accepted = True
+        self.direct_thread.save(update_fields=["owner_has_accepted", "client_has_accepted"])
+        self.direct_message = PrivateMessage.objects.create(
+            thread=self.direct_thread,
+            sender=self.homeowner,
+            text="We need a bathroom remodel with warmer tile and better lighting.",
+        )
+
+    def test_contractor_can_prefill_bid_from_project_thread_message(self):
+        self.client.force_authenticate(user=self.contractor)
+        response = self.client.post(f"/api/messages/{self.project_message.id}/prefill-bid/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["project_id"], self.project.id)
+        self.assertEqual(response.data["project_title"], self.project.title)
+        self.assertEqual(
+            response.data["prefill"]["proposal_text"],
+            "I can handle this for 4500 and finish in two weeks.",
+        )
+
+    def test_contractor_bid_prefill_requires_project_context(self):
+        self.client.force_authenticate(user=self.contractor_two)
+        response = self.client.post(f"/api/messages/{self.direct_message.id}/prefill-bid/")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("not linked to a project", str(response.data).lower())
+
+    def test_homeowner_can_prefill_project_from_direct_thread_message(self):
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(f"/api/messages/{self.direct_message.id}/prefill-project/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["suggested_private_invite_username"], "contractortwo")
+        self.assertTrue(response.data["prefill"]["is_job_posting"])
+        self.assertEqual(
+            response.data["prefill"]["summary"],
+            "We need a bathroom remodel with warmer tile and better lighting.",
+        )
+
+    def test_homeowner_cannot_prefill_project_for_project_linked_thread(self):
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(f"/api/messages/{self.project_message.id}/prefill-project/")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already linked to a project", str(response.data).lower())
+
+    def test_homeowner_cannot_prefill_bid(self):
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(f"/api/messages/{self.project_message.id}/prefill-bid/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_prefill_bid_blocks_existing_bid(self):
+        Bid.objects.create(
+            project=self.project,
+            contractor=self.contractor,
+            price_type=Bid.PRICE_TYPE_FIXED,
+            amount="3500.00",
+            proposal_text="Already sent.",
+            message="Already sent.",
+        )
+        self.client.force_authenticate(user=self.contractor)
+        response = self.client.post(f"/api/messages/{self.project_message.id}/prefill-bid/")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("already have a bid", str(response.data).lower())
