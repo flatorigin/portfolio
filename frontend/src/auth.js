@@ -1,7 +1,7 @@
 import api from "./api";
 
-export async function register({ username, email, password }) {
-  await api.post("/auth/users/", { username, email, password });
+export async function register({ username, email, password, profile_type }) {
+  await api.post("/auth/users/", { username, email, password, profile_type });
 }
 export async function login({ username, password }) {
   const { data } = await api.post("/auth/jwt/create", { username, password });

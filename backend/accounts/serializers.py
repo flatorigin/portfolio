@@ -1,6 +1,7 @@
 # backend/accounts/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from djoser.serializers import UserCreateSerializer
 from .models import HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
 
 User = get_user_model()
@@ -87,6 +88,35 @@ class HomeownerReferenceImageSerializer(serializers.ModelSerializer):
         if obj.image and hasattr(obj.image, "url"):
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
+
+
+class RoleAwareUserCreateSerializer(UserCreateSerializer):
+    profile_type = serializers.ChoiceField(
+        choices=Profile.ProfileType.choices,
+        write_only=True,
+    )
+
+    class Meta(UserCreateSerializer.Meta):
+        model = User
+        fields = tuple(UserCreateSerializer.Meta.fields) + ("profile_type",)
+
+    def validate(self, attrs):
+        profile_type = attrs.get("profile_type")
+        base_attrs = dict(attrs)
+        base_attrs.pop("profile_type", None)
+        validated = super().validate(base_attrs)
+        if profile_type:
+            validated["profile_type"] = profile_type
+        return validated
+
+    def create(self, validated_data):
+        profile_type = validated_data.pop("profile_type")
+        user = super().create(validated_data)
+        Profile.objects.update_or_create(
+            user=user,
+            defaults={"profile_type": profile_type},
+        )
+        return user
 
 
 class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):

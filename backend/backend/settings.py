@@ -118,6 +118,7 @@ STATICFILES_DIRS = [
 
 # --- Email (Resend via Anymail; fallback to console if no key) ---
 EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
+EMAIL_FILE_PATH = os.environ.get("EMAIL_FILE_PATH", str(BASE_DIR / "sent_emails"))
 
 ANYMAIL = {
     "RESEND_API_KEY": os.environ.get("ANYMAIL_RESEND_API_KEY", ""),
@@ -133,7 +134,7 @@ EMAIL_BACKEND = os.environ.get(
     (
         "anymail.backends.resend.EmailBackend"
         if ANYMAIL["RESEND_API_KEY"]
-        else "django.core.mail.backends.console.EmailBackend"
+        else "django.core.mail.backends.filebased.EmailBackend"
     ),
 )
 
@@ -184,6 +185,9 @@ DJOSER = {
     "EMAIL_FRONTEND_DOMAIN": FRONTEND_EMAIL_DOMAIN,
     "EMAIL_FRONTEND_PROTOCOL": FRONTEND_EMAIL_PROTOCOL,
     "EMAIL_FRONTEND_SITE_NAME": "FlatOrigin",
+    "SERIALIZERS": {
+        "user_create": "accounts.serializers.RoleAwareUserCreateSerializer",
+    },
 }
 
 LOGGING = {
