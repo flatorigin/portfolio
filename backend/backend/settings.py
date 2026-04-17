@@ -13,6 +13,13 @@ def parse_csv_env(name, default=""):
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def parse_bool_env(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
@@ -137,6 +144,12 @@ EMAIL_BACKEND = os.environ.get(
         else "django.core.mail.backends.filebased.EmailBackend"
     ),
 )
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL_PRIMARY = os.environ.get("OPENAI_MODEL_PRIMARY", "gpt-5.4-mini").strip()
+OPENAI_MODEL_LIGHT = os.environ.get("OPENAI_MODEL_LIGHT", "gpt-5.4-nano").strip()
+AI_ENABLED = parse_bool_env("AI_ENABLED", default=False)
+AI_DAILY_LIMIT_PER_USER = int(os.environ.get("AI_DAILY_LIMIT_PER_USER", "10"))
 
 AUTH_PASSWORD_VALIDATORS = []
 

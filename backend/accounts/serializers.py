@@ -119,6 +119,31 @@ class RoleAwareUserCreateSerializer(UserCreateSerializer):
         return user
 
 
+class AIAssistSerializer(serializers.Serializer):
+    feature = serializers.ChoiceField(
+        choices=[
+            "project_summary",
+            "project_checklist",
+            "bid_proposal",
+            "profile_headline",
+            "profile_blurb",
+            "profile_bio",
+        ]
+    )
+    title = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    category = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    location = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    budget = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    timeline = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=4000)
+    current_text = serializers.CharField(required=False, allow_blank=True, max_length=4000)
+    audience = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    price_type = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    included_text = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    excluded_text = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    payment_terms = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+
+
 class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     
     languages_display = serializers.ReadOnlyField()

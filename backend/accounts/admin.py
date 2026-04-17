@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from .models import HomeownerReferenceImage, Profile
+from .models import AIConfiguration, AIUsageEvent, HomeownerReferenceImage, Profile
 
 User = get_user_model()
 
@@ -199,3 +199,70 @@ class HomeownerReferenceImageAdmin(admin.ModelAdmin):
     list_filter = ("is_public", "created_at")
     search_fields = ("user__username", "caption")
     list_editable = ("is_public", "order")
+
+
+@admin.register(AIConfiguration)
+class AIConfigurationAdmin(admin.ModelAdmin):
+    list_display = (
+        "enabled",
+        "project_helper_enabled",
+        "bid_helper_enabled",
+        "profile_helper_enabled",
+        "daily_limit_per_user",
+        "updated_at",
+        "updated_by",
+    )
+    readonly_fields = ("updated_at", "updated_by")
+
+    fieldsets = (
+        ("Global control", {
+            "fields": ("enabled", "daily_limit_per_user"),
+        }),
+        ("Feature switches", {
+            "fields": (
+                "project_helper_enabled",
+                "bid_helper_enabled",
+                "profile_helper_enabled",
+            ),
+        }),
+        ("Audit", {
+            "fields": ("updated_at", "updated_by"),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        if AIConfiguration.objects.exists():
+            return False
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(AIUsageEvent)
+class AIUsageEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "feature",
+        "model_name",
+        "status",
+        "request_day",
+        "created_at",
+    )
+    list_filter = ("feature", "status", "request_day", "model_name")
+    search_fields = ("user__username", "user__email", "model_name")
+    readonly_fields = (
+        "user",
+        "feature",
+        "model_name",
+        "status",
+        "prompt_chars",
+        "response_chars",
+        "request_day",
+        "created_at",
+    )

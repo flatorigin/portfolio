@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api";
+import AiWriteButton from "../AiWriteButton";
 
 function formatStamp(value) {
   if (!value) return "";
@@ -148,7 +149,7 @@ function Field({ label, helper, children }) {
   );
 }
 
-export default function BidModule({ projectId, ownerUsername }) {
+export default function BidModule({ projectId, ownerUsername, projectTitle = "", projectCategory = "", projectSummary = "" }) {
   const [bids, setBids] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -904,6 +905,23 @@ export default function BidModule({ projectId, ownerUsername }) {
           </Field>
           <Field label="Proposal" helper="This is your main message to the owner. Explain how you would handle the project.">
             <textarea rows={5} value={form.proposal_text} onChange={(e) => setForm((prev) => ({ ...prev, proposal_text: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Describe your approach, understanding of the job, and anything the owner should know before choosing your bid." />
+            <AiWriteButton
+              className="pt-2"
+              feature="bid_proposal"
+              payload={{
+                title: projectTitle,
+                category: projectCategory,
+                timeline: form.timeline_text,
+                price_type: form.price_type,
+                included_text: form.included_text,
+                excluded_text: form.excluded_text,
+                payment_terms: form.payment_terms,
+                notes: projectSummary,
+                current_text: form.proposal_text,
+              }}
+              label="Draft proposal with AI"
+              onApply={(text) => setForm((prev) => ({ ...prev, proposal_text: text }))}
+            />
           </Field>
           <Field label="What’s included" helper="List the work, services, or materials covered by this bid.">
             <textarea rows={4} value={form.included_text} onChange={(e) => setForm((prev) => ({ ...prev, included_text: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Example: labor, installation, standard materials, site cleanup" />
