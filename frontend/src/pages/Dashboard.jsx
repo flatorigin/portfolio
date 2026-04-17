@@ -36,6 +36,19 @@ function extractProjectId(fav) {
   );
 }
 
+function AwardedIcon({ className = "" }) {
+  return (
+    <span className={"group relative inline-flex " + className} title="Awarded">
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-200 bg-amber-50/95 text-amber-700 shadow-sm backdrop-blur">
+        <SymbolIcon name="workspace_premium" className="text-[20px]" fill={1} weight={500} />
+      </span>
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden -translate-x-1/2 rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white shadow-lg group-hover:block">
+        Awarded
+      </span>
+    </span>
+  );
+}
+
 function buildProjectFormData(form, cover) {
   const fd = new FormData();
 
@@ -983,6 +996,8 @@ export default function Dashboard() {
     : projects.length === 0
     ? "New Project"
     : "Add Project";
+  const primaryProjectIcon = isHomeownerAccount ? "post_add" : "add_home_work";
+  const primaryProjectButtonIcon = isHomeownerAccount ? "add" : "add_home_work";
 
   return (
     <div className="space-y-4">
@@ -993,7 +1008,7 @@ export default function Dashboard() {
       <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
         <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-0 text-center">
           <div className="mb-5 text-slate-400">
-            <SymbolIcon name="create_new_folder" className="text-[52px]" weight={300} />
+            <SymbolIcon name={primaryProjectIcon} className="text-[52px]" weight={300} />
           </div>
 
           <div className="text-[1.05rem] font-semibold tracking-[-0.02em] text-slate-900">
@@ -1009,7 +1024,7 @@ export default function Dashboard() {
             onClick={() => setCreateOpen(true)}
             className="mt-8 inline-flex h-14 items-center gap-3 rounded-xl !bg-indigo-600 px-8 text-[1.05rem] font-semibold !text-white shadow-sm hover:!bg-indigo-700"
           >
-            <SymbolIcon name="add" className="text-[24px]" weight={400} />
+            <SymbolIcon name={primaryProjectButtonIcon} className="text-[24px]" weight={400} />
             {primaryProjectButtonLabel}
           </Button>
         </div>
@@ -1087,13 +1102,17 @@ export default function Dashboard() {
                       <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                         <Badge className="bg-slate-900 text-white">Job post</Badge>
                         {isAwarded ? (
-                          <Badge className="!bg-indigo-600 !text-white">Awarded</Badge>
+                          <AwardedIcon />
                         ) : isPublished ? (
                           <Badge className="bg-slate-900 text-white">Published</Badge>
                         ) : (
                           <Badge className="bg-slate-200 text-slate-800">Draft</Badge>
                         )}
-                        {!isAwarded && hasBids ? <Badge className="!bg-indigo-600 !text-white">Bid</Badge> : null}
+                        {!isAwarded && hasBids ? (
+                          <Badge className="!border !border-orange-200 !bg-orange-50 !text-orange-700">
+                            Bid
+                          </Badge>
+                        ) : null}
                       </div>
                     </div>
 
@@ -1124,7 +1143,7 @@ export default function Dashboard() {
                             className={
                               "font-medium " +
                               (isAwarded
-                                ? "text-indigo-700"
+                                ? "text-amber-700"
                                 : bidMeta.openCount > 0
                                 ? "text-emerald-700"
                                 : "text-slate-500")
@@ -1190,7 +1209,7 @@ export default function Dashboard() {
               const status = (bid.status || "").toLowerCase();
               const statusBadgeClass =
                 status === "accepted"
-                  ? "bg-indigo-600 text-white"
+                  ? "border border-[#8FA5BB] bg-[#ABBED1] text-[#27384A]"
                   : status === "declined"
                   ? "bg-rose-100 text-rose-700"
                   : status === "withdrawn"
@@ -1263,7 +1282,7 @@ export default function Dashboard() {
 
                     <div className="mt-3 flex w-full flex-nowrap gap-2">
                       <Button
-                        className="w-full min-w-0 !bg-indigo-600 !text-white hover:!bg-indigo-700"
+                        className="w-full min-w-0 !bg-[#CB633A] !text-white hover:!bg-[#A94F2E]"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveBidCard(bid);
@@ -1295,7 +1314,7 @@ export default function Dashboard() {
           const activeBidStatus = (activeBidCard.status || "").toLowerCase();
           const activeBidStatusBadgeClass =
             activeBidStatus === "accepted"
-              ? "bg-indigo-600 text-white"
+              ? "border border-[#8FA5BB] bg-[#ABBED1] text-[#27384A]"
               : activeBidStatus === "declined"
               ? "bg-rose-100 text-rose-700"
               : activeBidStatus === "withdrawn"
@@ -1652,7 +1671,7 @@ export default function Dashboard() {
                     )}
 
                     <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                      <Badge className="bg-emerald-600 text-white">Private invite</Badge>
+                      <Badge className="bg-[#47576B] text-white">Private invite</Badge>
                       <Badge className="bg-white text-slate-700">Job post</Badge>
                     </div>
                   </div>
