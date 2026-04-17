@@ -45,6 +45,12 @@ from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 User = get_user_model()
 
 
+def require_contractor_user(user):
+    profile = getattr(user, "profile", None)
+    if getattr(profile, "profile_type", "") != "contractor":
+        raise PermissionDenied("Only contractor accounts can submit or manage bids.")
+
+
 # ---------------------------------------------------
 # Comments: list + create
 #   GET  /api/projects/<pk>/comments/
@@ -479,6 +485,7 @@ class ProjectBidListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         project = self.get_project()
         user = request.user
+        require_contractor_user(user)
 
         if project.owner_id == user.id:
             return Response(
@@ -558,6 +565,7 @@ class ProjectBidReviseView(APIView):
             ProjectBid.objects.select_related("project", "contractor"),
             id=bid_id,
         )
+        require_contractor_user(request.user)
 
         if bid.contractor_id != request.user.id:
             return Response(
@@ -671,6 +679,7 @@ class ProjectBidWithdrawView(APIView):
             ProjectBid.objects.select_related("project", "contractor"),
             id=bid_id,
         )
+        require_contractor_user(request.user)
 
         if bid.contractor_id != request.user.id:
             return Response(

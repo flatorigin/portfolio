@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import Profile
 from portfolio.models import MessageThread, PrivateMessage, Project, ProjectInvite
 
 from .models import Bid
@@ -14,6 +15,8 @@ class BidFlowTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw123456")
         self.contractor = User.objects.create_user(username="contractor", password="pw123456")
+        Profile.objects.create(user=self.owner, profile_type=Profile.ProfileType.HOMEOWNER)
+        Profile.objects.create(user=self.contractor, profile_type=Profile.ProfileType.CONTRACTOR)
         self.project = Project.objects.create(
             owner=self.owner,
             title="Kitchen remodel",
@@ -120,6 +123,7 @@ class BidFlowTests(APITestCase):
             status=Bid.STATUS_ACCEPTED,
         )
         other = User.objects.create_user(username="other", password="pw123456")
+        Profile.objects.create(user=other, profile_type=Profile.ProfileType.CONTRACTOR)
 
         self.client.force_authenticate(user=other)
         response = self.client.post(
@@ -142,6 +146,7 @@ class BidFlowTests(APITestCase):
             accepted_at=self.project.created_at,
         )
         other = User.objects.create_user(username="other", password="pw123456")
+        Profile.objects.create(user=other, profile_type=Profile.ProfileType.CONTRACTOR)
 
         self.client.force_authenticate(user=self.owner)
         response = self.client.post(
@@ -216,6 +221,7 @@ class BidFlowTests(APITestCase):
             status=ProjectInvite.STATUS_INVITED,
         )
         other = User.objects.create_user(username="outsider", password="pw123456")
+        Profile.objects.create(user=other, profile_type=Profile.ProfileType.CONTRACTOR)
 
         self.client.force_authenticate(user=other)
         response = self.client.post(
@@ -230,11 +236,30 @@ class BidFlowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_homeowner_cannot_submit_bid(self):
+        homeowner = User.objects.create_user(username="homeowner_bidder", password="pw123456")
+        Profile.objects.create(user=homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
+
+        self.client.force_authenticate(user=homeowner)
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/bids/",
+            {
+                "price_type": "fixed",
+                "amount": "1900.00",
+                "proposal_text": "Attempting to bid as homeowner.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_seventh_active_bid_is_blocked(self):
         extra_contractors = [
             User.objects.create_user(username=f"contractor{i}", password="pw123456")
             for i in range(1, 7)
         ]
+        for user in extra_contractors:
+            Profile.objects.create(user=user, profile_type=Profile.ProfileType.CONTRACTOR)
         for index, user in enumerate(extra_contractors[:6], start=1):
             Bid.objects.create(
                 project=self.project,
@@ -247,6 +272,7 @@ class BidFlowTests(APITestCase):
             )
 
         seventh = User.objects.create_user(username="contractor7", password="pw123456")
+        Profile.objects.create(user=seventh, profile_type=Profile.ProfileType.CONTRACTOR)
         self.client.force_authenticate(user=seventh)
         response = self.client.post(
             f"/api/projects/{self.project.id}/bids/",

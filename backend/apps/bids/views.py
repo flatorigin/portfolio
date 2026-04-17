@@ -15,6 +15,12 @@ from .models import Bid
 from .serializers import BidSerializer
 
 
+def require_contractor_user(user):
+    profile = getattr(user, "profile", None)
+    if getattr(profile, "profile_type", "") != "contractor":
+        raise PermissionDenied("Only contractor accounts can submit or manage bids.")
+
+
 class BidViewSet(viewsets.ModelViewSet):
     queryset = Bid.objects.all().select_related("project", "contractor", "project__owner")
     serializer_class = BidSerializer
@@ -29,6 +35,7 @@ class BidViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        require_contractor_user(self.request.user)
         project = serializer.validated_data["project"]
 
         if project.owner == self.request.user:
@@ -58,6 +65,7 @@ class BidViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         bid = self.get_object()
+        require_contractor_user(self.request.user)
 
         if bid.contractor_id != self.request.user.id:
             raise PermissionDenied("Only the contractor can revise this bid.")
@@ -83,6 +91,8 @@ class BidViewSet(viewsets.ModelViewSet):
                 )
             serializer = self.get_serializer(qs, many=True)
             return Response(serializer.data)
+
+        require_contractor_user(request.user)
 
         if project.owner_id == request.user.id:
             raise PermissionDenied("You cannot bid on your own project.")
@@ -123,6 +133,7 @@ class BidViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="revise")
     def revise(self, request, pk=None):
         bid = self.get_object()
+        require_contractor_user(request.user)
 
         if bid.contractor_id != request.user.id:
             raise PermissionDenied("Only the contractor can revise this bid.")
@@ -305,6 +316,7 @@ class BidViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def withdraw(self, request, pk=None):
         bid = self.get_object()
+        require_contractor_user(request.user)
 
         if bid.contractor_id != request.user.id:
             raise PermissionDenied("Only the contractor can withdraw this bid.")

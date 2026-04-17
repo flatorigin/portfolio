@@ -336,19 +336,10 @@ export default function PublicProfile() {
     );
   }
 
-  if (isHomeownerProfile && jobPostingProjects.length === 0) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-12 text-sm text-slate-600">
-        This homeowner profile is private until there is a public job posting.
-        {" "}
-        <Link to="/work" className="text-blue-600 hover:underline">
-          Browse job postings
-        </Link>
-      </div>
-    );
-  }
-
   if (isHomeownerProfile) {
+    const referenceGallery = Array.isArray(profile?.reference_gallery)
+      ? profile.reference_gallery
+      : [];
     return (
       <div className="min-h-screen bg-[#FBF9F7]">
         <div className="mx-auto max-w-6xl px-4 py-10">
@@ -358,88 +349,44 @@ export default function PublicProfile() {
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
                     <div className="text-lg font-semibold text-slate-900">
-                      Job Postings
+                      Reference Gallery
                     </div>
                     <div className="text-xs text-slate-500">
-                      {jobPostingProjects.length} public job posting
-                      {jobPostingProjects.length === 1 ? "" : "s"}
+                      Style and quality references shared by the homeowner.
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  {jobPostingProjects.map((p) => {
-                    const coverSrc =
-                      toUrl(p.cover_image_url || "") ||
-                      (p.cover_image ? toUrl(p.cover_image) : "");
+                  {referenceGallery.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500 sm:col-span-2">
+                      No reference images shared yet.
+                    </div>
+                  ) : referenceGallery.map((item) => {
+                    const coverSrc = toUrl(item.image_url || item.image || "");
 
                     return (
                       <div
-                        key={p.id}
-                        className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                        key={item.id}
+                        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
                       >
-                        <Link to={`/projects/${p.id}`} className="block">
-                          <div className="h-44 bg-slate-100">
-                            {coverSrc ? (
-                              <img
-                                src={coverSrc}
-                                alt={p.title || "job posting cover"}
-                                className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-                                onError={(e) => {
-                                  e.currentTarget.src = "/placeholder.png";
-                                }}
-                              />
-                            ) : (
-                              <div className="flex h-full items-center justify-center text-xs text-slate-500">
-                                No image
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="p-4">
-                            <div className="truncate text-sm font-semibold text-slate-900">
-                              {p.title || `Project #${p.id}`}
-                            </div>
-                            {p.summary || p.job_summary ? (
-                              <div className="mt-1 line-clamp-2 text-xs text-slate-600">
-                                {p.summary || p.job_summary}
-                              </div>
-                            ) : (
-                              <div className="mt-1 text-xs text-slate-500">
-                                View details →
-                              </div>
-                            )}
-                          </div>
-                        </Link>
-
-                        <div className="flex gap-2 border-t border-slate-100 p-4 pt-3">
-                          <Link
-                            to={`/projects/${p.id}`}
-                            className="flex-1 rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            View job
-                          </Link>
-                          {!isMine ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMessageContext({
-                                  projectId: p.id,
-                                  projectTitle: p.title || `Project #${p.id}`,
-                                });
-                                setMsgOpen(true);
-                              }}
-                              disabled={!profile.allow_direct_messages}
-                              className={[
-                                "flex-1 rounded-xl px-4 py-2 text-sm font-medium transition",
-                                profile.allow_direct_messages
-                                  ? "bg-sky-600 text-white hover:bg-sky-700"
-                                  : "cursor-not-allowed bg-slate-200 text-slate-400",
-                              ].join(" ")}
-                            >
-                              Message
-                            </button>
+                        <div className="h-44 bg-slate-100">
+                          {coverSrc ? (
+                            <img
+                              src={coverSrc}
+                              alt={item.caption || "Reference image"}
+                              className="h-full w-full object-cover"
+                            />
                           ) : null}
+                        </div>
+
+                        <div className="p-4">
+                          <div className="truncate text-sm font-semibold text-slate-900">
+                            {item.caption || "Reference image"}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            Shared as inspiration only, not as completed work.
+                          </div>
                         </div>
                       </div>
                     );
@@ -525,6 +472,98 @@ export default function PublicProfile() {
                       Call
                     </a>
                   ) : null}
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="mt-6">
+            <Card className="rounded-2xl border border-slate-200 shadow-sm">
+              <div className="p-6">
+                <div className="mb-4 flex items-end justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold text-slate-900">
+                      Job Postings
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {jobPostingProjects.length} public job posting
+                      {jobPostingProjects.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {jobPostingProjects.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500 sm:col-span-2 lg:col-span-3">
+                      No public job postings right now.
+                    </div>
+                  ) : jobPostingProjects.map((p) => {
+                    const coverSrc =
+                      toUrl(p.cover_image_url || "") ||
+                      (p.cover_image ? toUrl(p.cover_image) : "");
+
+                    return (
+                      <div
+                        key={p.id}
+                        className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                      >
+                        <Link to={`/projects/${p.id}`} className="block">
+                          <div className="h-44 bg-slate-100">
+                            {coverSrc ? (
+                              <img
+                                src={coverSrc}
+                                alt={p.title || "job posting cover"}
+                                className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                                No image
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-4">
+                            <div className="truncate text-sm font-semibold text-slate-900">
+                              {p.title || `Project #${p.id}`}
+                            </div>
+                            <div className="mt-1 line-clamp-2 text-xs text-slate-600">
+                              {p.summary || p.job_summary || "View details →"}
+                            </div>
+                          </div>
+                        </Link>
+
+                        <div className="flex gap-2 border-t border-slate-100 p-4 pt-3">
+                          <Link
+                            to={`/projects/${p.id}`}
+                            className="flex-1 rounded-xl border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            View job
+                          </Link>
+                          {!isMine ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMessageContext({
+                                  projectId: p.id,
+                                  projectTitle: p.title || `Project #${p.id}`,
+                                });
+                                setMsgOpen(true);
+                              }}
+                              disabled={!profile.allow_direct_messages}
+                              className={[
+                                "flex-1 rounded-xl px-4 py-2 text-sm font-medium transition",
+                                profile.allow_direct_messages
+                                  ? "bg-sky-600 text-white hover:bg-sky-700"
+                                  : "cursor-not-allowed bg-slate-200 text-slate-400",
+                              ].join(" ")}
+                            >
+                              Message
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </Card>

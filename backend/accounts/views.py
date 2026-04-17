@@ -12,14 +12,15 @@ from djoser import signals
 from djoser.serializers import ActivationSerializer
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Profile, ProfileLike, ProfileSave
+from .models import HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
 from .serializers import (
+    HomeownerReferenceImageSerializer,
     ProfileSerializer,
     PublicUserProfileSerializer,
     LikedProfileCardSerializer,
@@ -148,6 +149,12 @@ class PublicProfileView(APIView):
     """
     permission_classes = [AllowAny]
 
+    def _homeowner_publicly_visible(self, profile):
+        return profile.public_profile_enabled or profile.user.projects.filter(
+            is_public=True,
+            is_job_posting=True,
+        ).exists()
+
     def get(self, request, username, *args, **kwargs):
         user = get_object_or_404(User, username=username)
         profile, _ = Profile.objects.get_or_create(user=user)
@@ -158,9 +165,67 @@ class PublicProfileView(APIView):
         )
         if profile.is_frozen and not can_view_frozen:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if (
+            profile.profile_type == Profile.ProfileType.HOMEOWNER
+            and not can_view_frozen
+            and not self._homeowner_publicly_visible(profile)
+        ):
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = PublicUserProfileSerializer(profile, context={"request": request})
         return Response(serializer.data)
+
+
+class HomeownerReferenceGalleryView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def _require_homeowner(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        if profile.profile_type != Profile.ProfileType.HOMEOWNER:
+            raise PermissionDenied("Only homeowner accounts can manage a reference gallery.")
+        return profile
+
+    def get(self, request, *args, **kwargs):
+        self._require_homeowner(request)
+        items = request.user.homeowner_reference_images.all()
+        serializer = HomeownerReferenceImageSerializer(items, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    def post(self, request, *args, **kwargs):
+        self._require_homeowner(request)
+        serializer = HomeownerReferenceImageSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user, is_public=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class HomeownerReferenceGalleryItemView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_object(self, request, pk):
+        return get_object_or_404(HomeownerReferenceImage, pk=pk, user=request.user)
+
+    def patch(self, request, pk, *args, **kwargs):
+        item = self.get_object(request, pk)
+        serializer = HomeownerReferenceImageSerializer(
+            item,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk, *args, **kwargs):
+        item = self.get_object(request, pk)
+        item.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ContractorSearchView(APIView):

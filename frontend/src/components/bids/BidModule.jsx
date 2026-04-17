@@ -162,10 +162,33 @@ export default function BidModule({ projectId, ownerUsername }) {
   const [ownerNotes, setOwnerNotes] = useState({});
   const [ownerAction, setOwnerAction] = useState({});
   const [form, setForm] = useState(emptyForm());
+  const [viewerProfileType, setViewerProfileType] = useState("");
 
   const authed = !!localStorage.getItem("access");
   const myUsername = (localStorage.getItem("username") || "").toLowerCase();
   const isOwner = (ownerUsername || "").toLowerCase() === myUsername;
+  const isContractorViewer = viewerProfileType === "contractor";
+
+  useEffect(() => {
+    let alive = true;
+    if (!authed) {
+      setViewerProfileType("");
+      return () => {
+        alive = false;
+      };
+    }
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (alive) setViewerProfileType(data?.profile_type || "");
+      } catch {
+        if (alive) setViewerProfileType("");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [authed]);
 
   async function loadBids() {
     if (!projectId) return;
@@ -702,6 +725,27 @@ export default function BidModule({ projectId, ownerUsername }) {
           {success ? <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div> : null}
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             Log in to submit a bid for this job posting.
+          </div>
+        </div>
+      ) : !isContractorViewer ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Bidding</h3>
+              <p className="text-sm text-slate-500">Bidding is available only for contractor accounts.</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadBids}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Refresh
+            </button>
+          </div>
+          {loading ? <div className="mb-4 text-sm text-slate-500">Loading bids...</div> : null}
+          {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            Homeowner accounts can browse job posts, but only contractor accounts can submit or manage bids.
           </div>
         </div>
       ) : (

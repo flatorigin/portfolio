@@ -1,7 +1,7 @@
 # backend/accounts/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Profile, ProfileLike, ProfileSave
+from .models import HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
 
 User = get_user_model()
 
@@ -66,6 +66,29 @@ class ProfileBaseMixin:
         return value
 
 
+class HomeownerReferenceImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HomeownerReferenceImage
+        fields = [
+            "id",
+            "image",
+            "image_url",
+            "caption",
+            "created_at",
+            "order",
+            "is_public",
+        ]
+        read_only_fields = ["id", "image_url", "created_at"]
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.image and hasattr(obj.image, "url"):
+            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return None
+
+
 class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     
     languages_display = serializers.ReadOnlyField()
@@ -99,6 +122,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "contact_phone",
             "show_contact_email",
             "show_contact_phone",
+            "public_profile_enabled",
             "bio",
             "logo",
             "avatar",
@@ -205,6 +229,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "contact_phone",
             "show_contact_email",
             "show_contact_phone",
+            "public_profile_enabled",
             "logo",
             "avatar",
             "avatar_url",
@@ -250,7 +275,14 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     def validate(self, attrs):
         instance = getattr(self, "instance", None)
 
-        if set(attrs.keys()) == {"profile_type"}:
+        toggle_only_fields = {
+            "profile_type",
+            "public_profile_enabled",
+            "allow_direct_messages",
+            "show_contact_email",
+            "show_contact_phone",
+        }
+        if attrs and set(attrs.keys()).issubset(toggle_only_fields):
             return attrs
 
         service_location = attrs.get(
@@ -300,6 +332,7 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
     saved_by_me = serializers.SerializerMethodField()
+    reference_gallery = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -330,6 +363,7 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "languages",
             "languages_display",
             "member_since_label",
+            "reference_gallery",
         ]
 
     def _build_abs_url(self, request, url: str):
@@ -387,6 +421,14 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             saver=request.user,
             saved_user=obj.user,
         ).exists()
+
+    def get_reference_gallery(self, obj):
+        items = obj.user.homeowner_reference_images.filter(is_public=True)
+        return HomeownerReferenceImageSerializer(
+            items,
+            many=True,
+            context=self.context,
+        ).data
 
 class LikedProfileCardSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
