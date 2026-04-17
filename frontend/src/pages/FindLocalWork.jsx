@@ -219,7 +219,7 @@ export default function FindLocalWork() {
                   )}
 
                   <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                    <Badge className="bg-emerald-600/95 text-[11px] font-semibold text-emerald-50">
+                    <Badge className="bg-[#47576B] text-[11px] font-semibold text-white">
                       Job posting
                     </Badge>
                     {meta.hasNewBid ? (

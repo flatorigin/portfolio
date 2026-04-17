@@ -36,7 +36,7 @@ function statusLabel(status) {
 
 function statusBadgeClass(status) {
   const value = String(status || "").toLowerCase();
-  if (value === "accepted") return "!bg-indigo-600 !text-white";
+  if (value === "accepted") return "!border !border-[#8FA5BB] !bg-[#ABBED1] !text-[#27384A]";
   if (value === "declined") return "bg-rose-100 text-rose-700";
   if (value === "withdrawn") return "bg-slate-200 text-slate-700";
   if (value === "revision_requested") return "bg-sky-100 text-sky-700";

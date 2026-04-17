@@ -1626,7 +1626,7 @@ export default function ProjectDetail() {
                 )}
 
                 {project?.is_job_posting && (
-                  <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[10px] font-semibold tracking-wide text-[#7D351C]">
+                  <span className="inline-flex items-center rounded-full bg-[#47576B] px-3 py-1 text-[10px] font-semibold tracking-wide text-white">
                     JOB POSTING
                   </span>
                 )}
