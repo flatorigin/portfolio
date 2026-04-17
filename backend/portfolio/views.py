@@ -1,4 +1,6 @@
 # file: backend/portfolio/views.py
+import re
+
 from django.db import models, transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
@@ -49,6 +51,24 @@ def require_contractor_user(user):
     profile = getattr(user, "profile", None)
     if getattr(profile, "profile_type", "") != "contractor":
         raise PermissionDenied("Only contractor accounts can submit or manage bids.")
+
+
+def require_homeowner_user(user):
+    profile = getattr(user, "profile", None)
+    if getattr(profile, "profile_type", "") != "homeowner":
+        raise PermissionDenied("Only homeowner accounts can create project drafts from chat.")
+
+
+def suggest_project_title_from_message(text):
+    cleaned = re.sub(r"\s+", " ", str(text or "").strip())
+    if not cleaned:
+        return "New project draft"
+
+    first_chunk = re.split(r"[.!?\n]", cleaned, maxsplit=1)[0].strip(" -,:;")
+    candidate = first_chunk or cleaned
+    if len(candidate) > 72:
+        candidate = candidate[:69].rstrip() + "..."
+    return candidate or "New project draft"
 
 
 # ---------------------------------------------------
@@ -1056,6 +1076,135 @@ class MessageAttachmentDeleteView(APIView):
         thread.save(update_fields=["updated_at"])
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MessagePrefillBidView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, message_id, *args, **kwargs):
+        require_contractor_user(request.user)
+
+        message = get_object_or_404(
+            PrivateMessage.objects.select_related(
+                "thread",
+                "thread__project",
+                "thread__project__owner",
+                "thread__owner",
+                "thread__client",
+                "sender",
+            ),
+            id=message_id,
+        )
+        thread = message.thread
+
+        if not thread.user_is_participant(request.user):
+            raise PermissionDenied("You do not have access to this conversation.")
+
+        project = thread.project
+        if not project:
+            raise ValidationError({"detail": "This conversation is not linked to a project yet."})
+
+        if project.owner_id == request.user.id:
+            raise PermissionDenied("You cannot bid on your own project.")
+
+        if not getattr(project, "is_job_posting", False):
+            raise ValidationError({"detail": "This conversation is linked to a project that is not open for bidding."})
+
+        if not can_access_job_interactions(project, request.user):
+            raise PermissionDenied("You do not have access to bid on this project.")
+
+        if Bid.objects.filter(project=project, contractor=request.user).exists():
+            raise ValidationError({"detail": "You already have a bid for this project."})
+
+        if Bid.objects.filter(project=project, status=Bid.STATUS_ACCEPTED).exists():
+            raise ValidationError({"detail": "This job posting is already closed to new bids."})
+
+        return Response(
+            {
+                "type": "bid",
+                "source_message_id": message.id,
+                "source_text": message.text or "",
+                "thread_id": thread.id,
+                "project_id": project.id,
+                "project_title": project.title,
+                "project_owner_username": getattr(project.owner, "username", ""),
+                "prefill": {
+                    "price_type": Bid.PRICE_TYPE_FIXED,
+                    "amount": "",
+                    "amount_min": "",
+                    "amount_max": "",
+                    "timeline_text": "",
+                    "proposal_text": message.text or "",
+                    "included_text": "",
+                    "excluded_text": "",
+                    "payment_terms": "",
+                    "valid_until": "",
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class MessagePrefillProjectView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, message_id, *args, **kwargs):
+        require_homeowner_user(request.user)
+
+        message = get_object_or_404(
+            PrivateMessage.objects.select_related(
+                "thread",
+                "thread__project",
+                "thread__owner",
+                "thread__owner__profile",
+                "thread__client",
+                "thread__client__profile",
+                "sender",
+            ),
+            id=message_id,
+        )
+        thread = message.thread
+
+        if not thread.user_is_participant(request.user):
+            raise PermissionDenied("You do not have access to this conversation.")
+
+        if thread.project_id:
+            raise ValidationError({"detail": "This conversation is already linked to a project."})
+
+        other_user = thread.client if request.user.id == thread.owner_id else thread.owner
+        other_profile = getattr(other_user, "profile", None)
+        invite_username = (
+            other_user.username
+            if getattr(other_profile, "profile_type", "") == "contractor"
+            else ""
+        )
+
+        source_text = message.text or ""
+
+        return Response(
+            {
+                "type": "project",
+                "source_message_id": message.id,
+                "source_text": source_text,
+                "thread_id": thread.id,
+                "suggested_private_invite_username": invite_username,
+                "prefill": {
+                    "title": suggest_project_title_from_message(source_text),
+                    "summary": source_text,
+                    "job_summary": source_text,
+                    "category": "",
+                    "location": "",
+                    "budget": "",
+                    "sqf": "",
+                    "is_job_posting": True,
+                    "is_public": False,
+                    "post_privacy": "public",
+                    "compliance_confirmed": False,
+                    "private_contractor_usernames": [invite_username] if invite_username else [],
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ThreadActionView(APIView):

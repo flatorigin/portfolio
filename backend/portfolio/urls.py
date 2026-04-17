@@ -19,6 +19,8 @@ from .views import (
     UnpublishTestimonialView,
     MessageDetailView,
     MessageAttachmentDeleteView,
+    MessagePrefillBidView,
+    MessagePrefillProjectView,
 )
 
 router = DefaultRouter()
@@ -71,6 +73,16 @@ urlpatterns = [
         name="dm-thread-messages",
     ),
     path("messages/<int:message_id>/", MessageDetailView.as_view(), name="message-detail"),
+    path(
+        "messages/<int:message_id>/prefill-bid/",
+        MessagePrefillBidView.as_view(),
+        name="message-prefill-bid",
+    ),
+    path(
+        "messages/<int:message_id>/prefill-project/",
+        MessagePrefillProjectView.as_view(),
+        name="message-prefill-project",
+    ),
     path(
         "message-attachments/<int:attachment_id>/",
         MessageAttachmentDeleteView.as_view(),
