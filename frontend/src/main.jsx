@@ -24,6 +24,7 @@ const NotFound = lazy(() => import("./pages/NotFound.jsx"));
 const FindLocalWork = lazy(() => import("./pages/FindLocalWork.jsx"));
 const DashboardProjectsPage = lazy(() => import("./pages/DashboardProjectsPage.jsx"));
 const ProjectEditPage = lazy(() => import("./pages/ProjectEditPage.jsx"));
+const ProjectPlanDetail = lazy(() => import("./pages/ProjectPlanDetail.jsx"));
 
 function RouteFallback() {
   return (
@@ -71,6 +72,14 @@ createRoot(document.getElementById("root")).render(
             element={
               <RequireAuth>
                 <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="dashboard/planner/:planId"
+            element={
+              <RequireAuth>
+                <ProjectPlanDetail />
               </RequireAuth>
             }
           />

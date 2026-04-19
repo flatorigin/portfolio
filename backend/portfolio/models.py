@@ -35,6 +35,10 @@ def project_image_upload_path(instance, filename):
     return f"projects/{instance.project.owner_id}/{instance.project_id}/images/{filename}"
 
 
+def project_plan_image_upload_path(instance, filename):
+    return f"project_plans/{instance.project_plan.owner_id}/{instance.project_plan_id}/images/{filename}"
+
+
 def message_attachment_upload_path(instance, filename):
     thread = instance.message.thread
     project_part = thread.project_id or "direct"
@@ -153,6 +157,121 @@ class Project(models.Model):
     @property
     def is_private_job(self):
         return bool(self.is_job_posting and (self.is_private or self.post_privacy == "private"))
+
+
+class ProjectPlan(models.Model):
+    STATUS_PLANNING = "planning"
+    STATUS_READY_TO_DRAFT = "ready_to_draft"
+    STATUS_CONVERTED = "converted"
+    STATUS_ARCHIVED = "archived"
+    STATUS_CHOICES = [
+        (STATUS_PLANNING, "Planning"),
+        (STATUS_READY_TO_DRAFT, "Ready to draft"),
+        (STATUS_CONVERTED, "Converted"),
+        (STATUS_ARCHIVED, "Archived"),
+    ]
+
+    PRIORITY_LOW = "low"
+    PRIORITY_MEDIUM = "medium"
+    PRIORITY_HIGH = "high"
+    PRIORITY_CHOICES = [
+        (PRIORITY_LOW, "Low"),
+        (PRIORITY_MEDIUM, "Medium"),
+        (PRIORITY_HIGH, "High"),
+    ]
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="project_plans",
+    )
+    title = models.CharField(max_length=255, blank=True, default="Untitled issue")
+    issue_summary = models.TextField(blank=True, default="")
+    house_location = models.CharField(max_length=140, blank=True, default="")
+    priority = models.CharField(
+        max_length=20,
+        choices=PRIORITY_CHOICES,
+        blank=True,
+        default=PRIORITY_MEDIUM,
+    )
+    budget_min = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    budget_max = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    notes = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PLANNING,
+    )
+    visibility = models.CharField(max_length=20, default="private")
+    contractor_types = models.JSONField(blank=True, default=list)
+    links = models.JSONField(blank=True, default=list)
+    options = models.JSONField(blank=True, default=list)
+    selected_option_key = models.CharField(max_length=80, blank=True, default="")
+    ai_generated_issue_summary = models.TextField(blank=True, default="")
+    ai_suggested_contractor_types = models.JSONField(blank=True, default=list)
+    converted_job_post = models.ForeignKey(
+        "portfolio.Project",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_project_plans",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return f"ProjectPlan<{self.owner_id}:{self.title or 'Untitled issue'}>"
+
+
+class ProjectPlanImage(models.Model):
+    project_plan = models.ForeignKey(
+        ProjectPlan,
+        related_name="images",
+        on_delete=models.CASCADE,
+    )
+    image = models.ImageField(upload_to=project_plan_image_upload_path)
+    caption = models.CharField(max_length=255, blank=True, default="")
+    order = models.PositiveIntegerField(default=0)
+    is_cover = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def _convert_image_to_webp(self):
+        if not self.image:
+            return
+
+        current_name = self.image.name
+        root, ext = os.path.splitext((current_name or "").lower())
+        if ext == ".webp":
+            return
+
+        img = Image.open(self.image)
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGB")
+
+        buffer = BytesIO()
+        img.save(buffer, format="WEBP", quality=80)
+        buffer.seek(0)
+
+        new_name = f"{root}.webp"
+        old_name = current_name
+        self.image.save(new_name, ContentFile(buffer.read()), save=False)
+
+        if old_name and old_name != self.image.name and default_storage.exists(old_name):
+            try:
+                default_storage.delete(old_name)
+            except Exception:
+                pass
+
+    def save(self, *args, **kwargs):
+        if self.image and hasattr(self.image, "file"):
+            self._convert_image_to_webp()
+        super().save(*args, **kwargs)
 
 
 class ProjectFavorite(models.Model):

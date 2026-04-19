@@ -11,6 +11,9 @@ FEATURE_MODEL_MAP = {
     "profile_headline": "primary",
     "profile_blurb": "primary",
     "profile_bio": "primary",
+    "planner_analyze": "primary",
+    "planner_options": "primary",
+    "planner_draft": "primary",
 }
 
 

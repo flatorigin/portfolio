@@ -1,12 +1,15 @@
 # file: backend/portfolio/views.py
+import json
 import re
 
+from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 
 from rest_framework import viewsets, permissions, status, generics
 from rest_framework.decorators import action
@@ -16,9 +19,13 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from accounts.ai import AIServiceError, generate_text
+from accounts.models import AIConfiguration, AIUsageEvent, Profile
 from .models import (
     Project,
     ProjectImage,
+    ProjectPlan,
+    ProjectPlanImage,
     ProjectComment,
     ProjectInvite,
     MessageThread,
@@ -34,6 +41,8 @@ from .access import can_access_job_interactions, can_view_project, visible_proje
 from .serializers import (
     ProjectSerializer,
     ProjectImageSerializer,
+    ProjectPlanSerializer,
+    ProjectPlanImageSerializer,
     ProjectCommentSerializer,
     MessageThreadSerializer,
     PrivateMessageSerializer,
@@ -69,6 +78,56 @@ def suggest_project_title_from_message(text):
     if len(candidate) > 72:
         candidate = candidate[:69].rstrip() + "..."
     return candidate or "New project draft"
+
+
+def require_homeowner_profile(user):
+    profile = getattr(user, "profile", None)
+    if getattr(profile, "profile_type", "") != Profile.ProfileType.HOMEOWNER:
+        raise PermissionDenied("Only homeowner accounts can use the project planner.")
+    return profile
+
+
+def get_ai_config():
+    config = AIConfiguration.get_solo()
+    if not config.daily_limit_per_user:
+        config.daily_limit_per_user = 10
+    return config
+
+
+def get_ai_remaining_today(user):
+    config = get_ai_config()
+    used = AIUsageEvent.objects.filter(
+        user=user,
+        request_day=timezone.localdate(),
+        status=AIUsageEvent.Status.SUCCESS,
+    ).count()
+    return max(0, int(config.daily_limit_per_user) - used), int(config.daily_limit_per_user)
+
+
+def ensure_planner_ai_allowed(user, feature):
+    config = get_ai_config()
+    if not settings.AI_ENABLED and not config.enabled:
+        raise PermissionDenied("AI helpers are currently paused.")
+    if not config.project_helper_enabled:
+        raise PermissionDenied("AI helpers are currently paused.")
+    remaining, daily_limit = get_ai_remaining_today(user)
+    if remaining <= 0:
+        raise ValidationError(
+            {
+                "detail": "You’ve used all 10 AI assists. You can still fill this out manually.",
+                "remaining_today": 0,
+                "daily_limit": daily_limit,
+            }
+        )
+    return config, remaining, daily_limit, feature
+
+
+def parse_ai_json(text):
+    cleaned = str(text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    return json.loads(cleaned)
 
 
 # ---------------------------------------------------
@@ -428,6 +487,412 @@ class ProjectViewSet(viewsets.ModelViewSet):
         )
         ser = self.get_serializer(qs, many=True, context={"request": request})
         return Response(ser.data)
+
+
+class ProjectPlanViewSet(viewsets.ModelViewSet):
+    serializer_class = ProjectPlanSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        require_homeowner_profile(self.request.user)
+        qs = ProjectPlan.objects.filter(owner=self.request.user).prefetch_related("images")
+        scope = (self.request.query_params.get("scope") or "").strip().lower()
+        if scope == "active":
+            qs = qs.filter(
+                status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT]
+            )
+        elif scope == "inactive":
+            qs = qs.filter(
+                status__in=[ProjectPlan.STATUS_CONVERTED, ProjectPlan.STATUS_ARCHIVED]
+            )
+        return qs.order_by("-updated_at", "-id")
+
+    def _serializer_context(self):
+        remaining, daily_limit = get_ai_remaining_today(self.request.user)
+        active_plan_count = ProjectPlan.objects.filter(
+            owner=self.request.user,
+            status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT],
+        ).count()
+        return {
+            "request": self.request,
+            "active_plan_count": active_plan_count,
+            "ai_remaining_today": remaining,
+            "ai_daily_limit": daily_limit,
+        }
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx.update(self._serializer_context())
+        return ctx
+
+    def perform_create(self, serializer):
+        require_homeowner_profile(self.request.user)
+        serializer.save(
+            owner=self.request.user,
+            title=(serializer.validated_data.get("title") or "Untitled issue").strip() or "Untitled issue",
+            visibility="private",
+            status=serializer.validated_data.get("status") or ProjectPlan.STATUS_PLANNING,
+        )
+
+    def perform_update(self, serializer):
+        serializer.save(owner=self.request.user, visibility="private")
+
+    @action(detail=False, methods=["get"], url_path="meta")
+    def meta(self, request):
+        require_homeowner_profile(request.user)
+        remaining, daily_limit = get_ai_remaining_today(request.user)
+        active_count = ProjectPlan.objects.filter(
+            owner=request.user,
+            status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT],
+        ).count()
+        return Response(
+            {
+                "active_count": active_count,
+                "max_active_plans": 3,
+                "ai_remaining_today": remaining,
+                "ai_daily_limit": daily_limit,
+                "can_create": active_count < 3,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="archive")
+    def archive(self, request, pk=None):
+        plan = self.get_object()
+        plan.status = ProjectPlan.STATUS_ARCHIVED
+        plan.save(update_fields=["status", "updated_at"])
+        return Response(
+            ProjectPlanSerializer(plan, context=self.get_serializer_context()).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get", "post"], url_path="images")
+    def images(self, request, pk=None):
+        plan = self.get_object()
+        if request.method.lower() == "get":
+            qs = plan.images.order_by("order", "id")
+            return Response(ProjectPlanImageSerializer(qs, many=True, context={"request": request}).data)
+
+        files = request.FILES.getlist("images")
+        captions = request.data.getlist("captions[]") or request.data.getlist("captions") or []
+        created = []
+        base_order = plan.images.count()
+        for idx, image_file in enumerate(files):
+            caption = captions[idx] if idx < len(captions) else ""
+            created.append(
+                ProjectPlanImage.objects.create(
+                    project_plan=plan,
+                    image=image_file,
+                    caption=caption,
+                    order=base_order + idx,
+                    is_cover=(base_order + idx == 0 and not plan.images.filter(is_cover=True).exists()),
+                )
+            )
+        return Response(
+            ProjectPlanImageSerializer(created, many=True, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["patch", "delete"], url_path="images/(?P<img_id>[^/.]+)")
+    def image_detail(self, request, pk=None, img_id=None):
+        plan = self.get_object()
+        try:
+            image = ProjectPlanImage.objects.get(id=img_id, project_plan=plan)
+        except ProjectPlanImage.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if request.method.lower() == "delete":
+            image.delete()
+            if not plan.images.filter(is_cover=True).exists():
+                replacement = plan.images.order_by("order", "id").first()
+                if replacement:
+                    replacement.is_cover = True
+                    replacement.order = 0
+                    replacement.save(update_fields=["is_cover", "order"])
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        ser = ProjectPlanImageSerializer(
+            image,
+            data=request.data.copy(),
+            partial=True,
+            context={"request": request},
+        )
+        ser.is_valid(raise_exception=True)
+        wants_cover = str(request.data.get("is_cover", "")).lower() in ("1", "true", "yes", "on")
+        with transaction.atomic():
+            if wants_cover:
+                ProjectPlanImage.objects.filter(project_plan=plan).update(is_cover=False)
+                ser.save(is_cover=True, order=0)
+                siblings = list(
+                    ProjectPlanImage.objects.filter(project_plan=plan).exclude(id=image.id).order_by("order", "id")
+                )
+                for idx, sibling in enumerate(siblings, start=1):
+                    if sibling.order != idx:
+                        sibling.order = idx
+                if siblings:
+                    ProjectPlanImage.objects.bulk_update(siblings, ["order"])
+            else:
+                ser.save()
+        image.refresh_from_db()
+        return Response(ProjectPlanImageSerializer(image, context={"request": request}).data)
+
+    def _build_plan_text(self, plan):
+        image_bits = []
+        for image in plan.images.order_by("order", "id")[:6]:
+            image_bits.append(f"- Image {image.id}: caption={image.caption or 'none'}")
+        return "\n".join(
+            [
+                f"Title: {plan.title}",
+                f"Issue summary: {plan.issue_summary}",
+                f"House location: {plan.house_location}",
+                f"Priority: {plan.priority}",
+                f"Budget min: {plan.budget_min or ''}",
+                f"Budget max: {plan.budget_max or ''}",
+                f"Notes: {plan.notes}",
+                f"Contractor types: {', '.join(plan.contractor_types or [])}",
+                f"Links: {json.dumps(plan.links or [])}",
+                f"Options: {json.dumps(plan.options or [])}",
+                f"Selected option key: {plan.selected_option_key}",
+                "Images:",
+                "\n".join(image_bits) or "- none",
+            ]
+        )
+
+    def _record_ai_event(self, *, user, feature, model_name, prompt_chars, response_chars, status_value):
+        AIUsageEvent.objects.create(
+            user=user,
+            feature=feature,
+            model_name=model_name,
+            status=status_value,
+            prompt_chars=prompt_chars,
+            response_chars=response_chars,
+        )
+
+    @action(detail=True, methods=["post"], url_path="ai")
+    def ai(self, request, pk=None):
+        plan = self.get_object()
+        action_name = str(request.data.get("action") or "").strip()
+        if action_name not in ("analyze_issue", "suggest_solution_paths"):
+            raise ValidationError({"action": "Unsupported planner AI action."})
+
+        feature = (
+            AIUsageEvent.Feature.PLANNER_ANALYZE
+            if action_name == "analyze_issue"
+            else AIUsageEvent.Feature.PLANNER_OPTIONS
+        )
+        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
+
+        if action_name == "analyze_issue":
+            system_prompt = (
+                "You are helping a homeowner understand a house issue before posting work. "
+                "Return strict JSON with keys: likely_issue_label, explanation, contractor_types, next_steps. "
+                "Keep it practical, short, and non-alarmist. contractor_types and next_steps must be arrays of strings."
+            )
+        else:
+            system_prompt = (
+                "You are helping a homeowner compare lightweight repair directions before writing a job post. "
+                "Return strict JSON with one key named options. options must be an array of 2 to 4 objects with keys "
+                "title, notes, pros, cons, estimated_cost_note."
+            )
+
+        user_prompt = self._build_plan_text(plan)
+        try:
+            result = generate_text(
+                feature=feature,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
+            payload = parse_ai_json(result["text"])
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name=result["model"],
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=len(result["text"]),
+                status_value=AIUsageEvent.Status.SUCCESS,
+            )
+        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name="",
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=0,
+                status_value=AIUsageEvent.Status.ERROR,
+            )
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        remaining_after, _ = get_ai_remaining_today(request.user)
+        if action_name == "analyze_issue":
+            return Response(
+                {
+                    "analysis": payload,
+                    "remaining_today": remaining_after,
+                    "daily_limit": daily_limit,
+                }
+            )
+        return Response(
+            {
+                "options": payload.get("options") or [],
+                "remaining_today": remaining_after,
+                "daily_limit": daily_limit,
+            }
+        )
+
+    def _build_draft_payload(self, plan, ai_payload=None):
+        selected_option = None
+        for option in plan.options or []:
+            if option.get("key") == plan.selected_option_key or option.get("is_selected"):
+                selected_option = option
+                break
+
+        title = (ai_payload or {}).get("title") or plan.title or "Project draft"
+        summary = (ai_payload or {}).get("summary") or plan.issue_summary or plan.notes[:400]
+        scope_of_work = (ai_payload or {}).get("scope_of_work") or plan.notes
+        preferred_types = (ai_payload or {}).get("preferred_contractor_types") or plan.contractor_types or plan.ai_suggested_contractor_types
+        material_preference = (ai_payload or {}).get("material_preference") or ""
+        urgency = (ai_payload or {}).get("urgency_timing") or ""
+        location_context = (ai_payload or {}).get("location_context") or plan.house_location
+        link_urls = [item.get("url") for item in (plan.links or []) if isinstance(item, dict) and item.get("url")]
+        budget_value = plan.budget_max or plan.budget_min
+
+        summary_parts = [summary.strip()]
+        if scope_of_work:
+            summary_parts.append(f"Scope of work: {scope_of_work.strip()}")
+        if selected_option and selected_option.get("title"):
+            summary_parts.append(f"Preferred direction: {selected_option.get('title')}")
+        if material_preference:
+            summary_parts.append(f"Material or product preference: {material_preference}")
+        if location_context:
+            summary_parts.append(f"Location context: {location_context}")
+        if urgency:
+            summary_parts.append(f"Timing: {urgency}")
+
+        return {
+            "title": str(title).strip() or "Project draft",
+            "summary": "\n\n".join([part for part in summary_parts if part]),
+            "job_summary": str(summary).strip(),
+            "location": (plan.house_location or "")[:140],
+            "budget": budget_value,
+            "service_categories": [str(item).strip() for item in (preferred_types or []) if str(item).strip()],
+            "extra_links": link_urls,
+            "highlights": ", ".join(
+                [
+                    x
+                    for x in [
+                        (selected_option or {}).get("title", ""),
+                        plan.priority.title() if plan.priority else "",
+                    ]
+                    if x
+                ]
+            ),
+            "is_job_posting": True,
+            "is_public": False,
+            "is_private": False,
+            "post_privacy": "public",
+            "compliance_confirmed": False,
+        }
+
+    @action(detail=True, methods=["post"], url_path="convert-to-draft")
+    def convert_to_draft(self, request, pk=None):
+        plan = self.get_object()
+        title_or_summary = bool((plan.title or "").strip() or (plan.issue_summary or "").strip())
+        note_or_image = bool((plan.notes or "").strip() or plan.images.exists())
+        if not title_or_summary or not note_or_image:
+            raise ValidationError(
+                {
+                    "detail": "Add a title or issue summary and at least one note or image before generating a draft."
+                }
+            )
+
+        force_regenerate = bool(request.data.get("force_regenerate"))
+        use_ai = bool(request.data.get("use_ai"))
+        if plan.converted_job_post_id and not force_regenerate:
+            raise ValidationError(
+                {
+                    "detail": "This plan already generated a draft job post.",
+                    "draft_id": plan.converted_job_post_id,
+                }
+            )
+
+        ai_payload = None
+        system_prompt = ""
+        user_prompt = ""
+        model_name = ""
+        if use_ai:
+            feature = AIUsageEvent.Feature.PLANNER_DRAFT
+            _, _, _, _ = ensure_planner_ai_allowed(request.user, feature)
+            system_prompt = (
+                "You are helping a homeowner turn planner notes into a job post draft. "
+                "Return strict JSON with keys title, summary, scope_of_work, preferred_contractor_types, "
+                "material_preference, location_context, urgency_timing. preferred_contractor_types must be an array of strings."
+            )
+            user_prompt = self._build_plan_text(plan)
+            try:
+                result = generate_text(
+                    feature=feature,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                )
+                model_name = result["model"]
+                ai_payload = parse_ai_json(result["text"])
+                self._record_ai_event(
+                    user=request.user,
+                    feature=feature,
+                    model_name=model_name,
+                    prompt_chars=len(system_prompt) + len(user_prompt),
+                    response_chars=len(result["text"]),
+                    status_value=AIUsageEvent.Status.SUCCESS,
+                )
+            except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
+                self._record_ai_event(
+                    user=request.user,
+                    feature=feature,
+                    model_name=model_name,
+                    prompt_chars=len(system_prompt) + len(user_prompt),
+                    response_chars=0,
+                    status_value=AIUsageEvent.Status.ERROR,
+                )
+                return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        payload = self._build_draft_payload(plan, ai_payload=ai_payload)
+        with transaction.atomic():
+            draft = Project.objects.create(owner=request.user, **payload)
+            copied_images = []
+            for image in plan.images.order_by("order", "id"):
+                if not image.image:
+                    continue
+                image.image.open("rb")
+                copied_images.append(
+                    ProjectImage(
+                        project=draft,
+                        caption=image.caption,
+                        order=image.order,
+                    )
+                )
+                copied_images[-1].image.save(
+                    image.image.name.split("/")[-1],
+                    ContentFile(image.image.read()),
+                    save=False,
+                )
+                image.image.close()
+            if copied_images:
+                ProjectImage.objects.bulk_create(copied_images)
+
+            plan.converted_job_post = draft
+            plan.status = ProjectPlan.STATUS_CONVERTED
+            plan.save(update_fields=["converted_job_post", "status", "updated_at"])
+
+        remaining_after, daily_limit = get_ai_remaining_today(request.user)
+        return Response(
+            {
+                "draft_id": draft.id,
+                "plan_id": plan.id,
+                "remaining_today": remaining_after,
+                "daily_limit": daily_limit,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class FavoriteProjectListView(generics.ListAPIView):

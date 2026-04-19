@@ -236,6 +236,9 @@ class AIUsageEvent(models.Model):
         PROFILE_HEADLINE = "profile_headline", "Profile headline"
         PROFILE_BLURB = "profile_blurb", "Profile blurb"
         PROFILE_BIO = "profile_bio", "Profile bio"
+        PLANNER_ANALYZE = "planner_analyze", "Planner issue analysis"
+        PLANNER_OPTIONS = "planner_options", "Planner solution paths"
+        PLANNER_DRAFT = "planner_draft", "Planner draft generation"
 
     class Status(models.TextChoices):
         SUCCESS = "success", "Success"

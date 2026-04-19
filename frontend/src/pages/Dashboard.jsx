@@ -8,6 +8,7 @@ import api from "../api";
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import SavedLikesCard from "../components/SavedLikesCard";
+import ProjectPlannerSection from "../components/ProjectPlannerSection";
 import { SectionTitle, Card, Button, GhostButton, Badge, SymbolIcon } from "../ui";
 
 // normalize media + safer protocol handling
@@ -1135,6 +1136,8 @@ export default function Dashboard() {
           </Button>
         </div>
       </Card>
+
+      <ProjectPlannerSection isVisible={isHomeownerAccount} />
 
       <SavedLikesCard />
 
