@@ -20,7 +20,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from accounts.ai import AIServiceError, generate_text
-from accounts.models import AIConfiguration, AIUsageEvent, Profile
+from accounts.models import (
+    AIConfiguration,
+    AIUsageEvent,
+    Profile,
+    get_ai_remaining_today_for_user,
+)
 from .models import (
     Project,
     ProjectImage,
@@ -96,12 +101,7 @@ def get_ai_config():
 
 def get_ai_remaining_today(user):
     config = get_ai_config()
-    used = AIUsageEvent.objects.filter(
-        user=user,
-        request_day=timezone.localdate(),
-        status=AIUsageEvent.Status.SUCCESS,
-    ).count()
-    return max(0, int(config.daily_limit_per_user) - used), int(config.daily_limit_per_user)
+    return get_ai_remaining_today_for_user(user, config=config)
 
 
 def ensure_planner_ai_allowed(user, feature):

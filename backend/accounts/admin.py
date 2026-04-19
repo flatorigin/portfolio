@@ -14,6 +14,7 @@ class ProfileAdmin(admin.ModelAdmin):
         "user",
         "email",
         "profile_type",
+        "ai_daily_limit_override",
         "public_profile_enabled",
         "is_frozen",
         "frozen_at",
@@ -59,6 +60,9 @@ class ProfileAdmin(admin.ModelAdmin):
                 "dm_opt_out_reason",
                 "dm_opt_out_until",
             )
+        }),
+        ("AI quota", {
+            "fields": ("ai_daily_limit_override",),
         }),
         ("Media and hero", {
             "fields": (
@@ -109,6 +113,7 @@ class ProfileInline(admin.StackedInline):
     extra = 0
     fields = (
         "profile_type",
+        "ai_daily_limit_override",
         "is_frozen",
         "frozen_at",
         "frozen_reason",
@@ -217,6 +222,7 @@ class AIConfigurationAdmin(admin.ModelAdmin):
     fieldsets = (
         ("Global control", {
             "fields": ("enabled", "daily_limit_per_user"),
+            "description": "This is the default daily AI assist limit for every user unless a profile-level override is set.",
         }),
         ("Feature switches", {
             "fields": (

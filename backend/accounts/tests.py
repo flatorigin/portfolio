@@ -5,7 +5,7 @@ from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import AIConfiguration, AIUsageEvent, Profile
+from .models import AIConfiguration, AIUsageEvent, Profile, get_ai_remaining_today_for_user
 
 
 User = get_user_model()
@@ -126,3 +126,54 @@ class AIAssistViewTests(APITestCase):
 
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(second.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    @patch("accounts.views.generate_text")
+    def test_profile_override_daily_limit_is_enforced(self, mock_generate_text):
+        mock_generate_text.return_value = {"text": "Drafted bio", "model": "gpt-5.4-mini"}
+        self.client.force_authenticate(self.contractor)
+
+        config = AIConfiguration.get_solo()
+        config.enabled = True
+        config.daily_limit_per_user = 10
+        config.save()
+
+        self.contractor.profile.ai_daily_limit_override = 1
+        self.contractor.profile.save(update_fields=["ai_daily_limit_override"])
+
+        first = self.client.post(
+            "/api/ai/assist/",
+            {
+                "feature": "profile_bio",
+                "current_text": "",
+            },
+            format="json",
+        )
+        second = self.client.post(
+            "/api/ai/assist/",
+            {
+                "feature": "profile_bio",
+                "current_text": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_remaining_today_uses_profile_override_when_present(self):
+        config = AIConfiguration.get_solo()
+        config.daily_limit_per_user = 10
+        config.save()
+
+        self.contractor.profile.ai_daily_limit_override = 3
+        self.contractor.profile.save(update_fields=["ai_daily_limit_override"])
+        AIUsageEvent.objects.create(
+            user=self.contractor,
+            feature=AIUsageEvent.Feature.PROFILE_BIO,
+            status=AIUsageEvent.Status.SUCCESS,
+        )
+
+        remaining, limit = get_ai_remaining_today_for_user(self.contractor, config=config)
+
+        self.assertEqual(limit, 3)
+        self.assertEqual(remaining, 2)

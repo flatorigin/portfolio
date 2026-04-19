@@ -79,6 +79,11 @@ class Profile(models.Model):
     )
 
     dm_opt_out_until = models.DateTimeField(null=True, blank=True)
+    ai_daily_limit_override = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Optional per-user override for the daily AI assist limit. Leave blank to use the global default.",
+    )
 
     # Moderation. Frozen profiles keep all data but are hidden from public
     # discovery until an admin unfreezes them.
@@ -263,3 +268,30 @@ class AIUsageEvent(models.Model):
 
     def __str__(self):
         return f"AIUsageEvent<{self.user_id}:{self.feature}:{self.status}>"
+
+
+def resolve_ai_daily_limit_for_user(user, config=None):
+    config = config or AIConfiguration.get_solo()
+    profile = getattr(user, "profile", None)
+    if profile is None and user is not None:
+        profile, _ = Profile.objects.get_or_create(user=user)
+
+    override = getattr(profile, "ai_daily_limit_override", None)
+    if override is not None:
+        return int(override)
+
+    fallback = int(getattr(config, "daily_limit_per_user", 0) or 0)
+    if fallback <= 0:
+        return int(getattr(settings, "AI_DAILY_LIMIT_PER_USER", 10))
+    return fallback
+
+
+def get_ai_remaining_today_for_user(user, config=None):
+    config = config or AIConfiguration.get_solo()
+    limit = resolve_ai_daily_limit_for_user(user, config=config)
+    used = AIUsageEvent.objects.filter(
+        user=user,
+        request_day=timezone.localdate(),
+        status=AIUsageEvent.Status.SUCCESS,
+    ).count()
+    return max(0, limit - used), limit
