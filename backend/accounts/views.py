@@ -21,7 +21,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .ai import AIServiceError, generate_text
-from .models import AIConfiguration, AIUsageEvent, HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
+from .models import (
+    AIConfiguration,
+    AIUsageEvent,
+    HomeownerReferenceImage,
+    Profile,
+    ProfileLike,
+    ProfileSave,
+    get_ai_remaining_today_for_user,
+)
 from .serializers import (
     AIAssistSerializer,
     HomeownerReferenceImageSerializer,
@@ -125,12 +133,8 @@ class AIAssistView(APIView):
         return bool(attr and getattr(config, attr, False))
 
     def _remaining_today(self, request, config):
-        used = AIUsageEvent.objects.filter(
-            user=request.user,
-            request_day=timezone.localdate(),
-            status=AIUsageEvent.Status.SUCCESS,
-        ).count()
-        return max(0, int(config.daily_limit_per_user) - used)
+        remaining, _ = get_ai_remaining_today_for_user(request.user, config=config)
+        return remaining
 
     def _build_prompts(self, feature, data, profile):
         if feature == "project_summary":
