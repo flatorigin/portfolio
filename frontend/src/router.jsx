@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import PublicProfile from "./pages/PublicProfile";
 import MessagesThread from "./pages/MessagesThread";
 import FindLocalWork from "./pages/FindLocalWork";
+import ProjectPlanDetail from "./pages/ProjectPlanDetail";
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
       { path: "work", element: <FindLocalWork /> },
       { path: "profile/edit", element: <ProfileEdit /> },
       { path: "dashboard", element: <Dashboard /> },
+      { path: "dashboard/planner/:planId", element: <ProjectPlanDetail /> },
       { path: "projects/:id", element: <ProjectDetail /> },
       { path: "messages/:threadId?", element: <MessagesThread /> },
       { path: "profiles/:username", element: <PublicProfile /> },

@@ -14,6 +14,8 @@ from .models import (
     ProjectComment,
     Project,
     ProjectImage,
+    ProjectPlan,
+    ProjectPlanImage,
     MessageThread,
     PrivateMessage,
     ProjectFavorite,
@@ -46,6 +48,235 @@ class ProjectImageSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("project", "created_at")
+
+
+class ProjectPlanImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectPlanImage
+        fields = (
+            "id",
+            "project_plan",
+            "image",
+            "image_url",
+            "caption",
+            "order",
+            "is_cover",
+            "created_at",
+        )
+        read_only_fields = ("project_plan", "created_at", "image_url")
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.image and hasattr(obj.image, "url"):
+            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return None
+
+
+class ProjectPlanSerializer(serializers.ModelSerializer):
+    owner_username = serializers.CharField(source="owner.username", read_only=True)
+    images = ProjectPlanImageSerializer(many=True, read_only=True)
+    cover_image_url = serializers.SerializerMethodField()
+    active_plan_count = serializers.SerializerMethodField()
+    max_active_plans = serializers.SerializerMethodField()
+    ai_remaining_today = serializers.SerializerMethodField()
+    ai_daily_limit = serializers.SerializerMethodField()
+    can_generate_draft = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectPlan
+        fields = [
+            "id",
+            "owner",
+            "owner_username",
+            "title",
+            "issue_summary",
+            "house_location",
+            "priority",
+            "budget_min",
+            "budget_max",
+            "notes",
+            "status",
+            "visibility",
+            "contractor_types",
+            "links",
+            "options",
+            "selected_option_key",
+            "ai_generated_issue_summary",
+            "ai_suggested_contractor_types",
+            "converted_job_post",
+            "created_at",
+            "updated_at",
+            "images",
+            "cover_image_url",
+            "active_plan_count",
+            "max_active_plans",
+            "ai_remaining_today",
+            "ai_daily_limit",
+            "can_generate_draft",
+        ]
+        read_only_fields = [
+            "id",
+            "owner",
+            "owner_username",
+            "visibility",
+            "ai_generated_issue_summary",
+            "ai_suggested_contractor_types",
+            "converted_job_post",
+            "created_at",
+            "updated_at",
+            "images",
+            "cover_image_url",
+            "active_plan_count",
+            "max_active_plans",
+            "ai_remaining_today",
+            "ai_daily_limit",
+            "can_generate_draft",
+        ]
+
+    def _normalize_string_list(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Expected a list.")
+        cleaned = []
+        seen = set()
+        for item in value:
+            text = str(item or "").strip()
+            key = text.lower()
+            if text and key not in seen:
+                cleaned.append(text)
+                seen.add(key)
+        return cleaned
+
+    def validate_contractor_types(self, value):
+        return self._normalize_string_list(value)
+
+    def validate_links(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Links must be a list.")
+        cleaned = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url") or "").strip()
+            label = str(item.get("label") or "").strip()
+            notes = str(item.get("notes") or "").strip()
+            if not url:
+                continue
+            cleaned.append({"url": url, "label": label, "notes": notes})
+        return cleaned
+
+    def validate_options(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Options must be a list.")
+        cleaned = []
+        seen = set()
+        for idx, item in enumerate(value):
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or f"option-{idx + 1}").strip()[:80]
+            title = str(item.get("title") or "").strip()
+            notes = str(item.get("notes") or "").strip()
+            pros = str(item.get("pros") or "").strip()
+            cons = str(item.get("cons") or "").strip()
+            estimated_cost_note = str(item.get("estimated_cost_note") or "").strip()
+            if not title:
+                continue
+            if key in seen:
+                key = f"{key}-{idx + 1}"
+            seen.add(key)
+            cleaned.append(
+                {
+                    "key": key,
+                    "title": title,
+                    "notes": notes,
+                    "pros": pros,
+                    "cons": cons,
+                    "estimated_cost_note": estimated_cost_note,
+                    "is_selected": bool(item.get("is_selected")),
+                }
+            )
+        return cleaned
+
+    def validate_selected_option_key(self, value):
+        return str(value or "").strip()[:80]
+
+    def validate_status(self, value):
+        value = str(value or "").strip()
+        allowed = {
+            ProjectPlan.STATUS_PLANNING,
+            ProjectPlan.STATUS_READY_TO_DRAFT,
+            ProjectPlan.STATUS_CONVERTED,
+            ProjectPlan.STATUS_ARCHIVED,
+        }
+        if value not in allowed:
+            raise serializers.ValidationError("Invalid project plan status.")
+        return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        instance = getattr(self, "instance", None)
+
+        selected_key = attrs.get(
+            "selected_option_key",
+            getattr(instance, "selected_option_key", ""),
+        )
+        options = attrs.get("options", getattr(instance, "options", []))
+        option_keys = {item.get("key") for item in options if isinstance(item, dict)}
+        if selected_key and selected_key not in option_keys:
+            raise serializers.ValidationError(
+                {"selected_option_key": "Choose one of the saved solution options."}
+            )
+
+        if attrs.get("budget_min") and attrs.get("budget_max"):
+            if attrs["budget_min"] > attrs["budget_max"]:
+                raise serializers.ValidationError(
+                    {"budget_max": "Budget max must be greater than or equal to budget min."}
+                )
+
+        if not instance and request and request.user.is_authenticated:
+            active_count = ProjectPlan.objects.filter(
+                owner=request.user,
+                status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT],
+            ).count()
+            if active_count >= 3:
+                raise serializers.ValidationError(
+                    {
+                        "detail": "You can keep up to 3 project plans at a time. Remove one to add another."
+                    }
+                )
+
+        return attrs
+
+    def get_cover_image_url(self, obj):
+        request = self.context.get("request")
+        cover = obj.images.filter(is_cover=True).first() or obj.images.order_by("order", "id").first()
+        if cover and cover.image and hasattr(cover.image, "url"):
+            return request.build_absolute_uri(cover.image.url) if request else cover.image.url
+        return None
+
+    def get_active_plan_count(self, obj):
+        return self.context.get("active_plan_count")
+
+    def get_max_active_plans(self, obj):
+        return 3
+
+    def get_ai_remaining_today(self, obj):
+        return self.context.get("ai_remaining_today")
+
+    def get_ai_daily_limit(self, obj):
+        return self.context.get("ai_daily_limit")
+
+    def get_can_generate_draft(self, obj):
+        title_or_summary = bool((obj.title or "").strip() or (obj.issue_summary or "").strip())
+        note_or_image = bool((obj.notes or "").strip() or obj.images.exists())
+        return title_or_summary and note_or_image
 
 
 class ProjectCommentSerializer(serializers.ModelSerializer):

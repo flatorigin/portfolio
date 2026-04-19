@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     ProjectViewSet,
+    ProjectPlanViewSet,
     ProjectCommentListCreateView,
     ProjectCommentDetailView,
     ProjectThreadCreateView,
@@ -25,6 +26,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
+router.register("project-plans", ProjectPlanViewSet, basename="project-plan")
 
 urlpatterns = [
     # DRF router (projects CRUD)

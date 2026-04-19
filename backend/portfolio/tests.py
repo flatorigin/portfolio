@@ -1,10 +1,13 @@
 from django.contrib.auth import get_user_model
 import json
+from unittest.mock import patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import Profile
-from .models import Project, ProjectInvite, MessageThread, PrivateMessage
+from accounts.models import AIConfiguration, AIUsageEvent, Profile
+from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan
 from apps.bids.models import Bid
 
 
@@ -332,3 +335,122 @@ class MessagePrefillTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("already have a bid", str(response.data).lower())
+
+
+class ProjectPlannerTests(APITestCase):
+    def setUp(self):
+        self.homeowner = User.objects.create_user(username="plannerhome", password="pw123456")
+        self.contractor = User.objects.create_user(username="plannerpro", password="pw123456")
+        Profile.objects.create(user=self.homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
+        Profile.objects.create(user=self.contractor, profile_type=Profile.ProfileType.CONTRACTOR)
+        config = AIConfiguration.get_solo()
+        config.enabled = True
+        config.project_helper_enabled = True
+        config.daily_limit_per_user = 10
+        config.save()
+
+    def test_homeowner_can_only_have_three_active_plans(self):
+        self.client.force_authenticate(user=self.homeowner)
+        for index in range(3):
+            response = self.client.post(
+                "/api/project-plans/",
+                {"title": f"Issue {index + 1}", "status": "planning"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        response = self.client.post(
+            "/api/project-plans/",
+            {"title": "Overflow issue", "status": "planning"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("up to 3 project plans", str(response.data).lower())
+
+    def test_archived_plan_frees_capacity(self):
+        self.client.force_authenticate(user=self.homeowner)
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Window", status=ProjectPlan.STATUS_PLANNING)
+        ProjectPlan.objects.create(owner=self.homeowner, title="Porch", status=ProjectPlan.STATUS_PLANNING)
+        ProjectPlan.objects.create(owner=self.homeowner, title="Bathroom", status=ProjectPlan.STATUS_READY_TO_DRAFT)
+
+        response = self.client.post(f"/api/project-plans/{plan.id}/archive/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.client.post(
+            "/api/project-plans/",
+            {"title": "New opening", "status": "planning"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_contractor_cannot_access_project_planner(self):
+        self.client.force_authenticate(user=self.contractor)
+        response = self.client.get("/api/project-plans/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_convert_plan_to_private_draft_job_post(self):
+        plan = ProjectPlan.objects.create(
+            owner=self.homeowner,
+            title="Rotten porch board",
+            issue_summary="Board near the front steps is soft.",
+            house_location="Front porch",
+            notes="Need someone to inspect and likely replace it.",
+            contractor_types=["carpenter"],
+            links=[{"url": "https://example.com/reference", "label": "Reference", "notes": ""}],
+        )
+        image = SimpleUploadedFile(
+            "porch.gif",
+            (
+                b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!"
+                b"\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00"
+                b"\x00\x02\x02D\x01\x00;"
+            ),
+            content_type="image/gif",
+        )
+        plan.images.create(image=image, caption="Close up", order=0, is_cover=True)
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(f"/api/project-plans/{plan.id}/convert-to-draft/", {"use_ai": False}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        draft = Project.objects.get(id=response.data["draft_id"])
+        plan.refresh_from_db()
+        self.assertTrue(draft.is_job_posting)
+        self.assertFalse(draft.is_public)
+        self.assertEqual(draft.owner_id, self.homeowner.id)
+        self.assertEqual(plan.status, ProjectPlan.STATUS_CONVERTED)
+        self.assertEqual(plan.converted_job_post_id, draft.id)
+        self.assertEqual(draft.service_categories, ["carpenter"])
+
+    @patch("portfolio.views.generate_text")
+    def test_planner_ai_action_uses_shared_quota(self, mock_generate_text):
+        mock_generate_text.return_value = {
+            "text": json.dumps(
+                {
+                    "likely_issue_label": "Rotten exterior trim",
+                    "explanation": "Water damage around the frame.",
+                    "contractor_types": ["carpenter"],
+                    "next_steps": ["Inspect surrounding trim"],
+                }
+            ),
+            "model": "gpt-test",
+        }
+        plan = ProjectPlan.objects.create(
+            owner=self.homeowner,
+            title="Window trim",
+            notes="Wood is soft on the outside edge.",
+        )
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/ai/",
+            {"action": "analyze_issue"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            AIUsageEvent.objects.filter(user=self.homeowner, status=AIUsageEvent.Status.SUCCESS).count(),
+            1,
+        )
