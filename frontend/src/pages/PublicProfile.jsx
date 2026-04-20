@@ -395,7 +395,7 @@ export default function PublicProfile() {
               </div>
             </Card>
 
-            <Card className="rounded-2xl border border-slate-200 shadow-sm">
+            <Card className="border border-slate-200 shadow-sm">
               <div className="p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -424,8 +424,8 @@ export default function PublicProfile() {
                   </span>
                 </div>
 
-                <div className="mt-5 overflow-hidden rounded-2xl bg-white">
-                  <div className="px-6 py-5">
+                <div className="mt-5 overflow-hidden bg-white">
+                  <div>
                     <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
                       Languages
                     </div>

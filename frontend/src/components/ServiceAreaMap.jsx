@@ -66,6 +66,7 @@ export default function ServiceAreaMap({
   const circleRef = useRef(null);
   const geocoderRef = useRef(null);
   const isMapReadyRef = useRef(false);
+  const lastResolvedCenterRef = useRef(DEFAULT_CENTER);
 
   const [status, setStatus] = useState({ kind: "idle", message: "" });
 
@@ -173,7 +174,7 @@ export default function ServiceAreaMap({
     return () => {
       cancelled = true;
     };
-  }, [apiKey, radiusMeters]);
+  }, [apiKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,9 +188,10 @@ export default function ServiceAreaMap({
       circleRef.current.setRadius(radiusMeters || 0);
 
       if (!normalizedQuery) {
-        markerRef.current.setPosition(DEFAULT_CENTER);
-        circleRef.current.setCenter(DEFAULT_CENTER);
-        mapRef.current.setCenter(DEFAULT_CENTER);
+        const fallbackCenter = lastResolvedCenterRef.current || DEFAULT_CENTER;
+        markerRef.current.setPosition(fallbackCenter);
+        circleRef.current.setCenter(fallbackCenter);
+        mapRef.current.setCenter(fallbackCenter);
         mapRef.current.setZoom(10);
 
         if (!cancelled) {
@@ -223,6 +225,7 @@ export default function ServiceAreaMap({
 
         const loc = first.geometry.location;
         const center = { lat: loc.lat(), lng: loc.lng() };
+        lastResolvedCenterRef.current = center;
 
         markerRef.current.setPosition(center);
         circleRef.current.setCenter(center);
