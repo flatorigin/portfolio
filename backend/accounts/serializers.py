@@ -212,6 +212,8 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "profile_type",
             "display_name",
             "service_location",
+            "service_lat",
+            "service_lng",
             "coverage_radius_miles",
             "contact_email",
             "contact_phone",
@@ -271,6 +273,8 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "service_location",
             getattr(instance, "service_location", ""),
         )
+        service_lat = attrs.get("service_lat", getattr(instance, "service_lat", None))
+        service_lng = attrs.get("service_lng", getattr(instance, "service_lng", None))
         contact_email = attrs.get(
             "contact_email",
             getattr(instance, "contact_email", ""),
@@ -291,6 +295,10 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
         if not str(contact_phone).strip():
             raise serializers.ValidationError(
                 {"contact_phone": "Phone number is required."}
+            )
+        if (service_lat is None) != (service_lng is None):
+            raise serializers.ValidationError(
+                {"service_location": "Saved map coordinates must include both latitude and longitude."}
             )
 
         return attrs
@@ -324,6 +332,8 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "profile_type",
             "display_name",
             "service_location",
+            "service_lat",
+            "service_lng",
             "coverage_radius_miles",
             "bio",
             "contact_email",
@@ -396,6 +406,8 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "service_location",
             getattr(instance, "service_location", ""),
         )
+        service_lat = attrs.get("service_lat", getattr(instance, "service_lat", None))
+        service_lng = attrs.get("service_lng", getattr(instance, "service_lng", None))
         contact_email = attrs.get(
             "contact_email",
             getattr(instance, "contact_email", ""),
@@ -416,6 +428,10 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
         if not str(contact_phone).strip():
             raise serializers.ValidationError(
                 {"contact_phone": "Phone number is required."}
+            )
+        if (service_lat is None) != (service_lng is None):
+            raise serializers.ValidationError(
+                {"service_location": "Saved map coordinates must include both latitude and longitude."}
             )
 
         return attrs
@@ -449,6 +465,8 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "profile_type",
             "display_name",
             "service_location",
+            "service_lat",
+            "service_lng",
             "coverage_radius_miles",
             "bio",
             "logo",

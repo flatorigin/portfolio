@@ -262,3 +262,85 @@ class AccountSecurityTests(APITestCase):
         )
         self.assertEqual(register_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("cannot be used", str(register_response.data).lower())
+
+
+class MeProfilePersistenceTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="persistuser",
+            email="persist@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        Profile.objects.update_or_create(
+            user=self.user,
+            defaults={
+                "profile_type": Profile.ProfileType.CONTRACTOR,
+                "service_location": "Philadelphia, PA",
+                "contact_email": "persist@example.com",
+                "contact_phone": "555-111-2222",
+            },
+        )
+
+    def test_service_location_persists_after_profile_patch(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            "/api/users/me/",
+            {
+                "service_location": "Boston, MA",
+                "service_lat": 42.3601,
+                "service_lng": -71.0589,
+                "contact_email": "persist@example.com",
+                "contact_phone": "555-111-2222",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["service_location"], "Boston, MA")
+        self.assertEqual(response.data["service_lat"], 42.3601)
+        self.assertEqual(response.data["service_lng"], -71.0589)
+
+        follow_up = self.client.get("/api/users/me/")
+        self.assertEqual(follow_up.status_code, status.HTTP_200_OK)
+        self.assertEqual(follow_up.data["service_location"], "Boston, MA")
+        self.assertEqual(follow_up.data["service_lat"], 42.3601)
+        self.assertEqual(follow_up.data["service_lng"], -71.0589)
+
+    def test_service_location_persists_after_multipart_profile_patch(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            "/api/users/me/",
+            {
+                "service_location": "Boston, MA",
+                "service_lat": "42.3601",
+                "service_lng": "-71.0589",
+                "contact_email": "persist@example.com",
+                "contact_phone": "555-111-2222",
+                "profile_type": Profile.ProfileType.CONTRACTOR,
+                "display_name": "",
+                "hero_headline": "",
+                "hero_blurb": "",
+                "bio": "",
+                "show_contact_email": "false",
+                "show_contact_phone": "false",
+                "languages": "[]",
+                "allow_direct_messages": "true",
+                "dm_opt_out_reason": "",
+                "dm_opt_out_until": "",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["service_location"], "Boston, MA")
+        self.assertEqual(response.data["service_lat"], 42.3601)
+        self.assertEqual(response.data["service_lng"], -71.0589)
+
+        follow_up = self.client.get("/api/users/me/")
+        self.assertEqual(follow_up.status_code, status.HTTP_200_OK)
+        self.assertEqual(follow_up.data["service_location"], "Boston, MA")
+        self.assertEqual(follow_up.data["service_lat"], 42.3601)
+        self.assertEqual(follow_up.data["service_lng"], -71.0589)

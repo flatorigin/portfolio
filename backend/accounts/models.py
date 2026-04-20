@@ -38,6 +38,8 @@ class Profile(models.Model):
     # Service
     service_location = models.CharField(max_length=255, blank=True, default="")
     coverage_radius_miles = models.PositiveIntegerField(blank=True, null=True)
+    service_lat = models.FloatField(blank=True, null=True)
+    service_lng = models.FloatField(blank=True, null=True)
 
     # About
     bio = models.TextField(blank=True, default="")

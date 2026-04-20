@@ -4,50 +4,15 @@
 // Safe loader init, clearer error states, no fake-key fallback
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from "react";
-import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
-
-const DEFAULT_CENTER = { lat: 39.9526, lng: -75.1652 }; // Philadelphia fallback
-const MILES_TO_METERS = 1609.344;
-
-let loaderConfigured = false;
-let configuredKey = "";
-
-function normalizeQuery(raw) {
-  const v = (raw || "").trim();
-  if (!v) return "";
-
-  const usZip = /^\d{5}(-\d{4})?$/.test(v);
-  if (usZip) return `${v}, USA`;
-
-  const canadianPostal = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(v);
-  if (canadianPostal) return `${v}, Canada`;
-
-  return v;
-}
-
-function milesToMeters(miles) {
-  const n = Number(miles);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return n * MILES_TO_METERS;
-}
-
-function getApiKey() {
-  const runtimeKey =
-    typeof window !== "undefined" ? window.__ENV__?.GOOGLE_MAPS_API_KEY : "";
-  const viteKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-  return String(runtimeKey || viteKey || "").trim();
-}
-
-function isPlaceholderKey(key) {
-  if (!key) return true;
-  const v = key.trim().toLowerCase();
-  return (
-    v === "your_key_if_needed" ||
-    v === "your_google_maps_api_key" ||
-    v === "your_api_key" ||
-    v.includes("replace_me")
-  );
-}
+import {
+  DEFAULT_CENTER,
+  geocodeLocationQuery,
+  getGoogleMapsApiKey,
+  isPlaceholderGoogleMapsKey,
+  loadGoogleMaps,
+  milesToMeters,
+  normalizeLocationQuery,
+} from "../lib/googleMaps";
 
 export default function ServiceAreaMap({
   locationQuery,
@@ -57,30 +22,38 @@ export default function ServiceAreaMap({
   deferUpdatesUntilSave = false,
   savedLocationQuery,
   savedRadiusMiles,
+  resolvedCenter,
 }) {
-  const apiKey = getApiKey();
+  const apiKey = getGoogleMapsApiKey();
 
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const circleRef = useRef(null);
-  const geocoderRef = useRef(null);
   const isMapReadyRef = useRef(false);
   const lastResolvedCenterRef = useRef(DEFAULT_CENTER);
+  const lastResolvedQueryRef = useRef("");
+  const geocodeRunRef = useRef(0);
 
   const [status, setStatus] = useState({ kind: "idle", message: "" });
 
-  const effectiveQuery = deferUpdatesUntilSave ? savedLocationQuery : locationQuery;
-  const effectiveRadius = deferUpdatesUntilSave ? savedRadiusMiles : radiusMiles;
+  const effectiveQuery = deferUpdatesUntilSave
+    ? (savedLocationQuery || locationQuery)
+    : locationQuery;
+  const effectiveRadius = deferUpdatesUntilSave
+    ? (savedRadiusMiles || radiusMiles)
+    : radiusMiles;
 
   const normalizedQuery = useMemo(
-    () => normalizeQuery(effectiveQuery),
+    () => normalizeLocationQuery(effectiveQuery),
     [effectiveQuery]
   );
   const radiusMeters = useMemo(
     () => milesToMeters(effectiveRadius),
     [effectiveRadius]
   );
+  const hasResolvedCenter =
+    Number.isFinite(resolvedCenter?.lat) && Number.isFinite(resolvedCenter?.lng);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +61,7 @@ export default function ServiceAreaMap({
     async function init() {
       if (typeof window === "undefined") return;
 
-      if (isPlaceholderKey(apiKey)) {
+      if (isPlaceholderGoogleMapsKey(apiKey)) {
         setStatus({
           kind: "error",
           message:
@@ -99,31 +72,15 @@ export default function ServiceAreaMap({
 
       try {
         setStatus({ kind: "loading", message: "Loading Google Maps…" });
-
-        if (!loaderConfigured) {
-          setOptions({
-            key: apiKey,
-            v: "weekly",
-            libraries: ["places"],
-          });
-          loaderConfigured = true;
-          configuredKey = apiKey;
-        } else if (configuredKey !== apiKey) {
-          console.warn(
-            "[ServiceAreaMap] Google Maps loader already initialized with a different key. Reusing the first configured key."
-          );
-        }
-
-        const { Map } = await importLibrary("maps");
-        const { Geocoder } = await importLibrary("geocoding");
-        await importLibrary("marker");
+        const { Map } = await loadGoogleMaps();
 
         if (cancelled) return;
         if (!containerRef.current) return;
 
         if (!mapRef.current) {
+          const initialCenter = hasResolvedCenter ? resolvedCenter : DEFAULT_CENTER;
           const map = new Map(containerRef.current, {
-            center: DEFAULT_CENTER,
+            center: initialCenter,
             zoom: 10,
             mapTypeControl: false,
             streetViewControl: false,
@@ -131,16 +88,15 @@ export default function ServiceAreaMap({
           });
 
           mapRef.current = map;
-          geocoderRef.current = new Geocoder();
 
           markerRef.current = new window.google.maps.Marker({
             map,
-            position: DEFAULT_CENTER,
+            position: initialCenter,
           });
 
           circleRef.current = new window.google.maps.Circle({
             map,
-            center: DEFAULT_CENTER,
+            center: initialCenter,
             radius: radiusMeters || 0,
             strokeOpacity: 0.4,
             strokeWeight: 1,
@@ -177,22 +133,68 @@ export default function ServiceAreaMap({
   }, [apiKey]);
 
   useEffect(() => {
+    if (!isMapReadyRef.current) return;
+    if (!mapRef.current || !markerRef.current || !circleRef.current) return;
+
+    circleRef.current.setRadius(radiusMeters || 0);
+
+    if (!hasResolvedCenter) return;
+
+    lastResolvedCenterRef.current = resolvedCenter;
+    lastResolvedQueryRef.current = normalizedQuery || "__resolved_center__";
+    markerRef.current.setPosition(resolvedCenter);
+    circleRef.current.setCenter(resolvedCenter);
+
+    if (radiusMeters > 0) {
+      const bounds = circleRef.current.getBounds();
+      if (bounds) {
+        mapRef.current.fitBounds(bounds);
+      } else {
+        mapRef.current.setCenter(resolvedCenter);
+        mapRef.current.setZoom(12);
+      }
+    } else {
+      mapRef.current.setCenter(resolvedCenter);
+      mapRef.current.setZoom(12);
+    }
+
+    setStatus((current) =>
+      current.kind === "error" ? current : { kind: "ready", message: "" }
+    );
+  }, [hasResolvedCenter, normalizedQuery, radiusMeters, resolvedCenter]);
+
+  useEffect(() => {
     let cancelled = false;
+    const runId = ++geocodeRunRef.current;
 
     async function geocodeAndUpdate() {
       if (!isMapReadyRef.current) return;
-      if (!mapRef.current || !markerRef.current || !circleRef.current || !geocoderRef.current) {
+      if (!mapRef.current || !markerRef.current || !circleRef.current) {
         return;
       }
 
+      const isStale = () => cancelled || geocodeRunRef.current !== runId;
+
       circleRef.current.setRadius(radiusMeters || 0);
 
+      if (hasResolvedCenter) {
+        if (!cancelled) {
+          setStatus((current) =>
+            current.kind === "error" ? current : { kind: "ready", message: "" }
+          );
+        }
+        return;
+      }
+
       if (!normalizedQuery) {
-        const fallbackCenter = lastResolvedCenterRef.current || DEFAULT_CENTER;
-        markerRef.current.setPosition(fallbackCenter);
-        circleRef.current.setCenter(fallbackCenter);
-        mapRef.current.setCenter(fallbackCenter);
-        mapRef.current.setZoom(10);
+        if (isStale()) return;
+        const hasResolvedLocation = Boolean(lastResolvedQueryRef.current);
+        if (!hasResolvedLocation) {
+          markerRef.current.setPosition(DEFAULT_CENTER);
+          circleRef.current.setCenter(DEFAULT_CENTER);
+          mapRef.current.setCenter(DEFAULT_CENTER);
+          mapRef.current.setZoom(10);
+        }
 
         if (!cancelled) {
           setStatus((s) =>
@@ -207,25 +209,13 @@ export default function ServiceAreaMap({
           setStatus({ kind: "geocoding", message: "Finding location…" });
         }
 
-        const resp = await geocoderRef.current.geocode({
-          address: normalizedQuery,
-        });
-
-        const first = resp?.results?.[0];
-
-        if (!first) {
-          if (!cancelled) {
-            setStatus({
-              kind: "error",
-              message: "No results found for that location or ZIP code.",
-            });
-          }
-          return;
-        }
-
-        const loc = first.geometry.location;
-        const center = { lat: loc.lat(), lng: loc.lng() };
+        const result = await geocodeLocationQuery(normalizedQuery);
+        if (isStale()) return;
+        const center = result?.center;
+        if (!center) return;
+        if (isStale()) return;
         lastResolvedCenterRef.current = center;
+        lastResolvedQueryRef.current = normalizedQuery;
 
         markerRef.current.setPosition(center);
         circleRef.current.setCenter(center);
@@ -270,7 +260,7 @@ export default function ServiceAreaMap({
     return () => {
       cancelled = true;
     };
-  }, [normalizedQuery, radiusMeters]);
+  }, [hasResolvedCenter, normalizedQuery, radiusMeters]);
 
   const banner =
     status.kind === "error" ? (

@@ -92,7 +92,13 @@ export default function PublicProfile() {
   const [saved, setSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
 
-  const shouldRenderMap = Boolean(profile?.service_location);
+  const shouldRenderMap = Boolean(
+    profile?.service_location ||
+      (profile?.service_lat !== null &&
+        profile?.service_lat !== undefined &&
+        profile?.service_lng !== null &&
+        profile?.service_lng !== undefined)
+  );
   const isHomeownerProfile = profile?.profile_type === "homeowner";
 
   const displayName = useMemo(() => {
@@ -869,6 +875,17 @@ export default function PublicProfile() {
               <ServiceAreaMap
                 locationQuery={profile?.service_location || ""}
                 radiusMiles={profile?.coverage_radius_miles || ""}
+                resolvedCenter={
+                  profile?.service_lat !== null &&
+                  profile?.service_lat !== undefined &&
+                  profile?.service_lng !== null &&
+                  profile?.service_lng !== undefined
+                    ? {
+                        lat: Number(profile.service_lat),
+                        lng: Number(profile.service_lng),
+                      }
+                    : null
+                }
                 heightClassName="h-64"
               />
             </Suspense>

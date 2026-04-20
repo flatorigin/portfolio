@@ -12,6 +12,7 @@ import AiWriteButton from "../components/AiWriteButton";
 import { logout } from "../auth";
 import { SectionTitle, Card, Input, Textarea, Button, GhostButton } from "../ui";
 import LanguageMultiSelect from "../components/LanguageMultiSelect";
+import { geocodeLocationQuery, normalizeLocationQuery } from "../lib/googleMaps";
 
 const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
 
@@ -60,6 +61,8 @@ export default function EditProfile() {
     hero_headline: "",
     hero_blurb: "",
     service_location: "",
+    service_lat: null,
+    service_lng: null,
     coverage_radius_miles: "",
     contact_email: "",
     contact_phone: "",
@@ -105,6 +108,8 @@ export default function EditProfile() {
 
   const [savedMapModel, setSavedMapModel] = useState({
     service_location: "",
+    service_lat: null,
+    service_lng: null,
     coverage_radius_miles: "",
   });
 
@@ -129,6 +134,14 @@ export default function EditProfile() {
           hero_headline: data.hero_headline || "",
           hero_blurb: data.hero_blurb || "",
           service_location: data.service_location || "",
+          service_lat:
+            data.service_lat !== null && data.service_lat !== undefined
+              ? Number(data.service_lat)
+              : null,
+          service_lng:
+            data.service_lng !== null && data.service_lng !== undefined
+              ? Number(data.service_lng)
+              : null,
           coverage_radius_miles:
             data.coverage_radius_miles !== null &&
             data.coverage_radius_miles !== undefined
@@ -149,6 +162,8 @@ export default function EditProfile() {
 
         setSavedMapModel({
           service_location: nextForm.service_location,
+          service_lat: nextForm.service_lat,
+          service_lng: nextForm.service_lng,
           coverage_radius_miles: nextForm.coverage_radius_miles,
         });
 
@@ -246,6 +261,25 @@ export default function EditProfile() {
     setMessage("");
 
     try {
+      const normalizedDraftLocation = normalizeLocationQuery(form.service_location);
+      const normalizedSavedLocation = normalizeLocationQuery(savedMapModel.service_location);
+
+      let resolvedCenter =
+        savedMapModel.service_lat !== null &&
+        savedMapModel.service_lng !== null &&
+        normalizedDraftLocation &&
+        normalizedDraftLocation === normalizedSavedLocation
+          ? {
+              lat: Number(savedMapModel.service_lat),
+              lng: Number(savedMapModel.service_lng),
+            }
+          : null;
+
+      if (!resolvedCenter && normalizedDraftLocation) {
+        const result = await geocodeLocationQuery(normalizedDraftLocation);
+        resolvedCenter = result?.center || null;
+      }
+
       const data = new FormData();
 
       data.append("display_name", form.display_name || "");
@@ -253,6 +287,10 @@ export default function EditProfile() {
       data.append("hero_headline", form.hero_headline || "");
       data.append("hero_blurb", form.hero_blurb || "");
       data.append("service_location", form.service_location || "");
+      if (resolvedCenter) {
+        data.append("service_lat", String(resolvedCenter.lat));
+        data.append("service_lng", String(resolvedCenter.lng));
+      }
 
       if (form.coverage_radius_miles !== "") {
         data.append("coverage_radius_miles", form.coverage_radius_miles);
@@ -293,6 +331,14 @@ export default function EditProfile() {
         hero_headline: updated.hero_headline ?? form.hero_headline,
         hero_blurb: updated.hero_blurb ?? form.hero_blurb,
         service_location: updated.service_location ?? form.service_location,
+        service_lat:
+          updated.service_lat !== null && updated.service_lat !== undefined
+            ? Number(updated.service_lat)
+            : resolvedCenter?.lat ?? form.service_lat,
+        service_lng:
+          updated.service_lng !== null && updated.service_lng !== undefined
+            ? Number(updated.service_lng)
+            : resolvedCenter?.lng ?? form.service_lng,
         coverage_radius_miles:
           updated.coverage_radius_miles !== null &&
           updated.coverage_radius_miles !== undefined
@@ -320,6 +366,8 @@ export default function EditProfile() {
 
       setSavedMapModel({
         service_location: next.service_location,
+        service_lat: next.service_lat,
+        service_lng: next.service_lng,
         coverage_radius_miles: next.coverage_radius_miles,
       });
 
@@ -1022,6 +1070,15 @@ export default function EditProfile() {
                 radiusMiles={form.coverage_radius_miles}
                 savedLocationQuery={savedMapModel.service_location}
                 savedRadiusMiles={savedMapModel.coverage_radius_miles}
+                resolvedCenter={
+                  savedMapModel.service_lat !== null &&
+                  savedMapModel.service_lng !== null
+                    ? {
+                        lat: Number(savedMapModel.service_lat),
+                        lng: Number(savedMapModel.service_lng),
+                      }
+                    : null
+                }
                 heightClassName="h-64"
               />
             </Suspense>
