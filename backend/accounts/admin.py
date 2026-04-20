@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from .models import AIConfiguration, AIUsageEvent, HomeownerReferenceImage, Profile
+from .models import AIConfiguration, AIUsageEvent, DeletedEmailBlocklist, HomeownerReferenceImage, Profile
 
 User = get_user_model()
 
@@ -14,16 +14,18 @@ class ProfileAdmin(admin.ModelAdmin):
         "user",
         "email",
         "profile_type",
+        "email_verified_at",
         "ai_daily_limit_override",
         "public_profile_enabled",
         "is_frozen",
+        "is_deactivated",
         "frozen_at",
         "is_user_active",
     )
-    list_editable = ("profile_type", "public_profile_enabled", "is_frozen")
-    list_filter = ("profile_type", "public_profile_enabled", "is_frozen", "user__is_active")
+    list_editable = ("profile_type", "public_profile_enabled", "is_frozen", "is_deactivated")
+    list_filter = ("profile_type", "public_profile_enabled", "is_frozen", "is_deactivated", "user__is_active")
     search_fields = ("user__username", "user__email")
-    readonly_fields = ("frozen_at",)
+    readonly_fields = ("frozen_at", "deactivated_at")
     actions = (
         "make_contractors",
         "make_homeowners",
@@ -35,9 +37,12 @@ class ProfileAdmin(admin.ModelAdmin):
             "fields": (
                 "user",
                 "profile_type",
+                "email_verified_at",
                 "is_frozen",
                 "frozen_at",
                 "frozen_reason",
+                "is_deactivated",
+                "deactivated_at",
             )
         }),
         ("Identity", {
@@ -113,14 +118,17 @@ class ProfileInline(admin.StackedInline):
     extra = 0
     fields = (
         "profile_type",
+        "email_verified_at",
         "ai_daily_limit_override",
         "is_frozen",
         "frozen_at",
         "frozen_reason",
+        "is_deactivated",
+        "deactivated_at",
         "display_name",
         "service_location",
     )
-    readonly_fields = ("frozen_at",)
+    readonly_fields = ("frozen_at", "deactivated_at")
 
 
 try:
@@ -138,12 +146,14 @@ class UserAdmin(DjangoUserAdmin):
         "email",
         "profile_type",
         "profile_frozen",
+        "profile_deactivated",
         "is_staff",
         "is_active",
     )
     list_filter = (
         "profile__profile_type",
         "profile__is_frozen",
+        "profile__is_deactivated",
         "is_staff",
         "is_superuser",
         "is_active",
@@ -162,6 +172,10 @@ class UserAdmin(DjangoUserAdmin):
     @admin.display(boolean=True, ordering="profile__is_frozen")
     def profile_frozen(self, obj):
         return bool(getattr(getattr(obj, "profile", None), "is_frozen", False))
+
+    @admin.display(boolean=True, ordering="profile__is_deactivated")
+    def profile_deactivated(self, obj):
+        return bool(getattr(getattr(obj, "profile", None), "is_deactivated", False))
 
     def _profiles_for_users(self, queryset):
         profile_ids = []
@@ -204,6 +218,13 @@ class HomeownerReferenceImageAdmin(admin.ModelAdmin):
     list_filter = ("is_public", "created_at")
     search_fields = ("user__username", "caption")
     list_editable = ("is_public", "order")
+
+
+@admin.register(DeletedEmailBlocklist)
+class DeletedEmailBlocklistAdmin(admin.ModelAdmin):
+    list_display = ("email", "reason", "created_at")
+    search_fields = ("email", "reason")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(AIConfiguration)

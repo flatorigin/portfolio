@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from djoser.serializers import UserCreateSerializer
-from .models import HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
+from .models import DeletedEmailBlocklist, HomeownerReferenceImage, Profile, ProfileLike, ProfileSave
 
 User = get_user_model()
 
@@ -105,6 +105,11 @@ class RoleAwareUserCreateSerializer(UserCreateSerializer):
         base_attrs = dict(attrs)
         base_attrs.pop("profile_type", None)
         validated = super().validate(base_attrs)
+        email = str(validated.get("email") or attrs.get("email") or "").strip().lower()
+        if email and DeletedEmailBlocklist.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError(
+                {"email": "This email address cannot be used to create a new account. Please contact the admin for help."}
+            )
         if profile_type:
             validated["profile_type"] = profile_type
         return validated
@@ -144,6 +149,37 @@ class AIAssistSerializer(serializers.Serializer):
     payment_terms = serializers.CharField(required=False, allow_blank=True, max_length=2000)
 
 
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False, min_length=8)
+    new_password_confirm = serializers.CharField(write_only=True, trim_whitespace=False, min_length=8)
+
+    def validate_current_password(self, value):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
+        return value
+
+    def validate(self, attrs):
+        if attrs.get("new_password") != attrs.get("new_password_confirm"):
+            raise serializers.ValidationError(
+                {"new_password_confirm": "New passwords do not match."}
+            )
+        return attrs
+
+
+class AccountDeleteSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_password(self, value):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.check_password(value):
+            raise serializers.ValidationError("Password is incorrect.")
+        return value
+
+
 class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     
     languages_display = serializers.ReadOnlyField()
@@ -152,6 +188,9 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     # read-only user identity
     username = serializers.CharField(source="user.username", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
+    email_verified = serializers.BooleanField(source="is_email_verified", read_only=True)
+    is_deactivated = serializers.BooleanField(read_only=True)
+    deactivated_at = serializers.DateTimeField(read_only=True)
 
     avatar_url = serializers.SerializerMethodField()
     banner_url = serializers.SerializerMethodField()
@@ -169,6 +208,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "id",
             "username",
             "email",
+            "email_verified",
             "profile_type",
             "display_name",
             "service_location",
@@ -197,6 +237,8 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "member_since_label",
             "dm_opt_out_reason",
             "dm_opt_out_until",
+            "is_deactivated",
+            "deactivated_at",
         ]
         read_only_fields = [
             "id",
@@ -259,6 +301,8 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     member_since_label = serializers.ReadOnlyField()
 
     username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    email_verified = serializers.BooleanField(source="is_email_verified", read_only=True)
 
     avatar_url = serializers.SerializerMethodField()
     banner_url = serializers.SerializerMethodField()
@@ -275,6 +319,8 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
         fields = (
             "id",
             "username",
+            "email",
+            "email_verified",
             "profile_type",
             "display_name",
             "service_location",
@@ -302,10 +348,14 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "languages_display",
             "member_since_label",
             "is_frozen",
+            "is_deactivated",
+            "deactivated_at",
         )
         read_only_fields = (
             "id",
             "username",
+            "email",
+            "email_verified",
             "avatar_url",
             "banner_url",
             "like_count",
@@ -314,6 +364,8 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "is_profile_complete",
             "profile_status",
             "is_frozen",
+            "is_deactivated",
+            "deactivated_at",
         )
 
     def validate_languages(self, value):

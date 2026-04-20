@@ -49,6 +49,7 @@ class Profile(models.Model):
     show_contact_email = models.BooleanField(default=False)
     show_contact_phone = models.BooleanField(default=False)
     public_profile_enabled = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     
     # Media
     logo = models.ImageField(upload_to=logo_upload_path, blank=True, null=True)
@@ -84,6 +85,8 @@ class Profile(models.Model):
         blank=True,
         help_text="Optional per-user override for the daily AI assist limit. Leave blank to use the global default.",
     )
+    is_deactivated = models.BooleanField(default=False)
+    deactivated_at = models.DateTimeField(null=True, blank=True)
 
     # Moderation. Frozen profiles keep all data but are hidden from public
     # discovery until an admin unfreezes them.
@@ -102,6 +105,14 @@ class Profile(models.Model):
     @property
     def profile_status(self):
         return "complete" if self.is_profile_complete else "incomplete"
+
+    @property
+    def is_email_verified(self):
+        return bool(self.email_verified_at)
+
+    @property
+    def is_publicly_hidden(self):
+        return bool(self.is_frozen or self.is_deactivated)
 
     @property
     def languages_display(self):
@@ -123,6 +134,10 @@ class Profile(models.Model):
             self.frozen_at = timezone.now()
         if not self.is_frozen:
             self.frozen_at = None
+        if self.is_deactivated and not self.deactivated_at:
+            self.deactivated_at = timezone.now()
+        if not self.is_deactivated:
+            self.deactivated_at = None
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
@@ -268,6 +283,18 @@ class AIUsageEvent(models.Model):
 
     def __str__(self):
         return f"AIUsageEvent<{self.user_id}:{self.feature}:{self.status}>"
+
+
+class DeletedEmailBlocklist(models.Model):
+    email = models.EmailField(unique=True)
+    reason = models.CharField(max_length=120, blank=True, default="deleted_account")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.email
 
 
 def resolve_ai_daily_limit_for_user(user, config=None):

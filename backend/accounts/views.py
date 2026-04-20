@@ -4,14 +4,17 @@ import re
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.db.models import Q
 from django.db import transaction
+from django.core.mail import get_connection, send_mail
 from django.shortcuts import get_object_or_404, redirect
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils import timezone
 
 from djoser import signals
-from djoser.serializers import ActivationSerializer
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import status
 from rest_framework.exceptions import APIException, PermissionDenied
@@ -28,10 +31,13 @@ from .models import (
     Profile,
     ProfileLike,
     ProfileSave,
+    DeletedEmailBlocklist,
     get_ai_remaining_today_for_user,
 )
 from .serializers import (
     AIAssistSerializer,
+    AccountDeleteSerializer,
+    ChangePasswordSerializer,
     HomeownerReferenceImageSerializer,
     ProfileSerializer,
     PublicUserProfileSerializer,
@@ -86,6 +92,34 @@ class RegistrationIncomplete(APIException):
         "could not be sent. No account was created. Please try again."
     )
     default_code = "registration_incomplete"
+
+
+def send_verification_email(*, user):
+    email = str(getattr(user, "email", "") or "").strip().lower()
+    if not email:
+        raise APIException("This account does not have an email address to verify.")
+
+    base_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com")
+    timeout = int(getattr(settings, "EMAIL_TIMEOUT", 10))
+    connection = get_connection(timeout=timeout)
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    verify_link = f"{base_url}/activate/{uid}/{token}"
+    message = (
+        "Please verify your email address for FlatOrigin.\n\n"
+        f"Open this link to verify your email:\n{verify_link}\n\n"
+        "If you did not ask for this, you can ignore this email."
+    )
+
+    send_mail(
+        subject="Verify your email",
+        message=message,
+        from_email=from_email,
+        recipient_list=[email],
+        fail_silently=False,
+        connection=connection,
+    )
 
 
 class SafeUserCreateViewSet(DjoserUserViewSet):
@@ -299,16 +333,17 @@ class ActivationRedirectView(APIView):
     token_generator = default_token_generator
 
     def get(self, request, uid, token, *args, **kwargs):
-        serializer = ActivationSerializer(
-            data={"uid": uid, "token": token},
-            context={"request": request, "view": self},
-        )
-
         try:
-            serializer.is_valid(raise_exception=True)
-            user = serializer.user
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id)
+            if not self.token_generator.check_token(user, token):
+                raise ValueError("Invalid or expired activation token.")
             user.is_active = True
             user.save(update_fields=["is_active"])
+            profile, _ = Profile.objects.get_or_create(user=user)
+            if not profile.email_verified_at:
+                profile.email_verified_at = timezone.now()
+                profile.save(update_fields=["email_verified_at"])
             signals.user_activated.send(
                 sender=self.__class__,
                 user=user,
@@ -352,6 +387,70 @@ class MeView(APIView):
         return Response(serializer.data)
 
 
+class SecurityChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        new_password = serializer.validated_data["new_password"]
+        validate_password(new_password, user=request.user)
+        request.user.set_password(new_password)
+        request.user.save(update_fields=["password"])
+        return Response({"detail": "Password updated successfully."}, status=status.HTTP_200_OK)
+
+
+class SecuritySendVerificationEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        if profile.email_verified_at:
+            return Response({"detail": "Your email is already verified."}, status=status.HTTP_200_OK)
+
+        send_verification_email(user=request.user)
+        return Response({"detail": "Verification email sent."}, status=status.HTTP_200_OK)
+
+
+class SecurityDeactivateView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        is_deactivated = bool(request.data.get("is_deactivated"))
+        profile.is_deactivated = is_deactivated
+        profile.save(update_fields=["is_deactivated", "deactivated_at"])
+        serializer = ProfileSerializer(profile, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SecurityDeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = AccountDeleteSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        email = str(getattr(user, "email", "") or "").strip().lower()
+        with transaction.atomic():
+            if email:
+                DeletedEmailBlocklist.objects.get_or_create(
+                    email=email,
+                    defaults={"reason": "deleted_account"},
+                )
+            user.delete()
+
+        return Response(
+            {
+                "detail": "Your account has been deleted. This email address cannot be used to register again automatically."
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class PublicProfileView(APIView):
     """
     Read-only public profile by username.
@@ -373,7 +472,7 @@ class PublicProfileView(APIView):
             request.user.is_authenticated
             and (request.user.is_staff or request.user.id == user.id)
         )
-        if profile.is_frozen and not can_view_frozen:
+        if (profile.is_frozen or profile.is_deactivated) and not can_view_frozen:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         if (
             profile.profile_type == Profile.ProfileType.HOMEOWNER
@@ -456,6 +555,7 @@ class ContractorSearchView(APIView):
             .filter(
                 profile_type=Profile.ProfileType.CONTRACTOR,
                 is_frozen=False,
+                is_deactivated=False,
                 user__is_active=True,
             )
             .exclude(user=request.user)
@@ -575,7 +675,7 @@ class LikedProfilesView(APIView):
         qs = (
             Profile.objects
             .filter(user_id__in=list(liked_user_ids))
-            .filter(is_frozen=False)
+            .filter(is_frozen=False, is_deactivated=False)
             .select_related("user")
         )
 
@@ -625,7 +725,7 @@ class SavedProfilesView(APIView):
         qs = (
             Profile.objects
             .filter(user_id__in=list(saved_user_ids))
-            .filter(is_frozen=False)
+            .filter(is_frozen=False, is_deactivated=False)
             .select_related("user")
         )
 
