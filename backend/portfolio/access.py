@@ -29,7 +29,10 @@ def can_view_project(project, user):
         return True
 
     owner_profile = getattr(project.owner, "profile", None)
-    if owner_profile and getattr(owner_profile, "is_frozen", False):
+    if owner_profile and (
+        getattr(owner_profile, "is_frozen", False)
+        or getattr(owner_profile, "is_deactivated", False)
+    ):
         return False
 
     if is_private_job(project):
@@ -49,12 +52,15 @@ def can_access_job_interactions(project, user):
 
 
 def visible_projects_q_for_user(user):
-    owner_not_frozen = Q(owner__profile__is_frozen=False) | Q(owner__profile__isnull=True)
+    owner_publicly_visible = (
+        Q(owner__profile__is_frozen=False, owner__profile__is_deactivated=False)
+        | Q(owner__profile__isnull=True)
+    )
     public_visible = Q(
         is_public=True,
         is_private=False,
         post_privacy="public",
-    ) & owner_not_frozen
+    ) & owner_publicly_visible
 
     if user and getattr(user, "is_authenticated", False):
         return (
@@ -65,7 +71,7 @@ def visible_projects_q_for_user(user):
                     invites__contractor=user,
                     invites__status__in=VISIBLE_INVITE_STATUSES,
                 )
-                & owner_not_frozen
+                & owner_publicly_visible
             )
         )
     return public_visible

@@ -4,6 +4,10 @@ from django.urls import path
 from .views import (
     AIAssistView,
     MeView,
+    SecurityChangePasswordView,
+    SecurityDeactivateView,
+    SecurityDeleteAccountView,
+    SecuritySendVerificationEmailView,
     PublicProfileView,
     ProfileLikeView,
     LikedProfilesView,
@@ -19,6 +23,10 @@ app_name = "accounts"
 
 urlpatterns = [
     path("users/me/", MeView.as_view(), name="users-me"),
+    path("users/me/security/change-password/", SecurityChangePasswordView.as_view(), name="security-change-password"),
+    path("users/me/security/send-verification/", SecuritySendVerificationEmailView.as_view(), name="security-send-verification"),
+    path("users/me/security/deactivate/", SecurityDeactivateView.as_view(), name="security-deactivate"),
+    path("users/me/security/delete/", SecurityDeleteAccountView.as_view(), name="security-delete"),
     path("ai/assist/", AIAssistView.as_view(), name="ai-assist"),
     path("users/me/reference-gallery/", HomeownerReferenceGalleryView.as_view(), name="reference-gallery"),
     path("users/me/reference-gallery/<int:pk>/", HomeownerReferenceGalleryItemView.as_view(), name="reference-gallery-item"),

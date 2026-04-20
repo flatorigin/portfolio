@@ -498,6 +498,7 @@ class ProjectSerializer(serializers.ModelSerializer):
                         is_active=True,
                         profile__profile_type="contractor",
                         profile__is_frozen=False,
+                        profile__is_deactivated=False,
                     )
                     .select_related("profile")
                 )

@@ -6,9 +6,11 @@
 // Adds direct-message opt-out modal with reason capture
 // =======================================
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api";
 import AiWriteButton from "../components/AiWriteButton";
-import { SectionTitle, Card, Input, Textarea, Button } from "../ui";
+import { logout } from "../auth";
+import { SectionTitle, Card, Input, Textarea, Button, GhostButton } from "../ui";
 import LanguageMultiSelect from "../components/LanguageMultiSelect";
 
 const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
@@ -47,8 +49,13 @@ function toUrl(raw) {
 }
 
 export default function EditProfile() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     profile_type: "",
+    email: "",
+    email_verified: false,
+    is_deactivated: false,
+    deactivated_at: "",
     display_name: "",
     hero_headline: "",
     hero_blurb: "",
@@ -81,6 +88,20 @@ export default function EditProfile() {
   const [savingProfileType, setSavingProfileType] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [securityMessage, setSecurityMessage] = useState("");
+  const [securityError, setSecurityError] = useState("");
+  const [sendingVerification, setSendingVerification] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [deactivationBusy, setDeactivationBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    new_password_confirm: "",
+  });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
 
   const [savedMapModel, setSavedMapModel] = useState({
     service_location: "",
@@ -100,6 +121,10 @@ export default function EditProfile() {
 
         const nextForm = {
           profile_type: data.profile_type || "",
+          email: data.email || "",
+          email_verified: !!data.email_verified,
+          is_deactivated: !!data.is_deactivated,
+          deactivated_at: data.deactivated_at || "",
           display_name: data.display_name || "",
           hero_headline: data.hero_headline || "",
           hero_blurb: data.hero_blurb || "",
@@ -260,6 +285,10 @@ export default function EditProfile() {
 
       const next = {
         profile_type: updated.profile_type ?? form.profile_type,
+        email: updated.email ?? form.email,
+        email_verified: updated.email_verified ?? form.email_verified,
+        is_deactivated: updated.is_deactivated ?? form.is_deactivated,
+        deactivated_at: updated.deactivated_at ?? form.deactivated_at,
         display_name: updated.display_name ?? form.display_name,
         hero_headline: updated.hero_headline ?? form.hero_headline,
         hero_blurb: updated.hero_blurb ?? form.hero_blurb,
@@ -421,6 +450,100 @@ export default function EditProfile() {
       </div>
     </div>
   );
+
+  const sendVerificationEmail = async () => {
+    setSendingVerification(true);
+    setSecurityError("");
+    setSecurityMessage("");
+    try {
+      const { data } = await api.post("/users/me/security/send-verification/");
+      setSecurityMessage(data?.detail || "Verification email sent.");
+    } catch (err) {
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data ||
+        "Could not send verification email.";
+      setSecurityError(typeof detail === "string" ? detail : JSON.stringify(detail));
+    } finally {
+      setSendingVerification(false);
+    }
+  };
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    setChangingPassword(true);
+    setSecurityError("");
+    setSecurityMessage("");
+    try {
+      const { data } = await api.post("/users/me/security/change-password/", passwordForm);
+      setSecurityMessage(data?.detail || "Password updated successfully.");
+      setPasswordForm({ current_password: "", new_password: "", new_password_confirm: "" });
+      setPasswordOpen(false);
+    } catch (err) {
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.new_password?.[0] ||
+        err?.response?.data?.new_password_confirm?.[0] ||
+        err?.response?.data?.current_password?.[0] ||
+        err?.response?.data ||
+        "Could not change password.";
+      setSecurityError(typeof detail === "string" ? detail : JSON.stringify(detail));
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const toggleDeactivated = async () => {
+    const nextValue = !form.is_deactivated;
+    setDeactivationBusy(true);
+    setSecurityError("");
+    setSecurityMessage("");
+    try {
+      const { data } = await api.post("/users/me/security/deactivate/", {
+        is_deactivated: nextValue,
+      });
+      setForm((prev) => ({
+        ...prev,
+        is_deactivated: !!data.is_deactivated,
+        deactivated_at: data.deactivated_at || "",
+      }));
+      setSecurityMessage(
+        nextValue
+          ? "Your public profile is now hidden until you turn it back on."
+          : "Your public profile is visible again."
+      );
+    } catch (err) {
+      const detail = err?.response?.data?.detail || "Could not update deactivation status.";
+      setSecurityError(detail);
+    } finally {
+      setDeactivationBusy(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!deletePassword) return;
+    setDeleteBusy(true);
+    setSecurityError("");
+    try {
+      await api.post("/users/me/security/delete/", { password: deletePassword });
+      logout();
+      navigate("/login", { replace: true });
+    } catch (err) {
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.password?.[0] ||
+        "Could not delete this account.";
+      setSecurityError(detail);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const accountInitial = (
+    form.display_name?.trim()?.charAt(0) ||
+    form.email?.trim()?.charAt(0) ||
+    "U"
+  ).toUpperCase();
 
   return (
     <div>
@@ -746,6 +869,138 @@ export default function EditProfile() {
             </form>
           </Card>
 
+          <div className="space-y-4">
+          <Card className="space-y-3 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Account
+            </div>
+            <div className="flex items-center gap-3">
+              {avatarPreview ? (
+                <img
+                  src={toUrl(avatarPreview)}
+                  alt=""
+                  className="h-14 w-14 rounded-full border border-slate-200 object-cover"
+                />
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  {accountInitial}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-900">
+                  {form.display_name || form.email || "Your account"}
+                </div>
+                <div className="truncate text-xs text-slate-500">{form.email || "No account email"}</div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Security
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <button
+                type="button"
+                onClick={() => setPasswordOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between text-left"
+              >
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Change password</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Update your password any time.
+                  </div>
+                </div>
+                <span className="text-sm text-slate-500">{passwordOpen ? "Hide" : "Open"}</span>
+              </button>
+              {passwordOpen ? (
+                <form onSubmit={changePassword} className="mt-3 space-y-3">
+                  <Input
+                    type="password"
+                    value={passwordForm.current_password}
+                    onChange={(e) =>
+                      setPasswordForm((prev) => ({ ...prev, current_password: e.target.value }))
+                    }
+                    placeholder="Current password"
+                  />
+                  <Input
+                    type="password"
+                    value={passwordForm.new_password}
+                    onChange={(e) =>
+                      setPasswordForm((prev) => ({ ...prev, new_password: e.target.value }))
+                    }
+                    placeholder="New password"
+                  />
+                  <Input
+                    type="password"
+                    value={passwordForm.new_password_confirm}
+                    onChange={(e) =>
+                      setPasswordForm((prev) => ({ ...prev, new_password_confirm: e.target.value }))
+                    }
+                    placeholder="Confirm new password"
+                  />
+                  <Button type="submit" disabled={changingPassword}>
+                    {changingPassword ? "Updating..." : "Change Password"}
+                  </Button>
+                </form>
+              ) : null}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Email</div>
+                  <div className="mt-1 text-xs text-slate-500">{form.email || "No account email"}</div>
+                  {!form.email_verified ? (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                        Not verified
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                        Verified
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {!form.email_verified ? (
+                  <GhostButton type="button" disabled={sendingVerification} onClick={sendVerificationEmail}>
+                    {sendingVerification ? "Sending..." : "Send confirmation email"}
+                  </GhostButton>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+              <div className="text-sm font-semibold text-rose-900">Deactivate and delete account</div>
+              <div className="mt-2 text-xs leading-5 text-rose-800">
+                Deactivate hides your public profile. Delete permanently removes the account, blocks this email from registering again automatically, and is not the right tool for cleanup requests. Contact the admin if you need help.
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <GhostButton type="button" disabled={deactivationBusy} onClick={toggleDeactivated}>
+                  {deactivationBusy
+                    ? "Updating..."
+                    : form.is_deactivated
+                    ? "Reactivate profile"
+                    : "Deactivate profile"}
+                </GhostButton>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                >
+                  Delete account
+                </button>
+              </div>
+            </div>
+
+            {securityError ? <p className="whitespace-pre-wrap text-xs text-red-600">{securityError}</p> : null}
+            {securityMessage ? <p className="text-xs text-emerald-600">{securityMessage}</p> : null}
+          </Card>
+
           <Card className="space-y-3 p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Service area preview
@@ -771,6 +1026,7 @@ export default function EditProfile() {
               />
             </Suspense>
           </Card>
+          </div>
         </div>
       )}
 
@@ -895,6 +1151,43 @@ export default function EditProfile() {
                 className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
               >
                 Turn off messaging
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">Delete account?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              This permanently deletes your account. Your email may not be usable for a new registration later. If you need cleanup help, contact the admin instead of deleting the account.
+            </p>
+            <Input
+              type="password"
+              className="mt-4"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Type your password to confirm"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <GhostButton
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeletePassword("");
+                }}
+              >
+                Cancel
+              </GhostButton>
+              <button
+                type="button"
+                disabled={!deletePassword || deleteBusy}
+                onClick={deleteAccount}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {deleteBusy ? "Deleting..." : "Delete account"}
               </button>
             </div>
           </div>

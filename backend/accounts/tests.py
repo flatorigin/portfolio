@@ -177,3 +177,88 @@ class AIAssistViewTests(APITestCase):
 
         self.assertEqual(limit, 3)
         self.assertEqual(remaining, 2)
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    AI_ENABLED=True,
+    OPENAI_API_KEY="test-key",
+)
+class AccountSecurityTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="securityuser",
+            email="security@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        Profile.objects.update_or_create(
+            user=self.user,
+            defaults={"profile_type": Profile.ProfileType.CONTRACTOR},
+        )
+
+    def test_send_verification_email(self):
+        self.user.profile.email_verified_at = None
+        self.user.profile.save(update_fields=["email_verified_at"])
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post("/api/users/me/security/send-verification/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("verify", mail.outbox[0].subject.lower())
+        self.assertIn("/activate/", mail.outbox[0].body)
+
+    def test_change_password(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/me/security/change-password/",
+            {
+                "current_password": "pw12345678",
+                "new_password": "newsecurepw123",
+                "new_password_confirm": "newsecurepw123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("newsecurepw123"))
+
+    def test_deactivate_hides_public_profile(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            "/api/users/me/security/deactivate/",
+            {"is_deactivated": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(f"/api/profiles/{self.user.username}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_account_blocks_email_reuse(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/me/security/delete/",
+            {"password": "pw12345678"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.filter(username="securityuser").exists())
+
+        register_response = self.client.post(
+            "/api/auth/users/",
+            {
+                "username": "securityuser2",
+                "email": "security@example.com",
+                "password": "pw12345678",
+                "profile_type": Profile.ProfileType.HOMEOWNER,
+            },
+            format="json",
+        )
+        self.assertEqual(register_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cannot be used", str(register_response.data).lower())
