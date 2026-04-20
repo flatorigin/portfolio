@@ -91,17 +91,7 @@ export default function PrivateMessagingPanel({ projectId, projectOwner }) {
           `/projects/${projectId}/threads/${current.id}/messages/`
         );
         const arr = Array.isArray(data) ? data : [];
-
-        // Only update state if we actually have a new last message
-        setMessages((prev) => {
-          if (
-            prev.length === arr.length &&
-            prev[prev.length - 1]?.id === arr[arr.length - 1]?.id
-          ) {
-            return prev;
-          }
-          return arr;
-        });
+        setMessages(arr);
       } catch {
         if (shouldShowSpinner) {
           setMessages([]);

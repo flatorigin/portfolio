@@ -336,6 +336,32 @@ class MessagePrefillTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("already have a bid", str(response.data).lower())
 
+    def test_direct_thread_messages_endpoint_returns_text(self):
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.get(
+            f"/api/messages/threads/{self.direct_thread.id}/messages/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0]["text"],
+            "We need a bathroom remodel with warmer tile and better lighting.",
+        )
+
+    def test_project_thread_messages_endpoint_returns_text(self):
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.get(
+            f"/api/projects/{self.project.id}/threads/{self.project_thread.id}/messages/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0]["text"],
+            "I can handle this for 4500 and finish in two weeks.",
+        )
+
 
 class ProjectPlannerTests(APITestCase):
     def setUp(self):
