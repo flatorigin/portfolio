@@ -454,16 +454,7 @@ export default function MessagesThread() {
         );
         const arr = Array.isArray(data) ? data : [];
         if (!isMountedRef.current) return;
-
-        setMessages((prev) => {
-          if (
-            prev.length === arr.length &&
-            prev[prev.length - 1]?.id === arr[arr.length - 1]?.id
-          ) {
-            return prev;
-          }
-          return arr;
-        });
+        setMessages(arr);
       } catch (err) {
         console.error(
           "[MessagesThread] failed to load messages",
