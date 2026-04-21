@@ -439,6 +439,30 @@ export default function MessagesThread() {
     fetchThreads();
   }, [fetchThreads]);
 
+  useEffect(() => {
+    const refreshThreads = () => {
+      fetchThreads();
+    };
+    const refreshOnVisible = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        fetchThreads();
+      }
+    };
+
+    window.addEventListener("focus", refreshThreads);
+    window.addEventListener("inbox:changed", refreshThreads);
+    document.addEventListener("visibilitychange", refreshOnVisible);
+
+    const interval = setInterval(refreshThreads, 60000);
+
+    return () => {
+      window.removeEventListener("focus", refreshThreads);
+      window.removeEventListener("inbox:changed", refreshThreads);
+      document.removeEventListener("visibilitychange", refreshOnVisible);
+      clearInterval(interval);
+    };
+  }, [fetchThreads]);
+
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
       if (!activeThread?.id) {

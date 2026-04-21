@@ -7,7 +7,7 @@
 // Fix: ALL hooks are declared before any early return
 // Contact card uses member-since + languages + filtered public contact info
 // =======================================
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card, SymbolIcon } from "../ui";
@@ -74,6 +74,7 @@ function extractHeroFromProfile(profile) {
 
 export default function PublicProfile() {
   const { username } = useParams();
+  const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -91,6 +92,8 @@ export default function PublicProfile() {
   const [likeBusy, setLikeBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
+  const [messageBusy, setMessageBusy] = useState(false);
+  const [messageError, setMessageError] = useState("");
 
   const shouldRenderMap = Boolean(
     profile?.service_location ||
@@ -327,6 +330,31 @@ export default function PublicProfile() {
     }
   }
 
+  async function openDirectThread() {
+    if (!authed || !profile?.username || disableDirectMessage || messageBusy) return;
+
+    setMessageBusy(true);
+    setMessageError("");
+    try {
+      const { data } = await api.post("/messages/start/", {
+        username: profile.username,
+      });
+      const threadId = data?.thread_id;
+      if (!threadId) {
+        throw new Error("No thread was created.");
+      }
+      navigate(`/messages/${threadId}`);
+    } catch (err) {
+      setMessageError(
+        err?.response?.data?.detail ||
+          err?.message ||
+          "Could not start a message."
+      );
+    } finally {
+      setMessageBusy(false);
+    }
+  }
+
   // ----- EARLY RETURNS (after hooks) -----
   if (loading && !profile) {
     return <div className="text-sm text-slate-500">Loading profile…</div>;
@@ -443,24 +471,35 @@ export default function PublicProfile() {
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (profile.allow_direct_messages) {
-                        setMessageContext(null);
-                        setMsgOpen(true);
-                      }
-                    }}
-                    disabled={disableDirectMessage}
-                    className={[
-                      "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
-                      !disableDirectMessage
-                        ? "bg-sky-600 text-white hover:bg-sky-700"
-                        : "cursor-not-allowed bg-slate-200 text-slate-400",
-                    ].join(" ")}
-                  >
-                    Message
-                  </button>
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      onClick={openDirectThread}
+                      disabled={disableDirectMessage}
+                      className={[
+                        "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
+                        !disableDirectMessage
+                          ? "bg-sky-600 text-white hover:bg-sky-700"
+                          : "cursor-not-allowed bg-slate-200 text-slate-400",
+                      ].join(" ")}
+                    >
+                      {messageBusy ? "Opening..." : "Message"}
+                    </button>
+
+                    {!profile.allow_direct_messages ? (
+                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                        This user has not opted in to receive direct messages.
+                      </div>
+                    ) : authed && isMine ? (
+                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                        You can’t message your own profile.
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {messageError ? (
+                    <p className="text-xs text-red-600">{messageError}</p>
+                  ) : null}
 
                   {profile.contact_email ? (
                     <a
@@ -793,9 +832,7 @@ export default function PublicProfile() {
                 <div className="group relative">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!disableDirectMessage) setMsgOpen(true);
-                    }}
+                    onClick={openDirectThread}
                     disabled={disableDirectMessage}
                     className={[
                       "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
@@ -804,8 +841,12 @@ export default function PublicProfile() {
                         : "cursor-not-allowed bg-slate-200 text-slate-400",
                     ].join(" ")}
                   >
-                    Message
+                    {messageBusy ? "Opening..." : "Message"}
                   </button>
+
+                  {messageError ? (
+                    <p className="text-xs text-red-600">{messageError}</p>
+                  ) : null}
 
                   {!profile.allow_direct_messages && (
                     <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">

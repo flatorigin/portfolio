@@ -362,6 +362,21 @@ class MessagePrefillTests(APITestCase):
             "I can handle this for 4500 and finish in two weeks.",
         )
 
+    def test_contractor_can_start_direct_message_with_homeowner(self):
+        self.client.force_authenticate(user=self.contractor)
+        response = self.client.post(
+            "/api/messages/start/",
+            {"username": self.homeowner.username},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("thread_id", response.data)
+
+        thread = MessageThread.objects.get(id=response.data["thread_id"])
+        self.assertTrue(thread.user_is_participant(self.contractor))
+        self.assertTrue(thread.user_is_participant(self.homeowner))
+
 
 class ProjectPlannerTests(APITestCase):
     def setUp(self):
