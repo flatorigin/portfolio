@@ -226,25 +226,33 @@ export default function GlobalInbox() {
 
     let cancelled = false;
 
-    async function refresh() {
+    async function refresh(force = false) {
       if (cancelled) return;
-      await fetchThreads();
+      await fetchThreads({ force });
     }
 
     // initial
-    refresh();
+    refresh(true);
+
+    const handleFocus = () => refresh(true);
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        refresh(true);
+      }
+    };
+    const handleInboxChanged = () => refresh(true);
 
     const interval = setInterval(refresh, 60000);
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    window.addEventListener("inbox:changed", refresh);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("inbox:changed", handleInboxChanged);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-      window.removeEventListener("inbox:changed", refresh);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("inbox:changed", handleInboxChanged);
     };
   }, [authed, fetchThreads]);
 

@@ -69,6 +69,7 @@ export default function EditProfile() {
     bio: "",
     show_contact_email: false,
     show_contact_phone: false,
+    public_profile_enabled: false,
     languages: [],
     allow_direct_messages: true,
     dm_opt_out_reason: "",
@@ -152,6 +153,7 @@ export default function EditProfile() {
           bio: data.bio || "",
           show_contact_email: !!data.show_contact_email,
           show_contact_phone: !!data.show_contact_phone,
+          public_profile_enabled: !!data.public_profile_enabled,
           languages: Array.isArray(data.languages) ? data.languages : [],
           allow_direct_messages: !!data.allow_direct_messages,
           dm_opt_out_reason: data.dm_opt_out_reason || "",
@@ -301,6 +303,7 @@ export default function EditProfile() {
       data.append("bio", form.bio || "");
       data.append("show_contact_email", String(!!form.show_contact_email));
       data.append("show_contact_phone", String(!!form.show_contact_phone));
+      data.append("public_profile_enabled", String(!!form.public_profile_enabled));
       data.append("languages", JSON.stringify(form.languages || []));
       data.append("allow_direct_messages", String(!!form.allow_direct_messages));
       data.append("dm_opt_out_reason", form.dm_opt_out_reason || "");
@@ -351,6 +354,8 @@ export default function EditProfile() {
           updated.show_contact_email ?? form.show_contact_email,
         show_contact_phone:
           updated.show_contact_phone ?? form.show_contact_phone,
+        public_profile_enabled:
+          updated.public_profile_enabled ?? form.public_profile_enabled,
         languages: Array.isArray(updated.languages)
           ? updated.languages
           : form.languages,
@@ -441,6 +446,22 @@ export default function EditProfile() {
       </div>
 
       <div className="space-y-3">
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+          <div>
+            <div className="text-sm font-medium text-slate-900">
+              Public profile visible
+            </div>
+            <div className="text-xs text-slate-500">
+              Keep this profile available on its public page.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={!!form.public_profile_enabled}
+            onChange={updateToggle("public_profile_enabled")}
+          />
+        </label>
+
         <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
           <div>
             <div className="text-sm font-medium text-slate-900">
