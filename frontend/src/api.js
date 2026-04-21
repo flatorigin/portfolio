@@ -14,6 +14,7 @@ let redirectingToLogin = false;
 function clearAuthAndRedirect() {
   localStorage.removeItem("access");
   localStorage.removeItem("refresh");
+  localStorage.removeItem("username");
   window.dispatchEvent(new CustomEvent("auth:changed"));
 
   if (!redirectingToLogin && window.location.pathname !== "/login") {

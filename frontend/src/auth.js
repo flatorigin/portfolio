@@ -11,4 +11,5 @@ export async function login({ username, password }) {
 export function logout() {
   localStorage.removeItem("access");
   localStorage.removeItem("refresh");
+  localStorage.removeItem("username");
 }
