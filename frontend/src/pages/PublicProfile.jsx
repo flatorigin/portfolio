@@ -146,6 +146,7 @@ export default function PublicProfile() {
   const isMine = useMemo(() => {
     return (profile?.username || "").toLowerCase() === meUsernameLower;
   }, [profile?.username, meUsernameLower]);
+  const disableDirectMessage = !profile?.allow_direct_messages || (authed && isMine);
 
   const memberSince = useMemo(() => {
     return (
@@ -450,10 +451,10 @@ export default function PublicProfile() {
                         setMsgOpen(true);
                       }
                     }}
-                    disabled={!profile.allow_direct_messages || isMine}
+                    disabled={disableDirectMessage}
                     className={[
                       "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
-                      profile.allow_direct_messages && !isMine
+                      !disableDirectMessage
                         ? "bg-sky-600 text-white hover:bg-sky-700"
                         : "cursor-not-allowed bg-slate-200 text-slate-400",
                     ].join(" ")}
@@ -793,12 +794,12 @@ export default function PublicProfile() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (profile.allow_direct_messages) setMsgOpen(true);
+                      if (!disableDirectMessage) setMsgOpen(true);
                     }}
-                    disabled={!profile.allow_direct_messages}
+                    disabled={disableDirectMessage}
                     className={[
                       "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
-                      profile.allow_direct_messages
+                      !disableDirectMessage
                         ? "bg-sky-600 text-white hover:bg-sky-700"
                         : "cursor-not-allowed bg-slate-200 text-slate-400",
                     ].join(" ")}
@@ -809,6 +810,11 @@ export default function PublicProfile() {
                   {!profile.allow_direct_messages && (
                     <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                       This user has not opted in to receive direct messages.
+                    </div>
+                  )}
+                  {profile.allow_direct_messages && authed && isMine && (
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      You can’t message your own profile.
                     </div>
                   )}
                 </div>
