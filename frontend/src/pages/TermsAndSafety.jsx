@@ -95,9 +95,6 @@ export default function TermsAndSafety() {
             <p className="mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
               These guidelines explain how user-submitted content, portfolios, project posts, bids, images, and community behavior should be handled on FlatOrigin.
             </p>
-            <p className="mt-4 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-              This page is a product-facing policy draft and does not replace legal review. Before relying on it as formal legal terms, have it reviewed by a qualified attorney.
-            </p>
           </div>
         </Container>
       </section>
