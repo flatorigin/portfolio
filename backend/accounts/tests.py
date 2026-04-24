@@ -1,11 +1,20 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.test import TestCase
 from django.test import override_settings
 from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import AIConfiguration, AIUsageEvent, Profile, get_ai_remaining_today_for_user
+from .models import (
+    AIConfiguration,
+    AIUsageEvent,
+    AdminAuditLog,
+    Profile,
+    StaffAccess,
+    get_ai_remaining_today_for_user,
+    user_can_access_admin,
+)
 
 
 User = get_user_model()
@@ -344,3 +353,65 @@ class MeProfilePersistenceTests(APITestCase):
         self.assertEqual(follow_up.data["service_location"], "Boston, MA")
         self.assertEqual(follow_up.data["service_lat"], 42.3601)
         self.assertEqual(follow_up.data["service_lng"], -71.0589)
+
+
+class AdminSecurityTests(TestCase):
+    def test_staff_user_without_staff_access_cannot_access_admin(self):
+        user = User.objects.create_user(
+            username="staff_no_access",
+            email="staff_no_access@example.com",
+            password="pw12345678!",
+            is_staff=True,
+            is_active=True,
+        )
+
+        self.assertFalse(user_can_access_admin(user))
+
+    def test_staff_user_with_staff_access_can_access_admin(self):
+        user = User.objects.create_user(
+            username="staff_with_access",
+            email="staff_with_access@example.com",
+            password="pw12345678!",
+            is_staff=True,
+            is_active=True,
+        )
+        StaffAccess.objects.create(
+            user=user,
+            role=StaffAccess.Role.MODERATOR,
+            can_access_admin=True,
+            can_manage_moderation=True,
+        )
+
+        self.assertTrue(user_can_access_admin(user))
+
+    def test_successful_admin_login_creates_audit_log(self):
+        user = User.objects.create_user(
+            username="ops_admin",
+            email="ops_admin@example.com",
+            password="pw12345678!",
+            is_staff=True,
+            is_active=True,
+        )
+        StaffAccess.objects.create(
+            user=user,
+            role=StaffAccess.Role.SUPERADMIN,
+            can_access_admin=True,
+            can_manage_accounts=True,
+            can_manage_moderation=True,
+            can_manage_verification=True,
+            can_manage_compliance=True,
+        )
+
+        response = self.client.post(
+            "/admin/login/?next=/admin/",
+            {"username": "ops_admin", "password": "pw12345678!"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            AdminAuditLog.objects.filter(
+                actor=user,
+                event_type=AdminAuditLog.EventType.ADMIN_LOGIN,
+            ).exists()
+        )
