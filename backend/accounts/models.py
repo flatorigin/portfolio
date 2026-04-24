@@ -3,6 +3,8 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
 
 User = get_user_model()
@@ -297,6 +299,239 @@ class DeletedEmailBlocklist(models.Model):
 
     def __str__(self):
         return self.email
+
+
+class StaffAccess(models.Model):
+    class Role(models.TextChoices):
+        SUPPORT = "support", "Support"
+        MODERATOR = "moderator", "Moderator"
+        COMPLIANCE = "compliance", "Compliance"
+        SUPERADMIN = "superadmin", "Superadmin"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="staff_access",
+    )
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.SUPPORT)
+    can_access_admin = models.BooleanField(default=False)
+    can_manage_accounts = models.BooleanField(default=False)
+    can_manage_moderation = models.BooleanField(default=False)
+    can_manage_verification = models.BooleanField(default=False)
+    can_manage_compliance = models.BooleanField(default=False)
+    require_password_reset = models.BooleanField(default=False)
+    last_reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="staff_access_reviews",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["user__username", "user__email", "id"]
+        verbose_name = "Staff access"
+        verbose_name_plural = "Staff access"
+
+    def __str__(self):
+        return f"StaffAccess<{self.user_id}:{self.role}>"
+
+
+def user_can_access_admin(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if not getattr(user, "is_active", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    if not getattr(user, "is_staff", False):
+        return False
+
+    access = getattr(user, "staff_access", None)
+    if access is None:
+        return False
+    return bool(access.can_access_admin and not access.require_password_reset)
+
+
+class UserReport(models.Model):
+    class ReportType(models.TextChoices):
+        SAFETY = "safety", "Safety"
+        FRAUD = "fraud", "Fraud"
+        IMPERSONATION = "impersonation", "Impersonation"
+        HARASSMENT = "harassment", "Harassment"
+        SPAM = "spam", "Spam"
+        COPYRIGHT = "copyright", "Copyright"
+        CHILD_SAFETY = "child_safety", "Child safety"
+        ILLEGAL_CONTENT = "illegal_content", "Illegal content"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        IN_REVIEW = "in_review", "In review"
+        ESCALATED = "escalated", "Escalated"
+        RESOLVED = "resolved", "Resolved"
+        REJECTED = "rejected", "Rejected"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+        CRITICAL = "critical", "Critical"
+
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="submitted_reports",
+    )
+    target_content_type = models.ForeignKey(
+        ContentType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reported_items",
+    )
+    target_object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    target_object = GenericForeignKey("target_content_type", "target_object_id")
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reports_against_user",
+    )
+    report_type = models.CharField(max_length=32, choices=ReportType.choices, default=ReportType.OTHER)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
+    subject = models.CharField(max_length=200, blank=True, default="")
+    details = models.TextField(blank=True, default="")
+    source_url = models.URLField(blank=True, default="")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_user_reports",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    resolution_notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"UserReport<{self.id}:{self.report_type}:{self.status}>"
+
+
+class ModerationAction(models.Model):
+    class ActionType(models.TextChoices):
+        WARN_USER = "warn_user", "Warn user"
+        FREEZE_PROFILE = "freeze_profile", "Freeze profile"
+        UNFREEZE_PROFILE = "unfreeze_profile", "Unfreeze profile"
+        DEACTIVATE_ACCOUNT = "deactivate_account", "Deactivate account"
+        REACTIVATE_ACCOUNT = "reactivate_account", "Reactivate account"
+        HIDE_CONTENT = "hide_content", "Hide content"
+        RESTORE_CONTENT = "restore_content", "Restore content"
+        REMOVE_CONTENT = "remove_content", "Remove content"
+        DISABLE_DIRECT_MESSAGES = "disable_direct_messages", "Disable direct messages"
+        ENABLE_DIRECT_MESSAGES = "enable_direct_messages", "Enable direct messages"
+        MARK_VERIFIED = "mark_verified", "Mark verified"
+        REJECT_VERIFICATION = "reject_verification", "Reject verification"
+        COPYRIGHT_TAKEDOWN = "copyright_takedown", "Copyright takedown"
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moderation_actions_taken",
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moderation_actions_received",
+    )
+    report = models.ForeignKey(
+        UserReport,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moderation_actions",
+    )
+    target_content_type = models.ForeignKey(
+        ContentType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moderation_actions",
+    )
+    target_object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    target_object = GenericForeignKey("target_content_type", "target_object_id")
+    action_type = models.CharField(max_length=40, choices=ActionType.choices)
+    public_note = models.TextField(blank=True, default="")
+    internal_note = models.TextField(blank=True, default="")
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"ModerationAction<{self.id}:{self.action_type}>"
+
+
+class AdminAuditLog(models.Model):
+    class EventType(models.TextChoices):
+        ADMIN_LOGIN = "admin_login", "Admin login"
+        ADMIN_ACCESS_DENIED = "admin_access_denied", "Admin access denied"
+        STAFF_ACCESS_UPDATED = "staff_access_updated", "Staff access updated"
+        REPORT_UPDATED = "report_updated", "Report updated"
+        MODERATION_ACTION = "moderation_action", "Moderation action"
+        PROFILE_UPDATED = "profile_updated", "Profile updated"
+        USER_UPDATED = "user_updated", "User updated"
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="admin_audit_logs",
+    )
+    event_type = models.CharField(max_length=40, choices=EventType.choices)
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="admin_events_about_user",
+    )
+    target_content_type = models.ForeignKey(
+        ContentType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="admin_audit_logs",
+    )
+    target_object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    target_object = GenericForeignKey("target_content_type", "target_object_id")
+    summary = models.CharField(max_length=255, blank=True, default="")
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"AdminAuditLog<{self.id}:{self.event_type}>"
 
 
 def resolve_ai_daily_limit_for_user(user, config=None):
