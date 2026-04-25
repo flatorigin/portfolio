@@ -433,7 +433,8 @@ export default function LandingPage() {
             <Link to="/guides" className="hover:text-slate-900">Guides</Link>
             <Link to="/register" className="hover:text-slate-900">Contact</Link>
             <Link to="/terms" className="hover:text-slate-900">Terms</Link>
-            <Link to="/terms" className="hover:text-slate-900">Privacy</Link>
+            <Link to="/privacy" className="hover:text-slate-900">Privacy</Link>
+            <Link to="/copyright" className="hover:text-slate-900">Copyright</Link>
           </div>
         </Container>
       </footer>

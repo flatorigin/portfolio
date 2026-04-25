@@ -34,6 +34,21 @@ function DisabledActionWithTooltip({ label, message }) {
   );
 }
 
+function VerificationBadge({ status, label }) {
+  if (!label) return null;
+  const tone =
+    status === "verified"
+      ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+      : status === "pending"
+      ? "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200"
+      : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200";
+  return (
+    <span className={["inline-flex items-center rounded-full px-3 py-1 text-xs font-medium", tone].join(" ")}>
+      {label}
+    </span>
+  );
+}
+
 function toUrl(raw) {
   if (!raw) return "";
   if (/^(data:|blob:)/i.test(raw)) return raw;
@@ -172,6 +187,8 @@ export default function PublicProfile() {
     }
     return "—";
   }, [profile?.languages_display, profile?.languages]);
+  const verificationBadgeLabel = profile?.verification_badge_label || "";
+  const verificationStatus = profile?.effective_verification_status || "unverified";
 
   // Load profile + projects
   useEffect(() => {
@@ -455,6 +472,11 @@ export default function PublicProfile() {
                     <p className="mt-1 text-sm text-slate-600">
                       Since {memberSince}
                     </p>
+                    {verificationBadgeLabel ? (
+                      <div className="mt-2">
+                        <VerificationBadge status={verificationStatus} label={verificationBadgeLabel} />
+                      </div>
+                    ) : null}
                   </div>
 
                   <span
@@ -793,17 +815,22 @@ export default function PublicProfile() {
 
           <Card className="rounded-2xl border border-slate-200 shadow-sm">
             <div className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Contact
-                  </div>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Contact
+                    </div>
                   <h3 className="mt-2 text-lg font-semibold text-slate-900">
                     {profile.display_name || profile.username}
                   </h3>
                   <p className="mt-1 text-sm text-slate-600">
                     Since {memberSince}
                   </p>
+                  {verificationBadgeLabel ? (
+                    <div className="mt-2">
+                      <VerificationBadge status={verificationStatus} label={verificationBadgeLabel} />
+                    </div>
+                  ) : null}
                 </div>
 
                 <span

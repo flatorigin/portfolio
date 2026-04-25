@@ -320,6 +320,8 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
 
     is_profile_complete = serializers.ReadOnlyField()
     profile_status = serializers.ReadOnlyField()
+    effective_verification_status = serializers.ReadOnlyField()
+    verification_badge_label = serializers.ReadOnlyField()
 
     class Meta:
         model = Profile
@@ -340,6 +342,19 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "show_contact_phone",
             "public_profile_enabled",
             "bio",
+            "license_number",
+            "license_state",
+            "insurance_provider",
+            "insurance_policy_number",
+            "insurance_expires_at",
+            "verification_status",
+            "verification_submitted_at",
+            "verification_reviewed_at",
+            "verification_review_due_at",
+            "verification_expires_at",
+            "verification_notes",
+            "effective_verification_status",
+            "verification_badge_label",
             "logo",
             "avatar",
             "avatar_url",
@@ -367,6 +382,12 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "email",
             "avatar_url",
             "banner_url",
+            "verification_status",
+            "verification_submitted_at",
+            "verification_reviewed_at",
+            "verification_review_due_at",
+            "verification_expires_at",
+            "verification_notes",
             "like_count",
             "liked_by_me",
             "saved_by_me",
@@ -440,6 +461,8 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
 
     is_profile_complete = serializers.ReadOnlyField()
     profile_status = serializers.ReadOnlyField()
+    effective_verification_status = serializers.ReadOnlyField()
+    verification_badge_label = serializers.ReadOnlyField()
 
     class Meta:
         model = Profile
@@ -457,6 +480,19 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "bio",
             "contact_email",
             "contact_phone",
+            "license_number",
+            "license_state",
+            "insurance_provider",
+            "insurance_policy_number",
+            "insurance_expires_at",
+            "verification_status",
+            "verification_submitted_at",
+            "verification_reviewed_at",
+            "verification_review_due_at",
+            "verification_expires_at",
+            "verification_notes",
+            "effective_verification_status",
+            "verification_badge_label",
             "show_contact_email",
             "show_contact_phone",
             "public_profile_enabled",
@@ -487,6 +523,12 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "email_verified",
             "avatar_url",
             "banner_url",
+            "verification_status",
+            "verification_submitted_at",
+            "verification_reviewed_at",
+            "verification_review_due_at",
+            "verification_expires_at",
+            "verification_notes",
             "like_count",
             "liked_by_me",
             "saved_by_me",
@@ -570,6 +612,8 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
     contact_phone = serializers.SerializerMethodField()
 
     badge = serializers.SerializerMethodField()
+    verification_badge_label = serializers.ReadOnlyField()
+    effective_verification_status = serializers.ReadOnlyField()
     profile_status = serializers.ReadOnlyField()
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
@@ -600,6 +644,9 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "contact_email",
             "contact_phone",
             "badge",
+            "verification_badge_label",
+            "effective_verification_status",
+            "license_state",
             "profile_status",
             "like_count",
             "liked_by_me",

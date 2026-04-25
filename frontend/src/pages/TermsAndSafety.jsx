@@ -8,6 +8,7 @@ const sections = [
       "FlatOrigin provides tools for users to publish portfolios, post projects, invite contractors, submit bids, and communicate around project opportunities.",
       "The platform acts as a facilitator for introductions, project information, proposals, and communication. FlatOrigin is not a party to agreements between homeowners, contractors, profile owners, bidders, or other users.",
       "Any final agreement, including scope, price, schedule, permits, licensing, insurance, safety obligations, and legal responsibilities, must be discussed and confirmed directly between the parties outside of the platform.",
+      "Platform messaging, dashboards, AI drafting tools, contractor discovery, and project organization features are offered to support communication and preparation. They do not make FlatOrigin a contractor, broker, insurer, guarantor, legal representative, or agent for either side.",
     ],
   },
   {
@@ -55,11 +56,38 @@ const sections = [
     ],
   },
   {
+    title: "AI and automated suggestions",
+    body: [
+      "FlatOrigin may provide AI-assisted drafting or organization tools for summaries, option ideas, contractor categories, profile text, and other planning support.",
+      "AI-generated text, labels, suggestions, or summaries are informational only. They may be incomplete, inaccurate, or unsuitable for a specific project, jurisdiction, contract, permit, or professional obligation.",
+      "Users are responsible for reviewing, editing, and independently validating AI-assisted output before relying on it, publishing it, sharing it, or using it in a contractor or homeowner decision.",
+      "FlatOrigin does not provide legal advice, contract review, insurance advice, license confirmation, pricing guarantees, or project-specific professional judgment through AI features.",
+    ],
+  },
+  {
     title: "Moderation and removal",
     body: [
       "FlatOrigin may remove, hide, restrict, or disable content, accounts, comments, bids, job postings, profiles, messages, or attachments that appear to violate these terms or create risk for users or the platform.",
       "FlatOrigin may take action with or without prior notice when content appears unsafe, unlawful, misleading, abusive, infringing, or inconsistent with a respectful professional environment.",
       "Users remain responsible for their own content even if FlatOrigin does not review, remove, or moderate it immediately.",
+    ],
+  },
+  {
+    title: "Reporting and notice-and-action",
+    body: [
+      "Users can report profiles, projects, images, and messages that appear unsafe, unlawful, infringing, misleading, abusive, or inconsistent with these terms.",
+      "FlatOrigin reviews reports through an internal moderation process and may prioritize urgent safety, fraud, child-safety, impersonation, threat, or illegal-content reports ahead of routine content concerns.",
+      "Safety and illegal-content reports are intended to be reviewed as quickly as reasonably possible, with an initial target of 24 to 48 hours for urgent categories. Timing may vary based on severity, evidence, volume, and platform availability.",
+      "Submitting a report does not guarantee removal, account suspension, legal action, or a specific outcome. FlatOrigin may request more information before acting.",
+    ],
+  },
+  {
+    title: "Copyright and repeat infringers",
+    body: [
+      "Users must not upload or share images, plans, drawings, text, logos, or other material unless they have the right to use and display it.",
+      "FlatOrigin may respond to copyright complaints, remove or disable access to reported material, request supporting information, and keep internal records of claims and responses.",
+      "Accounts associated with repeated or serious copyright issues may be restricted, frozen, or permanently removed from the platform.",
+      "Copyright-specific reporting and notice instructions are provided on the Copyright / DMCA page.",
     ],
   },
   {
