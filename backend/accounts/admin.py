@@ -161,7 +161,7 @@ class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
                 "verification_expires_at",
                 "verification_notes",
             ),
-            "description": "Optional contractor-provided verification details. Do not mark verified until reviewed.",
+            "description": "Optional contractor-provided documents. Mark as reviewed only after staff review. This is not a workmanship or legal-compliance guarantee.",
         }),
         ("Media and hero", {
             "fields": (
@@ -229,7 +229,7 @@ class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
     def mark_verification_pending(self, request, queryset):
         self._set_verification_status(request, queryset, Profile.VerificationStatus.PENDING)
 
-    @admin.action(description="Mark selected contractor profiles as verified")
+    @admin.action(description="Mark selected contractor profiles as reviewed")
     def mark_verification_verified(self, request, queryset):
         self._set_verification_status(request, queryset, Profile.VerificationStatus.VERIFIED)
 

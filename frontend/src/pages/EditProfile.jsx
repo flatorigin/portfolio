@@ -690,7 +690,7 @@ export default function EditProfile() {
                     </p>
                     {!isHomeownerProfile ? (
                       <p className="mt-2 text-xs text-slate-500">
-                        Verification badges only appear after admin review. Submitted license or insurance details do not count as verified on their own.
+                        Review badges only appear after admin review. Submitted license or insurance details do not count as endorsement, license confirmation, insurance confirmation, or workmanship approval on their own.
                       </p>
                     ) : null}
                   </div>
@@ -975,7 +975,7 @@ export default function EditProfile() {
                       License and insurance
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Optional. Add the details you want reviewed. Your public profile should only show a verification badge after admin approval.
+                      Optional. Add the details you want reviewed. Your public profile should only show a review badge after staff review.
                     </p>
                   </div>
                   <VerificationStatusBadge
@@ -1042,12 +1042,12 @@ export default function EditProfile() {
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                     {form.effective_verification_status === "verified"
-                      ? `Verified${form.verification_expires_at ? ` until ${new Date(form.verification_expires_at).toLocaleDateString()}` : ""}.`
+                      ? `Credentials reviewed${form.verification_expires_at ? ` until ${new Date(form.verification_expires_at).toLocaleDateString()}` : ""}.`
                       : form.effective_verification_status === "pending"
-                      ? "Verification is pending admin review."
+                      ? "Credential review is pending staff review."
                       : form.effective_verification_status === "expired"
-                      ? "Verification has expired and needs review again."
-                      : "You can submit optional license and insurance details for review."}
+                      ? "Credential review has expired and needs review again."
+                      : "You can submit optional license and insurance details for review. A review badge is not a guarantee of licensing status, insurance coverage, or work quality."}
                     {form.verification_review_due_at ? (
                       <div className="mt-1">
                         Review due by {new Date(form.verification_review_due_at).toLocaleDateString()}.

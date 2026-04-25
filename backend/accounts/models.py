@@ -29,9 +29,9 @@ class Profile(models.Model):
     class VerificationStatus(models.TextChoices):
         UNVERIFIED = "unverified", "Unverified"
         PENDING = "pending", "Pending review"
-        VERIFIED = "verified", "Verified"
+        VERIFIED = "verified", "Reviewed"
         REJECTED = "rejected", "Rejected"
-        EXPIRED = "expired", "Expired"
+        EXPIRED = "expired", "Review expired"
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
 
@@ -167,11 +167,11 @@ class Profile(models.Model):
         if self.profile_type != self.ProfileType.CONTRACTOR:
             return ""
         if status == self.VerificationStatus.VERIFIED:
-            return "Verified"
+            return "Credentials reviewed"
         if status == self.VerificationStatus.PENDING:
-            return "Verification pending"
+            return "Review pending"
         if status == self.VerificationStatus.EXPIRED:
-            return "Verification expired"
+            return "Review expired"
         return ""
 
     @property

@@ -346,7 +346,7 @@ class MeProfilePersistenceTests(APITestCase):
         self.assertEqual(response.data["insurance_provider"], "Acme Mutual")
         self.assertEqual(response.data["insurance_policy_number"], "POL-7788")
         self.assertEqual(response.data["effective_verification_status"], Profile.VerificationStatus.PENDING)
-        self.assertEqual(response.data["verification_badge_label"], "Verification pending")
+        self.assertEqual(response.data["verification_badge_label"], "Review pending")
 
         self.user.refresh_from_db()
         self.assertEqual(self.user.profile.license_number, "PA-12345")
@@ -468,7 +468,7 @@ class VerificationStatusTests(TestCase):
         )
 
         self.assertEqual(profile.effective_verification_status, Profile.VerificationStatus.EXPIRED)
-        self.assertEqual(profile.verification_badge_label, "Verification expired")
+        self.assertEqual(profile.verification_badge_label, "Review expired")
 
 
 class ReportFlowTests(APITestCase):
