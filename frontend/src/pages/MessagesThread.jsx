@@ -20,6 +20,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { Card, Button, Badge } from "../ui";
 import MessageComposer from "../components/MessageComposer";
+import ReportContentButton from "../components/ReportContentButton";
 
 function isWithinDeleteWindow(createdAt) {
   if (!createdAt) return false;
@@ -898,6 +899,17 @@ export default function MessagesThread() {
                       ) : null}
                     </div>
                   </div>
+
+                  {activeThread?.id ? (
+                    <ReportContentButton
+                      targetType="message_thread"
+                      targetId={activeThread.id}
+                      subject={counterpart?.username ? `Conversation with ${counterpart.username}` : "Conversation"}
+                      label="Report conversation"
+                      defaultReportType="harassment"
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    />
+                  ) : null}
                 </div>
 
                 {threadIsRequest && (
@@ -1028,6 +1040,17 @@ export default function MessagesThread() {
                             >
                               Reply
                             </button>
+
+                            {!fromMe ? (
+                              <ReportContentButton
+                                targetType="private_message"
+                                targetId={m.id}
+                                subject="Direct message"
+                                defaultReportType="harassment"
+                                label="Report"
+                                className="text-[11px] text-slate-500 hover:text-slate-800"
+                              />
+                            ) : null}
 
                             {canUseBidConversion && (m.text || "").trim() ? (
                               <button

@@ -1,17 +1,22 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test import override_settings
+from io import BytesIO
 from unittest.mock import patch
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from portfolio.models import MessageThread, PrivateMessage, Project, ProjectImage
 from .models import (
     AIConfiguration,
     AIUsageEvent,
     AdminAuditLog,
     Profile,
     StaffAccess,
+    UserReport,
     get_ai_remaining_today_for_user,
     user_can_access_admin,
 )
@@ -415,3 +420,141 @@ class AdminSecurityTests(TestCase):
                 event_type=AdminAuditLog.EventType.ADMIN_LOGIN,
             ).exists()
         )
+
+
+class ReportFlowTests(APITestCase):
+    def setUp(self):
+        self.reporter = User.objects.create_user(
+            username="reporter",
+            email="reporter@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        self.homeowner = User.objects.create_user(
+            username="homeowner_report_target",
+            email="homeowner_report_target@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        self.contractor = User.objects.create_user(
+            username="contractor_report_target",
+            email="contractor_report_target@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        Profile.objects.update_or_create(
+            user=self.reporter,
+            defaults={"profile_type": Profile.ProfileType.CONTRACTOR},
+        )
+        self.homeowner_profile, _ = Profile.objects.update_or_create(
+            user=self.homeowner,
+            defaults={
+                "profile_type": Profile.ProfileType.HOMEOWNER,
+                "public_profile_enabled": True,
+            },
+        )
+        Profile.objects.update_or_create(
+            user=self.contractor,
+            defaults={"profile_type": Profile.ProfileType.CONTRACTOR},
+        )
+
+    def test_user_can_report_public_profile(self):
+        self.client.force_authenticate(self.reporter)
+
+        response = self.client.post(
+            "/api/reports/",
+            {
+                "target_type": "profile",
+                "target_id": self.homeowner_profile.id,
+                "report_type": "fraud",
+                "details": "Suspicious claims on the profile.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(UserReport.objects.count(), 1)
+        report = UserReport.objects.get()
+        self.assertEqual(report.target_user, self.homeowner)
+        self.assertEqual(report.report_type, UserReport.ReportType.FRAUD)
+
+    def test_user_can_report_public_project_image(self):
+        project = Project.objects.create(
+            owner=self.homeowner,
+            title="Kitchen refresh",
+            summary="Public project",
+            is_public=True,
+        )
+        image_buffer = BytesIO()
+        Image.new("RGB", (4, 4), color="white").save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+        image = ProjectImage.objects.create(
+            project=project,
+            image=SimpleUploadedFile("test.png", image_buffer.read(), content_type="image/png"),
+            caption="Project image",
+        )
+
+        self.client.force_authenticate(self.reporter)
+        response = self.client.post(
+            "/api/reports/",
+            {
+                "target_type": "project_image",
+                "target_id": image.id,
+                "report_type": "copyright",
+                "details": "This image looks copied.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        report = UserReport.objects.get(target_object_id=image.id)
+        self.assertEqual(report.target_user, self.homeowner)
+
+    def test_thread_participant_can_report_private_message(self):
+        thread, _ = MessageThread.get_or_create_dm(self.reporter, self.homeowner, initiated_by=self.reporter)
+        message = PrivateMessage.objects.create(thread=thread, sender=self.homeowner, text="Abusive message")
+
+        self.client.force_authenticate(self.reporter)
+        response = self.client.post(
+            "/api/reports/",
+            {
+                "target_type": "private_message",
+                "target_id": message.id,
+                "report_type": "harassment",
+                "details": "This message crosses the line.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        report = UserReport.objects.get(target_object_id=message.id)
+        self.assertEqual(report.target_user, self.homeowner)
+        self.assertEqual(report.priority, UserReport.Priority.HIGH)
+
+    def test_user_cannot_report_message_they_cannot_access(self):
+        outsider = User.objects.create_user(
+            username="outsider",
+            email="outsider@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        Profile.objects.update_or_create(
+            user=outsider,
+            defaults={"profile_type": Profile.ProfileType.CONTRACTOR},
+        )
+        thread, _ = MessageThread.get_or_create_dm(self.homeowner, self.contractor, initiated_by=self.homeowner)
+        message = PrivateMessage.objects.create(thread=thread, sender=self.homeowner, text="Private")
+
+        self.client.force_authenticate(outsider)
+        response = self.client.post(
+            "/api/reports/",
+            {
+                "target_type": "private_message",
+                "target_id": message.id,
+                "report_type": "harassment",
+                "details": "I should not see this.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
