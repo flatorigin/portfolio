@@ -16,6 +16,7 @@ from .views import (
     ContractorSearchView,
     HomeownerReferenceGalleryView,
     HomeownerReferenceGalleryItemView,
+    ReportCreateView,
 )
 from .password_views import PasswordResetRequestView, PasswordResetConfirmView
 
@@ -42,4 +43,5 @@ urlpatterns = [
     path("profiles/<str:username>/like/", ProfileLikeView.as_view(), name="profile-like"),
     path("profiles/<str:username>/save/", ProfileSaveView.as_view(), name="profile-save"),
     path("profiles/<str:username>/", PublicProfileView.as_view(), name="public-profile"),
+    path("reports/", ReportCreateView.as_view(), name="report-create"),
 ]

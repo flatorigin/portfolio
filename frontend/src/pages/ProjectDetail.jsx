@@ -12,6 +12,7 @@ import { Badge, Card, Button, Textarea, Input, SymbolIcon } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import BidModule from "../components/bids/BidModule";
 import QuickMessageDrawer from "../components/QuickMessageDrawer";
+import ReportContentButton from "../components/ReportContentButton";
 
 const COMMENT_CHAR_LIMIT = 280;
 const COMMENT_LINK_PATTERN = /(https?:\/\/|www\.)/i;
@@ -1723,6 +1724,16 @@ export default function ProjectDetail() {
                       </button>
                     ) : null}
 
+                    {!isOwnerUser ? (
+                      <ReportContentButton
+                        targetType="project"
+                        targetId={project?.id}
+                        subject={project?.title || `Project #${id}`}
+                        label="Report"
+                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
+                      />
+                    ) : null}
+
                     {isOwnerUser ? (
                       <button
                         type="button"
@@ -1855,6 +1866,16 @@ export default function ProjectDetail() {
                       >
                         Message
                       </button>
+                    ) : null}
+
+                    {!isOwnerUser ? (
+                      <ReportContentButton
+                        targetType="project"
+                        targetId={project?.id}
+                        subject={project?.title || `Project #${id}`}
+                        label="Report"
+                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
+                      />
                     ) : null}
                   </div>
                 </div>
@@ -2105,22 +2126,37 @@ export default function ProjectDetail() {
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {images.map((img, i) => (
-                  <button
-                    type="button"
+                  <div
                     key={img.url + i}
-                    onClick={() => {
-                      setActiveImageIdx(i);
-                      setImageLightboxOpen(true);
-                    }}
-                    className="group w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
+                    className="group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
                   >
-                    <img
-                      src={img.url}
-                      alt={img.caption || ""}
-                      className="block h-40 w-full object-cover transition-transform group-hover:scale-[1.02]"
-                    />
-                    {img.caption && <div className="px-3 py-2 text-xs text-slate-700">{img.caption}</div>}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveImageIdx(i);
+                        setImageLightboxOpen(true);
+                      }}
+                      className="block w-full text-left"
+                    >
+                      <img
+                        src={img.url}
+                        alt={img.caption || ""}
+                        className="block h-40 w-full object-cover transition-transform group-hover:scale-[1.02]"
+                      />
+                      {img.caption && <div className="px-3 py-2 text-xs text-slate-700">{img.caption}</div>}
+                    </button>
+                    {!isOwnerUser && img.id ? (
+                      <div className="absolute right-2 top-2">
+                        <ReportContentButton
+                          targetType="project_image"
+                          targetId={img.id}
+                          subject={img.caption || project?.title || "Project image"}
+                          label="Report image"
+                          className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700 shadow hover:bg-white"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             )}

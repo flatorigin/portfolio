@@ -45,8 +45,39 @@ def _admin_site_has_permission(self, request):
 
 admin.site.has_permission = MethodType(_admin_site_has_permission, admin.site)
 
+
+class StaffRolePermissionMixin:
+    required_staff_flags = ()
+
+    def _has_staff_role_access(self, request):
+        user = getattr(request, "user", None)
+        if not user_can_access_admin(user):
+            return False
+        if getattr(user, "is_superuser", False):
+            return True
+        access = getattr(user, "staff_access", None)
+        if access is None:
+            return False
+        return all(bool(getattr(access, flag, False)) for flag in self.required_staff_flags)
+
+    def has_module_permission(self, request):
+        return self._has_staff_role_access(request)
+
+    def has_view_permission(self, request, obj=None):
+        return self._has_staff_role_access(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self._has_staff_role_access(request)
+
+    def has_add_permission(self, request):
+        return self._has_staff_role_access(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._has_staff_role_access(request)
+
 @admin.register(Profile)
-class ProfileAdmin(admin.ModelAdmin):
+class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_accounts",)
     list_display = (
         "id",
         "user",
@@ -208,7 +239,8 @@ except admin.sites.NotRegistered:
 
 
 @admin.register(User)
-class UserAdmin(DjangoUserAdmin):
+class UserAdmin(StaffRolePermissionMixin, DjangoUserAdmin):
+    required_staff_flags = ("can_manage_accounts",)
     inlines = (ProfileInline, StaffAccessInline)
     list_display = (
         "id",
@@ -297,7 +329,8 @@ class UserAdmin(DjangoUserAdmin):
 
 
 @admin.register(HomeownerReferenceImage)
-class HomeownerReferenceImageAdmin(admin.ModelAdmin):
+class HomeownerReferenceImageAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_moderation",)
     list_display = ("id", "user", "caption", "is_public", "order", "created_at")
     list_filter = ("is_public", "created_at")
     search_fields = ("user__username", "caption")
@@ -305,14 +338,16 @@ class HomeownerReferenceImageAdmin(admin.ModelAdmin):
 
 
 @admin.register(DeletedEmailBlocklist)
-class DeletedEmailBlocklistAdmin(admin.ModelAdmin):
+class DeletedEmailBlocklistAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_compliance",)
     list_display = ("email", "reason", "created_at")
     search_fields = ("email", "reason")
     readonly_fields = ("created_at",)
 
 
 @admin.register(StaffAccess)
-class StaffAccessAdmin(admin.ModelAdmin):
+class StaffAccessAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_accounts",)
     list_display = (
         "user",
         "role",
@@ -381,7 +416,8 @@ class StaffAccessAdmin(admin.ModelAdmin):
 
 
 @admin.register(UserReport)
-class UserReportAdmin(admin.ModelAdmin):
+class UserReportAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_moderation",)
     list_display = (
         "id",
         "report_type",
@@ -389,6 +425,7 @@ class UserReportAdmin(admin.ModelAdmin):
         "status",
         "reporter",
         "target_user",
+        "target_summary",
         "reviewed_by",
         "created_at",
     )
@@ -403,6 +440,15 @@ class UserReportAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("created_at", "updated_at", "reviewed_at")
     autocomplete_fields = ("reporter", "target_user", "reviewed_by")
+    actions = (
+        "mark_in_review",
+        "mark_escalated",
+        "mark_resolved",
+        "mark_rejected",
+        "freeze_target_profiles",
+        "deactivate_target_accounts",
+        "disable_direct_messages_for_targets",
+    )
 
     fieldsets = (
         ("Report", {"fields": ("report_type", "priority", "status", "subject", "details", "source_url")}),
@@ -411,6 +457,97 @@ class UserReportAdmin(admin.ModelAdmin):
         ("Review", {"fields": ("reviewed_by", "reviewed_at", "resolution_notes")}),
         ("Audit", {"fields": ("created_at", "updated_at")}),
     )
+
+    @admin.display(description="Target")
+    def target_summary(self, obj):
+        target = obj.target_object
+        if target is None:
+            return "—"
+        return str(target)
+
+    def _update_status(self, request, queryset, status_value):
+        now = timezone.now()
+        queryset.update(status=status_value, reviewed_by=request.user, reviewed_at=now)
+        for report in queryset:
+            log_admin_event(
+                request,
+                AdminAuditLog.EventType.REPORT_UPDATED,
+                target_user=report.target_user,
+                target_obj=report,
+                summary=f"Set report #{report.pk} to {status_value}",
+                metadata={"status": status_value},
+            )
+
+    @admin.action(description="Mark selected reports as in review")
+    def mark_in_review(self, request, queryset):
+        self._update_status(request, queryset, UserReport.Status.IN_REVIEW)
+
+    @admin.action(description="Mark selected reports as escalated")
+    def mark_escalated(self, request, queryset):
+        self._update_status(request, queryset, UserReport.Status.ESCALATED)
+
+    @admin.action(description="Mark selected reports as resolved")
+    def mark_resolved(self, request, queryset):
+        self._update_status(request, queryset, UserReport.Status.RESOLVED)
+
+    @admin.action(description="Mark selected reports as rejected")
+    def mark_rejected(self, request, queryset):
+        self._update_status(request, queryset, UserReport.Status.REJECTED)
+
+    @admin.action(description="Freeze profiles for reported target users")
+    def freeze_target_profiles(self, request, queryset):
+        now = timezone.now()
+        for report in queryset.select_related("target_user"):
+            if not report.target_user_id:
+                continue
+            profile, _ = Profile.objects.get_or_create(user=report.target_user)
+            profile.is_frozen = True
+            profile.frozen_at = now
+            profile.frozen_reason = f"Frozen from report #{report.pk}"
+            profile.save(update_fields=["is_frozen", "frozen_at", "frozen_reason"])
+            ModerationAction.objects.create(
+                actor=request.user,
+                target_user=report.target_user,
+                report=report,
+                action_type=ModerationAction.ActionType.FREEZE_PROFILE,
+                internal_note=f"Frozen from report #{report.pk}",
+            )
+
+    @admin.action(description="Deactivate reported target accounts")
+    def deactivate_target_accounts(self, request, queryset):
+        for report in queryset.select_related("target_user"):
+            user = report.target_user
+            if not user:
+                continue
+            user.is_active = False
+            user.save(update_fields=["is_active"])
+            profile, _ = Profile.objects.get_or_create(user=user)
+            profile.is_deactivated = True
+            profile.save(update_fields=["is_deactivated", "deactivated_at"])
+            ModerationAction.objects.create(
+                actor=request.user,
+                target_user=user,
+                report=report,
+                action_type=ModerationAction.ActionType.DEACTIVATE_ACCOUNT,
+                internal_note=f"Deactivated from report #{report.pk}",
+            )
+
+    @admin.action(description="Disable direct messages for reported target users")
+    def disable_direct_messages_for_targets(self, request, queryset):
+        for report in queryset.select_related("target_user"):
+            if not report.target_user_id:
+                continue
+            profile, _ = Profile.objects.get_or_create(user=report.target_user)
+            profile.allow_direct_messages = False
+            profile.dm_opt_out_reason = "other"
+            profile.save(update_fields=["allow_direct_messages", "dm_opt_out_reason"])
+            ModerationAction.objects.create(
+                actor=request.user,
+                target_user=report.target_user,
+                report=report,
+                action_type=ModerationAction.ActionType.DISABLE_DIRECT_MESSAGES,
+                internal_note=f"Disabled direct messages from report #{report.pk}",
+            )
 
     def save_model(self, request, obj, form, change):
         if obj.status in {UserReport.Status.IN_REVIEW, UserReport.Status.ESCALATED, UserReport.Status.RESOLVED, UserReport.Status.REJECTED}:
@@ -428,7 +565,8 @@ class UserReportAdmin(admin.ModelAdmin):
 
 
 @admin.register(ModerationAction)
-class ModerationActionAdmin(admin.ModelAdmin):
+class ModerationActionAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_moderation",)
     list_display = (
         "id",
         "action_type",
@@ -470,7 +608,8 @@ class ModerationActionAdmin(admin.ModelAdmin):
 
 
 @admin.register(AdminAuditLog)
-class AdminAuditLogAdmin(admin.ModelAdmin):
+class AdminAuditLogAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_compliance",)
     list_display = ("id", "event_type", "actor", "target_user", "summary", "created_at")
     list_filter = ("event_type", "created_at")
     search_fields = ("summary", "actor__username", "target_user__username")
@@ -493,7 +632,8 @@ class AdminAuditLogAdmin(admin.ModelAdmin):
 
 
 @admin.register(AIConfiguration)
-class AIConfigurationAdmin(admin.ModelAdmin):
+class AIConfigurationAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
+    required_staff_flags = ("can_manage_compliance",)
     list_display = (
         "enabled",
         "project_helper_enabled",

@@ -44,6 +44,7 @@ from .serializers import (
     LikedProfileCardSerializer,
     SavedProfileCardSerializer,
     ContractorSearchResultSerializer,
+    ReportCreateSerializer,
 )
 
 User = get_user_model()
@@ -731,3 +732,21 @@ class SavedProfilesView(APIView):
 
         ser = SavedProfileCardSerializer(qs, many=True, context={"request": request})
         return Response(ser.data, status=status.HTTP_200_OK)
+
+
+class ReportCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = ReportCreateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        report = serializer.save()
+        return Response(
+            {
+                "id": report.id,
+                "status": report.status,
+                "priority": report.priority,
+                "message": "Your report has been submitted for review.",
+            },
+            status=status.HTTP_201_CREATED,
+        )

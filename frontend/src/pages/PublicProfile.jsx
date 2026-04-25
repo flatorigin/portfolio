@@ -11,6 +11,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { Card, SymbolIcon } from "../ui";
+import ReportContentButton from "../components/ReportContentButton";
 
 const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
 const QuickMessageDrawer = lazy(() => import("../components/QuickMessageDrawer"));
@@ -405,13 +406,24 @@ export default function PublicProfile() {
                         key={item.id}
                         className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
                       >
-                        <div className="h-44 bg-slate-100">
+                        <div className="relative h-44 bg-slate-100">
                           {coverSrc ? (
                             <img
                               src={coverSrc}
                               alt={item.caption || "Reference image"}
                               className="h-full w-full object-cover"
                             />
+                          ) : null}
+                          {!isMine ? (
+                            <div className="absolute right-2 top-2">
+                              <ReportContentButton
+                                targetType="reference_image"
+                                targetId={item.id}
+                                subject={item.caption || "Reference image"}
+                                label="Report image"
+                                className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700 shadow hover:bg-white"
+                              />
+                            </div>
                           ) : null}
                         </div>
 
@@ -499,6 +511,16 @@ export default function PublicProfile() {
 
                   {messageError ? (
                     <p className="text-xs text-red-600">{messageError}</p>
+                  ) : null}
+
+                  {!isMine ? (
+                    <ReportContentButton
+                      targetType="profile"
+                      targetId={profile.id}
+                      subject={profile.display_name || profile.username || "Profile"}
+                      label="Report profile"
+                      className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    />
                   ) : null}
 
                   {profile.contact_email ? (
@@ -859,6 +881,16 @@ export default function PublicProfile() {
                     </div>
                   )}
                 </div>
+
+                {!isMine ? (
+                  <ReportContentButton
+                    targetType="profile"
+                    targetId={profile.id}
+                    subject={profile.display_name || profile.username || "Profile"}
+                    label="Report profile"
+                    className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  />
+                ) : null}
 
                 {profile.contact_email ? (
                   <a
