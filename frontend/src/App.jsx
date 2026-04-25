@@ -22,6 +22,8 @@ export default function App() {
     pathname === "/" ||
     pathname === "/guides" ||
     pathname === "/terms" ||
+    pathname === "/privacy" ||
+    pathname === "/copyright" ||
     pathname.startsWith("/profiles/") ||
     pathname.startsWith("/public/") ||
     false;

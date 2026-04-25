@@ -26,6 +26,13 @@ class Profile(models.Model):
         CONTRACTOR = "contractor", "Contractor"
         HOMEOWNER = "homeowner", "Homeowner"
 
+    class VerificationStatus(models.TextChoices):
+        UNVERIFIED = "unverified", "Unverified"
+        PENDING = "pending", "Pending review"
+        VERIFIED = "verified", "Verified"
+        REJECTED = "rejected", "Rejected"
+        EXPIRED = "expired", "Expired"
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
 
     # Identity / company
@@ -89,6 +96,22 @@ class Profile(models.Model):
         blank=True,
         help_text="Optional per-user override for the daily AI assist limit. Leave blank to use the global default.",
     )
+
+    license_number = models.CharField(max_length=120, blank=True, default="")
+    license_state = models.CharField(max_length=80, blank=True, default="")
+    insurance_provider = models.CharField(max_length=160, blank=True, default="")
+    insurance_policy_number = models.CharField(max_length=120, blank=True, default="")
+    insurance_expires_at = models.DateField(null=True, blank=True)
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.UNVERIFIED,
+    )
+    verification_submitted_at = models.DateTimeField(null=True, blank=True)
+    verification_reviewed_at = models.DateTimeField(null=True, blank=True)
+    verification_review_due_at = models.DateField(null=True, blank=True)
+    verification_expires_at = models.DateField(null=True, blank=True)
+    verification_notes = models.TextField(blank=True, default="")
     is_deactivated = models.BooleanField(default=False)
     deactivated_at = models.DateTimeField(null=True, blank=True)
 
@@ -119,6 +142,39 @@ class Profile(models.Model):
         return bool(self.is_frozen or self.is_deactivated)
 
     @property
+    def has_verification_submission(self):
+        return bool(
+            (self.license_number or "").strip()
+            or (self.license_state or "").strip()
+            or (self.insurance_provider or "").strip()
+            or (self.insurance_policy_number or "").strip()
+            or self.insurance_expires_at
+        )
+
+    @property
+    def effective_verification_status(self):
+        status = self.verification_status or self.VerificationStatus.UNVERIFIED
+        today = timezone.localdate()
+        if status == self.VerificationStatus.VERIFIED and self.verification_expires_at and self.verification_expires_at < today:
+            return self.VerificationStatus.EXPIRED
+        if status == self.VerificationStatus.UNVERIFIED and self.has_verification_submission:
+            return self.VerificationStatus.PENDING
+        return status
+
+    @property
+    def verification_badge_label(self):
+        status = self.effective_verification_status
+        if self.profile_type != self.ProfileType.CONTRACTOR:
+            return ""
+        if status == self.VerificationStatus.VERIFIED:
+            return "Verified"
+        if status == self.VerificationStatus.PENDING:
+            return "Verification pending"
+        if status == self.VerificationStatus.EXPIRED:
+            return "Verification expired"
+        return ""
+
+    @property
     def languages_display(self):
         items = self.languages or []
         return ", ".join([str(x).strip() for x in items if str(x).strip()])
@@ -142,6 +198,20 @@ class Profile(models.Model):
             self.deactivated_at = timezone.now()
         if not self.is_deactivated:
             self.deactivated_at = None
+        if self.profile_type != self.ProfileType.CONTRACTOR:
+            self.license_number = ""
+            self.license_state = ""
+            self.insurance_provider = ""
+            self.insurance_policy_number = ""
+            self.insurance_expires_at = None
+            self.verification_status = self.VerificationStatus.UNVERIFIED
+            self.verification_submitted_at = None
+            self.verification_reviewed_at = None
+            self.verification_review_due_at = None
+            self.verification_expires_at = None
+            self.verification_notes = ""
+        elif self.has_verification_submission and not self.verification_submitted_at:
+            self.verification_submitted_at = timezone.now()
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:

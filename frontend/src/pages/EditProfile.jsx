@@ -39,6 +39,23 @@ function ProfileStatusBadge({ complete }) {
   );
 }
 
+function VerificationStatusBadge({ status, label }) {
+  if (!label) return null;
+
+  const tone =
+    status === "verified"
+      ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+      : status === "pending"
+      ? "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200"
+      : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200";
+
+  return (
+    <span className={["inline-flex items-center rounded-full px-3 py-1 text-sm font-medium", tone].join(" ")}>
+      {label}
+    </span>
+  );
+}
+
 function toUrl(raw) {
   if (!raw) return "";
   if (/^(data:|blob:)/i.test(raw)) return raw;
@@ -67,6 +84,15 @@ export default function EditProfile() {
     contact_email: "",
     contact_phone: "",
     bio: "",
+    license_number: "",
+    license_state: "",
+    insurance_provider: "",
+    insurance_policy_number: "",
+    insurance_expires_at: "",
+    effective_verification_status: "unverified",
+    verification_badge_label: "",
+    verification_review_due_at: "",
+    verification_expires_at: "",
     show_contact_email: false,
     show_contact_phone: false,
     public_profile_enabled: false,
@@ -151,6 +177,15 @@ export default function EditProfile() {
           contact_email: data.contact_email || "",
           contact_phone: data.contact_phone || "",
           bio: data.bio || "",
+          license_number: data.license_number || "",
+          license_state: data.license_state || "",
+          insurance_provider: data.insurance_provider || "",
+          insurance_policy_number: data.insurance_policy_number || "",
+          insurance_expires_at: data.insurance_expires_at || "",
+          effective_verification_status: data.effective_verification_status || "unverified",
+          verification_badge_label: data.verification_badge_label || "",
+          verification_review_due_at: data.verification_review_due_at || "",
+          verification_expires_at: data.verification_expires_at || "",
           show_contact_email: !!data.show_contact_email,
           show_contact_phone: !!data.show_contact_phone,
           public_profile_enabled: !!data.public_profile_enabled,
@@ -301,6 +336,11 @@ export default function EditProfile() {
       data.append("contact_email", form.contact_email || "");
       data.append("contact_phone", form.contact_phone || "");
       data.append("bio", form.bio || "");
+      data.append("license_number", form.license_number || "");
+      data.append("license_state", form.license_state || "");
+      data.append("insurance_provider", form.insurance_provider || "");
+      data.append("insurance_policy_number", form.insurance_policy_number || "");
+      data.append("insurance_expires_at", form.insurance_expires_at || "");
       data.append("show_contact_email", String(!!form.show_contact_email));
       data.append("show_contact_phone", String(!!form.show_contact_phone));
       data.append("public_profile_enabled", String(!!form.public_profile_enabled));
@@ -350,6 +390,19 @@ export default function EditProfile() {
         contact_email: updated.contact_email ?? form.contact_email,
         contact_phone: updated.contact_phone ?? form.contact_phone,
         bio: updated.bio ?? form.bio,
+        license_number: updated.license_number ?? form.license_number,
+        license_state: updated.license_state ?? form.license_state,
+        insurance_provider: updated.insurance_provider ?? form.insurance_provider,
+        insurance_policy_number: updated.insurance_policy_number ?? form.insurance_policy_number,
+        insurance_expires_at: updated.insurance_expires_at ?? form.insurance_expires_at,
+        effective_verification_status:
+          updated.effective_verification_status ?? form.effective_verification_status,
+        verification_badge_label:
+          updated.verification_badge_label ?? form.verification_badge_label,
+        verification_review_due_at:
+          updated.verification_review_due_at ?? form.verification_review_due_at,
+        verification_expires_at:
+          updated.verification_expires_at ?? form.verification_expires_at,
         show_contact_email:
           updated.show_contact_email ?? form.show_contact_email,
         show_contact_phone:
@@ -635,8 +688,21 @@ export default function EditProfile() {
                         ? `${profileTypeLabel} profile selected. Complete profiles appear more credible to visitors.`
                         : "Complete profiles appear more credible to visitors."}
                     </p>
+                    {!isHomeownerProfile ? (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Verification badges only appear after admin review. Submitted license or insurance details do not count as verified on their own.
+                      </p>
+                    ) : null}
                   </div>
-                  <ProfileStatusBadge complete={complete} />
+                  <div className="flex items-center gap-2">
+                    {!isHomeownerProfile ? (
+                      <VerificationStatusBadge
+                        status={form.effective_verification_status}
+                        label={form.verification_badge_label}
+                      />
+                    ) : null}
+                    <ProfileStatusBadge complete={complete} />
+                  </div>
                 </div>
               </div>
 
@@ -900,6 +966,97 @@ export default function EditProfile() {
                   }
                 />
               </div>
+
+              {!isHomeownerProfile ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      License and insurance
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Optional. Add the details you want reviewed. Your public profile should only show a verification badge after admin approval.
+                    </p>
+                  </div>
+                  <VerificationStatusBadge
+                    status={form.effective_verification_status}
+                    label={form.verification_badge_label}
+                  />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      License number
+                    </label>
+                    <Input
+                      value={form.license_number}
+                      onChange={updateField("license_number")}
+                      placeholder="Optional"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      License state / jurisdiction
+                    </label>
+                    <Input
+                      value={form.license_state}
+                      onChange={updateField("license_state")}
+                      placeholder="e.g. PA"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Insurance provider
+                    </label>
+                    <Input
+                      value={form.insurance_provider}
+                      onChange={updateField("insurance_provider")}
+                      placeholder="Optional"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Insurance policy number
+                    </label>
+                    <Input
+                      value={form.insurance_policy_number}
+                      onChange={updateField("insurance_policy_number")}
+                      placeholder="Optional"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      Insurance expiration
+                    </label>
+                    <Input
+                      type="date"
+                      value={form.insurance_expires_at}
+                      onChange={updateField("insurance_expires_at")}
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                    {form.effective_verification_status === "verified"
+                      ? `Verified${form.verification_expires_at ? ` until ${new Date(form.verification_expires_at).toLocaleDateString()}` : ""}.`
+                      : form.effective_verification_status === "pending"
+                      ? "Verification is pending admin review."
+                      : form.effective_verification_status === "expired"
+                      ? "Verification has expired and needs review again."
+                      : "You can submit optional license and insurance details for review."}
+                    {form.verification_review_due_at ? (
+                      <div className="mt-1">
+                        Review due by {new Date(form.verification_review_due_at).toLocaleDateString()}.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              ) : null}
 
               {!isHomeownerProfile ? (
               <div>

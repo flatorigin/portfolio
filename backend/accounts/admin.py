@@ -1,4 +1,5 @@
 # accounts/admin.py
+from datetime import timedelta
 from types import MethodType
 
 from django.contrib import admin
@@ -48,6 +49,7 @@ admin.site.has_permission = MethodType(_admin_site_has_permission, admin.site)
 
 class StaffRolePermissionMixin:
     required_staff_flags = ()
+    any_required_staff_flags = ()
 
     def _has_staff_role_access(self, request):
         user = getattr(request, "user", None)
@@ -58,6 +60,8 @@ class StaffRolePermissionMixin:
         access = getattr(user, "staff_access", None)
         if access is None:
             return False
+        if self.any_required_staff_flags:
+            return any(bool(getattr(access, flag, False)) for flag in self.any_required_staff_flags)
         return all(bool(getattr(access, flag, False)) for flag in self.required_staff_flags)
 
     def has_module_permission(self, request):
@@ -77,13 +81,14 @@ class StaffRolePermissionMixin:
 
 @admin.register(Profile)
 class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
-    required_staff_flags = ("can_manage_accounts",)
+    any_required_staff_flags = ("can_manage_accounts", "can_manage_verification")
     list_display = (
         "id",
         "user",
         "email",
         "profile_type",
         "email_verified_at",
+        "effective_verification_status_display",
         "ai_daily_limit_override",
         "public_profile_enabled",
         "is_frozen",
@@ -92,14 +97,18 @@ class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
         "is_user_active",
     )
     list_editable = ("profile_type", "public_profile_enabled", "is_frozen", "is_deactivated")
-    list_filter = ("profile_type", "public_profile_enabled", "is_frozen", "is_deactivated", "user__is_active")
+    list_filter = ("profile_type", "verification_status", "public_profile_enabled", "is_frozen", "is_deactivated", "user__is_active")
     search_fields = ("user__username", "user__email")
-    readonly_fields = ("frozen_at", "deactivated_at")
+    readonly_fields = ("frozen_at", "deactivated_at", "verification_submitted_at", "verification_reviewed_at")
     actions = (
         "make_contractors",
         "make_homeowners",
         "freeze_profiles",
         "unfreeze_profiles",
+        "mark_verification_pending",
+        "mark_verification_verified",
+        "mark_verification_rejected",
+        "mark_verification_expired",
     )
     fieldsets = (
         ("Account settings", {
@@ -138,6 +147,22 @@ class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
         ("AI quota", {
             "fields": ("ai_daily_limit_override",),
         }),
+        ("Contractor verification", {
+            "fields": (
+                "license_number",
+                "license_state",
+                "insurance_provider",
+                "insurance_policy_number",
+                "insurance_expires_at",
+                "verification_status",
+                "verification_submitted_at",
+                "verification_reviewed_at",
+                "verification_review_due_at",
+                "verification_expires_at",
+                "verification_notes",
+            ),
+            "description": "Optional contractor-provided verification details. Do not mark verified until reviewed.",
+        }),
         ("Media and hero", {
             "fields": (
                 "logo",
@@ -157,6 +182,10 @@ class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
     def is_user_active(self, obj):
         return obj.user.is_active
 
+    @admin.display(description="Verification", ordering="verification_status")
+    def effective_verification_status_display(self, obj):
+        return obj.effective_verification_status
+
     @admin.action(description="Convert selected profiles to Contractor")
     def make_contractors(self, request, queryset):
         queryset.update(profile_type=Profile.ProfileType.CONTRACTOR)
@@ -172,6 +201,45 @@ class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
     @admin.action(description="Unfreeze selected profiles")
     def unfreeze_profiles(self, request, queryset):
         queryset.update(is_frozen=False, frozen_at=None, frozen_reason="")
+
+    def _set_verification_status(self, request, queryset, status_value):
+        today = timezone.localdate()
+        now = timezone.now()
+        for profile in queryset:
+            if profile.profile_type != Profile.ProfileType.CONTRACTOR:
+                continue
+            profile.verification_status = status_value
+            profile.verification_reviewed_at = now
+            if status_value == Profile.VerificationStatus.VERIFIED:
+                if not profile.verification_review_due_at:
+                    profile.verification_review_due_at = today + timedelta(days=365)
+                if not profile.verification_expires_at and profile.insurance_expires_at:
+                    profile.verification_expires_at = profile.insurance_expires_at
+            profile.save()
+            log_admin_event(
+                request,
+                AdminAuditLog.EventType.PROFILE_UPDATED,
+                target_user=profile.user,
+                target_obj=profile,
+                summary=f"Set verification for {profile.user.username} to {status_value}",
+                metadata={"verification_status": status_value},
+            )
+
+    @admin.action(description="Mark selected contractor profiles as pending review")
+    def mark_verification_pending(self, request, queryset):
+        self._set_verification_status(request, queryset, Profile.VerificationStatus.PENDING)
+
+    @admin.action(description="Mark selected contractor profiles as verified")
+    def mark_verification_verified(self, request, queryset):
+        self._set_verification_status(request, queryset, Profile.VerificationStatus.VERIFIED)
+
+    @admin.action(description="Mark selected contractor profiles as rejected")
+    def mark_verification_rejected(self, request, queryset):
+        self._set_verification_status(request, queryset, Profile.VerificationStatus.REJECTED)
+
+    @admin.action(description="Mark selected contractor profiles as expired")
+    def mark_verification_expired(self, request, queryset):
+        self._set_verification_status(request, queryset, Profile.VerificationStatus.EXPIRED)
 
     def save_model(self, request, obj, form, change):
         if obj.is_frozen and not obj.frozen_at:

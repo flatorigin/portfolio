@@ -9,6 +9,8 @@ const Explore = lazy(() => import("./pages/Explore.jsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
 const ProjectGuides = lazy(() => import("./pages/ProjectGuides.jsx"));
 const TermsAndSafety = lazy(() => import("./pages/TermsAndSafety.jsx"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.jsx"));
+const CopyrightPolicy = lazy(() => import("./pages/CopyrightPolicy.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const Register = lazy(() => import("./pages/Register.jsx"));
 const ActivateAccount = lazy(() => import("./pages/ActivateAccount.jsx"));
@@ -54,6 +56,8 @@ createRoot(document.getElementById("root")).render(
           <Route path="explore" element={<Explore />} />
           <Route path="guides" element={<ProjectGuides />} />
           <Route path="terms" element={<TermsAndSafety />} />
+          <Route path="privacy" element={<PrivacyPolicy />} />
+          <Route path="copyright" element={<CopyrightPolicy />} />
           {/* Auth + public routes */}
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />

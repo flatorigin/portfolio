@@ -3,6 +3,8 @@ from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test import override_settings
+from django.utils import timezone
+from datetime import timedelta
 from io import BytesIO
 from unittest.mock import patch
 from PIL import Image
@@ -322,6 +324,34 @@ class MeProfilePersistenceTests(APITestCase):
         self.assertEqual(follow_up.data["service_lat"], 42.3601)
         self.assertEqual(follow_up.data["service_lng"], -71.0589)
 
+    def test_contractor_verification_fields_round_trip_on_profile_patch(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            "/api/users/me/",
+            {
+                "profile_type": Profile.ProfileType.CONTRACTOR,
+                "license_number": "PA-12345",
+                "license_state": "PA",
+                "insurance_provider": "Acme Mutual",
+                "insurance_policy_number": "POL-7788",
+                "insurance_expires_at": "2027-06-30",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["license_number"], "PA-12345")
+        self.assertEqual(response.data["license_state"], "PA")
+        self.assertEqual(response.data["insurance_provider"], "Acme Mutual")
+        self.assertEqual(response.data["insurance_policy_number"], "POL-7788")
+        self.assertEqual(response.data["effective_verification_status"], Profile.VerificationStatus.PENDING)
+        self.assertEqual(response.data["verification_badge_label"], "Verification pending")
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.profile.license_number, "PA-12345")
+        self.assertIsNotNone(self.user.profile.verification_submitted_at)
+
     def test_service_location_persists_after_multipart_profile_patch(self):
         self.client.force_authenticate(self.user)
 
@@ -420,6 +450,25 @@ class AdminSecurityTests(TestCase):
                 event_type=AdminAuditLog.EventType.ADMIN_LOGIN,
             ).exists()
         )
+
+
+class VerificationStatusTests(TestCase):
+    def test_verified_status_expires_when_expiration_date_passes(self):
+        user = User.objects.create_user(
+            username="verifiedcontractor",
+            email="verifiedcontractor@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        profile = Profile.objects.create(
+            user=user,
+            profile_type=Profile.ProfileType.CONTRACTOR,
+            verification_status=Profile.VerificationStatus.VERIFIED,
+            verification_expires_at=timezone.localdate() - timedelta(days=1),
+        )
+
+        self.assertEqual(profile.effective_verification_status, Profile.VerificationStatus.EXPIRED)
+        self.assertEqual(profile.verification_badge_label, "Verification expired")
 
 
 class ReportFlowTests(APITestCase):
