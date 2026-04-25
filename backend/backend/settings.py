@@ -119,7 +119,7 @@ FRONTEND_EMAIL_DOMAIN = FRONTEND_ORIGIN.netloc or FRONTEND_ORIGIN.path
 FRONTEND_EMAIL_PROTOCOL = FRONTEND_ORIGIN.scheme or "http"
 
 FRONTEND_DIR = BASE_DIR.parent / "frontend" / "dist"
-TEMPLATES[0]["DIRS"] = [FRONTEND_DIR]
+TEMPLATES[0]["DIRS"] = [BASE_DIR / "accounts" / "templates", FRONTEND_DIR]
 
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR.parent, "frontend", "dist"),
