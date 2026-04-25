@@ -24,8 +24,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
+RUNNING_ON_RAILWAY = any(
+    os.getenv(name)
+    for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID")
+)
+
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "fallback-secret")
-DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
+DEBUG = parse_bool_env("DJANGO_DEBUG", default=not RUNNING_ON_RAILWAY)
 ALLOWED_HOSTS = parse_csv_env(
     "DJANGO_ALLOWED_HOSTS",
     "localhost,127.0.0.1,flatorigin.com,www.flatorigin.com,portfolio-production-1b31.up.railway.app",
@@ -86,10 +91,6 @@ WSGI_APPLICATION = "backend.wsgi.application"
 USE_SQLITE = os.getenv("USE_SQLITE", "").lower() in ("1", "true", "yes", "on")
 SQLITE_PATH = os.getenv("SQLITE_PATH", str(BASE_DIR / "db.sqlite3"))
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-RUNNING_ON_RAILWAY = any(
-    os.getenv(name)
-    for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID")
-)
 
 if DATABASE_URL and not USE_SQLITE:
     DATABASES = {

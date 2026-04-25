@@ -1,0 +1,24 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'accounts/admin/admin-shell.css' %}">
+{% endblock %}
+
+{% block branding %}
+  <div class="fo-admin-brand">
+    <span class="fo-admin-brand__badge">FO</span>
+    <div class="fo-admin-brand__copy">
+      <span class="fo-admin-brand__title">{{ site_header|default:_('FlatOrigin Admin') }}</span>
+      <span class="fo-admin-brand__subtitle">Operations Console</span>
+    </div>
+  </div>
+{% endblock %}
+
+{% block userlinks %}
+  {{ block.super }}
+{% endblock %}

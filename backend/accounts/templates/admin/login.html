@@ -1,0 +1,20 @@
+{% extends "admin/login.html" %}
+{% load static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'accounts/admin/admin-shell.css' %}">
+{% endblock %}
+
+{% block content_title %}
+  <div class="fo-login-heading">
+    <div class="fo-admin-brand fo-admin-brand--login">
+      <span class="fo-admin-brand__badge">FO</span>
+      <div class="fo-admin-brand__copy">
+        <span class="fo-admin-brand__title">{{ site_header|default:_('FlatOrigin Admin') }}</span>
+        <span class="fo-admin-brand__subtitle">Operations Console</span>
+      </div>
+    </div>
+    <p class="fo-login-copy">Internal access for moderation, compliance, verification, and account review.</p>
+  </div>
+{% endblock %}

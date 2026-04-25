@@ -11,6 +11,10 @@ import os
 
 from accounts.views import ActivationRedirectView, SafeUserCreateViewSet
 
+admin.site.site_header = "FlatOrigin Admin"
+admin.site.site_title = "FlatOrigin Admin"
+admin.site.index_title = "Operations and compliance"
+
 
 class ReactAppView(View):
     def get(self, request):
