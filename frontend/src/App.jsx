@@ -176,16 +176,16 @@ export default function App() {
               to="/"
               className="mr-1 text-base font-bold tracking-tight text-slate-900"
             >
-              flatOrigin
+              FlatOrigin
             </Link>
 
             {/* Mobile center: Explore + Dashboard visible */}
             <div className="flex items-center gap-1 md:hidden">
               <NavLink to="/explore" compact>
-                Portfolio
+                Explore
               </NavLink>
               <NavLink to="/work">
-                Open Projects
+                Find Local Work
               </NavLink>
               <NavLink to="/dashboard" compact>
                 Dashboard
@@ -194,8 +194,8 @@ export default function App() {
 
             {/* Desktop nav (Explore + Dashboard + Job Postings) */}
             <div className="ml-2 hidden items-center gap-2 md:flex">
-              <NavLink to="/explore">Portfolio</NavLink>
-              <NavLink to="/work">Open Projects</NavLink>
+              <NavLink to="/explore">Explore</NavLink>
+              <NavLink to="/work">Find Local Work</NavLink>
               <NavLink to="/dashboard">Dashboard</NavLink>
             </div>
 
