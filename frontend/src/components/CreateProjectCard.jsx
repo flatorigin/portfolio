@@ -614,7 +614,7 @@ export default function CreateProjectCard({
 
   return (
     <Card className="p-5">
-      <div className="mb-3 flex items-center justify-between">
+      {/*<div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-semibold text-slate-800">Create Project</div>
         <Badge>{ownedCount} owned</Badge>
       </div>
@@ -623,7 +623,7 @@ export default function CreateProjectCard({
         <Button type="button" className="mb-3" onClick={toggleOpen}>
           {isOpen ? "Hide form" : "Create new project"}
         </Button>
-      ) : null}
+      ) : null}*/}
 
       {showForm && (
         <>

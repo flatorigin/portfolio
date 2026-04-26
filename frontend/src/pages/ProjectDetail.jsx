@@ -2301,11 +2301,11 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            <div className="relative flex-1 bg-[#f4f4f1]">
+            <div className="relative flex min-h-0 flex-1 flex-col bg-[#f4f4f1]">
               {currentImage ? (
                 <>
-                  <div className="flex h-full flex-col">
-                    <div className="flex h-[72vh] min-h-[440px] w-full items-center justify-center overflow-hidden bg-[#f4f4f1] px-4 py-4 md:px-12">
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#f4f4f1] px-4 py-4 md:px-14 md:py-5">
                       <div className="flex h-full w-full items-center justify-center overflow-hidden">
                         <img
                           src={currentImage.url}
@@ -2313,10 +2313,29 @@ export default function ProjectDetail() {
                           className="block h-full w-full object-contain"
                         />
                       </div>
+
+                      {images.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={prevImage}
+                            className="absolute left-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
+                          >
+                            <SymbolIcon name="chevron_left" className="text-[36px]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={nextImage}
+                            className="absolute right-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
+                          >
+                            <SymbolIcon name="chevron_right" className="text-[36px]" />
+                          </button>
+                        </>
+                      )}
                     </div>
 
                     {images.length > 1 && (
-                      <div className="flex items-center justify-center gap-1 border-t border-black/5 bg-[#efefeb] px-3 py-2 text-[11px] text-slate-600">
+                      <div className="flex shrink-0 items-center justify-center gap-1 border-t border-black/5 bg-[#efefeb] px-3 py-3 text-[11px] text-slate-600">
                         <button
                           type="button"
                           onClick={prevImage}
@@ -2349,25 +2368,6 @@ export default function ProjectDetail() {
                       </div>
                     )}
                   </div>
-
-                  {images.length > 1 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={prevImage}
-                        className="absolute left-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
-                      >
-                        <SymbolIcon name="chevron_left" className="text-[36px]" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={nextImage}
-                        className="absolute right-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
-                      >
-                        <SymbolIcon name="chevron_right" className="text-[36px]" />
-                      </button>
-                    </>
-                  )}
                 </>
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-slate-500">No media</div>

@@ -85,6 +85,7 @@ export default function Explore() {
     minBudget: "",
     maxBudget: "",
   });
+  const [activeSearchField, setActiveSearchField] = useState("name");
 
   // ✅ reactive auth snapshot
   const [{ authed, username: me }, setAuthSnap] = useState(readAuthSnapshot);
@@ -334,9 +335,52 @@ export default function Explore() {
     });
   }, [projects, filters]);
 
-  const updateFilter = (key) => (e) => {
+  const clearFilters = () => {
+    setFilters({
+      name: "",
+      location: "",
+      minSqf: "",
+      maxSqf: "",
+      minBudget: "",
+      maxBudget: "",
+    });
+  };
+
+  const activeSearchValue =
+    activeSearchField === "name"
+      ? filters.name
+      : activeSearchField === "location"
+      ? filters.location
+      : activeSearchField === "sqf"
+      ? filters.minSqf
+      : filters.minBudget;
+
+  const activeSearchLabel =
+    activeSearchField === "name"
+      ? "Project name"
+      : activeSearchField === "location"
+      ? "Location"
+      : activeSearchField === "sqf"
+      ? "Sqf"
+      : "Budget";
+
+  const activeSearchPlaceholder =
+    activeSearchField === "name"
+      ? "Kitchen remodel"
+      : activeSearchField === "location"
+      ? "City, area, etc."
+      : activeSearchField === "sqf"
+      ? "Minimum sqf"
+      : "Minimum budget";
+
+  const updateActiveSearch = (e) => {
     const value = e.target.value;
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setFilters((prev) => {
+      if (activeSearchField === "name") return { ...prev, name: value };
+      if (activeSearchField === "location") return { ...prev, location: value };
+      if (activeSearchField === "sqf") return { ...prev, minSqf: value, maxSqf: "" };
+      return { ...prev, minBudget: value, maxBudget: "" };
+    });
   };
 
   if (loading) {
@@ -389,88 +433,86 @@ export default function Explore() {
 
       {/* 🔍 Filter bar */}
       <Card className="mb-4 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[160px]">
-            <div className="mb-1 text-xs font-medium text-slate-500">Project name</div>
-            <Input
-              value={filters.name}
-              onChange={updateFilter("name")}
-              placeholder="e.g. Kitchen remodel"
-            />
-          </div>
+        <div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-full sm:w-44">
+              <div className="mb-1 text-xs font-medium text-slate-500">
+                Search by
+              </div>
 
-          <div className="flex-1 min-w-[160px]">
-            <div className="mb-1 text-xs font-medium text-slate-500">Location</div>
-            <Input
-              value={filters.location}
-              onChange={updateFilter("location")}
-              placeholder="City, area, etc."
-            />
-          </div>
+              <div className="relative">
+                <select
+                  value={activeSearchField}
+                  onChange={(e) => setActiveSearchField(e.target.value)}
+                  className="h-10 w-full appearance-none rounded-xl border border-slate-300 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value="name">Project name</option>
+                  <option value="location">Location</option>
+                  <option value="sqf">Sqf</option>
+                  <option value="budget">Budget</option>
+                </select>
 
-          <div className="flex-1 min-w-[160px]">
-            <div className="mb-1 text-xs font-medium text-slate-500">Sqf (min / max)</div>
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={filters.minSqf}
-                onChange={updateFilter("minSqf")}
-                placeholder="Min"
-              />
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={filters.maxSqf}
-                onChange={updateFilter("maxSqf")}
-                placeholder="Max"
-              />
+                {/* Custom arrow */}
+                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4 text-slate-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </div>
+              </div>
             </div>
-          </div>
-
-          <div className="flex-1 min-w-[160px]">
-            <div className="mb-1 text-xs font-medium text-slate-500">
-              Budget (min / max)
+            <div className="min-w-[280px] flex-1">
+              <div className="mb-1 text-xs font-medium text-slate-500">
+                Search project
+              </div>
+              <div className="flex h-10 w-full items-center rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-within:border-slate-500 focus-within:ring-2 focus-within:ring-slate-200">
+                <span className="mr-1 shrink-0 whitespace-nowrap text-sm font-semibold text-slate-700">
+                  {activeSearchLabel}:
+                </span>
+                <input
+                  type={
+                    activeSearchField === "sqf" ||
+                    activeSearchField === "budget"
+                      ? "number"
+                      : "text"
+                  }
+                  inputMode={
+                    activeSearchField === "sqf" ||
+                    activeSearchField === "budget"
+                      ? "numeric"
+                      : "text"
+                  }
+                  value={activeSearchValue}
+                  onChange={updateActiveSearch}
+                  placeholder={activeSearchPlaceholder}
+                  className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
+                />
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={filters.minBudget}
-                onChange={updateFilter("minBudget")}
-                placeholder="Min"
-              />
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={filters.maxBudget}
-                onChange={updateFilter("maxBudget")}
-                placeholder="Max"
-              />
-            </div>
-          </div>
 
-          <div className="self-center mt-5">
             <Button
               type="button"
-              onClick={() =>
-                setFilters({
-                  name: "",
-                  location: "",
-                  minSqf: "",
-                  maxSqf: "",
-                  minBudget: "",
-                  maxBudget: "",
-                })
-              }
+              variant="outline"
+              onClick={clearFilters}
+              className="h-10 whitespace-nowrap"
             >
               Clear filters
             </Button>
           </div>
-        </div>
 
-        <div className="mt-2 text-xs text-slate-500">
-          Showing {filteredProjects.length} of {projects.length} projects
+          <div className="mt-2 text-xs text-slate-500">
+            Showing {filteredProjects.length} of {projects.length} projects
+          </div>
         </div>
       </Card>
 

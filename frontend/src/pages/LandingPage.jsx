@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Button, Card, Container, SymbolIcon } from "../ui";
@@ -197,19 +197,6 @@ export default function LandingPage() {
   const showcaseProjects = projects.length > 0 ? projects : FALLBACK_PROJECTS;
   const heroProjects = showcaseProjects.slice(0, 3);
 
-  const metrics = useMemo(() => {
-    const totalProjects = showcaseProjects.length;
-    const ownerCount = new Set(
-      showcaseProjects.map((p) => String(p.owner_username || "").trim()).filter(Boolean)
-    ).size;
-
-    return [
-      { value: totalProjects || 12, label: "Projects shared", note: "Real work, not abstract profiles." },
-      { value: ownerCount || 8, label: "Contractors featured", note: "Built around portfolios and service areas." },
-      { value: 6, label: "Bids per job", note: "Keep comparisons serious and manageable." },
-    ];
-  }, [showcaseProjects]);
-
   return (
     <div className="bg-[#FBF9F7] pb-20 text-slate-900">
       <TutorialModal open={videoOpen} onClose={() => setVideoOpen(false)} />
@@ -277,22 +264,15 @@ export default function LandingPage() {
         </Container>
       </section>
 
-      <section className="border-b border-[#ECE7DF] py-6 sm:py-8">
+      <section id="how-it-works" className="py-14 sm:py-18">
         <Container>
-          <div className="grid gap-8 sm:grid-cols-3">
-            {metrics.map((item) => (
-              <div key={item.label} className="px-1 py-5">
-                <div className="text-5xl font-semibold tracking-tight text-slate-950 sm:text-6xl">{item.value}</div>
-                <div className="mt-3 text-base font-semibold text-slate-700">{item.label}</div>
-                <div className="mt-2 max-w-xs text-base leading-7 text-slate-500">{item.note}</div>
-              </div>
-            ))}
+          <div className="mb-8 max-w-2xl">
+            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">How it works</div>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+              A simple workflow built around real projects
+            </h2>
           </div>
-        </Container>
-      </section>
 
-      <section className="py-14 sm:py-18">
-        <Container>
           <div className="grid gap-5 md:grid-cols-2">
             {PATHS.map((path) => (
               <Card key={path.label} className="rounded-[2rem] border-[#E9E5DC] bg-white/80 p-7 shadow-none">
@@ -313,33 +293,6 @@ export default function LandingPage() {
                   </div>
                 </div>
               </Card>
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      <section id="how-it-works" className="py-16 sm:py-20">
-        <Container>
-          <div className="max-w-2xl">
-            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">How it works</div>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-              A simple workflow built around real projects
-            </h2>
-          </div>
-
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {[
-              ["01", "Create a profile or post a project", "Start with a public portfolio, a job post, or a private invite-only project."],
-              ["02", "Share it or get discovered", "Homeowners can invite contractors. Contractors can be found through real project work."],
-              ["03", "Compare bids and connect directly", "Questions, bids, and follow-up stay tied to the project so decisions are easier."],
-            ].map(([step, title, copy]) => (
-              <div key={step} className="rounded-[1.75rem] border border-[#E9E5DC] bg-white/50 p-6">
-                <div className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#EEF2FB] text-sm font-semibold text-[#4F5D83]">
-                  {step}
-                </div>
-                <h3 className="mt-5 text-xl font-semibold text-slate-900">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p>
-              </div>
             ))}
           </div>
         </Container>
