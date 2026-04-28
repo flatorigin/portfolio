@@ -23,6 +23,7 @@ cd /app/backend
 # Provide safe defaults so staging doesn't crash if vars aren't set yet
 DATABASE_URL="${DATABASE_URL:-}"
 MEDIA_ROOT="${MEDIA_ROOT:-/media}"
+export MEDIA_ROOT
 
 echo "DATABASE_URL is: ${DATABASE_URL:-<missing>}"
 echo "MEDIA_ROOT is: ${MEDIA_ROOT}"

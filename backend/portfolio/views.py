@@ -4,6 +4,7 @@ import logging
 import re
 
 from django.conf import settings
+from django.core.files.storage import default_storage
 from django.db import models, transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
@@ -319,8 +320,22 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
 
         if request.method.lower() == "get":
-            qs = project.images.order_by("order", "id")
-            ser = ProjectImageSerializer(qs, many=True, context={"request": request})
+            qs = list(project.images.order_by("order", "id"))
+            existing = []
+            missing = []
+            for img in qs:
+                name = getattr(img.image, "name", "")
+                if name and default_storage.exists(name):
+                    existing.append(img)
+                else:
+                    missing.append(img.id)
+            if missing:
+                logger.warning(
+                    "Project image list skipped missing files for project_id=%s image_ids=%s",
+                    project.id,
+                    missing,
+                )
+            ser = ProjectImageSerializer(existing, many=True, context={"request": request})
             return Response(ser.data)
 
         if project.owner != request.user:

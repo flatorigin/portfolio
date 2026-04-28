@@ -276,7 +276,7 @@ class ProjectPlanImage(models.Model):
                 pass
 
     def save(self, *args, **kwargs):
-        if self.image and hasattr(self.image, "file"):
+        if self.image and not getattr(self.image, "_committed", True):
             self._convert_image_to_webp()
         super().save(*args, **kwargs)
 
@@ -443,7 +443,7 @@ class ProjectImage(models.Model):
                 pass
 
     def save(self, *args, **kwargs):
-        if self.image and hasattr(self.image, "file"):
+        if self.image and not getattr(self.image, "_committed", True):
             self._convert_image_to_webp()
         super().save(*args, **kwargs)
 

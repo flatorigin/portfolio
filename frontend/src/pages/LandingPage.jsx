@@ -93,37 +93,6 @@ const GUIDE_PREVIEWS = [
   },
 ];
 
-const FEATURED_SERVICES = [
-  {
-    name: "Local Deck & Patio",
-    category: "Deck builder",
-    location: "Serving Philadelphia suburbs",
-    description: "Deck repairs, rebuilds, railings, and outdoor carpentry for residential projects.",
-    phone: "(555) 214-8090",
-    website: "",
-    cover: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80",
-  },
-  {
-    name: "BrightLine Electrical",
-    category: "Electrician",
-    location: "Serving Media, PA",
-    description: "Lighting, panel updates, outlets, and project-ready electrical work for home improvements.",
-    phone: "(555) 481-3302",
-    website: "",
-    cover: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=1200&q=80",
-  },
-  {
-    name: "Permit & Plan Studio",
-    category: "Project support",
-    location: "Remote and local support",
-    description: "Planning, drawings, permit prep, and scope documentation before contractors bid.",
-    phone: "(555) 638-1174",
-    website: "",
-    cover: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1200&q=80",
-  },
-];
-const SHOW_FEATURED_SERVICES = false;
-
 function TutorialModal({ open, onClose }) {
   if (!open) return null;
 
@@ -194,49 +163,6 @@ function ShowcaseCard({ project }) {
         <div className="text-sm font-medium text-slate-500">{project.location || "Project showcase"}</div>
       </div>
     </Link>
-  );
-}
-
-function FeaturedServiceCard({ service }) {
-  const href = service.website || `tel:${service.phone.replace(/[^\d+]/g, "")}`;
-
-  return (
-    <a
-      href={href}
-      target={service.website ? "_blank" : undefined}
-      rel={service.website ? "noreferrer" : undefined}
-      className="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
-    >
-      <div className="aspect-[4/3] bg-slate-100">
-        {service.cover ? (
-          <img
-            src={service.cover}
-            alt={service.name}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-slate-500">Local service</div>
-        )}
-      </div>
-      <div className="space-y-3 p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge className="border-[#E4E6EE] bg-[#F6F7FB] text-slate-700">{service.category}</Badge>
-          <Badge className="border-[#E4E6EE] bg-white text-slate-500">Featured</Badge>
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">{service.name}</h3>
-          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-slate-600">
-            {service.description}
-          </p>
-        </div>
-        <div className="space-y-1 text-sm">
-          <div className="font-medium text-slate-500">{service.location}</div>
-          <div className="font-semibold text-[#4F5D83] group-hover:underline">
-            {service.website ? "Visit website" : service.phone}
-          </div>
-        </div>
-      </div>
-    </a>
   );
 }
 
@@ -393,30 +319,6 @@ export default function LandingPage() {
           </div>
         </Container>
       </section>
-
-      {SHOW_FEATURED_SERVICES ? (
-        <section className="border-b border-[#ECE7DF] bg-[#FBF9F7] py-16 sm:py-20">
-          <Container>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="max-w-2xl">
-                <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">Featured local services</div>
-                <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-                  Businesses that can support real home projects
-                </h2>
-              </div>
-              <Link to="/register" className="text-sm font-medium text-slate-600 hover:text-slate-950">
-                Add your business →
-              </Link>
-            </div>
-
-            <div className="mt-8 grid gap-5 md:grid-cols-3">
-              {FEATURED_SERVICES.map((service) => (
-                <FeaturedServiceCard key={service.name} service={service} />
-              ))}
-            </div>
-          </Container>
-        </section>
-      ) : null}
 
       <section className="border-b border-[#ECE7DF] py-16 sm:py-20">
         <Container>
