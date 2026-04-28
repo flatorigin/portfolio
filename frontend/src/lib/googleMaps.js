@@ -33,6 +33,13 @@ export function getGoogleMapsApiKey() {
   return String(runtimeKey || viteKey || "").trim();
 }
 
+export function getGoogleMapsMapId() {
+  const runtimeMapId =
+    typeof window !== "undefined" ? window.__ENV__?.GOOGLE_MAPS_MAP_ID : "";
+  const viteMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
+  return String(runtimeMapId || viteMapId || "DEMO_MAP_ID").trim();
+}
+
 export function isPlaceholderGoogleMapsKey(key) {
   if (!key) return true;
   const value = key.trim().toLowerCase();
@@ -66,13 +73,13 @@ export async function loadGoogleMaps() {
     );
   }
 
-  const [{ Map }, { Geocoder }] = await Promise.all([
+  const [{ Map }, { Geocoder }, { AdvancedMarkerElement }] = await Promise.all([
     importLibrary("maps"),
     importLibrary("geocoding"),
     importLibrary("marker"),
   ]);
 
-  return { Map, Geocoder };
+  return { Map, Geocoder, AdvancedMarkerElement };
 }
 
 export async function geocodeLocationQuery(rawQuery) {
