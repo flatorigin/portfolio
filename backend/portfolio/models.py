@@ -252,18 +252,18 @@ class ProjectPlanImage(models.Model):
 
         try:
             img = Image.open(self.image)
-        except (UnidentifiedImageError, OSError):
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGB")
+
+            buffer = BytesIO()
+            img.save(buffer, format="WEBP", quality=80)
+            buffer.seek(0)
+        except (UnidentifiedImageError, OSError, ValueError):
             try:
                 self.image.seek(0)
             except Exception:
                 pass
             return
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGB")
-
-        buffer = BytesIO()
-        img.save(buffer, format="WEBP", quality=80)
-        buffer.seek(0)
 
         new_name = f"{root}.webp"
         old_name = current_name
@@ -418,18 +418,18 @@ class ProjectImage(models.Model):
 
         try:
             img = Image.open(self.image)
-        except (UnidentifiedImageError, OSError):
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGB")
+
+            buffer = BytesIO()
+            img.save(buffer, format="WEBP", quality=80)
+            buffer.seek(0)
+        except (UnidentifiedImageError, OSError, ValueError):
             try:
                 self.image.seek(0)
             except Exception:
                 pass
             return
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGB")
-
-        buffer = BytesIO()
-        img.save(buffer, format="WEBP", quality=80)
-        buffer.seek(0)
 
         new_name = f"{root}.webp"
         old_name = current_name
