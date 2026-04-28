@@ -10,7 +10,7 @@ from django.core.files.storage import default_storage
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils import timezone
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from .utils import convert_field_file_to_webp
 
@@ -250,7 +250,14 @@ class ProjectPlanImage(models.Model):
         if ext == ".webp":
             return
 
-        img = Image.open(self.image)
+        try:
+            img = Image.open(self.image)
+        except (UnidentifiedImageError, OSError):
+            try:
+                self.image.seek(0)
+            except Exception:
+                pass
+            return
         if img.mode not in ("RGB", "RGBA"):
             img = img.convert("RGB")
 
@@ -409,7 +416,14 @@ class ProjectImage(models.Model):
         if ext == ".webp":
             return
 
-        img = Image.open(self.image)
+        try:
+            img = Image.open(self.image)
+        except (UnidentifiedImageError, OSError):
+            try:
+                self.image.seek(0)
+            except Exception:
+                pass
+            return
         if img.mode not in ("RGB", "RGBA"):
             img = img.convert("RGB")
 
