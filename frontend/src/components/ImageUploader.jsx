@@ -10,6 +10,17 @@ export default function ImageUploader({ projectId, onUploaded }) {
   const inputRef = useRef(null);
   const [over, setOver] = useState(false);
 
+  function uploadErrorMessage(e) {
+    const data = e?.response?.data;
+    if (!data) return e?.message || "Could not upload images.";
+    if (typeof data === "string") {
+      return data.trim().startsWith("<!doctype") || data.trim().startsWith("<html")
+        ? "The server could not process that image. Try a JPG, PNG, or WebP file."
+        : data;
+    }
+    return data.detail || data.error || JSON.stringify(data);
+  }
+
   function onPick(fileList) {
     const arr = Array.from(fileList || []);
     const next = arr.map((f) => ({ file: f, url: URL.createObjectURL(f), caption: "" }));
@@ -30,7 +41,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
       setFiles([]);
       onUploaded?.();
     } catch (e) {
-      setErr(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
+      setErr(uploadErrorMessage(e));
     } finally {
       setBusy(false);
     }
