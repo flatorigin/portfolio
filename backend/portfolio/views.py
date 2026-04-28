@@ -61,6 +61,16 @@ from .serializers import (
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 
 logger = logging.getLogger(__name__)
+SUPPORTED_PROJECT_IMAGE_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/heic-sequence",
+    "image/heif-sequence",
+}
+SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
 
 User = get_user_model()
 
@@ -353,6 +363,24 @@ class ProjectViewSet(viewsets.ModelViewSet):
             )
             return Response(
                 {"detail": "No image files were received. Choose one or more image files and try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        unsupported = [
+            getattr(f, "name", "Selected file")
+            for f in files
+            if getattr(f, "content_type", "") not in SUPPORTED_PROJECT_IMAGE_CONTENT_TYPES
+            and not str(getattr(f, "name", "")).lower().endswith(SUPPORTED_PROJECT_IMAGE_EXTENSIONS)
+        ]
+        if unsupported:
+            return Response(
+                {
+                    "detail": (
+                        "Unsupported image format: "
+                        + ", ".join(unsupported)
+                        + ". Please use JPG, PNG, WebP, HEIC, or HEIF."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

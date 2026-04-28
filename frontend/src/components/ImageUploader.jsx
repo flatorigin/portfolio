@@ -1,14 +1,37 @@
 // frontend/src/components/ImageUploader.jsx
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import api from "../api";
 import { Button, SymbolIcon } from "../ui";
+
+const SUPPORTED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+]);
+const SUPPORTED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|heic|heif)$/i;
+const BROWSER_PREVIEW_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export default function ImageUploader({ projectId, onUploaded }) {
   const [files, setFiles] = useState([]); // [{ file, url, caption }]
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const inputRef = useRef(null);
+  const filesRef = useRef([]);
   const [over, setOver] = useState(false);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  useEffect(() => {
+    return () => {
+      filesRef.current.forEach((it) => URL.revokeObjectURL(it.url));
+    };
+  }, []);
 
   function uploadErrorMessage(e) {
     const status = e?.response?.status;
@@ -27,7 +50,34 @@ export default function ImageUploader({ projectId, onUploaded }) {
 
   function onPick(fileList) {
     const arr = Array.from(fileList || []);
-    const next = arr.map((f) => ({ file: f, url: URL.createObjectURL(f), caption: "" }));
+    const accepted = [];
+    const rejected = [];
+
+    arr.forEach((file) => {
+      const hasSupportedType = SUPPORTED_IMAGE_TYPES.has(file.type);
+      const hasSupportedExtension = SUPPORTED_IMAGE_EXTENSIONS.test(file.name || "");
+      if (hasSupportedType || (!file.type && hasSupportedExtension)) {
+        accepted.push(file);
+      } else {
+        rejected.push(file.name || "Selected file");
+      }
+    });
+
+    if (rejected.length) {
+      setErr(
+        `Unsupported image format: ${rejected.join(", ")}. Please use JPG, PNG, WebP, HEIC, or HEIF.`
+      );
+    } else {
+      setErr("");
+    }
+
+    const next = accepted.map((f) => ({
+      id: `${f.name}-${f.size}-${f.lastModified}-${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+      file: f,
+      url: URL.createObjectURL(f),
+      caption: "",
+      previewError: !BROWSER_PREVIEW_TYPES.has(f.type),
+    }));
     setFiles((prev) => [...prev, ...next]);
   }
   function onDrop(e) { e.preventDefault(); setOver(false); onPick(e.dataTransfer.files); }
@@ -40,6 +90,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
       files.forEach((it) => fd.append("images", it.file));
       files.forEach((it) => fd.append("captions", it.caption || ""));
       await api.post(`/projects/${projectId}/images/`, fd);
+      files.forEach((it) => URL.revokeObjectURL(it.url));
       setFiles([]);
       onUploaded?.();
     } catch (e) {
@@ -92,13 +143,13 @@ export default function ImageUploader({ projectId, onUploaded }) {
             </Button>
           </div>
         </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => onPick(e.target.files)}
-          className="hidden"
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+            multiple
+            onChange={(e) => onPick(e.target.files)}
+            className="hidden"
         />
       </div>
 
@@ -106,25 +157,48 @@ export default function ImageUploader({ projectId, onUploaded }) {
         <>
           <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
             {files.map((it, i) => (
-              <div key={i} className="rounded-xl border border-slate-200 bg-white p-3">
-                <img 
-                  src={it.url} 
-                  alt="" 
-                  className="mb-2 h-36 w-full rounded-md object-cover"
-                  onError={(e) => {
-                      e.currentTarget.src = "/placeholder.png"; // or hide it
-                  }}
-                 />
+              <div key={it.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="mb-2 flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-slate-100">
+                  {it.previewError ? (
+                    <div className="px-3 text-center">
+                      <SymbolIcon name="image_not_supported" className="text-[32px] text-slate-400" />
+                      <div className="mt-1 truncate text-xs font-medium text-slate-600">
+                        {it.file.name}
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        Will convert after upload
+                      </div>
+                    </div>
+                  ) : (
+                    <img
+                      src={it.url}
+                      alt={it.file.name || ""}
+                      className="h-full w-full object-cover"
+                      onError={() => {
+                        setFiles((prev) =>
+                          prev.map((x) => (x.id === it.id ? { ...x, previewError: true } : x))
+                        );
+                      }}
+                    />
+                  )}
+                </div>
                 <input
                   className="w-full rounded-lg border border-slate-300 px-2 py-1"
                   placeholder="Caption…"
                   value={it.caption}
-                  onChange={(e) => setFiles(prev => prev.map((x,idx)=> idx===i ? {...x, caption: e.target.value} : x))}
+                  onChange={(e) =>
+                    setFiles((prev) =>
+                      prev.map((x) => (x.id === it.id ? { ...x, caption: e.target.value } : x))
+                    )
+                  }
                 />
                 <div className="mt-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => setFiles(prev => prev.filter((_,idx)=>idx!==i))}
+                    onClick={() => {
+                      URL.revokeObjectURL(it.url);
+                      setFiles((prev) => prev.filter((x) => x.id !== it.id));
+                    }}
                     className="rounded-lg border px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
                   >
                     Remove
@@ -143,10 +217,13 @@ export default function ImageUploader({ projectId, onUploaded }) {
             >
               Upload {files.length} image{files.length > 1 ? "s" : ""}
             </button>
-            <button
-              type="button"
-              onClick={() => setFiles([])}
-              disabled={busy}
+              <button
+                type="button"
+                onClick={() => {
+                  files.forEach((it) => URL.revokeObjectURL(it.url));
+                  setFiles([]);
+                }}
+                disabled={busy}
               className="rounded-xl border px-3 py-2 text-slate-700 hover:bg-slate-50"
             >
               Clear

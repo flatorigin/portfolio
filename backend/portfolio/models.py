@@ -14,6 +14,14 @@ from PIL import Image, UnidentifiedImageError
 
 from .utils import convert_field_file_to_webp
 
+try:
+    from pillow_heif import register_heif_opener
+except ImportError:
+    register_heif_opener = None
+
+if register_heif_opener:
+    register_heif_opener()
+
 User = get_user_model()
 
 
