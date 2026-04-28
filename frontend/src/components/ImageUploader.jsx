@@ -11,14 +11,18 @@ export default function ImageUploader({ projectId, onUploaded }) {
   const [over, setOver] = useState(false);
 
   function uploadErrorMessage(e) {
+    const status = e?.response?.status;
     const data = e?.response?.data;
-    if (!data) return e?.message || "Could not upload images.";
+    const prefix = status ? `Upload failed (${status}). ` : "";
+    if (!data) return `${prefix}${e?.message || "Could not upload images."}`;
     if (typeof data === "string") {
-      return data.trim().startsWith("<!doctype") || data.trim().startsWith("<html")
+      const trimmed = data.trim().toLowerCase();
+      const message = trimmed.startsWith("<!doctype") || trimmed.startsWith("<html")
         ? "The server could not process that image. Try a JPG, PNG, or WebP file."
         : data;
+      return `${prefix}${message}`;
     }
-    return data.detail || data.error || JSON.stringify(data);
+    return `${prefix}${data.detail || data.error || JSON.stringify(data)}`;
   }
 
   function onPick(fileList) {
@@ -35,9 +39,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
       const fd = new FormData();
       files.forEach((it) => fd.append("images", it.file));
       files.forEach((it) => fd.append("captions", it.caption || ""));
-      await api.post(`/projects/${projectId}/images/`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post(`/projects/${projectId}/images/`, fd);
       setFiles([]);
       onUploaded?.();
     } catch (e) {

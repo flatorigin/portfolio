@@ -261,9 +261,7 @@ export default function Dashboard() {
       fd.append("captions[]", img.caption || "");
     }
 
-    await api.post(`/projects/${projectId}/images/`, fd, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    await api.post(`/projects/${projectId}/images/`, fd);
   }
 
   async function deleteProject(projectId) {

@@ -8,6 +8,7 @@ import {
   DEFAULT_CENTER,
   geocodeLocationQuery,
   getGoogleMapsApiKey,
+  getGoogleMapsMapId,
   isPlaceholderGoogleMapsKey,
   loadGoogleMaps,
   milesToMeters,
@@ -25,6 +26,7 @@ export default function ServiceAreaMap({
   resolvedCenter,
 }) {
   const apiKey = getGoogleMapsApiKey();
+  const mapId = getGoogleMapsMapId();
 
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -72,7 +74,7 @@ export default function ServiceAreaMap({
 
       try {
         setStatus({ kind: "loading", message: "Loading Google Maps…" });
-        const { Map } = await loadGoogleMaps();
+        const { Map, AdvancedMarkerElement } = await loadGoogleMaps();
 
         if (cancelled) return;
         if (!containerRef.current) return;
@@ -85,11 +87,12 @@ export default function ServiceAreaMap({
             mapTypeControl: false,
             streetViewControl: false,
             fullscreenControl: false,
+            mapId,
           });
 
           mapRef.current = map;
 
-          markerRef.current = new window.google.maps.Marker({
+          markerRef.current = new AdvancedMarkerElement({
             map,
             position: initialCenter,
           });
@@ -130,7 +133,7 @@ export default function ServiceAreaMap({
     return () => {
       cancelled = true;
     };
-  }, [apiKey]);
+  }, [apiKey, mapId]);
 
   useEffect(() => {
     if (!isMapReadyRef.current) return;
@@ -142,7 +145,7 @@ export default function ServiceAreaMap({
 
     lastResolvedCenterRef.current = resolvedCenter;
     lastResolvedQueryRef.current = normalizedQuery || "__resolved_center__";
-    markerRef.current.setPosition(resolvedCenter);
+    markerRef.current.position = resolvedCenter;
     circleRef.current.setCenter(resolvedCenter);
 
     if (radiusMeters > 0) {
@@ -190,7 +193,7 @@ export default function ServiceAreaMap({
         if (isStale()) return;
         const hasResolvedLocation = Boolean(lastResolvedQueryRef.current);
         if (!hasResolvedLocation) {
-          markerRef.current.setPosition(DEFAULT_CENTER);
+          markerRef.current.position = DEFAULT_CENTER;
           circleRef.current.setCenter(DEFAULT_CENTER);
           mapRef.current.setCenter(DEFAULT_CENTER);
           mapRef.current.setZoom(10);
@@ -217,7 +220,7 @@ export default function ServiceAreaMap({
         lastResolvedCenterRef.current = center;
         lastResolvedQueryRef.current = normalizedQuery;
 
-        markerRef.current.setPosition(center);
+        markerRef.current.position = center;
         circleRef.current.setCenter(center);
 
         if (radiusMeters > 0) {

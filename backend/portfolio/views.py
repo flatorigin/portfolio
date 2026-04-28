@@ -1,5 +1,6 @@
 # file: backend/portfolio/views.py
 import json
+import logging
 import re
 
 from django.conf import settings
@@ -57,6 +58,8 @@ from .serializers import (
     ProjectBidVersionSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -326,17 +329,41 @@ class ProjectViewSet(viewsets.ModelViewSet):
         files = request.FILES.getlist("images")
         captions = request.data.getlist("captions[]") or request.data.getlist("captions") or []
 
+        if not files:
+            logger.warning(
+                "Project image upload received no files for project_id=%s user_id=%s content_type=%s",
+                project.id,
+                request.user.id,
+                request.content_type,
+            )
+            return Response(
+                {"detail": "No image files were received. Choose one or more image files and try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         created = []
         base_order = project.images.count()
-        for idx, f in enumerate(files):
-            caption = captions[idx] if idx < len(captions) else ""
-            img = ProjectImage.objects.create(
-                project=project,
-                image=f,
-                caption=caption,
-                order=base_order + idx,
+        try:
+            for idx, f in enumerate(files):
+                caption = captions[idx] if idx < len(captions) else ""
+                img = ProjectImage.objects.create(
+                    project=project,
+                    image=f,
+                    caption=caption,
+                    order=base_order + idx,
+                )
+                created.append(img)
+        except Exception as exc:
+            logger.exception(
+                "Project image upload failed for project_id=%s user_id=%s file_count=%s",
+                project.id,
+                request.user.id,
+                len(files),
             )
-            created.append(img)
+            detail = "Could not upload images. Try a JPG, PNG, or WebP file."
+            if settings.DEBUG:
+                detail = f"{detail} ({exc})"
+            return Response({"detail": detail}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         ser = ProjectImageSerializer(created, many=True, context={"request": request})
         return Response(ser.data, status=status.HTTP_201_CREATED)
