@@ -204,62 +204,78 @@ export default function ImageUploader({ projectId, onUploaded }) {
       {files.length > 0 && (
         <>
           <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-            {files.map((it, i) => (
-              <div key={it.id} className="rounded-xl border border-slate-200 bg-white p-3">
-                <div className="mb-2 flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-slate-100">
-                  {it.previewError ? (
-                    <div className="px-3 text-center">
-                      <SymbolIcon name="image_not_supported" className="text-[32px] text-slate-400" />
-                      <div className="mt-1 truncate text-xs font-medium text-slate-600">
-                        {it.file?.name || "Uploaded image"}
+            {files.filter(Boolean).map((it, i) => {
+              const fileName = it.file?.name || it.name || "Uploaded image";
+              const imageUrl = it.url || it.image || it.image_url || it.src || "/placeholder.png";
+
+              return (
+                <div key={it.id ?? imageUrl ?? i} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mb-2 flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-slate-100">
+                    {it.previewError ? (
+                      <div className="px-3 text-center">
+                        <SymbolIcon name="image_not_supported" className="text-[32px] text-slate-400" />
+                        <div className="mt-1 truncate text-xs font-medium text-slate-600">
+                          {fileName}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {it.uploaded ? "Preview unavailable" : "Will convert after upload"}
+                        </div>
                       </div>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {it.uploaded ? "Preview unavailable" : "Will convert after upload"}
-                      </div>
-                    </div>
-                  ) : (
-                    <img
-                      src={it.url}
-                      alt={it.file.name || ""}
-                      className="h-full w-full object-cover"
-                      onError={() => {
-                        setFiles((prev) =>
-                          prev.map((x) => (x.id === it.id ? { ...x, previewError: true } : x))
-                        );
-                      }}
-                    />
-                  )}
-                </div>
-                {it.uploading ? (
-                  <div className="mb-2 text-xs font-medium text-slate-500">
-                    Uploading and preparing image…
+                    ) : (
+                      <img
+                        src={imageUrl}
+                        alt={fileName}
+                        className="h-full w-full object-cover"
+                        onError={() => {
+                          setFiles((prev) =>
+                            prev
+                              .filter(Boolean)
+                              .map((x) =>
+                                x.id === it.id ? { ...x, previewError: true } : x
+                              )
+                          );
+                        }}
+                      />
+                    )}
                   </div>
-                ) : null}
-                <input
-                  className="w-full rounded-lg border border-slate-300 px-2 py-1"
-                  placeholder="Caption…"
-                  value={it.caption}
-                  disabled={it.uploaded}
-                  onChange={(e) =>
-                    setFiles((prev) =>
-                      prev.map((x) => (x.id === it.id ? { ...x, caption: e.target.value } : x))
-                    )
-                  }
-                />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (it.objectUrl) URL.revokeObjectURL(it.url);
-                      setFiles((prev) => prev.filter((x) => x.id !== it.id));
-                    }}
-                    className="rounded-lg border px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                  >
-                    Remove
-                  </button>
+
+                  {it.uploading ? (
+                    <div className="mb-2 text-xs font-medium text-slate-500">
+                      Uploading and preparing image…
+                    </div>
+                  ) : null}
+
+                  <input
+                    className="w-full rounded-lg border border-slate-300 px-2 py-1"
+                    placeholder="Caption…"
+                    value={it.caption ?? ""}
+                    disabled={it.uploaded}
+                    onChange={(e) =>
+                      setFiles((prev) =>
+                        prev
+                          .filter(Boolean)
+                          .map((x) =>
+                            x.id === it.id ? { ...x, caption: e.target.value } : x
+                          )
+                      )
+                    }
+                  />
+
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (it.objectUrl && it.url) URL.revokeObjectURL(it.url);
+                        setFiles((prev) => prev.filter((x) => x && x.id !== it.id));
+                      }}
+                      className="rounded-lg border px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-3">
