@@ -15,6 +15,16 @@ const SUPPORTED_IMAGE_TYPES = new Set([
 const SUPPORTED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|heic|heif)$/i;
 const BROWSER_PREVIEW_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+function toUrl(raw) {
+  if (!raw) return "";
+  const value = String(raw).trim();
+  if (/^(https?:|data:|blob:)/i.test(value)) return value;
+
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+  const origin = base.replace(/\/api\/?$/, "");
+  return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
+}
+
 export default function ImageUploader({ projectId, onUploaded }) {
   const [files, setFiles] = useState([]); // [{ file, url, caption }]
   const [busy, setBusy] = useState(false);
@@ -76,7 +86,10 @@ export default function ImageUploader({ projectId, onUploaded }) {
       file: f,
       url: URL.createObjectURL(f),
       caption: "",
-      previewError: !BROWSER_PREVIEW_TYPES.has(f.type),
+      previewError: false,
+      objectUrl: true,
+      uploaded: false,
+      uploading: false,
     }));
     setFiles((prev) => [...prev, ...next]);
   }
@@ -84,16 +97,51 @@ export default function ImageUploader({ projectId, onUploaded }) {
 
   const submit = useCallback(async () => {
     if (!files.length || !projectId) return;
+    const pendingFiles = files.filter((it) => !it.uploaded);
+    if (!pendingFiles.length) return;
+
     setBusy(true); setErr("");
     try {
       const fd = new FormData();
-      files.forEach((it) => fd.append("images", it.file));
-      files.forEach((it) => fd.append("captions", it.caption || ""));
-      await api.post(`/projects/${projectId}/images/`, fd);
-      files.forEach((it) => URL.revokeObjectURL(it.url));
-      setFiles([]);
+      pendingFiles.forEach((it) => fd.append("images", it.file));
+      pendingFiles.forEach((it) => fd.append("captions", it.caption || ""));
+
+      setFiles((prev) =>
+        prev.map((it) => (!it.uploaded ? { ...it, uploading: true } : it))
+      );
+
+      const { data } = await api.post(`/projects/${projectId}/images/`, fd);
+      const savedImages = Array.isArray(data) ? data : [];
+
+      pendingFiles.forEach((it) => {
+        if (it.objectUrl) URL.revokeObjectURL(it.url);
+      });
+
+      setFiles((prev) => {
+        let savedIndex = 0;
+        return prev.map((it) => {
+          if (it.uploaded) return it;
+
+          const saved = savedImages[savedIndex++] || {};
+          const savedUrl = toUrl(saved.url || saved.image || saved.src || saved.file);
+          return {
+            ...it,
+            id: saved.id || it.id,
+            file: null,
+            url: savedUrl || it.url,
+            caption: saved.caption ?? it.caption,
+            previewError: false,
+            objectUrl: false,
+            uploaded: true,
+            uploading: false,
+          };
+        });
+      });
       onUploaded?.();
     } catch (e) {
+      setFiles((prev) =>
+        prev.map((it) => (!it.uploaded ? { ...it, uploading: false } : it))
+      );
       setErr(uploadErrorMessage(e));
     } finally {
       setBusy(false);
@@ -146,7 +194,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
             multiple
             onChange={(e) => onPick(e.target.files)}
             className="hidden"
@@ -163,10 +211,10 @@ export default function ImageUploader({ projectId, onUploaded }) {
                     <div className="px-3 text-center">
                       <SymbolIcon name="image_not_supported" className="text-[32px] text-slate-400" />
                       <div className="mt-1 truncate text-xs font-medium text-slate-600">
-                        {it.file.name}
+                        {it.file?.name || "Uploaded image"}
                       </div>
                       <div className="mt-1 text-[11px] text-slate-500">
-                        Will convert after upload
+                        {it.uploaded ? "Preview unavailable" : "Will convert after upload"}
                       </div>
                     </div>
                   ) : (
@@ -182,10 +230,16 @@ export default function ImageUploader({ projectId, onUploaded }) {
                     />
                   )}
                 </div>
+                {it.uploading ? (
+                  <div className="mb-2 text-xs font-medium text-slate-500">
+                    Uploading and preparing image…
+                  </div>
+                ) : null}
                 <input
                   className="w-full rounded-lg border border-slate-300 px-2 py-1"
                   placeholder="Caption…"
                   value={it.caption}
+                  disabled={it.uploaded}
                   onChange={(e) =>
                     setFiles((prev) =>
                       prev.map((x) => (x.id === it.id ? { ...x, caption: e.target.value } : x))
@@ -196,7 +250,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
                   <button
                     type="button"
                     onClick={() => {
-                      URL.revokeObjectURL(it.url);
+                      if (it.objectUrl) URL.revokeObjectURL(it.url);
                       setFiles((prev) => prev.filter((x) => x.id !== it.id));
                     }}
                     className="rounded-lg border px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
@@ -212,15 +266,22 @@ export default function ImageUploader({ projectId, onUploaded }) {
             <button
               type="button"
               onClick={submit}
-              disabled={busy}
+              disabled={busy || files.every((it) => it.uploaded)}
               className="rounded-xl bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
             >
-              Upload {files.length} image{files.length > 1 ? "s" : ""}
+              Upload {files.filter((it) => !it.uploaded).length} image{files.filter((it) => !it.uploaded).length === 1 ? "" : "s"}
             </button>
-              <button
-                type="button"
-                onClick={() => {
-                  files.forEach((it) => URL.revokeObjectURL(it.url));
+            {busy ? (
+              <div className="text-xs font-medium text-slate-500">
+                Uploading and preparing image…
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                  files.forEach((it) => {
+                    if (it.objectUrl) URL.revokeObjectURL(it.url);
+                  });
                   setFiles([]);
                 }}
                 disabled={busy}
