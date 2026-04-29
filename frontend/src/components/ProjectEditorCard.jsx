@@ -578,10 +578,10 @@ export default function ProjectEditorCard({
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-                {images.map((it) => (
-                  <figure key={it.id ?? it.url} className="rounded-xl border border-slate-200 bg-white p-3">
+                {images.filter(Boolean).map((it) => (
+                  <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="rounded-xl border border-slate-200 bg-white p-3">
                     <img
-                      src={it.url}
+                      src={it.url || it.image || it.image_url || it.file || "/placeholder.png"}
                       alt=""
                       className="mb-2 h-36 w-full rounded-md object-cover"
                       onError={(e) => {
@@ -592,10 +592,14 @@ export default function ProjectEditorCard({
                     <input
                       className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
                       placeholder="Caption…"
-                      value={it._localCaption}
+                      value={it._localCaption ?? it.caption ?? ""}
                       onChange={(e) =>
                         setImages((prev) =>
-                          prev.map((x) => (x.id === it.id ? { ...x, _localCaption: e.target.value } : x))
+                          prev
+                            .filter(Boolean)
+                            .map((x) =>
+                              x.id === it.id ? { ...x, _localCaption: e.target.value } : x
+                            )
                         )
                       }
                     />
