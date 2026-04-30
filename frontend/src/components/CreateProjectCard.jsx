@@ -10,6 +10,9 @@ import api from "../api";
 import AiWriteButton from "./AiWriteButton";
 import { Card, Input, Textarea, Button, Badge, SymbolIcon } from "../ui";
 
+const PROJECT_MEDIA_ACCEPT =
+  "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm";
+
 function toggleInArray(arr, value) {
   const list = Array.isArray(arr) ? arr : [];
   return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
@@ -516,6 +519,7 @@ export default function CreateProjectCard({
     const newImages = arr.map((file) => ({
       id: Math.random().toString(36).slice(2),
       url: URL.createObjectURL(file),
+      media_type: file.type?.startsWith("video/") ? "video" : "image",
       caption: "",
       _file: file,
     }));
@@ -999,7 +1003,7 @@ export default function CreateProjectCard({
             {/* Images */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-700">Images</span>
+                <span className="text-sm font-medium text-slate-700">Media</span>
                 {images.length > 0 && (
                   <span className="text-xs text-slate-500">{images.length} total</span>
                 )}
@@ -1013,14 +1017,25 @@ export default function CreateProjectCard({
                       className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 md:flex-row md:items-center"
                     >
                       <div className="h-32 w-full overflow-hidden rounded-md bg-slate-100 md:w-56">
-                        <img
-                          src={image.url}
-                          alt={image.caption || "Project image"}
-                          className="h-full w-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = "/placeholder.png";
-                          }}
-                        />
+                        {(image.media_type || "image") === "video" ? (
+                          <div className="relative h-full w-full">
+                            <video src={image.url} className="h-full w-full object-cover" muted playsInline />
+                            <span className="absolute inset-0 flex items-center justify-center text-white">
+                              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60">
+                                <SymbolIcon name="play_arrow" fill={1} className="text-[24px]" />
+                              </span>
+                            </span>
+                          </div>
+                        ) : (
+                          <img
+                            src={image.url}
+                            alt={image.caption || "Project image"}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = "/placeholder.png";
+                            }}
+                          />
+                        )}
                       </div>
 
                       <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center">
@@ -1045,13 +1060,13 @@ export default function CreateProjectCard({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">No images yet.</p>
+                <p className="text-sm text-slate-500">No media yet.</p>
               )}
             </div>
 
             {/* Add images */}
             <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700">Add Images</div>
+              <div className="text-sm font-medium text-slate-700">Add Media</div>
               <div className="text-xs text-slate-500">
                 Drag &amp; drop or click; add captions; upload.
               </div>
@@ -1066,7 +1081,7 @@ export default function CreateProjectCard({
               >
                 <input
                   type="file"
-                  accept="image/*"
+                  accept={PROJECT_MEDIA_ACCEPT}
                   multiple
                   className="hidden"
                   id="create-project-add-images-input"

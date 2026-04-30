@@ -369,7 +369,12 @@ export default function ProjectDetail() {
       const publicImages = raw
         .map((x) => ({
           url: toUrl(x.url || x.image || x.src || x.file),
+          thumbnail: toUrl(x.thumbnail || x.thumb || ""),
           caption: x.caption || "",
+          id: x.id ?? x.pk ?? x.image_id ?? null,
+          order: x.order ?? x.sort_order ?? null,
+          media_type: x.media_type || x.mediaType || "image",
+          processing_status: x.processing_status || x.processingStatus || "ready",
         }))
         .filter((x) => !!x.url);
 
@@ -379,7 +384,11 @@ export default function ProjectDetail() {
           return {
             id: imgId,
             url: toUrl(x.url || x.image || x.src || x.file),
+            thumbnail: toUrl(x.thumbnail || x.thumb || ""),
             caption: x.caption || "",
+            order: x.order ?? x.sort_order ?? null,
+            media_type: x.media_type || x.mediaType || "image",
+            processing_status: x.processing_status || x.processingStatus || "ready",
             _localCaption: x.caption || "",
             _saving: false,
           };
@@ -1172,9 +1181,9 @@ export default function ProjectDetail() {
 
     if (selectedId != null) {
       const match = editImages.find((im) => Number(im.id) === Number(selectedId));
-      if (match?.url) return match.url;
+      if ((match?.media_type || "image") === "image" && match?.url) return match.url;
     }
-    return images?.[0]?.url || null;
+    return images?.find((item) => (item.media_type || "image") === "image")?.url || null;
   }, [editCoverImageId, editForm.cover_image_id, editImages, images]);
 
   function getBidContractorMeta(bid) {
@@ -2114,7 +2123,7 @@ export default function ProjectDetail() {
               </div>
               {images.length > 0 && (
                 <div className="text-[11px] text-slate-500">
-                  {images.length} photo{images.length === 1 ? "" : "s"}
+                  {images.length} media item{images.length === 1 ? "" : "s"}
                 </div>
               )}
             </div>
@@ -2125,39 +2134,71 @@ export default function ProjectDetail() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                {images.map((img, i) => (
-                  <div
-                    key={img.url + i}
-                    className="group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveImageIdx(i);
-                        setImageLightboxOpen(true);
-                      }}
-                      className="block w-full text-left"
+                {images.map((img, i) => {
+                  const mediaType = img.media_type || "image";
+                  const thumbUrl = img.thumbnail || img.url;
+                  const isProcessing = img.processing_status && img.processing_status !== "ready";
+
+                  return (
+                    <div
+                      key={img.url + i}
+                      className="group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
                     >
-                      <img
-                        src={img.url}
-                        alt={img.caption || ""}
-                        className="block h-40 w-full object-cover transition-transform group-hover:scale-[1.02]"
-                      />
-                      {img.caption && <div className="px-3 py-2 text-xs text-slate-700">{img.caption}</div>}
-                    </button>
-                    {!isOwnerUser && img.id ? (
-                      <div className="absolute right-2 top-2">
-                        <ReportContentButton
-                          targetType="project_image"
-                          targetId={img.id}
-                          subject={img.caption || project?.title || "Project image"}
-                          label="Report image"
-                          className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700 shadow hover:bg-white"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveImageIdx(i);
+                          setImageLightboxOpen(true);
+                        }}
+                        className="block w-full text-left"
+                      >
+                        <div className="relative h-40 w-full overflow-hidden bg-slate-100">
+                          {mediaType === "video" ? (
+                            <>
+                              {thumbUrl ? (
+                                <img
+                                  src={thumbUrl}
+                                  alt={img.caption || ""}
+                                  className="block h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-xs text-slate-500">Video</div>
+                              )}
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white">
+                                  <SymbolIcon name="play_arrow" fill={1} className="text-[26px]" />
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <img
+                              src={img.url}
+                              alt={img.caption || ""}
+                              className="block h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                            />
+                          )}
+                          {isProcessing ? (
+                            <div className="absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-1 text-[11px] font-medium text-slate-700 shadow">
+                              Processing video...
+                            </div>
+                          ) : null}
+                        </div>
+                        {img.caption && <div className="px-3 py-2 text-xs text-slate-700">{img.caption}</div>}
+                      </button>
+                      {!isOwnerUser && img.id ? (
+                        <div className="absolute right-2 top-2">
+                          <ReportContentButton
+                            targetType="project_image"
+                            targetId={img.id}
+                            subject={img.caption || project?.title || "Project media"}
+                            label="Report media"
+                            className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700 shadow hover:bg-white"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -2307,11 +2348,21 @@ export default function ProjectDetail() {
                   <div className="flex min-h-0 flex-1 flex-col">
                     <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#f4f4f1] px-4 py-4 md:px-14 md:py-5">
                       <div className="flex h-full w-full items-center justify-center overflow-hidden">
-                        <img
-                          src={currentImage.url}
-                          alt={currentImage.caption || ""}
-                          className="block h-full w-full object-contain"
-                        />
+                        {(currentImage.media_type || "image") === "video" ? (
+                          <video
+                            src={currentImage.url}
+                            poster={currentImage.thumbnail || undefined}
+                            controls
+                            playsInline
+                            className="block h-full w-full object-contain"
+                          />
+                        ) : (
+                          <img
+                            src={currentImage.url}
+                            alt={currentImage.caption || ""}
+                            className="block h-full w-full object-contain"
+                          />
+                        )}
                       </div>
 
                       {images.length > 1 && (

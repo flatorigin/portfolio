@@ -18,10 +18,15 @@ function toUrl(raw) {
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
-function extractImageUrl(it) {
+function extractMediaUrl(it) {
   if (!it) return "";
   if (typeof it === "string") return toUrl(it);
   return toUrl(it.url || it.src || it.image || it.file || "");
+}
+
+function extractThumbUrl(it) {
+  if (!it || typeof it === "string") return extractMediaUrl(it);
+  return toUrl(it.thumbnail || it.thumb || "") || extractMediaUrl(it);
 }
 
 function extractOrder(it) {
@@ -34,20 +39,23 @@ function buildThumbPack(project) {
   const images = Array.isArray(project?.images) ? project.images : [];
   const mapped = images
     .map((it) => ({
-      url: extractImageUrl(it),
+      url: extractMediaUrl(it),
+      thumb: extractThumbUrl(it),
+      mediaType: it?.media_type || it?.mediaType || "image",
       order: extractOrder(it),
     }))
     .filter((x) => !!x.url);
+  const imageMapped = mapped.filter((x) => x.mediaType === "image");
 
   const cover =
     toUrl(project?.cover_image_url || "") ||
-    mapped.find((x) => Number(x.order) === 0)?.url ||
-    mapped[0]?.url ||
+    imageMapped.find((x) => Number(x.order) === 0)?.url ||
+    imageMapped[0]?.url ||
     null;
 
   return {
     cover,
-    thumbs: mapped.slice(0, 3).map((x) => x.url),
+    thumbs: mapped.slice(0, 3),
   };
 }
 
@@ -549,13 +557,21 @@ export default function Explore() {
                       )}, 1fr)`,
                     }}
                   >
-                    {pack.thumbs.map((src, i) => (
-                      <img
-                        key={src + i}
-                        src={src}
-                        alt=""
-                        className="h-24 w-full rounded-md object-cover"
-                      />
+                    {pack.thumbs.map((item, i) => (
+                      <div key={(item.thumb || item.url) + i} className="relative h-24 overflow-hidden rounded-md bg-slate-100">
+                        <img
+                          src={item.thumb || item.url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                        {item.mediaType === "video" ? (
+                          <span className="absolute inset-0 flex items-center justify-center text-white">
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60">
+                              <SymbolIcon name="play_arrow" fill={1} className="text-[22px]" />
+                            </span>
+                          </span>
+                        ) : null}
+                      </div>
                     ))}
                   </div>
                 </div>

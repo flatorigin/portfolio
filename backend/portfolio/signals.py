@@ -13,3 +13,8 @@ def delete_project_image_file(sender, instance, **kwargs):
         except Exception:
             # don't crash deletes if storage is temporarily unavailable
             pass
+    if instance.thumbnail:
+        try:
+            instance.thumbnail.delete(save=False)
+        except Exception:
+            pass

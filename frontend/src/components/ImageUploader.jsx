@@ -11,9 +11,13 @@ const SUPPORTED_IMAGE_TYPES = new Set([
   "image/heif",
   "image/heic-sequence",
   "image/heif-sequence",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
 ]);
-const SUPPORTED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|heic|heif)$/i;
+const SUPPORTED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|heic|heif|mp4|mov|webm)$/i;
 const BROWSER_PREVIEW_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const BROWSER_VIDEO_PREVIEW_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -75,7 +79,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
 
     if (rejected.length) {
       setErr(
-        `Unsupported image format: ${rejected.join(", ")}. Please use JPG, PNG, WebP, HEIC, or HEIF.`
+        `Unsupported media format: ${rejected.join(", ")}. Please use JPG, PNG, WebP, MP4, MOV, or WebM.`
       );
     } else {
       setErr("");
@@ -86,6 +90,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
       file: f,
       url: URL.createObjectURL(f),
       caption: "",
+      mediaType: f.type?.startsWith("video/") ? "video" : "image",
       previewError: false,
       objectUrl: true,
       uploaded: false,
@@ -124,11 +129,15 @@ export default function ImageUploader({ projectId, onUploaded }) {
 
           const saved = savedImages[savedIndex++] || {};
           const savedUrl = toUrl(saved.url || saved.image || saved.src || saved.file);
+          const savedThumbnail = toUrl(saved.thumbnail);
           return {
             ...it,
             id: saved.id || it.id,
             file: null,
             url: savedUrl || it.url,
+            thumbnail: savedThumbnail || savedUrl || it.thumbnail,
+            mediaType: saved.media_type || it.mediaType,
+            processingStatus: saved.processing_status || "ready",
             caption: saved.caption ?? it.caption,
             previewError: false,
             objectUrl: false,
@@ -175,9 +184,9 @@ export default function ImageUploader({ projectId, onUploaded }) {
             className="mb-4 text-[42px] text-slate-400"
             weight={300}
           />
-          <div className="text-base font-semibold text-slate-900">Add sample images</div>
+          <div className="text-base font-semibold text-slate-900">Add sample media</div>
           <div className="mt-2 max-w-lg text-sm text-slate-600">
-            Upload project images, add captions, and organize the work you want shown on your project card.
+            Upload project images or videos, add captions, and organize the work you want shown on your project card.
           </div>
           <div className="mt-5">
             <Button
@@ -187,14 +196,14 @@ export default function ImageUploader({ projectId, onUploaded }) {
                 inputRef.current?.click();
               }}
             >
-              Browse images
+              Browse media
             </Button>
           </div>
         </div>
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm"
             multiple
             onChange={(e) => onPick(e.target.files)}
             className="hidden"
@@ -207,18 +216,37 @@ export default function ImageUploader({ projectId, onUploaded }) {
             {files.filter(Boolean).map((it, i) => {
               const fileName = it.file?.name || it.name || "Uploaded image";
               const imageUrl = it.url || it.image || it.image_url || it.src || "/placeholder.png";
+              const mediaType = it.mediaType || it.media_type || (it.file?.type?.startsWith("video/") ? "video" : "image");
+              const canPreviewVideo = it.objectUrl && BROWSER_VIDEO_PREVIEW_TYPES.has(it.file?.type);
 
               return (
                 <div key={it.id ?? imageUrl ?? i} className="rounded-xl border border-slate-200 bg-white p-3">
                   <div className="mb-2 flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-slate-100">
                     {it.previewError ? (
                       <div className="px-3 text-center">
-                        <SymbolIcon name="image_not_supported" className="text-[32px] text-slate-400" />
+                        <SymbolIcon name={mediaType === "video" ? "movie" : "image_not_supported"} className="text-[32px] text-slate-400" />
                         <div className="mt-1 truncate text-xs font-medium text-slate-600">
                           {fileName}
                         </div>
                         <div className="mt-1 text-[11px] text-slate-500">
                           {it.uploaded ? "Preview unavailable" : "Will convert after upload"}
+                        </div>
+                      </div>
+                    ) : mediaType === "video" ? (
+                      <div className="relative h-full w-full">
+                        {canPreviewVideo ? (
+                          <video src={imageUrl} className="h-full w-full object-cover" muted playsInline />
+                        ) : it.thumbnail ? (
+                          <img src={it.thumbnail} alt={fileName} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <SymbolIcon name="movie" className="text-[34px] text-slate-400" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white">
+                            <SymbolIcon name="play_arrow" fill={1} className="text-[24px]" />
+                          </span>
                         </div>
                       </div>
                     ) : (
@@ -285,7 +313,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
               disabled={busy || files.every((it) => it.uploaded)}
               className="rounded-xl bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
             >
-              Upload {files.filter((it) => !it.uploaded).length} image{files.filter((it) => !it.uploaded).length === 1 ? "" : "s"}
+              Upload {files.filter((it) => !it.uploaded).length} item{files.filter((it) => !it.uploaded).length === 1 ? "" : "s"}
             </button>
             {busy ? (
               <div className="text-xs font-medium text-slate-500">

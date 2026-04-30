@@ -483,13 +483,15 @@ export default function Dashboard() {
           const mapped = imgs
             .map((it) => ({
               url: toUrl(it.url || it.image || it.src || it.file || ""),
+              mediaType: it.media_type || it.mediaType || "image",
               order: it.order ?? it.sort_order ?? null,
             }))
             .filter((x) => !!x.url);
+          const imageMapped = mapped.filter((x) => x.mediaType === "image");
 
           const cover =
-            mapped.find((x) => Number(x.order) === 0)?.url ||
-            mapped[0]?.url ||
+            imageMapped.find((x) => Number(x.order) === 0)?.url ||
+            imageMapped[0]?.url ||
             null;
 
           return [p.id, { cover }];
@@ -663,6 +665,9 @@ export default function Dashboard() {
       .map((x) => ({
         id: x.id,
         url: x.url || x.image || x.src || x.file,
+        thumbnail: x.thumbnail || x.thumb || "",
+        media_type: x.media_type || x.mediaType || "image",
+        processing_status: x.processing_status || x.processingStatus || "ready",
         caption: x.caption || "",
         order: x.order ?? x.sort_order ?? null,
         _localCaption: x.caption || "",

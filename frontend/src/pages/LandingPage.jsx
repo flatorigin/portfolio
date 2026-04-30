@@ -15,7 +15,7 @@ function extractCover(project) {
   if (!project) return "";
   if (project.cover_image_url) return toUrl(project.cover_image_url);
   const images = Array.isArray(project.images) ? project.images : [];
-  const first = images[0];
+  const first = images.find((item) => (item?.media_type || item?.mediaType || "image") === "image");
   if (!first) return "";
   return toUrl(first.url || first.image || first.file || "");
 }

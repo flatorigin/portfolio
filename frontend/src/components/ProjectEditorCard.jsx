@@ -101,7 +101,8 @@ export default function ProjectEditorCard({
     []
   );
 
-  const currentCoverId = images.find((img) => Number(img.order) === 0)?.id ?? null;
+  const currentCoverId =
+    images.find((img) => (img.media_type || img.mediaType || "image") === "image" && Number(img.order) === 0)?.id ?? null;
 
   const ensureJobDefaults = () => {
     setForm((prev) => ({
@@ -563,86 +564,123 @@ export default function ProjectEditorCard({
         </div>
       )}
 
-      {/* Images + uploader */}
+      {/* Media + uploader */}
       {mode === "edit" && projectId && (
         <>
           <div className="mt-6">
             <div className="mb-2 flex items-center justify-between">
-              <div className="text-sm text-slate-600">Images</div>
+              <div className="text-sm text-slate-600">Media</div>
               <Badge>{images.length} total</Badge>
             </div>
 
             {images.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                No images yet.
+                No media yet.
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-                {images.filter(Boolean).map((it) => (
-                  <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="rounded-xl border border-slate-200 bg-white p-3">
-                    <img
-                      src={it.url || it.image || it.image_url || it.file || "/placeholder.png"}
-                      alt=""
-                      className="mb-2 h-36 w-full rounded-md object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.png";
-                      }}
-                    />
+                {images.filter(Boolean).map((it) => {
+                  const mediaType = it.media_type || it.mediaType || "image";
+                  const mediaUrl = it.url || it.image || it.image_url || it.file || "/placeholder.png";
+                  const thumbnailUrl = it.thumbnail || mediaUrl;
+                  const isProcessing = it.processing_status && it.processing_status !== "ready";
 
-                    <input
-                      className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                      placeholder="Caption…"
-                      value={it._localCaption ?? it.caption ?? ""}
-                      onChange={(e) =>
-                        setImages((prev) =>
-                          prev
-                            .filter(Boolean)
-                            .map((x) =>
-                              x.id === it.id ? { ...x, _localCaption: e.target.value } : x
-                            )
-                        )
-                      }
-                    />
-
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <label className="flex items-center gap-1 text-[11px] text-slate-600">
-                        <input
-                          type="radio"
-                          name="cover-image"
-                          className="h-3 w-3"
-                          checked={String(currentCoverId ?? "") === String(it.id ?? "")}
-                          onChange={() => onMakeCover?.(it.id)}
-                        />
-                        <span>
-                          {String(currentCoverId ?? "") === String(it.id ?? "")
-                            ? "Cover image"
-                            : "Make cover"}
-                        </span>
-                      </label>
-
-                      <div className="flex items-center gap-2">
-                        <GhostButton
-                          onClick={() => it.id && onDeleteImage?.(it)}
-                          disabled={!it.id || busy}
-                        >
-                          Delete
-                        </GhostButton>
-                        <Button
-                          onClick={() => onSaveImageCaption?.(it)}
-                          disabled={it._saving || it._localCaption === it.caption}
-                        >
-                          {it._saving ? "Saving…" : "Save caption"}
-                        </Button>
+                  return (
+                    <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="relative mb-2 h-36 w-full overflow-hidden rounded-md bg-slate-100">
+                        {mediaType === "video" ? (
+                          <>
+                            {thumbnailUrl ? (
+                              <img
+                                src={thumbnailUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.src = "/placeholder.png";
+                                }}
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-xs text-slate-500">Video</div>
+                            )}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white">
+                                <SymbolIcon name="play_arrow" fill={1} className="text-[24px]" />
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <img
+                            src={mediaUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = "/placeholder.png";
+                            }}
+                          />
+                        )}
                       </div>
-                    </div>
-                  </figure>
-                ))}
+                      {isProcessing ? (
+                        <div className="mb-2 text-xs font-medium text-slate-500">Processing video…</div>
+                      ) : null}
+
+                      <input
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                        placeholder="Caption…"
+                        value={it._localCaption ?? it.caption ?? ""}
+                        onChange={(e) =>
+                          setImages((prev) =>
+                            prev
+                              .filter(Boolean)
+                              .map((x) =>
+                                x.id === it.id ? { ...x, _localCaption: e.target.value } : x
+                              )
+                          )
+                        }
+                      />
+
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <label className="flex items-center gap-1 text-[11px] text-slate-600">
+                          <input
+                            type="radio"
+                            name="cover-image"
+                            className="h-3 w-3"
+                            checked={String(currentCoverId ?? "") === String(it.id ?? "")}
+                            onChange={() => mediaType === "image" && onMakeCover?.(it.id)}
+                            disabled={mediaType !== "image"}
+                          />
+                          <span>
+                            {mediaType !== "image"
+                              ? "Video"
+                              : String(currentCoverId ?? "") === String(it.id ?? "")
+                                ? "Cover image"
+                                : "Make cover"}
+                          </span>
+                        </label>
+
+                        <div className="flex items-center gap-2">
+                          <GhostButton
+                            onClick={() => it.id && onDeleteImage?.(it)}
+                            disabled={!it.id || busy}
+                          >
+                            Delete
+                          </GhostButton>
+                          <Button
+                            onClick={() => onSaveImageCaption?.(it)}
+                            disabled={it._saving || it._localCaption === it.caption}
+                          >
+                            {it._saving ? "Saving…" : "Save caption"}
+                          </Button>
+                        </div>
+                      </div>
+                    </figure>
+                  );
+                })}
               </div>
             )}
           </div>
 
           <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-slate-800">Add Images</div>
+            <div className="mb-2 text-sm font-semibold text-slate-800">Add Media</div>
             <div className="mb-2 text-xs text-slate-600">Drag & drop or click; add captions; upload.</div>
             <ImageUploader
               projectId={projectId}

@@ -53,7 +53,9 @@ export default function ProjectPrintView() {
           (Array.isArray(rawImages) ? rawImages : [])
             .map((img) => ({
               url: toUrl(img.url || img.image || img.src || img.file),
+              thumbnail: toUrl(img.thumbnail || img.thumb || ""),
               caption: img.caption || "",
+              media_type: img.media_type || img.mediaType || "image",
             }))
             .filter((img) => !!img.url)
         );
@@ -75,7 +77,7 @@ export default function ProjectPrintView() {
   const coverImage = useMemo(() => {
     const directCover = toUrl(project?.cover_image_url);
     if (directCover) return directCover;
-    return images[0]?.url || "";
+    return images.find((img) => (img.media_type || "image") === "image")?.url || "";
   }, [project?.cover_image_url, images]);
 
   const serviceCategoryList = Array.isArray(project?.service_categories)
@@ -201,7 +203,7 @@ export default function ProjectPrintView() {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                   {images.slice(0, 6).map((img, index) => (
                     <div key={`${img.url}-${index}`} className="overflow-hidden rounded-2xl bg-slate-100">
-                      <img src={img.url} alt={img.caption || ""} className="h-40 w-full object-cover" />
+                      <img src={img.thumbnail || img.url} alt={img.caption || ""} className="h-40 w-full object-cover" />
                     </div>
                   ))}
                 </div>
