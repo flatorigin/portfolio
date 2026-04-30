@@ -16,6 +16,7 @@ from .views import (
     ContractorSearchView,
     HomeownerReferenceGalleryView,
     HomeownerReferenceGalleryItemView,
+    PublicHomeownerReferenceGalleryListView,
     ReportCreateView,
 )
 from .password_views import PasswordResetRequestView, PasswordResetConfirmView
@@ -38,6 +39,7 @@ urlpatterns = [
     path("profiles/liked/", LikedProfilesView.as_view(), name="liked-profiles"),
     path("profiles/saved/", SavedProfilesView.as_view(), name="saved-profiles"),
     path("profiles/contractors/search/", ContractorSearchView.as_view(), name="contractor-search"),
+    path("profiles/homeowner-references/", PublicHomeownerReferenceGalleryListView.as_view(), name="homeowner-reference-gallery-list"),
 
     # ✅ keep like route before/after public profile (either is fine)
     path("profiles/<str:username>/like/", ProfileLikeView.as_view(), name="profile-like"),

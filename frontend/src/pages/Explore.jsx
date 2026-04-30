@@ -50,7 +50,11 @@ function mediaTypeFor(it) {
 }
 
 function buildThumbPack(project) {
-  const images = Array.isArray(project?.images) ? project.images : [];
+  const images = Array.isArray(project?.images)
+    ? project.images
+    : Array.isArray(project?.reference_gallery)
+    ? project.reference_gallery
+    : [];
   const mapped = images
     .map((it) => ({
       url: extractMediaUrl(it),
@@ -239,10 +243,13 @@ export default function Explore() {
    let alive = true;
    setLoading(true);
 
-   (async () => {
-     try {
-       const { data } = await api.get("/projects/");
-       if (!alive) return;
+	  (async () => {
+	    try {
+	      const [{ data }, { data: homeownerRefs }] = await Promise.all([
+	        api.get("/projects/"),
+	        api.get("/profiles/homeowner-references/").catch(() => ({ data: [] })),
+	      ]);
+	      if (!alive) return;
 
        const arr = Array.isArray(data) ? data : [];
 
@@ -253,17 +260,34 @@ export default function Explore() {
            !p?.is_job_posting
        );
 
-       setProjects(exploreProjects);
-       setLikeCounts(
-         Object.fromEntries(
-           exploreProjects.map((p) => [p.id, Number(p?.like_count || 0)])
-         )
-       );
-       setLikeMap(
-         Object.fromEntries(
-           exploreProjects.map((p) => [p.id, !!p?.liked_by_me])
-         )
-       );
+	      const referenceCards = (Array.isArray(homeownerRefs) ? homeownerRefs : []).map((profile) => ({
+	        id: `homeowner-reference-${profile.username || profile.id}`,
+	        _kind: "homeowner_reference_gallery",
+	        title: `${profile.display_name || profile.username || "Homeowner"} reference gallery`,
+	        summary: profile.bio || "Style and quality references shared by the homeowner.",
+	        category: "Reference gallery",
+	        location: profile.service_location || "",
+	        owner_username: profile.username || "",
+	        is_public: true,
+	        is_job_posting: false,
+	        cover_image_url: profile.cover_image_url || "",
+	        images: Array.isArray(profile.reference_gallery) ? profile.reference_gallery : [],
+	        reference_count: profile.reference_count || 0,
+	        profile_url: `/profiles/${profile.username}`,
+	      }));
+	      const exploreItems = [...referenceCards, ...exploreProjects];
+
+	      setProjects(exploreItems);
+	      setLikeCounts(
+	        Object.fromEntries(
+	          exploreItems.map((p) => [p.id, Number(p?.like_count || 0)])
+	        )
+	      );
+	      setLikeMap(
+	        Object.fromEntries(
+	          exploreItems.map((p) => [p.id, !!p?.liked_by_me])
+	        )
+	      );
      } catch (e) {
        console.error("[Explore] projects fetch failed", e?.response || e);
        if (alive) setProjects([]);
@@ -533,7 +557,7 @@ export default function Explore() {
           </div>
 
           <div className="mt-2 text-xs text-slate-500">
-            Showing {filteredProjects.length} of {projects.length} projects
+	            Showing {filteredProjects.length} of {projects.length} items
           </div>
         </div>
       </Card>
@@ -543,8 +567,9 @@ export default function Explore() {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
 
-          const saved = !!favMap[p.id];
-          const canSave = authed && !isOwner(p);
+	          const isReferenceGallery = p._kind === "homeowner_reference_gallery";
+	          const saved = !!favMap[p.id];
+	          const canSave = authed && !isOwner(p) && !isReferenceGallery;
           const liked = !!likeMap[p.id];
           const likeCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
 
@@ -605,10 +630,18 @@ export default function Explore() {
                   {p.summary || <span className="opacity-60">No summary</span>}
                 </div>
 
-                <div className="mt-2 text-xs text-slate-500">by {p.owner_username}</div>
+	                <div className="mt-2 text-xs text-slate-500">
+	                  {isReferenceGallery
+	                    ? `${p.reference_count || pack.thumbs.length} reference image${Number(p.reference_count || pack.thumbs.length) === 1 ? "" : "s"}`
+	                    : `by ${p.owner_username}`}
+	                </div>
 
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  {canSave ? (
+	                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+	                  {isReferenceGallery ? (
+	                    <span className="inline-flex rounded-full px-2 py-1 font-medium text-slate-700">
+	                      View profile
+	                    </span>
+	                  ) : canSave ? (
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
@@ -628,7 +661,7 @@ export default function Explore() {
                   )}
 
                   <div className="inline-flex items-center gap-1.5">
-                    {authed && isOwner(p) ? (
+	                    {authed && isOwner(p) && !isReferenceGallery ? (
                       <button
                         type="button"
                         className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
@@ -660,10 +693,14 @@ export default function Explore() {
             </Card>
           );
 
-          return (
-            <Link key={p.id} to={`/projects/${p.id}`} className="block text-inherit no-underline">
-              {card}
-            </Link>
+	          return (
+	            <Link
+	              key={p.id}
+	              to={isReferenceGallery ? p.profile_url : `/projects/${p.id}`}
+	              className="block text-inherit no-underline"
+	            >
+	              {card}
+	            </Link>
           );
         })}
       </div>

@@ -721,6 +721,54 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             context=self.context,
         ).data
 
+
+class PublicHomeownerReferenceGallerySerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    cover_image_url = serializers.SerializerMethodField()
+    reference_gallery = serializers.SerializerMethodField()
+    reference_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "username",
+            "profile_type",
+            "display_name",
+            "service_location",
+            "bio",
+            "cover_image_url",
+            "reference_gallery",
+            "reference_count",
+        ]
+
+    def _build_abs_url(self, url: str):
+        if not url:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+    def _public_reference_items(self, obj):
+        return obj.user.homeowner_reference_images.filter(is_public=True).order_by("order", "-created_at", "-id")
+
+    def get_cover_image_url(self, obj):
+        item = self._public_reference_items(obj).first()
+        if item and item.image and hasattr(item.image, "url"):
+            return self._build_abs_url(item.image.url)
+        return None
+
+    def get_reference_gallery(self, obj):
+        items = self._public_reference_items(obj)[:3]
+        return HomeownerReferenceImageSerializer(
+            items,
+            many=True,
+            context=self.context,
+        ).data
+
+    def get_reference_count(self, obj):
+        return self._public_reference_items(obj).count()
+
+
 class LikedProfileCardSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     avatar_url = serializers.SerializerMethodField()
