@@ -69,8 +69,24 @@ SUPPORTED_PROJECT_IMAGE_CONTENT_TYPES = {
     "image/heif",
     "image/heic-sequence",
     "image/heif-sequence",
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
 }
-SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
+SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".heic",
+    ".heif",
+    ".mp4",
+    ".mov",
+    ".webm",
+)
+
+VIDEO_UPLOAD_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
+VIDEO_UPLOAD_EXTENSIONS = (".mp4", ".mov", ".webm")
 
 User = get_user_model()
 
@@ -378,7 +394,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     "detail": (
                         "Unsupported image format: "
                         + ", ".join(unsupported)
-                        + ". Please use JPG, PNG, WebP, HEIC, or HEIF."
+                        + ". Please use JPG, PNG, WebP, MP4, MOV, or WebM."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -389,9 +405,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
         try:
             for idx, f in enumerate(files):
                 caption = captions[idx] if idx < len(captions) else ""
+                content_type = str(getattr(f, "content_type", "") or "").lower()
+                file_name = str(getattr(f, "name", "") or "").lower()
+                media_type = (
+                    ProjectImage.MEDIA_TYPE_VIDEO
+                    if content_type in VIDEO_UPLOAD_CONTENT_TYPES
+                    or file_name.endswith(VIDEO_UPLOAD_EXTENSIONS)
+                    else ProjectImage.MEDIA_TYPE_IMAGE
+                )
                 img = ProjectImage.objects.create(
                     project=project,
                     image=f,
+                    media_type=media_type,
                     caption=caption,
                     order=base_order + idx,
                 )
@@ -403,7 +428,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 request.user.id,
                 len(files),
             )
-            detail = "Could not upload images. Try a JPG, PNG, or WebP file."
+            detail = "Could not upload media. Try a JPG, PNG, WebP, MP4, MOV, or WebM file."
             if settings.DEBUG:
                 detail = f"{detail} ({exc})"
             return Response({"detail": detail}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -448,6 +473,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         new_order = ser.validated_data.get("order", None)
 
         if wants_cover_flag or new_order == 0:
+            if img.media_type != ProjectImage.MEDIA_TYPE_IMAGE:
+                return Response(
+                    {"detail": "Only image media can be used as the project cover."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             with transaction.atomic():
                 ProjectImage.objects.filter(project=project).exclude(id=img.id).update(
                     order=models.F("order") + 1

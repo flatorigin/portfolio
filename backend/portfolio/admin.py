@@ -12,4 +12,4 @@ class ProjectAdmin(admin.ModelAdmin):
 
 @admin.register(ProjectImage)
 class ProjectImageAdmin(admin.ModelAdmin):
-    list_display = ("project","order","created_at")
+    list_display = ("project", "media_type", "processing_status", "order", "created_at")

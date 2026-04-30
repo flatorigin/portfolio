@@ -32,7 +32,8 @@ URL_PATTERN = re.compile(r"(https?://|www\.)", re.IGNORECASE)
 
 
 class ProjectImageSerializer(serializers.ModelSerializer):
-    url = serializers.ImageField(source="image", read_only=True)
+    url = serializers.SerializerMethodField()
+    thumbnail = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectImage
@@ -41,6 +42,9 @@ class ProjectImageSerializer(serializers.ModelSerializer):
             "project",
             "image",
             "url",
+            "media_type",
+            "thumbnail",
+            "processing_status",
             "caption",
             "alt_text",
             "extra_data",
@@ -48,6 +52,22 @@ class ProjectImageSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("project", "created_at")
+
+    def _absolute_url(self, file_field):
+        if not file_field:
+            return None
+        try:
+            url = file_field.url
+        except ValueError:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+    def get_url(self, obj):
+        return self._absolute_url(obj.image)
+
+    def get_thumbnail(self, obj):
+        return self._absolute_url(obj.thumbnail) or self.get_url(obj)
 
 
 class ProjectPlanImageSerializer(serializers.ModelSerializer):
@@ -537,7 +557,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_cover_image_url(self, obj):
         request = self.context.get("request")
 
-        cover = obj.images.order_by("order", "id").first()
+        cover = obj.images.filter(media_type=ProjectImage.MEDIA_TYPE_IMAGE).order_by("order", "id").first()
         if cover and cover.image and hasattr(cover.image, "url"):
             url = cover.image.url
             return request.build_absolute_uri(url) if request else url
@@ -671,7 +691,7 @@ class ProjectFavoriteSerializer(serializers.ModelSerializer):
     def get_project_cover_image(self, obj):
         request = self.context.get("request")
 
-        cover = obj.project.images.order_by("order", "id").first()
+        cover = obj.project.images.filter(media_type=ProjectImage.MEDIA_TYPE_IMAGE).order_by("order", "id").first()
         if cover and cover.image and hasattr(cover.image, "url"):
             url = cover.image.url
             return request.build_absolute_uri(url) if request else url

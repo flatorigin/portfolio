@@ -1,7 +1,10 @@
 # backend/portfolio/models.py
 from io import BytesIO
 import os
+import subprocess
+import tempfile
 from datetime import timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -23,6 +26,9 @@ if register_heif_opener:
     register_heif_opener()
 
 User = get_user_model()
+
+IMAGE_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+VIDEO_UPLOAD_EXTENSIONS = {".mp4", ".mov", ".webm"}
 
 
 # -------------------------------------------------------------------
@@ -403,12 +409,37 @@ class ProjectComment(models.Model):
 
 
 class ProjectImage(models.Model):
+    MEDIA_TYPE_IMAGE = "image"
+    MEDIA_TYPE_VIDEO = "video"
+    MEDIA_TYPE_CHOICES = (
+        (MEDIA_TYPE_IMAGE, "Image"),
+        (MEDIA_TYPE_VIDEO, "Video"),
+    )
+
+    STATUS_PENDING = "pending"
+    STATUS_PROCESSING = "processing"
+    STATUS_READY = "ready"
+    STATUS_FAILED = "failed"
+    PROCESSING_STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PROCESSING, "Processing"),
+        (STATUS_READY, "Ready"),
+        (STATUS_FAILED, "Failed"),
+    )
+
     project = models.ForeignKey(
         Project,
         related_name="images",
         on_delete=models.CASCADE,
     )
     image = models.ImageField(upload_to="project_images/")
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default=MEDIA_TYPE_IMAGE)
+    thumbnail = models.ImageField(upload_to="project_images/thumbnails/", blank=True, null=True)
+    processing_status = models.CharField(
+        max_length=20,
+        choices=PROCESSING_STATUS_CHOICES,
+        default=STATUS_READY,
+    )
     caption = models.CharField(max_length=255, blank=True)
     alt_text = models.CharField(max_length=255, blank=True)
     extra_data = models.JSONField(blank=True, null=True)
@@ -423,6 +454,8 @@ class ProjectImage(models.Model):
         root, ext = os.path.splitext((current_name or "").lower())
 
         if ext == ".webp":
+            self.media_type = self.MEDIA_TYPE_IMAGE
+            self.processing_status = self.STATUS_READY
             return
 
         try:
@@ -439,12 +472,15 @@ class ProjectImage(models.Model):
                 self.image.seek(0)
             except Exception:
                 pass
+            self.processing_status = self.STATUS_FAILED
             return
 
         new_name = f"{root}.webp"
         old_name = current_name
 
         self.image.save(new_name, ContentFile(buffer.read()), save=False)
+        self.media_type = self.MEDIA_TYPE_IMAGE
+        self.processing_status = self.STATUS_READY
 
         if old_name and old_name != self.image.name and default_storage.exists(old_name):
             try:
@@ -452,9 +488,99 @@ class ProjectImage(models.Model):
             except Exception:
                 pass
 
+    def _convert_video_to_webm(self):
+        if not self.image:
+            return
+
+        current_name = self.image.name
+        root, ext = os.path.splitext((current_name or "").lower())
+
+        self.media_type = self.MEDIA_TYPE_VIDEO
+        self.processing_status = self.STATUS_PROCESSING
+
+        suffix = ext if ext in VIDEO_UPLOAD_EXTENSIONS else ".video"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / f"input{suffix}"
+            output_path = Path(tmpdir) / "output.webm"
+            thumb_path = Path(tmpdir) / "thumbnail.png"
+
+            try:
+                with open(input_path, "wb") as handle:
+                    for chunk in self.image.chunks():
+                        handle.write(chunk)
+
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-i",
+                        str(input_path),
+                        "-vf",
+                        "scale=min(1280\\,iw):-2",
+                        "-c:v",
+                        "libvpx-vp9",
+                        "-b:v",
+                        "0",
+                        "-crf",
+                        "34",
+                        "-c:a",
+                        "libopus",
+                        "-b:a",
+                        "96k",
+                        str(output_path),
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
+
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-i",
+                        str(output_path),
+                        "-frames:v",
+                        "1",
+                        "-update",
+                        "1",
+                        str(thumb_path),
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
+
+                old_name = current_name
+                new_name = f"{root}.webm"
+                self.image.save(new_name, ContentFile(output_path.read_bytes()), save=False)
+                self.thumbnail.save(f"{root}_thumb.png", ContentFile(thumb_path.read_bytes()), save=False)
+                self.processing_status = self.STATUS_READY
+
+                if old_name and old_name != self.image.name and default_storage.exists(old_name):
+                    try:
+                        default_storage.delete(old_name)
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    self.image.seek(0)
+                except Exception:
+                    pass
+                self.processing_status = self.STATUS_FAILED
+
     def save(self, *args, **kwargs):
         if self.image and not getattr(self.image, "_committed", True):
-            self._convert_image_to_webp()
+            ext = os.path.splitext((self.image.name or "").lower())[1]
+            content_type = str(getattr(self.image, "content_type", "") or "").lower()
+            if (
+                self.media_type == self.MEDIA_TYPE_VIDEO
+                or ext in VIDEO_UPLOAD_EXTENSIONS
+                or content_type.startswith("video/")
+            ):
+                self._convert_video_to_webm()
+            else:
+                self._convert_image_to_webp()
         super().save(*args, **kwargs)
 
 class ProjectBid(models.Model):

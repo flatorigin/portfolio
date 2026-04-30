@@ -11,6 +11,8 @@ import SavedLikesCard from "../components/SavedLikesCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
 import { SectionTitle, Card, Button, GhostButton, Badge, SymbolIcon } from "../ui";
 
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+
 // normalize media + safer protocol handling
 function toUrl(raw) {
   if (!raw) return "";
@@ -26,6 +28,18 @@ function toUrl(raw) {
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
   return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
+}
+
+function mediaTypeFor(item) {
+  const url = item?.url || item?.image || item?.image_url || item?.file || item?.src || "";
+  if (
+    item?.media_type === "video" ||
+    item?.mediaType === "video" ||
+    VIDEO_EXTENSIONS.test(String(url))
+  ) {
+    return "video";
+  }
+  return "image";
 }
 
 // robust extraction of project id from favorite payload
@@ -483,13 +497,15 @@ export default function Dashboard() {
           const mapped = imgs
             .map((it) => ({
               url: toUrl(it.url || it.image || it.src || it.file || ""),
+              mediaType: mediaTypeFor(it),
               order: it.order ?? it.sort_order ?? null,
             }))
             .filter((x) => !!x.url);
+          const imageMapped = mapped.filter((x) => x.mediaType === "image");
 
           const cover =
-            mapped.find((x) => Number(x.order) === 0)?.url ||
-            mapped[0]?.url ||
+            imageMapped.find((x) => Number(x.order) === 0)?.url ||
+            imageMapped[0]?.url ||
             null;
 
           return [p.id, { cover }];
@@ -663,6 +679,9 @@ export default function Dashboard() {
       .map((x) => ({
         id: x.id,
         url: x.url || x.image || x.src || x.file,
+        thumbnail: x.thumbnail || x.thumb || "",
+        media_type: mediaTypeFor(x),
+        processing_status: x.processing_status || x.processingStatus || "ready",
         caption: x.caption || "",
         order: x.order ?? x.sort_order ?? null,
         _localCaption: x.caption || "",
