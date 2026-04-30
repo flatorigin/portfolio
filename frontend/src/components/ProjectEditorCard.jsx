@@ -5,7 +5,7 @@
 // ============================================================================
 import { useMemo, useState } from "react";
 import ImageUploader from "./ImageUploader";
-import { Card, Input, Textarea, Button, GhostButton, Badge } from "../ui";
+import { Card, Input, Textarea, Button, GhostButton, Badge, SymbolIcon } from "../ui";
 
 function toggleInArray(arr, value) {
   const list = Array.isArray(arr) ? arr : [];
