@@ -12,6 +12,23 @@ import { Card, Input, Textarea, Button, Badge, SymbolIcon } from "../ui";
 
 const PROJECT_MEDIA_ACCEPT =
   "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm";
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+
+function mediaTypeFor(item) {
+  const fileType = item?.file?.type || item?._file?.type || "";
+  const fileName = item?.file?.name || item?._file?.name || item?.name || "";
+  const url = item?.url || "";
+  if (
+    item?.media_type === "video" ||
+    item?.mediaType === "video" ||
+    fileType.startsWith("video/") ||
+    VIDEO_EXTENSIONS.test(String(fileName)) ||
+    VIDEO_EXTENSIONS.test(String(url))
+  ) {
+    return "video";
+  }
+  return "image";
+}
 
 function toggleInArray(arr, value) {
   const list = Array.isArray(arr) ? arr : [];
@@ -519,7 +536,7 @@ export default function CreateProjectCard({
     const newImages = arr.map((file) => ({
       id: Math.random().toString(36).slice(2),
       url: URL.createObjectURL(file),
-      media_type: file.type?.startsWith("video/") ? "video" : "image",
+      media_type: mediaTypeFor({ _file: file }),
       caption: "",
       _file: file,
     }));
@@ -1017,7 +1034,7 @@ export default function CreateProjectCard({
                       className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 md:flex-row md:items-center"
                     >
                       <div className="h-32 w-full overflow-hidden rounded-md bg-slate-100 md:w-56">
-                        {(image.media_type || "image") === "video" ? (
+                        {mediaTypeFor(image) === "video" ? (
                           <div className="relative h-full w-full">
                             <video src={image.url} className="h-full w-full object-cover" muted playsInline />
                             <span className="absolute inset-0 flex items-center justify-center text-white">

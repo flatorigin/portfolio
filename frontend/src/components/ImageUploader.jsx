@@ -16,6 +16,7 @@ const SUPPORTED_IMAGE_TYPES = new Set([
   "video/webm",
 ]);
 const SUPPORTED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|heic|heif|mp4|mov|webm)$/i;
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 const BROWSER_PREVIEW_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const BROWSER_VIDEO_PREVIEW_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 
@@ -27,6 +28,22 @@ function toUrl(raw) {
   const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
   const origin = base.replace(/\/api\/?$/, "");
   return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
+}
+
+function detectMediaType(item) {
+  const explicit = item?.media_type || item?.mediaType;
+  const fileType = item?.file?.type || item?.type || "";
+  const fileName = item?.file?.name || item?.name || "";
+  const url = item?.url || item?.image || item?.image_url || item?.src || item?.file || "";
+  if (
+    explicit === "video" ||
+    fileType.startsWith("video/") ||
+    VIDEO_EXTENSIONS.test(fileName) ||
+    VIDEO_EXTENSIONS.test(String(url))
+  ) {
+    return "video";
+  }
+  return "image";
 }
 
 export default function ImageUploader({ projectId, onUploaded }) {
@@ -90,7 +107,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
       file: f,
       url: URL.createObjectURL(f),
       caption: "",
-      mediaType: f.type?.startsWith("video/") ? "video" : "image",
+      mediaType: detectMediaType({ file: f }),
       previewError: false,
       objectUrl: true,
       uploaded: false,
@@ -216,7 +233,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
             {files.filter(Boolean).map((it, i) => {
               const fileName = it.file?.name || it.name || "Uploaded image";
               const imageUrl = it.url || it.image || it.image_url || it.src || "/placeholder.png";
-              const mediaType = it.mediaType || it.media_type || (it.file?.type?.startsWith("video/") ? "video" : "image");
+              const mediaType = detectMediaType(it);
               const canPreviewVideo = it.objectUrl && BROWSER_VIDEO_PREVIEW_TYPES.has(it.file?.type);
 
               return (

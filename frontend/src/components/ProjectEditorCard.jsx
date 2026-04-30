@@ -7,6 +7,23 @@ import { useMemo, useState } from "react";
 import ImageUploader from "./ImageUploader";
 import { Card, Input, Textarea, Button, GhostButton, Badge, SymbolIcon } from "../ui";
 
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+
+function mediaTypeFor(item) {
+  const url = item?.url || item?.image || item?.image_url || item?.file || "";
+  const fileName = item?.name || item?.file?.name || "";
+  if (
+    item?.media_type === "video" ||
+    item?.mediaType === "video" ||
+    item?.file?.type?.startsWith("video/") ||
+    VIDEO_EXTENSIONS.test(String(url)) ||
+    VIDEO_EXTENSIONS.test(String(fileName))
+  ) {
+    return "video";
+  }
+  return "image";
+}
+
 function toggleInArray(arr, value) {
   const list = Array.isArray(arr) ? arr : [];
   return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
@@ -102,7 +119,7 @@ export default function ProjectEditorCard({
   );
 
   const currentCoverId =
-    images.find((img) => (img.media_type || img.mediaType || "image") === "image" && Number(img.order) === 0)?.id ?? null;
+    images.find((img) => mediaTypeFor(img) === "image" && Number(img.order) === 0)?.id ?? null;
 
   const ensureJobDefaults = () => {
     setForm((prev) => ({
@@ -580,7 +597,7 @@ export default function ProjectEditorCard({
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
                 {images.filter(Boolean).map((it) => {
-                  const mediaType = it.media_type || it.mediaType || "image";
+                  const mediaType = mediaTypeFor(it);
                   const mediaUrl = it.url || it.image || it.image_url || it.file || "/placeholder.png";
                   const thumbnailUrl = it.thumbnail || mediaUrl;
                   const isProcessing = it.processing_status && it.processing_status !== "ready";

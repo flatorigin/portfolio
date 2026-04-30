@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api";
 
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+
 function toUrl(raw) {
   if (!raw) return "";
 
@@ -16,6 +18,18 @@ function toUrl(raw) {
   const origin = base.replace(/\/api\/?$/, "");
 
   return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
+}
+
+function mediaTypeFor(item) {
+  const url = item?.url || item?.image || item?.file || item?.src || "";
+  if (
+    item?.media_type === "video" ||
+    item?.mediaType === "video" ||
+    VIDEO_EXTENSIONS.test(String(url))
+  ) {
+    return "video";
+  }
+  return "image";
 }
 
 function formatPostedDate(value) {
@@ -55,7 +69,7 @@ export default function ProjectPrintView() {
               url: toUrl(img.url || img.image || img.src || img.file),
               thumbnail: toUrl(img.thumbnail || img.thumb || ""),
               caption: img.caption || "",
-              media_type: img.media_type || img.mediaType || "image",
+              media_type: mediaTypeFor(img),
             }))
             .filter((img) => !!img.url)
         );
@@ -77,7 +91,7 @@ export default function ProjectPrintView() {
   const coverImage = useMemo(() => {
     const directCover = toUrl(project?.cover_image_url);
     if (directCover) return directCover;
-    return images.find((img) => (img.media_type || "image") === "image")?.url || "";
+    return images.find((img) => mediaTypeFor(img) === "image")?.url || "";
   }, [project?.cover_image_url, images]);
 
   const serviceCategoryList = Array.isArray(project?.service_categories)

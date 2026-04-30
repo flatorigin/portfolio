@@ -85,6 +85,9 @@ SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (
     ".webm",
 )
 
+VIDEO_UPLOAD_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
+VIDEO_UPLOAD_EXTENSIONS = (".mp4", ".mov", ".webm")
+
 User = get_user_model()
 
 
@@ -402,9 +405,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
         try:
             for idx, f in enumerate(files):
                 caption = captions[idx] if idx < len(captions) else ""
+                content_type = str(getattr(f, "content_type", "") or "").lower()
+                file_name = str(getattr(f, "name", "") or "").lower()
+                media_type = (
+                    ProjectImage.MEDIA_TYPE_VIDEO
+                    if content_type in VIDEO_UPLOAD_CONTENT_TYPES
+                    or file_name.endswith(VIDEO_UPLOAD_EXTENSIONS)
+                    else ProjectImage.MEDIA_TYPE_IMAGE
+                )
                 img = ProjectImage.objects.create(
                     project=project,
                     image=f,
+                    media_type=media_type,
                     caption=caption,
                     order=base_order + idx,
                 )

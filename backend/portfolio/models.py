@@ -572,7 +572,12 @@ class ProjectImage(models.Model):
     def save(self, *args, **kwargs):
         if self.image and not getattr(self.image, "_committed", True):
             ext = os.path.splitext((self.image.name or "").lower())[1]
-            if ext in VIDEO_UPLOAD_EXTENSIONS:
+            content_type = str(getattr(self.image, "content_type", "") or "").lower()
+            if (
+                self.media_type == self.MEDIA_TYPE_VIDEO
+                or ext in VIDEO_UPLOAD_EXTENSIONS
+                or content_type.startswith("video/")
+            ):
                 self._convert_video_to_webm()
             else:
                 self._convert_image_to_webp()

@@ -16,6 +16,7 @@ import ReportContentButton from "../components/ReportContentButton";
 
 const COMMENT_CHAR_LIMIT = 280;
 const COMMENT_LINK_PATTERN = /(https?:\/\/|www\.)/i;
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -32,6 +33,21 @@ function toUrl(raw) {
   const origin = base.replace(/\/api\/?$/, "");
 
   return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
+}
+
+function mediaTypeFor(item) {
+  const url = item?.url || item?.image || item?.image_url || item?.file || "";
+  const fileName = item?.name || item?.file?.name || "";
+  if (
+    item?.media_type === "video" ||
+    item?.mediaType === "video" ||
+    item?.file?.type?.startsWith("video/") ||
+    VIDEO_EXTENSIONS.test(String(url)) ||
+    VIDEO_EXTENSIONS.test(String(fileName))
+  ) {
+    return "video";
+  }
+  return "image";
 }
 
 function buildMapSrc(location) {
@@ -1181,9 +1197,9 @@ export default function ProjectDetail() {
 
     if (selectedId != null) {
       const match = editImages.find((im) => Number(im.id) === Number(selectedId));
-      if ((match?.media_type || "image") === "image" && match?.url) return match.url;
+      if (mediaTypeFor(match) === "image" && match?.url) return match.url;
     }
-    return images?.find((item) => (item.media_type || "image") === "image")?.url || null;
+    return images?.find((item) => mediaTypeFor(item) === "image")?.url || null;
   }, [editCoverImageId, editForm.cover_image_id, editImages, images]);
 
   function getBidContractorMeta(bid) {
@@ -2135,7 +2151,7 @@ export default function ProjectDetail() {
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {images.map((img, i) => {
-                  const mediaType = img.media_type || "image";
+                  const mediaType = mediaTypeFor(img);
                   const thumbUrl = img.thumbnail || img.url;
                   const isProcessing = img.processing_status && img.processing_status !== "ready";
 
@@ -2348,7 +2364,7 @@ export default function ProjectDetail() {
                   <div className="flex min-h-0 flex-1 flex-col">
                     <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#f4f4f1] px-4 py-4 md:px-14 md:py-5">
                       <div className="flex h-full w-full items-center justify-center overflow-hidden">
-                        {(currentImage.media_type || "image") === "video" ? (
+                        {mediaTypeFor(currentImage) === "video" ? (
                           <video
                             src={currentImage.url}
                             poster={currentImage.thumbnail || undefined}

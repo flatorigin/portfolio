@@ -9,6 +9,8 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { SectionTitle, Badge, Card, Button, Input, GhostButton, SymbolIcon } from "../ui";
 
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+
 // normalize urls (same spirit as ProjectDetail)
 function toUrl(raw) {
   if (!raw) return "";
@@ -35,13 +37,25 @@ function extractOrder(it) {
   return raw == null ? null : Number(raw);
 }
 
+function mediaTypeFor(it) {
+  const url = extractMediaUrl(it);
+  if (
+    it?.media_type === "video" ||
+    it?.mediaType === "video" ||
+    VIDEO_EXTENSIONS.test(String(url))
+  ) {
+    return "video";
+  }
+  return "image";
+}
+
 function buildThumbPack(project) {
   const images = Array.isArray(project?.images) ? project.images : [];
   const mapped = images
     .map((it) => ({
       url: extractMediaUrl(it),
       thumb: extractThumbUrl(it),
-      mediaType: it?.media_type || it?.mediaType || "image",
+      mediaType: mediaTypeFor(it),
       order: extractOrder(it),
     }))
     .filter((x) => !!x.url);

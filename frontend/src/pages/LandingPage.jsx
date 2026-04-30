@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Button, Card, Container, SymbolIcon } from "../ui";
 
+const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+
 function toUrl(raw) {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
@@ -15,7 +17,10 @@ function extractCover(project) {
   if (!project) return "";
   if (project.cover_image_url) return toUrl(project.cover_image_url);
   const images = Array.isArray(project.images) ? project.images : [];
-  const first = images.find((item) => (item?.media_type || item?.mediaType || "image") === "image");
+  const first = images.find((item) => {
+    const raw = item?.url || item?.image || item?.file || "";
+    return item?.media_type !== "video" && item?.mediaType !== "video" && !VIDEO_EXTENSIONS.test(String(raw));
+  });
   if (!first) return "";
   return toUrl(first.url || first.image || first.file || "");
 }
