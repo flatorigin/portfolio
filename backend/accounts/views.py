@@ -41,6 +41,7 @@ from .serializers import (
     HomeownerReferenceImageSerializer,
     ProfileSerializer,
     PublicUserProfileSerializer,
+    PublicHomeownerReferenceGallerySerializer,
     LikedProfileCardSerializer,
     SavedProfileCardSerializer,
     ContractorSearchResultSerializer,
@@ -511,6 +512,32 @@ class HomeownerReferenceGalleryView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(user=request.user, is_public=True)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PublicHomeownerReferenceGalleryListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        qs = (
+            Profile.objects
+            .filter(
+                profile_type=Profile.ProfileType.HOMEOWNER,
+                public_profile_enabled=True,
+                is_frozen=False,
+                is_deactivated=False,
+                user__is_active=True,
+                user__homeowner_reference_images__is_public=True,
+            )
+            .select_related("user")
+            .distinct()
+            .order_by("display_name", "user__username")
+        )
+        serializer = PublicHomeownerReferenceGallerySerializer(
+            qs,
+            many=True,
+            context={"request": request},
+        )
+        return Response(serializer.data)
 
 
 class HomeownerReferenceGalleryItemView(APIView):
