@@ -10,6 +10,7 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea, Input, SymbolIcon } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
+import MediaVideoPlayer from "../components/MediaVideoPlayer";
 import BidModule from "../components/bids/BidModule";
 import QuickMessageDrawer from "../components/QuickMessageDrawer";
 import ReportContentButton from "../components/ReportContentButton";
@@ -2365,11 +2366,9 @@ export default function ProjectDetail() {
                     <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#f4f4f1] px-4 py-4 md:px-14 md:py-5">
                       <div className="flex h-full w-full items-center justify-center overflow-hidden">
                         {mediaTypeFor(currentImage) === "video" ? (
-                          <video
+                          <MediaVideoPlayer
                             src={currentImage.url}
                             poster={currentImage.thumbnail || undefined}
-                            controls
-                            playsInline
                             className="block h-full w-full object-contain"
                           />
                         ) : (
