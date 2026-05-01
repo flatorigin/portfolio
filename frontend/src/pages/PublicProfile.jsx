@@ -119,6 +119,7 @@ export default function PublicProfile() {
         profile?.service_lng !== undefined)
   );
   const isHomeownerProfile = profile?.profile_type === "homeowner";
+  const profileRoleLabel = isHomeownerProfile ? "homeowner" : "contractor";
 
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
@@ -554,7 +555,7 @@ export default function PublicProfile() {
                   ) : null}
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600">
-                    Contact info is shared only after the homeowner chooses to connect.
+                    Contact info is shared only after the {profileRoleLabel} chooses to connect.
                   </div>
                 </div>
               </div>
@@ -922,7 +923,7 @@ export default function PublicProfile() {
                 </div>
 
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600 sm:col-span-2">
-                  Contact info is shared only after the homeowner chooses to connect.
+                  Contact info is shared only after the {profileRoleLabel} chooses to connect.
                 </div>
               </div>
             </div>
