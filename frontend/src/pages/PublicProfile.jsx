@@ -555,7 +555,7 @@ export default function PublicProfile() {
                   ) : null}
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600">
-                    Contact shared after the {profileRoleLabel} approval.
+                    Contact requires {profileRoleLabel} approval.
                   </div>
                 </div>
               </div>
@@ -923,7 +923,7 @@ export default function PublicProfile() {
                 </div>
 
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600 sm:col-span-2">
-                  Contact info is shared only after the {profileRoleLabel} chooses to connect.
+                  Contact requires {profileRoleLabel} approval.
                 </div>
               </div>
             </div>
