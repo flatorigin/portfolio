@@ -553,24 +553,9 @@ export default function PublicProfile() {
                     <p className="text-xs text-red-600">{messageError}</p>
                   ) : null}
 
-                  {profile.contact_email ? (
-                    <a
-                      href={`mailto:${profile.contact_email}`}
-                      className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Email
-                    </a>
-                  ) : null}
-
-                  {profile.contact_phone ? (
-                    <a
-                      href={`tel:${profile.contact_phone}`}
-                      className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Call
-                    </a>
-                  ) : null}
-
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600">
+                    Contact info is shared only after the homeowner chooses to connect.
+                  </div>
                 </div>
               </div>
             </Card>
@@ -936,51 +921,9 @@ export default function PublicProfile() {
                   )}
                 </div>
 
-                {profile.contact_email ? (
-                  <a
-                    href={`mailto:${profile.contact_email}`}
-                    className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Email
-                  </a>
-                ) : (
-                  <div className="group relative">
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400"
-                    >
-                      Email
-                    </button>
-
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                      This user has not opted in to share their email publicly.
-                    </div>
-                  </div>
-                )}
-
-                {profile.contact_phone ? (
-                  <a
-                    href={`tel:${profile.contact_phone}`}
-                    className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Call
-                  </a>
-                ) : (
-                  <div className="group relative">
-                    <button
-                      type="button"
-                      disabled
-                      className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400"
-                    >
-                      Call
-                    </button>
-
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                      This user has not opted in to receive calls.
-                    </div>
-                  </div>
-                )}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600 sm:col-span-2">
+                  Contact info is shared only after the homeowner chooses to connect.
+                </div>
               </div>
             </div>
           </Card>
