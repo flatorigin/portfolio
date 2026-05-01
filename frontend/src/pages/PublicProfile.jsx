@@ -479,18 +479,36 @@ export default function PublicProfile() {
                     ) : null}
                   </div>
 
-                  <span
-                    className={[
-                      "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
-                      profile.profile_status === "complete"
-                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
-                        : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-                    ].join(" ")}
-                  >
-                    {profile.profile_status === "complete"
-                      ? "Profile Complete"
-                      : "Incomplete Profile"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
+                        profile.profile_status === "complete"
+                          ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                          : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+                      ].join(" ")}
+                    >
+                      {profile.profile_status === "complete"
+                        ? "Profile Complete"
+                        : "Incomplete Profile"}
+                    </span>
+                    {!isMine ? (
+                      <div className="group relative">
+                        <ReportContentButton
+                          targetType="profile"
+                          targetId={profile.id}
+                          subject={profile.display_name || profile.username || "Profile"}
+                          label={<SymbolIcon name="flag" className="text-[16px]" />}
+                          title="Report profile"
+                          ariaLabel="Report profile"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                        />
+                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-32 rounded-lg bg-slate-900 px-2 py-1.5 text-center text-[11px] text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                          Report profile
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-5 overflow-hidden bg-white">
@@ -535,16 +553,6 @@ export default function PublicProfile() {
                     <p className="text-xs text-red-600">{messageError}</p>
                   ) : null}
 
-                  {!isMine ? (
-                    <ReportContentButton
-                      targetType="profile"
-                      targetId={profile.id}
-                      subject={profile.display_name || profile.username || "Profile"}
-                      label="Report profile"
-                      className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    />
-                  ) : null}
-
                   {profile.contact_email ? (
                     <a
                       href={`mailto:${profile.contact_email}`}
@@ -562,6 +570,7 @@ export default function PublicProfile() {
                       Call
                     </a>
                   ) : null}
+
                 </div>
               </div>
             </Card>
@@ -833,18 +842,36 @@ export default function PublicProfile() {
                   ) : null}
                 </div>
 
-                <span
-                  className={[
-                    "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
-                    profile.profile_status === "complete"
-                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
-                      : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-                  ].join(" ")}
-                >
-                  {profile.profile_status === "complete"
-                    ? "Profile Complete"
-                    : "Incomplete Profile"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={[
+                      "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
+                      profile.profile_status === "complete"
+                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
+                        : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+                    ].join(" ")}
+                  >
+                    {profile.profile_status === "complete"
+                      ? "Profile Complete"
+                      : "Incomplete Profile"}
+                  </span>
+                  {!isMine ? (
+                    <div className="group relative">
+                      <ReportContentButton
+                        targetType="profile"
+                        targetId={profile.id}
+                        subject={profile.display_name || profile.username || "Profile"}
+                        label={<SymbolIcon name="flag" className="text-[16px]" />}
+                        title="Report profile"
+                        ariaLabel="Report profile"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                      />
+                      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-32 rounded-lg bg-slate-900 px-2 py-1.5 text-center text-[11px] text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                        Report profile
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               <div className="mt-5 overflow-hidden rounded-2xl bg-white">
@@ -908,16 +935,6 @@ export default function PublicProfile() {
                     </div>
                   )}
                 </div>
-
-                {!isMine ? (
-                  <ReportContentButton
-                    targetType="profile"
-                    targetId={profile.id}
-                    subject={profile.display_name || profile.username || "Profile"}
-                    label="Report profile"
-                    className="rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  />
-                ) : null}
 
                 {profile.contact_email ? (
                   <a

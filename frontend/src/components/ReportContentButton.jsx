@@ -20,6 +20,8 @@ export default function ReportContentButton({
   className = "",
   defaultReportType = "other",
   subject = "",
+  title,
+  ariaLabel,
 }) {
   const [open, setOpen] = useState(false);
   const [reportType, setReportType] = useState(defaultReportType);
@@ -68,6 +70,8 @@ export default function ReportContentButton({
           setError("");
         }}
         className={className}
+        title={title}
+        aria-label={ariaLabel}
       >
         {submitted ? "Reported" : label}
       </button>
