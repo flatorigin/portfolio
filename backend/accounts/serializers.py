@@ -608,9 +608,6 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
     logo_url = serializers.SerializerMethodField()
     banner_url = serializers.SerializerMethodField()
 
-    contact_email = serializers.SerializerMethodField()
-    contact_phone = serializers.SerializerMethodField()
-
     badge = serializers.SerializerMethodField()
     verification_badge_label = serializers.ReadOnlyField()
     effective_verification_status = serializers.ReadOnlyField()
@@ -641,8 +638,6 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "allow_direct_messages",
             "hero_headline",
             "hero_blurb",
-            "contact_email",
-            "contact_phone",
             "badge",
             "verification_badge_label",
             "effective_verification_status",
@@ -682,12 +677,6 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
         if image and hasattr(image, "url"):
             return self._build_abs_url(request, image.url)
         return None
-
-    def get_contact_email(self, obj):
-        return obj.contact_email if obj.show_contact_email else None
-
-    def get_contact_phone(self, obj):
-        return obj.contact_phone if obj.show_contact_phone else None
 
     def get_badge(self, obj):
         return "Profile Complete" if obj.is_profile_complete else "Incomplete Profile"

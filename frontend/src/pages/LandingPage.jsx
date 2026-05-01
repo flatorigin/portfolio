@@ -127,11 +127,7 @@ function TutorialModal({ open, onClose }) {
         <div className="p-6">
           <div className="flex aspect-video items-center justify-center rounded-[1.5rem] border border-dashed border-slate-300 bg-[#F3EFE8] text-center text-slate-600">
             <div className="max-w-md px-6">
-              <div className="text-lg font-semibold text-slate-900">Tutorial placeholder</div>
-              <p className="mt-2 text-sm leading-relaxed">
-                Drop in a YouTube, Vimeo, or self-hosted video URL here later. The modal is already set up so you can
-                swap the placeholder for the final player without changing the page layout.
-              </p>
+              <div className="text-lg font-semibold text-slate-900">Platform Story - Coming Soon</div>
             </div>
           </div>
         </div>
