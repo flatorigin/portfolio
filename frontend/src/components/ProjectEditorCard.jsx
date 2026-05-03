@@ -99,6 +99,9 @@ export default function ProjectEditorCard({
   onView,
   onAfterUpload,
   onMakeCover,
+  coverImageId,
+  onCoverImageChange,
+  setCoverImageId,
   onDeleteProject,
   onSendPrivate, // OPTIONAL: (username, payload) => void (later)
 }) {
@@ -118,8 +121,32 @@ export default function ProjectEditorCard({
     []
   );
 
-  const currentCoverId =
+  const orderCoverId =
     images.find((img) => mediaTypeFor(img) === "image" && Number(img.order) === 0)?.id ?? null;
+  const currentCoverId = coverImageId ?? form.cover_image_id ?? orderCoverId;
+
+  const handleMakeCover = (item) => {
+    if (!item?.id || mediaTypeFor(item) !== "image") return;
+
+    const normalized = Number(item.id);
+    const nextCoverId = Number.isNaN(normalized) ? item.id : normalized;
+
+    onCoverImageChange?.(nextCoverId);
+    setCoverImageId?.(nextCoverId);
+    setForm?.((prev) => ({ ...prev, cover_image_id: nextCoverId }));
+    setImages?.((prev) =>
+      prev
+        .filter(Boolean)
+        .map((img) => {
+          if (mediaTypeFor(img) !== "image") return img;
+          return String(img.id) === String(item.id)
+            ? { ...img, order: 0 }
+            : { ...img, order: Number(img.order) === 0 ? 1 : img.order };
+        })
+    );
+
+    onMakeCover?.(item.id);
+  };
 
   const ensureJobDefaults = () => {
     setForm((prev) => ({
@@ -662,7 +689,7 @@ export default function ProjectEditorCard({
                             name="cover-image"
                             className="h-3 w-3"
                             checked={String(currentCoverId ?? "") === String(it.id ?? "")}
-                            onChange={() => mediaType === "image" && onMakeCover?.(it.id)}
+                            onChange={() => handleMakeCover(it)}
                             disabled={mediaType !== "image"}
                           />
                           <span>
