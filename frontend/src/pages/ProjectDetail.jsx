@@ -108,6 +108,23 @@ function getInitials(name = "") {
   return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
 }
 
+function formatApiError(err, fallback = "Request failed.") {
+  const data = err?.response?.data;
+  const status = err?.response?.status;
+  let msg =
+    data?.detail ||
+    data?.message ||
+    data?.non_field_errors ||
+    data ||
+    err?.message ||
+    fallback;
+
+  if (Array.isArray(msg)) msg = msg.join(" ");
+  if (typeof msg !== "string") msg = JSON.stringify(msg, null, 2);
+
+  return `${fallback}${status ? ` (status ${status})` : ""}: ${msg}`;
+}
+
 function LikeCircleIcon({ active = false, className = "" }) {
   return (
     <SymbolIcon
@@ -371,6 +388,40 @@ export default function ProjectDetail() {
         e?.message ||
         "Failed to set cover image.";
       throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg, null, 2));
+    }
+  }
+
+  async function handleMakeCoverImage(imgId) {
+    const normalized = imgId == null ? null : Number(imgId);
+    if (!project?.id || normalized == null || Number.isNaN(normalized)) return;
+
+    const target = editImages.find((img) => Number(img.id) === normalized);
+    if (target && mediaTypeFor(target) !== "image") {
+      alert("Only image media can be used as the project cover.");
+      return;
+    }
+
+    setEditError("");
+    setEditCoverImageId(normalized);
+    setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
+    setEditImages((prev) =>
+      prev.map((img) => {
+        if (mediaTypeFor(img) !== "image") return img;
+        return Number(img.id) === normalized
+          ? { ...img, order: 0 }
+          : { ...img, order: Number(img.order) === 0 ? 1 : img.order };
+      })
+    );
+
+    try {
+      await setCoverOnBackend(project.id, normalized);
+      await refreshImages();
+    } catch (err) {
+      console.error("[cover] failed to set cover:", err?.response || err);
+      await refreshImages();
+      const full = formatApiError(err, "Cover update failed");
+      if (isMountedRef.current) setEditError(full);
+      alert(full);
     }
   }
 
@@ -982,20 +1033,7 @@ export default function ProjectDetail() {
     } catch (err) {
       console.error("[handleSaveEdits] error:", err?.response || err);
 
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-
-      let msg =
-        data?.detail ||
-        data?.message ||
-        data?.non_field_errors ||
-        err?.message ||
-        data ||
-        "Could not save changes. Please try again.";
-
-      if (typeof msg !== "string") msg = JSON.stringify(msg, null, 2);
-
-      const full = `Save failed${status ? ` (status ${status})` : ""}: ${msg}`;
+      const full = formatApiError(err, "Save failed");
       if (isMountedRef.current) setEditError(full);
       alert(full);
     } finally {
@@ -2032,6 +2070,7 @@ export default function ProjectDetail() {
                 onAfterUpload={async () => {
                   await refreshImages();
                 }}
+                onMakeCover={handleMakeCoverImage}
                 coverImageId={editCoverImageId}
                 onCoverImageChange={(val) => {
                   const normalized = val == null ? null : Number(val);
