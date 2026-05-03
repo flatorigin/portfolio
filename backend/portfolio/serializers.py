@@ -8,6 +8,8 @@ import re
 from rest_framework import serializers
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.db.models import F
 from accounts.serializers import ProfileSerializer
 
 from .models import (
@@ -362,6 +364,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    cover_image_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     cover_image_file = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
@@ -409,6 +412,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "liked_by_me",
             "saved_by_me",
             "cover_image_ref",
+            "cover_image_id",
             "cover_image_file",
             "cover_image_url",
         ]
@@ -471,7 +475,10 @@ class ProjectSerializer(serializers.ModelSerializer):
             getattr(instance, "is_job_posting", False) if instance else False,
         )
 
-        if is_public and not compliance_confirmed:
+        was_already_public = bool(instance and instance.is_public)
+        is_being_published = bool(is_public and not was_already_public)
+
+        if is_being_published and not compliance_confirmed:
             raise serializers.ValidationError(
                 {"compliance_confirmed": "Please confirm compliance before publishing."}
             )
@@ -551,6 +558,18 @@ class ProjectSerializer(serializers.ModelSerializer):
 
             if "service_categories" in attrs and attrs["service_categories"] is None:
                 attrs["service_categories"] = []
+
+        cover_image_id = attrs.get("cover_image_id", None)
+        if cover_image_id is not None and instance is not None:
+            cover = ProjectImage.objects.filter(id=cover_image_id, project=instance).first()
+            if not cover:
+                raise serializers.ValidationError(
+                    {"cover_image_id": "Choose an image that belongs to this project."}
+                )
+            if cover.media_type != ProjectImage.MEDIA_TYPE_IMAGE:
+                raise serializers.ValidationError(
+                    {"cover_image_id": "Only image media can be used as the project cover."}
+                )
 
         return attrs
 
@@ -646,15 +665,39 @@ class ProjectSerializer(serializers.ModelSerializer):
             )
         ProjectInvite.objects.filter(project=project).exclude(contractor__in=contractors).delete()
 
+    def _set_cover_image(self, project, cover_image_id):
+        if cover_image_id is None:
+            return
+
+        cover = ProjectImage.objects.filter(id=cover_image_id, project=project).first()
+        if not cover or cover.media_type != ProjectImage.MEDIA_TYPE_IMAGE:
+            return
+
+        with transaction.atomic():
+            ProjectImage.objects.filter(project=project).exclude(id=cover.id).update(
+                order=F("order") + 1
+            )
+            cover.order = 0
+            cover.save(update_fields=["order"])
+
+            ordered = list(ProjectImage.objects.filter(project=project).order_by("order", "id"))
+            for idx, row in enumerate(ordered):
+                if row.order != idx:
+                    row.order = idx
+            ProjectImage.objects.bulk_update(ordered, ["order"])
+
     def create(self, validated_data):
         invite_usernames = validated_data.pop("private_contractor_usernames", None)
+        validated_data.pop("cover_image_id", None)
         project = super().create(validated_data)
         self._sync_project_invites(project, invite_usernames)
         return project
 
     def update(self, instance, validated_data):
         invite_usernames = validated_data.pop("private_contractor_usernames", None)
+        cover_image_id = validated_data.pop("cover_image_id", None)
         project = super().update(instance, validated_data)
+        self._set_cover_image(project, cover_image_id)
         self._sync_project_invites(project, invite_usernames)
         return project
 

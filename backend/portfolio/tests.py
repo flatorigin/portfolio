@@ -226,6 +226,53 @@ class PrivateProjectAccessTests(APITestCase):
         self.assertEqual(project.private_contractor_username, "formpro")
         self.assertTrue(project.invites.filter(contractor=contractor).exists())
 
+    def test_legacy_public_project_without_compliance_can_still_be_edited(self):
+        project = Project.objects.create(
+            owner=self.owner,
+            title="Legacy public project",
+            summary="Old public row.",
+            is_public=True,
+            compliance_confirmed=False,
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.patch(
+            f"/api/projects/{project.id}/",
+            {
+                "title": "Legacy public project updated",
+                "summary": project.summary,
+                "is_public": True,
+                "compliance_confirmed": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        project.refresh_from_db()
+        self.assertEqual(project.title, "Legacy public project updated")
+
+    def test_publishing_project_requires_compliance_confirmation(self):
+        project = Project.objects.create(
+            owner=self.owner,
+            title="Draft project",
+            summary="Draft row.",
+            is_public=False,
+            compliance_confirmed=False,
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.patch(
+            f"/api/projects/{project.id}/",
+            {
+                "is_public": True,
+                "compliance_confirmed": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("compliance_confirmed", response.data)
+
 
 class MessagePrefillTests(APITestCase):
     def setUp(self):
