@@ -616,6 +616,8 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
     liked_by_me = serializers.SerializerMethodField()
     saved_by_me = serializers.SerializerMethodField()
     reference_gallery = serializers.SerializerMethodField()
+    contact_email = serializers.SerializerMethodField()
+    contact_phone = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -629,6 +631,8 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "service_lng",
             "coverage_radius_miles",
             "bio",
+            "contact_email",
+            "contact_phone",
             "logo",
             "avatar",
             "banner",
@@ -651,6 +655,14 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "member_since_label",
             "reference_gallery",
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not data.get("contact_email"):
+            data.pop("contact_email", None)
+        if not data.get("contact_phone"):
+            data.pop("contact_phone", None)
+        return data
 
     def _build_abs_url(self, request, url: str):
         if not url:
@@ -709,6 +721,16 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             many=True,
             context=self.context,
         ).data
+
+    def get_contact_email(self, obj):
+        if obj.show_contact_email and (obj.contact_email or "").strip():
+            return obj.contact_email
+        return None
+
+    def get_contact_phone(self, obj):
+        if obj.show_contact_phone and (obj.contact_phone or "").strip():
+            return obj.contact_phone
+        return None
 
 
 class PublicHomeownerReferenceGallerySerializer(serializers.ModelSerializer):
