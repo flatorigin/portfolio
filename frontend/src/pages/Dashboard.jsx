@@ -907,11 +907,9 @@ export default function Dashboard() {
 
       if (!Array.isArray(payload.service_categories)) payload.service_categories = [];
 
-      if (payload.cover_image_id == null || payload.cover_image_id === "") {
-        delete payload.cover_image_id;
-      } else {
-        payload.cover_image_id = Number(payload.cover_image_id);
-      }
+      // Cover selection is persisted through /projects/:id/images/:imageId/.
+      // The project PATCH serializer does not accept cover_image_id.
+      delete payload.cover_image_id;
 
       await api.patch(`/projects/${editingId}/`, payload);
 
