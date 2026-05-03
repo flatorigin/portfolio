@@ -190,6 +190,31 @@ export default function PublicProfile() {
   }, [profile?.languages_display, profile?.languages]);
   const verificationBadgeLabel = profile?.verification_badge_label || "";
   const verificationStatus = profile?.effective_verification_status || "unverified";
+  const publicContactMethods = useMemo(() => {
+    const methods = [];
+    const email = String(profile?.contact_email || "").trim();
+    const phone = String(profile?.contact_phone || "").trim();
+    if (email) {
+      methods.push({
+        key: "email",
+        label: "Email",
+        value: email,
+        href: `mailto:${email}`,
+        icon: "mail",
+      });
+    }
+    if (phone) {
+      const tel = phone.replace(/[^\d+]/g, "");
+      methods.push({
+        key: "phone",
+        label: "Phone",
+        value: phone,
+        href: tel ? `tel:${tel}` : "",
+        icon: "call",
+      });
+    }
+    return methods;
+  }, [profile?.contact_email, profile?.contact_phone]);
 
   // Load profile + projects
   useEffect(() => {
@@ -922,9 +947,29 @@ export default function PublicProfile() {
                   )}
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600 sm:col-span-2">
-                  Contact requires {profileRoleLabel} approval.
-                </div>
+                {publicContactMethods.length > 0 ? (
+                  <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+                    {publicContactMethods.map((method) => (
+                      <a
+                        key={method.key}
+                        href={method.href}
+                        className="flex min-h-[46px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 transition hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        <SymbolIcon name={method.icon} className="text-[18px] text-slate-500" />
+                        <span className="min-w-0">
+                          <span className="block text-[11px] uppercase tracking-wide text-slate-500">
+                            {method.label}
+                          </span>
+                          <span className="block truncate">{method.value}</span>
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600 sm:col-span-2">
+                    Contact info is shared only after the {profileRoleLabel} chooses to connect.
+                  </div>
+                )}
               </div>
             </div>
           </Card>

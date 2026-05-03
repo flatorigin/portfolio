@@ -968,6 +968,12 @@ export default function ProjectDetail() {
         permit_responsible_party: editForm.permit_responsible_party || "",
       };
 
+      if (payload.sqf === "" || payload.sqf === null || payload.sqf === undefined) {
+        delete payload.sqf;
+      } else {
+        payload.sqf = Number(payload.sqf);
+      }
+
       let data;
 
       if (editCoverFile) {

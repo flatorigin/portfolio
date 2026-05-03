@@ -255,6 +255,38 @@ class AccountSecurityTests(APITestCase):
         response = self.client.get(f"/api/profiles/{self.user.username}/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_public_profile_hides_contact_info_by_default(self):
+        profile = self.user.profile
+        profile.public_profile_enabled = True
+        profile.contact_email = "public-pro@example.com"
+        profile.contact_phone = "555-444-3333"
+        profile.show_contact_email = False
+        profile.show_contact_phone = False
+        profile.save()
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(f"/api/profiles/{self.user.username}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("contact_email", response.data)
+        self.assertNotIn("contact_phone", response.data)
+
+    def test_public_profile_returns_contact_info_when_owner_allows_it(self):
+        profile = self.user.profile
+        profile.public_profile_enabled = True
+        profile.contact_email = "public-pro@example.com"
+        profile.contact_phone = "555-444-3333"
+        profile.show_contact_email = True
+        profile.show_contact_phone = True
+        profile.save()
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(f"/api/profiles/{self.user.username}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["contact_email"], "public-pro@example.com")
+        self.assertEqual(response.data["contact_phone"], "555-444-3333")
+
     def test_delete_account_blocks_email_reuse(self):
         self.client.force_authenticate(self.user)
 

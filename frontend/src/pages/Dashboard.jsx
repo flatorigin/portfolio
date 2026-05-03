@@ -906,6 +906,11 @@ export default function Dashboard() {
       payload.notify_by_email = !!payload.notify_by_email;
 
       if (!Array.isArray(payload.service_categories)) payload.service_categories = [];
+      if (payload.sqf === "" || payload.sqf === null || payload.sqf === undefined) {
+        delete payload.sqf;
+      } else {
+        payload.sqf = Number(payload.sqf);
+      }
 
       // Cover selection is persisted through /projects/:id/images/:imageId/.
       // The project PATCH serializer does not accept cover_image_id.
