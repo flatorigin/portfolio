@@ -207,7 +207,7 @@ export default function PublicProfile() {
       const tel = phone.replace(/[^\d+]/g, "");
       methods.push({
         key: "phone",
-        label: "Phone",
+        label: "Call",
         value: phone,
         href: tel ? `tel:${tel}` : "",
         icon: "call",
@@ -953,15 +953,10 @@ export default function PublicProfile() {
                       <a
                         key={method.key}
                         href={method.href}
-                        className="flex min-h-[46px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 transition hover:border-slate-300 hover:bg-slate-50"
+                        className="flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 transition hover:border-slate-300 hover:bg-slate-50"
                       >
                         <SymbolIcon name={method.icon} className="text-[18px] text-slate-500" />
-                        <span className="min-w-0">
-                          <span className="block text-[11px] uppercase tracking-wide text-slate-500">
-                            {method.label}
-                          </span>
-                          <span className="block truncate">{method.value}</span>
-                        </span>
+                        <span>{method.label}</span>
                       </a>
                     ))}
                   </div>
