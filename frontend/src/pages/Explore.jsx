@@ -761,23 +761,23 @@ export default function Explore() {
                 const specialties = Array.isArray(listing.specialties) ? listing.specialties : [];
                 const visibleSpecialties = specialties.slice(0, 4);
                 return (
-                  <Card key={`directory-${listing.id}`} className="flex min-h-[210px] flex-col p-4">
+                  <Card
+                    key={`directory-${listing.id}`}
+                    className="flex min-h-[240px] flex-col rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="truncate text-base font-semibold text-slate-950">
+                        <h3 className="truncate text-xl font-extrabold leading-tight text-slate-950">
                           {listing.business_name}
                         </h3>
-                        {listing.phone_number ? (
-                          <div className="mt-2 text-sm font-medium text-slate-700">
-                            {listing.phone_number}
-                          </div>
-                        ) : null}
+
                         {listing.location ? (
-                          <div className="mt-1 text-xs font-medium text-slate-500">
+                          <div className="mt-1 text-sm font-medium text-slate-500">
                             {listing.location}
                           </div>
                         ) : null}
                       </div>
+
                       <ReportContentButton
                         targetType="business_directory_listing"
                         targetId={listing.id}
@@ -790,11 +790,11 @@ export default function Explore() {
                     </div>
 
                     {visibleSpecialties.length > 0 ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-5 flex flex-wrap gap-2.5">
                         {visibleSpecialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700"
+                            className="rounded-full border border-indigo-100 bg-indigo-50 px-3.5 py-1.5 text-xs font-bold text-slate-700"
                           >
                             {specialty}
                           </span>
@@ -802,17 +802,28 @@ export default function Explore() {
                       </div>
                     ) : null}
 
+                    {listing.phone_number ? (
+                      <a
+                        href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
+                        className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-blue-700"
+                      >
+                        📞 {listing.phone_number}
+                      </a>
+                    ) : null}
+
                     {listing.website ? (
                       <a
                         href={listing.website}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-auto pt-5 text-sm font-semibold text-sky-700 hover:text-sky-900 hover:underline"
+                        className="mt-4 inline-block text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
                       >
-                        Visit website
+                        Visit Website
                       </a>
                     ) : (
-                      <div className="mt-auto pt-5 text-xs text-slate-400">Reviewed listing</div>
+                      <div className="mt-auto pt-5 text-xs text-slate-400">
+                        Reviewed listing
+                      </div>
                     )}
                   </Card>
                 );
