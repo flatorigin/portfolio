@@ -746,14 +746,11 @@ export default function Explore() {
         <div className="mt-8 border-t border-slate-200 pt-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Local business/contractors directory
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Business information may be sourced from publicly available information. Business owners may request edits or removal.
-              </p>
-            </div>
-          </div>
+	              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+	                Local business/contractors directory
+	              </h2>
+	            </div>
+	          </div>
 
           {filteredDirectoryListings.length > 0 ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
@@ -778,16 +775,21 @@ export default function Explore() {
                         ) : null}
                       </div>
 
-                      <ReportContentButton
-                        targetType="business_directory_listing"
-                        targetId={listing.id}
-                        subject={listing.business_name || "Business directory listing"}
-                        label={<SymbolIcon name="flag" className="text-[16px]" />}
-                        title="Report listing"
-                        ariaLabel="Report listing"
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                      />
-                    </div>
+	                      <div className="group relative">
+	                        <ReportContentButton
+	                          targetType="business_directory_listing"
+	                          targetId={listing.id}
+	                          subject={listing.business_name || "Business directory listing"}
+	                          label={<SymbolIcon name="flag" className="text-[16px]" />}
+	                          title="Report listing"
+	                          ariaLabel="Report listing"
+	                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+	                        />
+	                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+	                          Business information may be sourced from publicly available information. Business owners may request edits or removal.
+	                        </div>
+	                      </div>
+	                    </div>
 
                     {visibleSpecialties.length > 0 ? (
                       <div className="mt-5 flex flex-wrap gap-2.5">
