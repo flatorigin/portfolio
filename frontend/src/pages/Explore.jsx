@@ -8,6 +8,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { SectionTitle, Badge, Card, Button, Input, GhostButton, SymbolIcon } from "../ui";
+import ReportContentButton from "../components/ReportContentButton";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 
@@ -92,6 +93,7 @@ export default function Explore() {
   const navigate = useNavigate();
 
   const [projects, setProjects] = useState([]);
+  const [directoryListings, setDirectoryListings] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // ✅ favorites state
@@ -245,9 +247,10 @@ export default function Explore() {
 
 	  (async () => {
 	    try {
-	      const [{ data }, { data: homeownerRefs }] = await Promise.all([
+	      const [{ data }, { data: homeownerRefs }, { data: directoryData }] = await Promise.all([
 	        api.get("/projects/"),
 	        api.get("/profiles/homeowner-references/").catch(() => ({ data: [] })),
+	        api.get("/business-directory/").catch(() => ({ data: [] })),
 	      ]);
 	      if (!alive) return;
 
@@ -278,6 +281,7 @@ export default function Explore() {
 	      const exploreItems = [...referenceCards, ...exploreProjects];
 
 	      setProjects(exploreItems);
+	      setDirectoryListings(Array.isArray(directoryData) ? directoryData : []);
 	      setLikeCounts(
 	        Object.fromEntries(
 	          exploreItems.map((p) => [p.id, Number(p?.like_count || 0)])
@@ -288,9 +292,12 @@ export default function Explore() {
 	          exploreItems.map((p) => [p.id, !!p?.liked_by_me])
 	        )
 	      );
-     } catch (e) {
-       console.error("[Explore] projects fetch failed", e?.response || e);
-       if (alive) setProjects([]);
+	     } catch (e) {
+	       console.error("[Explore] projects fetch failed", e?.response || e);
+	       if (alive) {
+	         setProjects([]);
+	         setDirectoryListings([]);
+	       }
      } finally {
        if (alive) setLoading(false);
      }
@@ -299,7 +306,7 @@ export default function Explore() {
    return () => {
      alive = false;
    };
- }, []);
+	  }, []);
 
   // 2) Favorites reactive: update when authed changes (and when projects list changes)
   useEffect(() => {
@@ -381,6 +388,34 @@ export default function Explore() {
     });
   }, [projects, filters]);
 
+  const filteredDirectoryListings = useMemo(() => {
+    return directoryListings.filter((listing) => {
+      const nameQuery = filters.name.toLowerCase().trim();
+      const locationQuery = filters.location.toLowerCase().trim();
+      const hasNumericFilters =
+        filters.minSqf !== "" ||
+        filters.maxSqf !== "" ||
+        filters.minBudget !== "" ||
+        filters.maxBudget !== "";
+
+      if (locationQuery || hasNumericFilters) return false;
+      if (!nameQuery) return true;
+
+      const specialties = Array.isArray(listing.specialties) ? listing.specialties : [];
+      const haystack = [
+        listing.business_name,
+        listing.phone_number,
+        listing.website,
+        ...specialties,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(nameQuery);
+    });
+  }, [directoryListings, filters]);
+
   const clearFilters = () => {
     setFilters({
       name: "",
@@ -451,7 +486,7 @@ export default function Explore() {
     );
   }
 
-  if (!projects.length) {
+  if (!projects.length && !directoryListings.length) {
     return (
       <div>
         <header className="flex min-h-14 items-center mb-1">
@@ -557,7 +592,7 @@ export default function Explore() {
           </div>
 
           <div className="mt-2 text-xs text-slate-500">
-	            Showing {filteredProjects.length} of {projects.length} items
+		            Showing {filteredProjects.length + filteredDirectoryListings.length} of {projects.length + directoryListings.length} items
           </div>
         </div>
       </Card>
@@ -704,6 +739,84 @@ export default function Explore() {
           );
         })}
       </div>
+      {directoryListings.length > 0 ? (
+        <div className="mt-8 border-t border-slate-200 pt-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Approved directory listings
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Submitted listings reviewed by admin.
+              </p>
+            </div>
+          </div>
+
+          {filteredDirectoryListings.length > 0 ? (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+              {filteredDirectoryListings.map((listing) => {
+                const specialties = Array.isArray(listing.specialties) ? listing.specialties : [];
+                const visibleSpecialties = specialties.slice(0, 4);
+                return (
+                  <Card key={`directory-${listing.id}`} className="flex min-h-[210px] flex-col p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-semibold text-slate-950">
+                          {listing.business_name}
+                        </h3>
+                        {listing.phone_number ? (
+                          <div className="mt-2 text-sm font-medium text-slate-700">
+                            {listing.phone_number}
+                          </div>
+                        ) : null}
+                      </div>
+                      <ReportContentButton
+                        targetType="business_directory_listing"
+                        targetId={listing.id}
+                        subject={listing.business_name || "Business directory listing"}
+                        label={<SymbolIcon name="flag" className="text-[16px]" />}
+                        title="Report listing"
+                        ariaLabel="Report listing"
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                      />
+                    </div>
+
+                    {visibleSpecialties.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {visibleSpecialties.map((specialty) => (
+                          <span
+                            key={specialty}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700"
+                          >
+                            {specialty}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {listing.website ? (
+                      <a
+                        href={listing.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-auto pt-5 text-sm font-semibold text-sky-700 hover:text-sky-900 hover:underline"
+                      >
+                        Visit website
+                      </a>
+                    ) : (
+                      <div className="mt-auto pt-5 text-xs text-slate-400">Reviewed listing</div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Card className="p-5 text-sm text-slate-500">
+              No approved directory listings match this search.
+            </Card>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
