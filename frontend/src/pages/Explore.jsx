@@ -398,12 +398,15 @@ export default function Explore() {
         filters.minBudget !== "" ||
         filters.maxBudget !== "";
 
-      if (locationQuery || hasNumericFilters) return false;
+      const listingLocation = String(listing.location || "").toLowerCase();
+      if (locationQuery && !listingLocation.includes(locationQuery)) return false;
+      if (hasNumericFilters) return false;
       if (!nameQuery) return true;
 
       const specialties = Array.isArray(listing.specialties) ? listing.specialties : [];
       const haystack = [
         listing.business_name,
+        listing.location,
         listing.phone_number,
         listing.website,
         ...specialties,
@@ -744,10 +747,10 @@ export default function Explore() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Approved directory listings
+                Local business/contractors directory
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                Submitted listings reviewed by admin.
+                Business information may be sourced from publicly available information. Business owners may request edits or removal.
               </p>
             </div>
           </div>
@@ -767,6 +770,11 @@ export default function Explore() {
                         {listing.phone_number ? (
                           <div className="mt-2 text-sm font-medium text-slate-700">
                             {listing.phone_number}
+                          </div>
+                        ) : null}
+                        {listing.location ? (
+                          <div className="mt-1 text-xs font-medium text-slate-500">
+                            {listing.location}
                           </div>
                         ) : null}
                       </div>

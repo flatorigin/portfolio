@@ -90,6 +90,7 @@ def send_business_directory_review_email(listing):
     message = (
         "A new business directory listing was submitted for review.\n\n"
         f"Business name: {listing.business_name}\n"
+        f"Location: {listing.location}\n"
         f"Phone: {listing.phone_number or 'Not provided'}\n"
         f"Website: {listing.website or 'Not provided'}\n"
         f"Specialties: {', '.join(listing.specialties or []) or 'None'}\n\n"

@@ -108,6 +108,7 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "business_name",
+            "location",
             "specialties",
             "phone_number",
             "website",
@@ -119,6 +120,12 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
         value = str(value or "").strip()
         if not value:
             raise serializers.ValidationError("Business name is required.")
+        return value
+
+    def validate_location(self, value):
+        value = str(value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Location is required.")
         return value
 
     def validate_specialties(self, value):

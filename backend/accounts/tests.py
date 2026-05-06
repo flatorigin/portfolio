@@ -648,6 +648,7 @@ class BusinessDirectoryListingTests(APITestCase):
             "/api/business-directory/",
             {
                 "business_name": "Deck Pros",
+                "location": "Media, PA",
                 "specialties": ["Decks", "Railings"],
                 "phone_number": "555-101-2020",
                 "website": "deckpros.example.com",
@@ -658,6 +659,7 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.business_name, "Deck Pros")
+        self.assertEqual(listing.location, "Media, PA")
         self.assertEqual(listing.website, "https://deckpros.example.com")
         self.assertFalse(listing.is_published)
         self.assertFalse(listing.is_removed)
@@ -667,6 +669,7 @@ class BusinessDirectoryListingTests(APITestCase):
             "/api/business-directory/",
             {
                 "business_name": "No Contact LLC",
+                "location": "Media, PA",
                 "specialties": ["Roofing"],
             },
             format="json",
@@ -680,6 +683,7 @@ class BusinessDirectoryListingTests(APITestCase):
             "/api/business-directory/",
             {
                 "business_name": "Too Many Trades",
+                "location": "Media, PA",
                 "specialties": [f"Specialty {idx}" for idx in range(9)],
                 "phone_number": "555-101-2020",
             },
@@ -692,6 +696,7 @@ class BusinessDirectoryListingTests(APITestCase):
     def test_public_listing_endpoint_returns_only_approved_not_removed(self):
         approved = BusinessDirectoryListing.objects.create(
             business_name="Approved Contractor",
+            location="Media, PA",
             specialties=["Kitchens", "Bathrooms", "Tile", "Plumbing", "Hidden specialty"],
             phone_number="555-333-4444",
             website="https://approved.example.com",
@@ -699,11 +704,13 @@ class BusinessDirectoryListingTests(APITestCase):
         )
         BusinessDirectoryListing.objects.create(
             business_name="Pending Contractor",
+            location="Media, PA",
             phone_number="555-333-5555",
             is_published=False,
         )
         BusinessDirectoryListing.objects.create(
             business_name="Removed Contractor",
+            location="Media, PA",
             phone_number="555-333-6666",
             is_published=True,
             is_removed=True,
@@ -714,6 +721,7 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id"], approved.id)
+        self.assertEqual(response.data[0]["location"], "Media, PA")
         self.assertIn("Hidden specialty", response.data[0]["specialties"])
 
     def test_logged_in_user_can_report_public_directory_listing(self):
@@ -721,6 +729,7 @@ class BusinessDirectoryListingTests(APITestCase):
         Profile.objects.update_or_create(user=reporter, defaults={"profile_type": Profile.ProfileType.HOMEOWNER})
         listing = BusinessDirectoryListing.objects.create(
             business_name="Questionable Contractor",
+            location="Media, PA",
             phone_number="555-333-7777",
             is_published=True,
         )

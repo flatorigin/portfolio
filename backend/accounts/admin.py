@@ -28,6 +28,7 @@ User = get_user_model()
 class BusinessDirectoryListingAdmin(admin.ModelAdmin):
     list_display = (
         "business_name",
+        "location",
         "phone_number",
         "website",
         "specialties_display",
@@ -37,10 +38,11 @@ class BusinessDirectoryListingAdmin(admin.ModelAdmin):
     )
     list_editable = ("is_published", "is_removed")
     list_filter = ("is_published", "is_removed", "created_at")
-    search_fields = ("business_name", "phone_number", "website", "specialties")
+    search_fields = ("business_name", "location", "phone_number", "website", "specialties")
     readonly_fields = ("created_at", "updated_at")
     fields = (
         "business_name",
+        "location",
         "specialties",
         "phone_number",
         "website",
