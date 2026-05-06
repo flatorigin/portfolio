@@ -767,7 +767,7 @@ export default function Explore() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="truncate text-xl font-extrabold leading-tight text-slate-950">
+                        <h3 className="truncate text-base font-semibold text-slate-950">
                           {listing.business_name}
                         </h3>
 
@@ -805,9 +805,10 @@ export default function Explore() {
                     {listing.phone_number ? (
                       <a
                         href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                        className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-blue-700"
+                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-bold text-white transition hover:opacity-90"
                       >
-                        📞 {listing.phone_number}
+                        <span className="text-white">📞</span>
+                        <span>{listing.phone_number}</span>
                       </a>
                     ) : null}
 
