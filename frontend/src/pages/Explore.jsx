@@ -794,7 +794,7 @@ export default function Explore() {
                         {visibleSpecialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full border border-slate-600 bg-slate-300 px-3.5 py-1.5 text-xs font-normal text-slate-900"
+                            className="rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1.5 text-xs font-normal text-slate-950"
                           >
                             {specialty}
                           </span>
