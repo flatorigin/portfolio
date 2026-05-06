@@ -137,6 +137,10 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
     "FlatOrigin <no-reply@flatorigin.com>",
 )
+BUSINESS_DIRECTORY_REVIEW_EMAIL = os.environ.get(
+    "BUSINESS_DIRECTORY_REVIEW_EMAIL",
+    "babak@flatorigin.com",
+)
 
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",

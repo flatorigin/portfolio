@@ -373,6 +373,7 @@ class DeletedEmailBlocklist(models.Model):
 
 class BusinessDirectoryListing(models.Model):
     business_name = models.CharField(max_length=255)
+    location = models.CharField(max_length=200, blank=True, default="")
     specialties = models.JSONField(blank=True, default=list)
     phone_number = models.CharField(max_length=50, blank=True, default="")
     website = models.URLField(blank=True, default="")

@@ -16,6 +16,7 @@ export default function Register() {
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [directoryForm, setDirectoryForm] = useState({
     business_name: "",
+    location: "",
     specialtyInput: "",
     specialties: [],
     phone_number: "",
@@ -89,6 +90,10 @@ export default function Register() {
       setDirectoryError("Business name is required.");
       return;
     }
+    if (!directoryForm.location.trim()) {
+      setDirectoryError("Location is required.");
+      return;
+    }
     if (!directoryForm.phone_number.trim() && !directoryForm.website.trim()) {
       setDirectoryError("Provide either a phone number or a website.");
       return;
@@ -102,6 +107,7 @@ export default function Register() {
     try {
       const { data } = await api.post("/business-directory/", {
         business_name: directoryForm.business_name.trim(),
+        location: directoryForm.location.trim(),
         specialties: uniqueSpecialties,
         phone_number: directoryForm.phone_number.trim(),
         website: directoryForm.website.trim(),
@@ -111,6 +117,7 @@ export default function Register() {
       );
       setDirectoryForm({
         business_name: "",
+        location: "",
         specialtyInput: "",
         specialties: [],
         phone_number: "",
@@ -300,6 +307,18 @@ export default function Register() {
             <Input
               value={directoryForm.business_name}
               onChange={(e) => setDirectoryForm((prev) => ({ ...prev, business_name: e.target.value }))}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Location
+            </label>
+            <Input
+              value={directoryForm.location}
+              onChange={(e) => setDirectoryForm((prev) => ({ ...prev, location: e.target.value }))}
+              placeholder="City, State or ZIP code"
               required
             />
           </div>
