@@ -794,7 +794,7 @@ export default function Explore() {
                         {visibleSpecialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full border border-indigo-100 bg-indigo-50 px-3.5 py-1.5 text-xs font-bold text-slate-700"
+                            className="rounded-full border border-indigo-100 bg-sky-200 px-3.5 py-1.5 text-xs font-normal text-slate-700"
                           >
                             {specialty}
                           </span>
@@ -805,9 +805,9 @@ export default function Explore() {
                     {listing.phone_number ? (
                       <a
                         href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-bold text-white transition hover:opacity-90"
+                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-sm font-bold text-slate-950 transition hover:bg-sky-200 border border-gray-200 px-2 py-3"
                       >
-                        <span className="text-white">📞</span>
+                        <span className="text-slate-950">📞</span>
                         <span>{listing.phone_number}</span>
                       </a>
                     ) : null}
