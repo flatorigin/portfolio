@@ -11,6 +11,7 @@ from .models import (
     AIConfiguration,
     AIUsageEvent,
     AdminAuditLog,
+    BusinessDirectoryListing,
     DeletedEmailBlocklist,
     HomeownerReferenceImage,
     ModerationAction,
@@ -21,6 +22,37 @@ from .models import (
 )
 
 User = get_user_model()
+
+
+@admin.register(BusinessDirectoryListing)
+class BusinessDirectoryListingAdmin(admin.ModelAdmin):
+    list_display = (
+        "business_name",
+        "phone_number",
+        "website",
+        "specialties_display",
+        "is_published",
+        "is_removed",
+        "created_at",
+    )
+    list_editable = ("is_published", "is_removed")
+    list_filter = ("is_published", "is_removed", "created_at")
+    search_fields = ("business_name", "phone_number", "website", "specialties")
+    readonly_fields = ("created_at", "updated_at")
+    fields = (
+        "business_name",
+        "specialties",
+        "phone_number",
+        "website",
+        "is_published",
+        "is_removed",
+        "created_at",
+        "updated_at",
+    )
+
+    @admin.display(description="Specialties")
+    def specialties_display(self, obj):
+        return ", ".join(obj.specialties or [])
 
 
 def log_admin_event(request, event_type, *, target_user=None, target_obj=None, summary="", metadata=None):

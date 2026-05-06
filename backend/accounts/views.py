@@ -27,6 +27,7 @@ from .ai import AIServiceError, generate_text
 from .models import (
     AIConfiguration,
     AIUsageEvent,
+    BusinessDirectoryListing,
     HomeownerReferenceImage,
     Profile,
     ProfileLike,
@@ -37,6 +38,7 @@ from .models import (
 from .serializers import (
     AIAssistSerializer,
     AccountDeleteSerializer,
+    BusinessDirectoryListingSerializer,
     ChangePasswordSerializer,
     HomeownerReferenceImageSerializer,
     ProfileSerializer,
@@ -67,6 +69,42 @@ PROJECT_SEARCH_STOPWORDS = {
     "new",
     "old",
 }
+
+
+def business_directory_review_recipients():
+    explicit = str(getattr(settings, "BUSINESS_DIRECTORY_REVIEW_EMAIL", "") or "").strip()
+    if explicit:
+        return [explicit]
+    admins = [email for _, email in getattr(settings, "ADMINS", []) if email]
+    if admins:
+        return admins
+    fallback = str(getattr(settings, "DEFAULT_FROM_EMAIL", "") or "").strip()
+    return [fallback] if fallback else []
+
+
+def send_business_directory_review_email(listing):
+    recipients = business_directory_review_recipients()
+    if not recipients:
+        return
+
+    message = (
+        "A new business directory listing was submitted for review.\n\n"
+        f"Business name: {listing.business_name}\n"
+        f"Phone: {listing.phone_number or 'Not provided'}\n"
+        f"Website: {listing.website or 'Not provided'}\n"
+        f"Specialties: {', '.join(listing.specialties or []) or 'None'}\n\n"
+        "Review this listing in Django Admin and check is_published to approve it."
+    )
+    try:
+        send_mail(
+            subject="Business directory listing submitted",
+            message=message,
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@example.com"),
+            recipient_list=recipients,
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("Failed to send business directory review email for listing_id=%s", listing.id)
 
 AI_FEATURE_ROLE_RULES = {
     "project_summary": None,
@@ -647,6 +685,31 @@ class ContractorSearchView(APIView):
             context={"request": request},
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class BusinessDirectoryListingView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        listings = BusinessDirectoryListing.objects.filter(
+            is_published=True,
+            is_removed=False,
+        ).order_by("business_name", "id")
+        serializer = BusinessDirectoryListingSerializer(listings, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = BusinessDirectoryListingSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        listing = serializer.save(is_published=False, is_removed=False)
+        send_business_directory_review_email(listing)
+        return Response(
+            {
+                "id": listing.id,
+                "message": "Thanks. Your listing was submitted and will be reviewed before publishing.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ProfileLikeView(APIView):

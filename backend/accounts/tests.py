@@ -16,6 +16,7 @@ from .models import (
     AIConfiguration,
     AIUsageEvent,
     AdminAuditLog,
+    BusinessDirectoryListing,
     Profile,
     StaffAccess,
     UserReport,
@@ -639,3 +640,103 @@ class ReportFlowTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class BusinessDirectoryListingTests(APITestCase):
+    def test_anonymous_user_can_submit_listing_for_review(self):
+        response = self.client.post(
+            "/api/business-directory/",
+            {
+                "business_name": "Deck Pros",
+                "specialties": ["Decks", "Railings"],
+                "phone_number": "555-101-2020",
+                "website": "deckpros.example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        listing = BusinessDirectoryListing.objects.get()
+        self.assertEqual(listing.business_name, "Deck Pros")
+        self.assertEqual(listing.website, "https://deckpros.example.com")
+        self.assertFalse(listing.is_published)
+        self.assertFalse(listing.is_removed)
+
+    def test_listing_requires_phone_or_website(self):
+        response = self.client.post(
+            "/api/business-directory/",
+            {
+                "business_name": "No Contact LLC",
+                "specialties": ["Roofing"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone number or a website", str(response.data).lower())
+
+    def test_listing_rejects_more_than_eight_specialties(self):
+        response = self.client.post(
+            "/api/business-directory/",
+            {
+                "business_name": "Too Many Trades",
+                "specialties": [f"Specialty {idx}" for idx in range(9)],
+                "phone_number": "555-101-2020",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("8", str(response.data))
+
+    def test_public_listing_endpoint_returns_only_approved_not_removed(self):
+        approved = BusinessDirectoryListing.objects.create(
+            business_name="Approved Contractor",
+            specialties=["Kitchens", "Bathrooms", "Tile", "Plumbing", "Hidden specialty"],
+            phone_number="555-333-4444",
+            website="https://approved.example.com",
+            is_published=True,
+        )
+        BusinessDirectoryListing.objects.create(
+            business_name="Pending Contractor",
+            phone_number="555-333-5555",
+            is_published=False,
+        )
+        BusinessDirectoryListing.objects.create(
+            business_name="Removed Contractor",
+            phone_number="555-333-6666",
+            is_published=True,
+            is_removed=True,
+        )
+
+        response = self.client.get("/api/business-directory/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], approved.id)
+        self.assertIn("Hidden specialty", response.data[0]["specialties"])
+
+    def test_logged_in_user_can_report_public_directory_listing(self):
+        reporter = User.objects.create_user(username="directoryreporter", password="pw123456")
+        Profile.objects.update_or_create(user=reporter, defaults={"profile_type": Profile.ProfileType.HOMEOWNER})
+        listing = BusinessDirectoryListing.objects.create(
+            business_name="Questionable Contractor",
+            phone_number="555-333-7777",
+            is_published=True,
+        )
+
+        self.client.force_authenticate(reporter)
+        response = self.client.post(
+            "/api/reports/",
+            {
+                "target_type": "business_directory_listing",
+                "target_id": listing.id,
+                "report_type": "fraud",
+                "subject": "Wrong listing",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        report = UserReport.objects.get()
+        self.assertEqual(report.target_object, listing)

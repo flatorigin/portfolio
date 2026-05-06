@@ -371,6 +371,23 @@ class DeletedEmailBlocklist(models.Model):
         return self.email
 
 
+class BusinessDirectoryListing(models.Model):
+    business_name = models.CharField(max_length=255)
+    specialties = models.JSONField(blank=True, default=list)
+    phone_number = models.CharField(max_length=50, blank=True, default="")
+    website = models.URLField(blank=True, default="")
+    is_published = models.BooleanField(default=False)
+    is_removed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["business_name", "id"]
+
+    def __str__(self):
+        return self.business_name
+
+
 class StaffAccess(models.Model):
     class Role(models.TextChoices):
         SUPPORT = "support", "Support"

@@ -1,8 +1,18 @@
 # backend/accounts/serializers.py
+import re
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from djoser.serializers import UserCreateSerializer
-from .models import DeletedEmailBlocklist, HomeownerReferenceImage, Profile, ProfileLike, ProfileSave, UserReport
+from .models import (
+    BusinessDirectoryListing,
+    DeletedEmailBlocklist,
+    HomeownerReferenceImage,
+    Profile,
+    ProfileLike,
+    ProfileSave,
+    UserReport,
+)
 
 User = get_user_model()
 
@@ -88,6 +98,67 @@ class HomeownerReferenceImageSerializer(serializers.ModelSerializer):
         if obj.image and hasattr(obj.image, "url"):
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
+
+
+class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
+    website = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    class Meta:
+        model = BusinessDirectoryListing
+        fields = [
+            "id",
+            "business_name",
+            "specialties",
+            "phone_number",
+            "website",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_business_name(self, value):
+        value = str(value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Business name is required.")
+        return value
+
+    def validate_specialties(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Specialties must be a list.")
+
+        cleaned = []
+        seen = set()
+        for item in value:
+            text = str(item or "").strip()
+            key = text.lower()
+            if text and key not in seen:
+                cleaned.append(text[:80])
+                seen.add(key)
+
+        if len(cleaned) > 8:
+            raise serializers.ValidationError("Add up to 8 specialties.")
+        return cleaned
+
+    def validate_phone_number(self, value):
+        return str(value or "").strip()
+
+    def validate_website(self, value):
+        value = str(value or "").strip()
+        if not value:
+            return ""
+        if not re.match(r"^https?://", value, re.IGNORECASE):
+            value = f"https://{value}"
+        return value
+
+    def validate(self, attrs):
+        phone = str(attrs.get("phone_number", "") or "").strip()
+        website = str(attrs.get("website", "") or "").strip()
+        if not phone and not website:
+            raise serializers.ValidationError(
+                {"detail": "Provide either a phone number or a website."}
+            )
+        return attrs
 
 
 class RoleAwareUserCreateSerializer(UserCreateSerializer):
@@ -187,6 +258,7 @@ class ReportCreateSerializer(serializers.Serializer):
     TARGET_REFERENCE_IMAGE = "reference_image"
     TARGET_MESSAGE_THREAD = "message_thread"
     TARGET_PRIVATE_MESSAGE = "private_message"
+    TARGET_BUSINESS_DIRECTORY_LISTING = "business_directory_listing"
 
     TARGET_TYPE_CHOICES = [
         (TARGET_PROFILE, "Profile"),
@@ -195,6 +267,7 @@ class ReportCreateSerializer(serializers.Serializer):
         (TARGET_REFERENCE_IMAGE, "Reference image"),
         (TARGET_MESSAGE_THREAD, "Message thread"),
         (TARGET_PRIVATE_MESSAGE, "Private message"),
+        (TARGET_BUSINESS_DIRECTORY_LISTING, "Business directory listing"),
     ]
 
     target_type = serializers.ChoiceField(choices=TARGET_TYPE_CHOICES)
@@ -265,6 +338,16 @@ class ReportCreateSerializer(serializers.Serializer):
             if message.sender_id == request.user.id:
                 raise serializers.ValidationError({"target_id": "You cannot report your own message."})
             return message, message.sender
+
+        if target_type == self.TARGET_BUSINESS_DIRECTORY_LISTING:
+            listing = BusinessDirectoryListing.objects.filter(
+                pk=target_id,
+                is_published=True,
+                is_removed=False,
+            ).first()
+            if not listing:
+                raise serializers.ValidationError({"target_id": "Directory listing not found."})
+            return listing, None
 
         raise serializers.ValidationError({"target_type": "Unsupported report target."})
 
