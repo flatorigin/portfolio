@@ -794,7 +794,7 @@ export default function Explore() {
                         {visibleSpecialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full border border-indigo-100 bg-sky-200 px-3.5 py-1.5 text-xs font-normal text-slate-700"
+                            className="rounded-full border border-slate-600 bg-slate-300 px-3.5 py-1.5 text-xs font-normal text-slate-900"
                           >
                             {specialty}
                           </span>
@@ -805,7 +805,7 @@ export default function Explore() {
                     {listing.phone_number ? (
                       <a
                         href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-sky-200 hover:bg-sky-50"
+                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
                       >
                         <span className="text-slate-950">📞</span>
                         <span>{listing.phone_number}</span>
@@ -817,7 +817,7 @@ export default function Explore() {
                         href={listing.website}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-4 inline-block text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                        className="mt-4 inline-block text-sm font-semibold text-blue-500 hover:text-blue-900 hover:underline"
                       >
                         Visit Website
                       </a>
