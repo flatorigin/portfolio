@@ -805,7 +805,7 @@ export default function Explore() {
                     {listing.phone_number ? (
                       <a
                         href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-sm font-bold text-slate-950 transition hover:bg-sky-200 border border-gray-200 px-2 py-3"
+                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-sky-200 hover:bg-sky-50"
                       >
                         <span className="text-slate-950">📞</span>
                         <span>{listing.phone_number}</span>
