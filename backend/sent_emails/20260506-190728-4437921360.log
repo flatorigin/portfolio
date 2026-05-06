@@ -1,0 +1,20 @@
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Subject: Business directory listing submitted
+From: FlatOrigin <no-reply@flatorigin.com>
+To: babak@flatorigin.com
+Date: Wed, 06 May 2026 19:07:28 -0000
+Message-ID: 
+ <177809444831.62068.587820354365381542@1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa>
+
+A new business directory listing was submitted for review.
+
+Business name: Pine Ridge
+Location: Lancaster, PA
+Phone: 4845004343
+Website: https://pineridgeenterprizes.com
+Specialties: Patio, Fireplace, Outdoor Kitchen, Outdoor structures
+
+Review this listing in Django Admin and check is_published to approve it.
+-------------------------------------------------------------------------------
