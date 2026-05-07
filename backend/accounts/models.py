@@ -389,6 +389,32 @@ class BusinessDirectoryListing(models.Model):
         return self.business_name
 
 
+class BusinessDirectoryListingLike(models.Model):
+    liker = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="business_directory_likes_given",
+    )
+    listing = models.ForeignKey(
+        BusinessDirectoryListing,
+        on_delete=models.CASCADE,
+        related_name="likes",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["liker", "listing"],
+                name="unique_business_directory_listing_like",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.liker_id} liked directory listing {self.listing_id}"
+
+
 class StaffAccess(models.Model):
     class Role(models.TextChoices):
         SUPPORT = "support", "Support"

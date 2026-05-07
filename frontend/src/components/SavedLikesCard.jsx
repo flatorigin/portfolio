@@ -107,6 +107,11 @@ export default function SavedLikesCard() {
       return;
     }
     if (activeTab === "liked-profiles") {
+      if (item.kind === "business_directory_listing") {
+        await api.delete(`/business-directory/${item.id}/like/`);
+        window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
+        return;
+      }
       await api.delete(`/profiles/${item.username}/like/`);
       window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
     }
@@ -196,6 +201,65 @@ export default function SavedLikesCard() {
                     >
                       Visit Profile
                     </GhostButton>
+                    <Button type="button" variant="outline" onClick={() => removeItem(item)}>
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              );
+            }
+
+            if (activeTab === "liked-profiles" && item.kind === "business_directory_listing") {
+              const specialties = Array.isArray(item.specialties) ? item.specialties.slice(0, 4) : [];
+              return (
+                <div
+                  key={`${activeTab}-directory-${item.id}`}
+                  className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center"
+                >
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                    {(item.business_name || "B").slice(0, 1).toUpperCase()}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-base font-semibold text-slate-900">
+                      {item.business_name || "Business listing"}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {item.location || "Local business/contractor directory"}
+                    </div>
+                    {specialties.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {specialties.map((specialty) => (
+                          <span
+                            key={specialty}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600"
+                          >
+                            {specialty}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    {item.website ? (
+                      <GhostButton
+                        type="button"
+                        onClick={() => window.open(item.website, "_blank", "noopener,noreferrer")}
+                      >
+                        Visit Website
+                      </GhostButton>
+                    ) : null}
+                    {item.phone_number ? (
+                      <GhostButton
+                        type="button"
+                        onClick={() => {
+                          window.location.href = `tel:${String(item.phone_number).replace(/[^\d+]/g, "")}`;
+                        }}
+                      >
+                        Call
+                      </GhostButton>
+                    ) : null}
                     <Button type="button" variant="outline" onClick={() => removeItem(item)}>
                       Remove
                     </Button>
