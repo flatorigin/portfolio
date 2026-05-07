@@ -17,6 +17,7 @@ from .models import (
     AIUsageEvent,
     AdminAuditLog,
     BusinessDirectoryListing,
+    BusinessDirectoryListingLike,
     Profile,
     StaffAccess,
     UserReport,
@@ -749,3 +750,47 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         report = UserReport.objects.get()
         self.assertEqual(report.target_object, listing)
+
+    def test_logged_in_user_can_like_public_directory_listing(self):
+        user = User.objects.create_user(username="directoryliker", password="pw123456")
+        Profile.objects.update_or_create(user=user, defaults={"profile_type": Profile.ProfileType.HOMEOWNER})
+        listing = BusinessDirectoryListing.objects.create(
+            business_name="Liked Contractor",
+            location="Media, PA",
+            phone_number="555-333-8888",
+            is_published=True,
+        )
+
+        self.client.force_authenticate(user)
+        like_response = self.client.post(f"/api/business-directory/{listing.id}/like/")
+        list_response = self.client.get("/api/business-directory/")
+        unlike_response = self.client.delete(f"/api/business-directory/{listing.id}/like/")
+
+        self.assertEqual(like_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(like_response.data["liked"])
+        self.assertEqual(like_response.data["like_count"], 1)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(list_response.data[0]["liked_by_me"])
+        self.assertEqual(list_response.data[0]["like_count"], 1)
+        self.assertEqual(unlike_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(unlike_response.data["liked"])
+        self.assertFalse(BusinessDirectoryListingLike.objects.filter(listing=listing).exists())
+
+    def test_liked_directory_listing_appears_with_liked_profiles(self):
+        user = User.objects.create_user(username="directorydash", password="pw123456")
+        Profile.objects.update_or_create(user=user, defaults={"profile_type": Profile.ProfileType.HOMEOWNER})
+        listing = BusinessDirectoryListing.objects.create(
+            business_name="Dashboard Contractor",
+            location="Media, PA",
+            specialties=["Decks", "Painting"],
+            website="https://dashboard.example.com",
+            is_published=True,
+        )
+        BusinessDirectoryListingLike.objects.create(liker=user, listing=listing)
+
+        self.client.force_authenticate(user)
+        response = self.client.get("/api/profiles/liked/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data[0]["kind"], "business_directory_listing")
+        self.assertEqual(response.data[0]["business_name"], "Dashboard Contractor")

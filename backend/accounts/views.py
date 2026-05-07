@@ -28,6 +28,7 @@ from .models import (
     AIConfiguration,
     AIUsageEvent,
     BusinessDirectoryListing,
+    BusinessDirectoryListingLike,
     HomeownerReferenceImage,
     Profile,
     ProfileLike,
@@ -713,6 +714,39 @@ class BusinessDirectoryListingView(APIView):
         )
 
 
+class BusinessDirectoryListingLikeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_listing(self, pk):
+        return get_object_or_404(
+            BusinessDirectoryListing,
+            pk=pk,
+            is_published=True,
+            is_removed=False,
+        )
+
+    def get(self, request, pk):
+        listing = self.get_listing(pk)
+        liked = BusinessDirectoryListingLike.objects.filter(
+            liker=request.user,
+            listing=listing,
+        ).exists()
+        count = BusinessDirectoryListingLike.objects.filter(listing=listing).count()
+        return Response({"liked": liked, "like_count": count}, status=status.HTTP_200_OK)
+
+    def post(self, request, pk):
+        listing = self.get_listing(pk)
+        BusinessDirectoryListingLike.objects.get_or_create(liker=request.user, listing=listing)
+        count = BusinessDirectoryListingLike.objects.filter(listing=listing).count()
+        return Response({"liked": True, "like_count": count}, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        listing = self.get_listing(pk)
+        BusinessDirectoryListingLike.objects.filter(liker=request.user, listing=listing).delete()
+        count = BusinessDirectoryListingLike.objects.filter(listing=listing).count()
+        return Response({"liked": False, "like_count": count}, status=status.HTTP_200_OK)
+
+
 class ProfileLikeView(APIView):
     """
     GET    /api/profiles/<username>/like/   -> { liked: bool, like_count: int }
@@ -772,7 +806,37 @@ class LikedProfilesView(APIView):
         )
 
         ser = LikedProfileCardSerializer(qs, many=True, context={"request": request})
-        return Response(ser.data, status=status.HTTP_200_OK)
+        profile_cards = [
+            {
+                **item,
+                "kind": "profile",
+            }
+            for item in ser.data
+        ]
+
+        directory_listing_ids = (
+            BusinessDirectoryListingLike.objects
+            .filter(liker=request.user)
+            .values_list("listing_id", flat=True)
+        )
+        directory_qs = BusinessDirectoryListing.objects.filter(
+            id__in=list(directory_listing_ids),
+            is_published=True,
+            is_removed=False,
+        )
+        directory_cards = [
+            {
+                "kind": "business_directory_listing",
+                **item,
+            }
+            for item in BusinessDirectoryListingSerializer(
+                directory_qs,
+                many=True,
+                context={"request": request},
+            ).data
+        ]
+
+        return Response(profile_cards + directory_cards, status=status.HTTP_200_OK)
 
 
 class ProfileSaveView(APIView):

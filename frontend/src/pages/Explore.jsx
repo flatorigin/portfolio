@@ -103,6 +103,9 @@ export default function Explore() {
   const [likeMap, setLikeMap] = useState({});
   const [likeCounts, setLikeCounts] = useState({});
   const [likeBusyId, setLikeBusyId] = useState(null);
+  const [directoryLikeMap, setDirectoryLikeMap] = useState({});
+  const [directoryLikeCounts, setDirectoryLikeCounts] = useState({});
+  const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -240,6 +243,56 @@ export default function Explore() {
     [isOwner, likeBusyId, likeCounts, likeMap]
   );
 
+  const toggleDirectoryLike = useCallback(
+    async (e, listing) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!listing?.id) return;
+      if (!authRef.current.authed) {
+        alert("Log in to like directory listings.");
+        return;
+      }
+      if (directoryLikeBusyId === listing.id) return;
+
+      const currently = !!directoryLikeMap[listing.id];
+      const prevCount = Number(directoryLikeCounts[listing.id] ?? listing.like_count ?? 0);
+
+      setDirectoryLikeBusyId(listing.id);
+      setDirectoryLikeMap((prev) => ({ ...prev, [listing.id]: !currently }));
+      setDirectoryLikeCounts((prev) => ({
+        ...prev,
+        [listing.id]: Math.max(0, prevCount + (currently ? -1 : 1)),
+      }));
+
+      try {
+        const { data } = currently
+          ? await api.delete(`/business-directory/${listing.id}/like/`)
+          : await api.post(`/business-directory/${listing.id}/like/`);
+
+        setDirectoryLikeMap((prev) => ({ ...prev, [listing.id]: !!data?.liked }));
+        if (data?.like_count !== undefined) {
+          setDirectoryLikeCounts((prev) => ({
+            ...prev,
+            [listing.id]: Number(data.like_count || 0),
+          }));
+        }
+        window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
+      } catch (err) {
+        console.error("[Explore] toggleDirectoryLike failed", err?.response || err);
+        setDirectoryLikeMap((prev) => ({ ...prev, [listing.id]: currently }));
+        setDirectoryLikeCounts((prev) => ({ ...prev, [listing.id]: prevCount }));
+
+        const data = err?.response?.data;
+        const msg = data?.detail || data?.message || err?.message || "Could not update like.";
+        alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+      } finally {
+        setDirectoryLikeBusyId(null);
+      }
+    },
+    [directoryLikeBusyId, directoryLikeCounts, directoryLikeMap]
+  );
+
  // 1) Load projects once (stable)
  useEffect(() => {
    let alive = true;
@@ -281,7 +334,18 @@ export default function Explore() {
 	      const exploreItems = [...referenceCards, ...exploreProjects];
 
 	      setProjects(exploreItems);
-	      setDirectoryListings(Array.isArray(directoryData) ? directoryData : []);
+	      const directoryItems = Array.isArray(directoryData) ? directoryData : [];
+	      setDirectoryListings(directoryItems);
+	      setDirectoryLikeCounts(
+	        Object.fromEntries(
+	          directoryItems.map((listing) => [listing.id, Number(listing?.like_count || 0)])
+	        )
+	      );
+	      setDirectoryLikeMap(
+	        Object.fromEntries(
+	          directoryItems.map((listing) => [listing.id, !!listing?.liked_by_me])
+	        )
+	      );
 	      setLikeCounts(
 	        Object.fromEntries(
 	          exploreItems.map((p) => [p.id, Number(p?.like_count || 0)])
@@ -746,17 +810,19 @@ export default function Explore() {
         <div className="mt-8 border-t border-slate-200 pt-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-	              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-	                Local business/contractors directory
-	              </h2>
-	            </div>
-	          </div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Local business/contractors directory
+              </h2>
+            </div>
+          </div>
 
           {filteredDirectoryListings.length > 0 ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
               {filteredDirectoryListings.map((listing) => {
                 const specialties = Array.isArray(listing.specialties) ? listing.specialties : [];
                 const visibleSpecialties = specialties.slice(0, 4);
+                const liked = !!directoryLikeMap[listing.id];
+                const likeCount = Number(directoryLikeCounts[listing.id] ?? listing.like_count ?? 0);
                 return (
                   <Card
                     key={`directory-${listing.id}`}
@@ -775,21 +841,34 @@ export default function Explore() {
                         ) : null}
                       </div>
 
-	                      <div className="group relative">
-	                        <ReportContentButton
-	                          targetType="business_directory_listing"
-	                          targetId={listing.id}
-	                          subject={listing.business_name || "Business directory listing"}
-	                          label={<SymbolIcon name="flag" className="text-[16px]" />}
-	                          title="Report listing"
-	                          ariaLabel="Report listing"
-	                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-	                        />
-	                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-	                          Business information may be sourced from publicly available information. Business owners may request edits or removal.
-	                        </div>
-	                      </div>
-	                    </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                          onClick={(e) => toggleDirectoryLike(e, listing)}
+                          disabled={directoryLikeBusyId === listing.id}
+                          aria-label={liked ? "Unlike directory listing" : "Like directory listing"}
+                          title={liked ? "Unlike directory listing" : "Like directory listing"}
+                        >
+                          <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
+                          <span>{likeCount}</span>
+                        </button>
+                        <div className="group relative">
+                          <ReportContentButton
+                            targetType="business_directory_listing"
+                            targetId={listing.id}
+                            subject={listing.business_name || "Business directory listing"}
+                            label={<SymbolIcon name="flag" className="text-[16px]" />}
+                            title="Report listing"
+                            ariaLabel="Report listing"
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                          />
+                          <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                            Business information may be sourced from publicly available information. Business owners may request edits or removal.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
                     {visibleSpecialties.length > 0 ? (
                       <div className="mt-5 flex flex-wrap gap-2.5">

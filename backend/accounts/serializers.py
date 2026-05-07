@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from djoser.serializers import UserCreateSerializer
 from .models import (
     BusinessDirectoryListing,
+    BusinessDirectoryListingLike,
     DeletedEmailBlocklist,
     HomeownerReferenceImage,
     Profile,
@@ -102,6 +103,8 @@ class HomeownerReferenceImageSerializer(serializers.ModelSerializer):
 
 class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
     website = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    like_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessDirectoryListing
@@ -112,9 +115,23 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
             "specialties",
             "phone_number",
             "website",
+            "like_count",
+            "liked_by_me",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "like_count", "liked_by_me", "created_at"]
+
+    def get_like_count(self, obj):
+        return BusinessDirectoryListingLike.objects.filter(listing=obj).count()
+
+    def get_liked_by_me(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return BusinessDirectoryListingLike.objects.filter(
+            liker=request.user,
+            listing=obj,
+        ).exists()
 
     def validate_business_name(self, value):
         value = str(value or "").strip()
