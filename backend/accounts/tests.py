@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -6,6 +7,9 @@ from django.test import override_settings
 from django.utils import timezone
 from datetime import timedelta
 from io import BytesIO
+import json
+from pathlib import Path
+import tempfile
 from unittest.mock import patch
 from PIL import Image
 from rest_framework import status
@@ -794,3 +798,78 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data[0]["kind"], "business_directory_listing")
         self.assertEqual(response.data[0]["business_name"], "Dashboard Contractor")
+
+
+class ImportBusinessDirectoryCommandTests(TestCase):
+    def write_json(self, payload):
+        handle = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
+        with handle:
+            json.dump(payload, handle)
+        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
+        return handle.name
+
+    def test_import_business_directory_creates_listing_from_json_list(self):
+        path = self.write_json(
+            [
+                {
+                    "name_of_the_business": "M&D Home Renovations",
+                    "location": "Media, PA",
+                    "phone_number": "(484) 250-4883",
+                    "website": "manddhomerenovations.com",
+                    "specialties": [
+                        "Kitchen & Bath Renovation",
+                        "Custom Builds",
+                    ],
+                }
+            ]
+        )
+
+        call_command("import_business_directory", path, "--publish")
+
+        listing = BusinessDirectoryListing.objects.get()
+        self.assertEqual(listing.business_name, "M&D Home Renovations")
+        self.assertEqual(listing.location, "Media, PA")
+        self.assertEqual(listing.website, "https://manddhomerenovations.com")
+        self.assertEqual(listing.specialties, ["Kitchen & Bath Renovation", "Custom Builds"])
+        self.assertTrue(listing.is_published)
+
+    def test_import_business_directory_updates_by_business_name_and_location(self):
+        BusinessDirectoryListing.objects.create(
+            business_name="M&D Home Renovations",
+            location="Media, PA",
+            phone_number="old",
+            is_published=True,
+        )
+        path = self.write_json(
+            [
+                {
+                    "business_name": "M&D Home Renovations",
+                    "location": "Media, PA",
+                    "phone_number": "(484) 250-4883",
+                    "specialties": "Kitchen, Bath",
+                    "is_published": True,
+                }
+            ]
+        )
+
+        call_command("import_business_directory", path)
+
+        self.assertEqual(BusinessDirectoryListing.objects.count(), 1)
+        listing = BusinessDirectoryListing.objects.get()
+        self.assertEqual(listing.phone_number, "(484) 250-4883")
+        self.assertEqual(listing.specialties, ["Kitchen", "Bath"])
+
+    def test_import_business_directory_dry_run_does_not_write(self):
+        path = self.write_json(
+            [
+                {
+                    "business_name": "Dry Run Contractor",
+                    "location": "Media, PA",
+                    "phone_number": "555-123-4567",
+                }
+            ]
+        )
+
+        call_command("import_business_directory", path, "--dry-run")
+
+        self.assertFalse(BusinessDirectoryListing.objects.exists())
