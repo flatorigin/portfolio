@@ -841,31 +841,18 @@ export default function Explore() {
                         ) : null}
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                          onClick={(e) => toggleDirectoryLike(e, listing)}
-                          disabled={directoryLikeBusyId === listing.id}
-                          aria-label={liked ? "Unlike directory listing" : "Like directory listing"}
-                          title={liked ? "Unlike directory listing" : "Like directory listing"}
-                        >
-                          <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
-                          <span>{likeCount}</span>
-                        </button>
-                        <div className="group relative">
-                          <ReportContentButton
-                            targetType="business_directory_listing"
-                            targetId={listing.id}
-                            subject={listing.business_name || "Business directory listing"}
-                            label={<SymbolIcon name="flag" className="text-[16px]" />}
-                            title="Report listing"
-                            ariaLabel="Report listing"
-                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                          />
-                          <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                            Business information may be sourced from publicly available information. Business owners may request edits or removal.
-                          </div>
+                      <div className="group relative shrink-0">
+                        <ReportContentButton
+                          targetType="business_directory_listing"
+                          targetId={listing.id}
+                          subject={listing.business_name || "Business directory listing"}
+                          label={<SymbolIcon name="flag" className="text-[16px]" />}
+                          title="Report listing"
+                          ariaLabel="Report listing"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                        />
+                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                          Business information may be sourced from publicly available information. Business owners may request edits or removal.
                         </div>
                       </div>
                     </div>
@@ -893,20 +880,32 @@ export default function Explore() {
                       </a>
                     ) : null}
 
-                    {listing.website ? (
-                      <a
-                        href={listing.website}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-4 inline-block text-sm font-semibold text-blue-500 hover:text-blue-900 hover:underline"
+                    <div className="mt-auto flex items-center justify-between gap-3 pt-5 text-xs text-slate-500">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                        onClick={(e) => toggleDirectoryLike(e, listing)}
+                        disabled={directoryLikeBusyId === listing.id}
+                        aria-label={liked ? "Unlike directory listing" : "Like directory listing"}
+                        title={liked ? "Unlike directory listing" : "Like directory listing"}
                       >
-                        Visit Website
-                      </a>
-                    ) : (
-                      <div className="mt-auto pt-5 text-xs text-slate-400">
-                        Reviewed listing
-                      </div>
-                    )}
+                        <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
+                        <span>{likeCount}</span>
+                      </button>
+
+                      {listing.website ? (
+                        <a
+                          href={listing.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-end text-sm font-semibold text-blue-500 hover:text-blue-900 hover:underline"
+                        >
+                          Visit Website
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-400">Reviewed listing</span>
+                      )}
+                    </div>
                   </Card>
                 );
               })}
