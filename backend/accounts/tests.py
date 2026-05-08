@@ -490,6 +490,77 @@ class AdminSecurityTests(TestCase):
         )
 
 
+class BusinessDirectoryAdminImportTests(TestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_user(
+            username="business_admin",
+            email="business_admin@example.com",
+            password="pw12345678!",
+            is_staff=True,
+            is_superuser=True,
+            is_active=True,
+        )
+        self.client.force_login(self.admin_user)
+
+    def upload_json(self, payload, *, publish="on", dry_run=""):
+        upload = SimpleUploadedFile(
+            "businesses.json",
+            json.dumps(payload).encode("utf-8"),
+            content_type="application/json",
+        )
+        data = {"json_file": upload}
+        if publish:
+            data["publish"] = publish
+        if dry_run:
+            data["dry_run"] = dry_run
+        return self.client.post(
+            "/admin/accounts/businessdirectorylisting/import-json/",
+            data,
+            follow=True,
+        )
+
+    def test_admin_import_page_loads(self):
+        response = self.client.get("/admin/accounts/businessdirectorylisting/import-json/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Upload JSON file")
+        self.assertContains(response, "Dry run only")
+
+    def test_admin_json_import_creates_published_listing(self):
+        response = self.upload_json(
+            [
+                {
+                    "business_name": "Admin Import Contractor",
+                    "location": "Media, PA",
+                    "phone_number": "555-111-2222",
+                    "specialties": ["Decks", "Kitchens"],
+                }
+            ]
+        )
+
+        self.assertEqual(response.status_code, 200)
+        listing = BusinessDirectoryListing.objects.get()
+        self.assertEqual(listing.business_name, "Admin Import Contractor")
+        self.assertTrue(listing.is_published)
+        self.assertContains(response, "Imported business directory listings: 1 created, 0 updated, 0 skipped.")
+
+    def test_admin_json_import_dry_run_does_not_write(self):
+        response = self.upload_json(
+            [
+                {
+                    "business_name": "Dry Run Admin Contractor",
+                    "location": "Media, PA",
+                    "phone_number": "555-111-2222",
+                }
+            ],
+            dry_run="on",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(BusinessDirectoryListing.objects.exists())
+        self.assertContains(response, "Would import business directory listings: 1 created, 0 updated, 0 skipped.")
+
+
 class VerificationStatusTests(TestCase):
     def test_verified_status_expires_when_expiration_date_passes(self):
         user = User.objects.create_user(

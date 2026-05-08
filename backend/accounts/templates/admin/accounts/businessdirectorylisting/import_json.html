@@ -1,0 +1,63 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{{ changelist_url }}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; Import JSON
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+
+      <fieldset class="module aligned">
+        <h2>Upload JSON file</h2>
+
+        {% if form.non_field_errors %}
+          <div class="errornote">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="form-row">
+          {{ form.json_file.errors }}
+          <div>
+            {{ form.json_file.label_tag }}
+            {{ form.json_file }}
+            {% if form.json_file.help_text %}
+              <div class="help">{{ form.json_file.help_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-row">
+          {{ form.publish.errors }}
+          <div class="checkbox-row">
+            {{ form.publish }} {{ form.publish.label_tag }}
+            {% if form.publish.help_text %}
+              <div class="help">{{ form.publish.help_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-row">
+          {{ form.dry_run.errors }}
+          <div class="checkbox-row">
+            {{ form.dry_run }} {{ form.dry_run.label_tag }}
+            {% if form.dry_run.help_text %}
+              <div class="help">{{ form.dry_run.help_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="submit-row">
+        <input type="submit" value="Import JSON" class="default">
+        <a class="button cancel-link" href="{{ changelist_url }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
