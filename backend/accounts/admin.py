@@ -2,11 +2,20 @@
 from datetime import timedelta
 from types import MethodType
 
+from django import forms
 from django.contrib import admin
+from django.contrib import messages
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
+from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
 from django.utils import timezone
+from .business_directory_import import (
+    import_business_directory_payload,
+    parse_business_directory_json,
+)
 from .models import (
     AIConfiguration,
     AIUsageEvent,
@@ -24,8 +33,27 @@ from .models import (
 User = get_user_model()
 
 
+class BusinessDirectoryImportForm(forms.Form):
+    json_file = forms.FileField(
+        label="JSON file",
+        help_text="Upload a JSON array of business directory listings.",
+    )
+    publish = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Publish imported listings",
+        help_text="Listings with an explicit is_published value in JSON keep that value.",
+    )
+    dry_run = forms.BooleanField(
+        required=False,
+        label="Dry run only",
+        help_text="Validate and preview counts without saving changes.",
+    )
+
+
 @admin.register(BusinessDirectoryListing)
 class BusinessDirectoryListingAdmin(admin.ModelAdmin):
+    change_list_template = "admin/accounts/businessdirectorylisting/change_list.html"
     list_display = (
         "business_name",
         "location",
@@ -55,6 +83,64 @@ class BusinessDirectoryListingAdmin(admin.ModelAdmin):
     @admin.display(description="Specialties")
     def specialties_display(self, obj):
         return ", ".join(obj.specialties or [])
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-json/",
+                self.admin_site.admin_view(self.import_json_view),
+                name="accounts_businessdirectorylisting_import_json",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_json_view(self, request):
+        opts = self.model._meta
+        changelist_url = reverse("admin:accounts_businessdirectorylisting_changelist")
+
+        if request.method == "POST":
+            form = BusinessDirectoryImportForm(request.POST, request.FILES)
+            if form.is_valid():
+                uploaded = form.cleaned_data["json_file"]
+                try:
+                    raw = uploaded.read().decode("utf-8")
+                    payload = parse_business_directory_json(raw)
+                    result = import_business_directory_payload(
+                        payload,
+                        default_publish=form.cleaned_data["publish"],
+                        dry_run=form.cleaned_data["dry_run"],
+                    )
+                except UnicodeDecodeError:
+                    form.add_error("json_file", "Upload a UTF-8 encoded JSON file.")
+                except ValueError as exc:
+                    form.add_error("json_file", str(exc))
+                else:
+                    if result.errors:
+                        for error in result.errors[:10]:
+                            messages.error(request, error)
+                        if len(result.errors) > 10:
+                            messages.error(request, f"{len(result.errors) - 10} more error(s) not shown.")
+                        messages.error(request, result.summary())
+                    else:
+                        messages.success(request, result.summary())
+                        return HttpResponseRedirect(changelist_url)
+        else:
+            form = BusinessDirectoryImportForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": opts,
+            "title": "Import business directory listings",
+            "form": form,
+            "changelist_url": changelist_url,
+            "has_view_permission": self.has_view_permission(request),
+        }
+        return TemplateResponse(
+            request,
+            "admin/accounts/businessdirectorylisting/import_json.html",
+            context,
+        )
 
 
 def log_admin_event(request, event_type, *, target_user=None, target_obj=None, summary="", metadata=None):
