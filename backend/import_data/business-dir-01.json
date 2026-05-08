@@ -1,0 +1,170 @@
+[
+  {
+    "business_name": "DeMeo Builders",
+    "location": "Media, PA",
+    "specialties": ["New Home Construction", "Residential Additions", "Kitchens", "Bathrooms", "Basements", "Decks & Patios", "Excavating"],
+    "is_published": true,
+    "phone_number": "(484) 832-3460",
+    "website": "https://www.demeobuilders.com"
+  },
+  {
+    "business_name": "COCOON",
+    "location": "Media, PA",
+    "specialties": ["Whole Home Remodeling", "First & Second Floor Remodels", "Design-Build Services", "Aging in Place Remodel", "Home Additions"],
+    "is_published": true,
+    "phone_number": "(610) 250-4883",
+    "website": "https://thecocoon.com"
+  },
+  {
+    "business_name": "Wentworth Contracting",
+    "location": "Media, PA",
+    "specialties": ["Home Additions", "Basement Remodeling", "Kitchen Remodeling", "Custom Built-ins", "Accessory Dwelling Units"],
+    "is_published": true,
+    "phone_number": "(610) 812-8453",
+    "website": "https://www.houzz.com/professionals/general-contractors/wentworth-contracting-pfvwus-pf~505281832"
+  },
+  {
+    "business_name": "R.C. Titter Construction, Inc.",
+    "location": "Media, PA",
+    "specialties": ["General Contracting", "Residential Construction", "Custom Building", "Major Renovations"],
+    "is_published": true,
+    "phone_number": "(610) 891-0739",
+    "website": "https://www.rctitter.com"
+  },
+  {
+    "business_name": "Canopy Building Services",
+    "location": "Media, PA",
+    "specialties": ["Home Expansions", "Room Extensions", "Remodeling Projects", "Delaware County Residential Service"],
+    "is_published": true,
+    "phone_number": "(610) 566-2309",
+    "website": "https://canopybuildingservices.com"
+  },
+  {
+    "business_name": "M&D Home Renovations",
+    "location": "Media, PA",
+    "specialties": ["Kitchen & Bath Renovation", "Custom Builds", "Design Services", "Family-Owned Project Management"],
+    "is_published": true,
+    "phone_number": "(484) 250-4883",
+    "website": "https://www.manddhomerenovations.com"
+  },
+  {
+    "business_name": "Windows Plus",
+    "location": "Media, PA",
+    "specialties": ["Window Replacement", "Roofing Contractors", "Siding Contractors", "Exterior General Contracting"],
+    "is_published": true,
+    "phone_number": "(610) 566-2309",
+    "website": "https://www.windowsplus.com"
+  },
+  {
+    "business_name": "Archadeck of Delaware County",
+    "location": "Media, PA",
+    "specialties": ["Custom Deck Design and Construction", "Pergolas", "Screen Porches", "Outdoor Kitchens", "Fire Features"],
+    "is_published": true,
+    "phone_number": "(610) 840-6695",
+    "website": "https://www.archadeck.com/delaware-county/resources/service-areas/media/"
+  },
+  {
+    "business_name": "TJ's Painting & Renovations Co.",
+    "location": "Media, PA",
+    "specialties": ["Custom Trim and Crown Molding", "Wainscotting", "Custom Shelving and Built-ins", "Interior Carpentry", "Restoration Services"],
+    "is_published": true,
+    "phone_number": "(610) 461-1234",
+    "website": "https://tjspaintingandrenovations.com/locations/media/"
+  },
+  {
+    "business_name": "Meridian Construction",
+    "location": "Media, PA",
+    "specialties": ["Custom Deck Additions", "Porches and Patios", "Whole-House Remodeling", "Finish Carpentry", "Structural Framing"],
+    "is_published": true,
+    "phone_number": "(215) 720-1863",
+    "website": "https://meridianbuilder.com/service-area/remodeling/media-pa/"
+  },
+  {
+    "business_name": "Mr. Handyman of Media and Springfield",
+    "location": "Media, PA",
+    "specialties": ["General Carpentry", "Door Installation", "Window Frame Repair", "Cabinet Repair", "Shelving Installation"],
+    "is_published": true,
+    "phone_number": "(484) 229-2175",
+    "website": "https://www.mrhandyman.com/media-springfield/"
+  },
+  {
+    "business_name": "DeMichele Inc.",
+    "location": "Media, PA",
+    "specialties": ["Custom Outdoor Living Spaces", "Concrete Patio Installation", "Retaining Wall Construction", "Decorative Concrete Features", "Residential Hardscape Design"],
+    "is_published": true,
+    "phone_number": "(610) 361-0231",
+    "website": "https://demicheleinc.com"
+  },
+  {
+    "business_name": "Mahoney and Mahoney Landscaping, Inc.",
+    "location": "Media, PA",
+    "specialties": ["Patios and Walkways", "Outdoor Fireplaces and Fire Pits", "Paver Driveways", "Retaining Walls", "Custom Landscape Design"],
+    "is_published": true,
+    "phone_number": "(610) 328-4092",
+    "website": "https://www.mahoneylandscaping.com"
+  },
+  {
+    "business_name": "Cider Mill Landscapes",
+    "location": "Media, PA",
+    "specialties": ["Garden Design & Installation", "Hardscaping", "Arbors, Pergolas & Pavilions", "Outdoor Kitchens", "Landscape Lighting"],
+    "is_published": true,
+    "phone_number": "(484) 574-4666",
+    "website": "https://www.cidermilllandscapes.com"
+  },
+  {
+    "business_name": "Philz Landscaping & Contracting LLC",
+    "location": "Media, PA",
+    "specialties": ["Hardscaping and Patios", "Concrete and Masonry", "Fencing and Railings", "Exterior Facility Management", "Custom Planting"],
+    "is_published": true,
+    "phone_number": "(610) 656-3110",
+    "website": "https://www.philzlandscaping.com"
+  },
+  {
+    "business_name": "Main Line Kitchen Design",
+    "location": "Media, PA",
+    "specialties": ["Custom Kitchen Cabinetry", "Kitchen Design & Layout", "Semi-Custom Cabinet Lines", "Full Kitchen Remodeling", "Countertop Selection"],
+    "is_published": true,
+    "phone_number": "(610) 500-4071",
+    "website": "https://www.mainlinekitchendesign.com"
+  },
+  {
+    "business_name": "European Kitchen & Bath",
+    "location": "Media, PA",
+    "specialties": ["High-End Kitchen Design", "European Cabinetry Styles", "Bathroom Vanities", "Hardware & Fixtures", "Luxury Remodeling"],
+    "is_published": true,
+    "phone_number": "(610) 891-9100",
+    "website": "https://www.europeankitchenandbath.com"
+  },
+  {
+    "business_name": "Media Kitchen & Bath",
+    "location": "Media, PA",
+    "specialties": ["Kitchen Design", "Cabinet Installation", "Bathroom Remodeling", "Tile Work", "Residential Renovations"],
+    "is_published": true,
+    "phone_number": "(610) 565-3430",
+    "website": "http://www.mediakitchenandbath.com"
+  },
+  {
+    "business_name": "Honey Fix It Inc.",
+    "location": "Media, PA",
+    "specialties": ["Residential Bathroom Remodeling", "General Contracting", "Home Improvement Repairs", "Project Management"],
+    "is_published": true,
+    "phone_number": "(610) 331-5077",
+    "website": "https://honeyfixit.com"
+  },
+  {
+    "business_name": "Petka Remodeling",
+    "location": "Media, PA",
+    "specialties": ["Bathroom Remodeling Specialists", "Custom Tile Work", "Window and Door Integration", "Small to Medium Scale Renovations"],
+    "is_published": true,
+    "phone_number": "(610) 566-1360",
+    "website": "https://www.petkaremodeling.com"
+  },
+  {
+    "business_name": "Deck Pros",
+    "location": "Media, PA",
+    "specialties": ["Decks", "Railings", "Framing"],
+    "is_published": true,
+    "phone_number": "555-101-2020",
+    "website": "https://deckpros.com"
+  }
+]
