@@ -1,0 +1,33 @@
+.git
+.gitignore
+
+# Local Python/runtime artifacts
+backend/venv
+backend/__pycache__
+backend/**/__pycache__
+backend/**/*.pyc
+backend/db.sqlite3
+
+# Local media is served from Railway volume in production.
+backend/media
+media
+
+# Local frontend dependencies/build output are recreated in Docker.
+frontend/node_modules
+frontend/dist
+
+# Local environment and editor files
+.env
+backend/.env
+frontend/.env.local
+.DS_Store
+**/.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Test/cache artifacts
+.pytest_cache
+.ruff_cache
+.mypy_cache
+coverage
+htmlcov

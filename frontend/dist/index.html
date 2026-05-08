@@ -18,7 +18,13 @@
       gtag('js', new Date());
       gtag('config', 'G-CT3Y4SNZWK', { send_page_view: false });
     </script>
-    <script type="module" crossorigin src="/static/index-ACObgCUx.js"></script>
+    <script>
+      window.__ENV__ = {
+        GOOGLE_MAPS_API_KEY: "__VITE_GOOGLE_MAPS_API_KEY__",
+        GOOGLE_MAPS_MAP_ID: "__VITE_GOOGLE_MAPS_MAP_ID__"
+      };
+    </script>
+    <script type="module" crossorigin src="/static/index-CUReTbVV.js"></script>
     <link rel="stylesheet" crossorigin href="/static/index-l0UBUr7N.css">
   </head>
   <body>
