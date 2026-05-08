@@ -14,6 +14,10 @@ if [ -f "$FRONTEND_INDEX" ]; then
   else
     echo "WARNING: VITE_GOOGLE_MAPS_API_KEY is missing at runtime"
   fi
+  if [ -n "${VITE_GOOGLE_MAPS_MAP_ID:-}" ]; then
+    echo "Injecting VITE_GOOGLE_MAPS_MAP_ID into frontend build..."
+    sed -i "s|__VITE_GOOGLE_MAPS_MAP_ID__|${VITE_GOOGLE_MAPS_MAP_ID}|g" "$FRONTEND_INDEX" || true
+  fi
 else
   echo "WARNING: Frontend dist not found at $FRONTEND_INDEX (skipping env injection)"
 fi

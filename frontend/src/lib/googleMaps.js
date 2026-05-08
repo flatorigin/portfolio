@@ -37,13 +37,20 @@ export function getGoogleMapsMapId() {
   const runtimeMapId =
     typeof window !== "undefined" ? window.__ENV__?.GOOGLE_MAPS_MAP_ID : "";
   const viteMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "";
-  return String(runtimeMapId || viteMapId || "DEMO_MAP_ID").trim();
+  const value = String(runtimeMapId || viteMapId || "").trim();
+  return isPlaceholderEnvValue(value) ? "DEMO_MAP_ID" : value || "DEMO_MAP_ID";
+}
+
+function isPlaceholderEnvValue(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized.startsWith("__vite_") || normalized.endsWith("__");
 }
 
 export function isPlaceholderGoogleMapsKey(key) {
   if (!key) return true;
   const value = key.trim().toLowerCase();
   return (
+    isPlaceholderEnvValue(value) ||
     value === "your_key_if_needed" ||
     value === "your_google_maps_api_key" ||
     value === "your_api_key" ||
