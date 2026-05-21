@@ -113,6 +113,7 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
             "id",
             "business_name",
             "location",
+            "country_code",
             "location_lat",
             "location_lng",
             "service_radius_miles",
@@ -151,6 +152,14 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
         value = str(value or "").strip()
         if not value:
             raise serializers.ValidationError("Location is required.")
+        return value
+
+    def validate_country_code(self, value):
+        value = str(value or "").strip().upper()
+        if not value:
+            return ""
+        if len(value) != 2 or not value.isalpha():
+            raise serializers.ValidationError("Country code must be a two-letter code.")
         return value
 
     def validate_specialties(self, value):

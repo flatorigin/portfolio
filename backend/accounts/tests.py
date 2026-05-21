@@ -544,6 +544,7 @@ class BusinessDirectoryAdminImportTests(TestCase):
         self.assertEqual(response.status_code, 200)
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.business_name, "Admin Import Contractor")
+        self.assertEqual(listing.country_code, "US")
         self.assertEqual(listing.location_lat, 39.9168)
         self.assertEqual(listing.location_lng, -75.3877)
         self.assertEqual(listing.service_radius_miles, 25)
@@ -835,6 +836,7 @@ class BusinessDirectoryListingTests(APITestCase):
         far = BusinessDirectoryListing.objects.create(
             business_name="Toronto Contractor",
             location="Toronto, ON",
+            country_code="CA",
             location_lat=43.6532,
             location_lng=-79.3832,
             phone_number="555-444-4444",
@@ -856,6 +858,34 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertIsNone(response.data[2]["distance_miles"])
         returned_ids = {item["id"] for item in response.data}
         self.assertNotIn(far.id, returned_ids)
+
+    def test_public_listing_endpoint_filters_by_country_code_when_available(self):
+        us_listing = BusinessDirectoryListing.objects.create(
+            business_name="Media Contractor",
+            location="Media, PA",
+            country_code="US",
+            location_lat=39.9168,
+            location_lng=-75.3877,
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        canada_listing = BusinessDirectoryListing.objects.create(
+            business_name="Richmond Hill Contractor",
+            location="Richmond Hill, ON",
+            country_code="CA",
+            location_lat=43.8828,
+            location_lng=-79.4403,
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+
+        us_response = self.client.get("/api/business-directory/?lat=39.95&lng=-75.16&country_code=US")
+        canada_response = self.client.get("/api/business-directory/?lat=43.88&lng=-79.44&country_code=CA")
+
+        self.assertEqual(us_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in us_response.data], [us_listing.id])
+        self.assertEqual(canada_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in canada_response.data], [canada_listing.id])
 
     def test_public_listing_endpoint_uses_authenticated_profile_location_fallback(self):
         user = User.objects.create_user(username="directoryorigin", password="pw123456")
@@ -1061,6 +1091,7 @@ class ImportBusinessDirectoryCommandTests(TestCase):
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.business_name, "M&D Home Renovations")
         self.assertEqual(listing.location, "Media, PA")
+        self.assertEqual(listing.country_code, "US")
         self.assertEqual(listing.location_lat, 39.9168)
         self.assertEqual(listing.location_lng, -75.3877)
         self.assertEqual(listing.service_radius_miles, 20)
@@ -1092,6 +1123,7 @@ class ImportBusinessDirectoryCommandTests(TestCase):
         self.assertEqual(BusinessDirectoryListing.objects.count(), 1)
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.phone_number, "(484) 250-4883")
+        self.assertEqual(listing.country_code, "US")
         self.assertEqual(listing.specialties, ["Kitchen", "Bath"])
 
     def test_import_business_directory_dry_run_does_not_write(self):
@@ -1115,6 +1147,7 @@ class GeocodeBusinessDirectoryCommandTests(TestCase):
     def test_geocode_business_directory_updates_missing_coordinates(self, geocode_mock):
         geocode_mock.return_value.lat = 39.9168
         geocode_mock.return_value.lng = -75.3877
+        geocode_mock.return_value.country_code = "US"
         BusinessDirectoryListing.objects.create(
             business_name="Needs Coordinates",
             location="Media, PA",
@@ -1127,12 +1160,14 @@ class GeocodeBusinessDirectoryCommandTests(TestCase):
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.location_lat, 39.9168)
         self.assertEqual(listing.location_lng, -75.3877)
+        self.assertEqual(listing.country_code, "US")
         geocode_mock.assert_called_once_with("Media, PA")
 
     @patch("accounts.management.commands.geocode_business_directory.geocode_with_google_maps")
     def test_geocode_business_directory_dry_run_does_not_write(self, geocode_mock):
         geocode_mock.return_value.lat = 39.9168
         geocode_mock.return_value.lng = -75.3877
+        geocode_mock.return_value.country_code = "US"
         BusinessDirectoryListing.objects.create(
             business_name="Dry Run Coordinates",
             location="Media, PA",

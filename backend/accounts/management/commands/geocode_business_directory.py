@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Q
 
 from accounts.geocoding import GeocodingError, geocode_with_google_maps
 from accounts.models import BusinessDirectoryListing
@@ -38,7 +39,10 @@ class Command(BaseCommand):
         if options["listing_ids"]:
             qs = qs.filter(id__in=options["listing_ids"])
         if not options["force"]:
-            qs = qs.filter(location_lat__isnull=True, location_lng__isnull=True)
+            qs = qs.filter(
+                Q(location_lat__isnull=True, location_lng__isnull=True)
+                | Q(country_code="")
+            )
         qs = qs.order_by("business_name", "id")
         if options["limit"] and options["limit"] > 0:
             qs = qs[: options["limit"]]
@@ -60,11 +64,14 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"{listing.business_name}: {listing.location} -> "
                 f"{result.lat:.6f}, {result.lng:.6f}"
+                + (f" ({result.country_code})" if result.country_code else "")
             )
             if not options["dry_run"]:
                 listing.location_lat = result.lat
                 listing.location_lng = result.lng
-                listing.save(update_fields=["location_lat", "location_lng", "updated_at"])
+                if result.country_code:
+                    listing.country_code = result.country_code
+                listing.save(update_fields=["country_code", "location_lat", "location_lng", "updated_at"])
             updated += 1
 
         for error in errors:

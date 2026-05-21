@@ -374,6 +374,7 @@ class DeletedEmailBlocklist(models.Model):
 class BusinessDirectoryListing(models.Model):
     business_name = models.CharField(max_length=255)
     location = models.CharField(max_length=200, blank=True, default="")
+    country_code = models.CharField(max_length=2, blank=True, default="", db_index=True)
     location_lat = models.FloatField(blank=True, null=True)
     location_lng = models.FloatField(blank=True, null=True)
     service_radius_miles = models.PositiveIntegerField(blank=True, null=True)
