@@ -112,6 +112,9 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
             "id",
             "business_name",
             "location",
+            "location_lat",
+            "location_lng",
+            "service_radius_miles",
             "specialties",
             "phone_number",
             "website",
@@ -176,11 +179,18 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        instance = getattr(self, "instance", None)
         phone = str(attrs.get("phone_number", "") or "").strip()
         website = str(attrs.get("website", "") or "").strip()
         if not phone and not website:
             raise serializers.ValidationError(
                 {"detail": "Provide either a phone number or a website."}
+            )
+        location_lat = attrs.get("location_lat", getattr(instance, "location_lat", None))
+        location_lng = attrs.get("location_lng", getattr(instance, "location_lng", None))
+        if (location_lat is None) != (location_lng is None):
+            raise serializers.ValidationError(
+                {"location": "Location coordinates must include both latitude and longitude."}
             )
         return attrs
 
