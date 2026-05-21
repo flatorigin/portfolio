@@ -532,6 +532,9 @@ class BusinessDirectoryAdminImportTests(TestCase):
                 {
                     "business_name": "Admin Import Contractor",
                     "location": "Media, PA",
+                    "location_lat": 39.9168,
+                    "location_lng": -75.3877,
+                    "service_radius_miles": 25,
                     "phone_number": "555-111-2222",
                     "specialties": ["Decks", "Kitchens"],
                 }
@@ -541,6 +544,9 @@ class BusinessDirectoryAdminImportTests(TestCase):
         self.assertEqual(response.status_code, 200)
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.business_name, "Admin Import Contractor")
+        self.assertEqual(listing.location_lat, 39.9168)
+        self.assertEqual(listing.location_lng, -75.3877)
+        self.assertEqual(listing.service_radius_miles, 25)
         self.assertTrue(listing.is_published)
         self.assertContains(response, "Imported business directory listings: 1 created, 0 updated, 0 skipped.")
 
@@ -736,6 +742,8 @@ class BusinessDirectoryListingTests(APITestCase):
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.business_name, "Deck Pros")
         self.assertEqual(listing.location, "Media, PA")
+        self.assertIsNone(listing.location_lat)
+        self.assertIsNone(listing.location_lng)
         self.assertEqual(listing.website, "https://deckpros.example.com")
         self.assertFalse(listing.is_published)
         self.assertFalse(listing.is_removed)
@@ -773,6 +781,9 @@ class BusinessDirectoryListingTests(APITestCase):
         approved = BusinessDirectoryListing.objects.create(
             business_name="Approved Contractor",
             location="Media, PA",
+            location_lat=39.9168,
+            location_lng=-75.3877,
+            service_radius_miles=25,
             specialties=["Kitchens", "Bathrooms", "Tile", "Plumbing", "Hidden specialty"],
             phone_number="555-333-4444",
             website="https://approved.example.com",
@@ -798,7 +809,93 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id"], approved.id)
         self.assertEqual(response.data[0]["location"], "Media, PA")
+        self.assertEqual(response.data[0]["location_lat"], 39.9168)
+        self.assertEqual(response.data[0]["location_lng"], -75.3877)
+        self.assertEqual(response.data[0]["service_radius_miles"], 25)
         self.assertIn("Hidden specialty", response.data[0]["specialties"])
+        self.assertIsNone(response.data[0]["distance_miles"])
+
+    def test_public_listing_endpoint_sorts_by_query_coordinates(self):
+        far = BusinessDirectoryListing.objects.create(
+            business_name="Boston Contractor",
+            location="Boston, MA",
+            location_lat=42.3601,
+            location_lng=-71.0589,
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        near = BusinessDirectoryListing.objects.create(
+            business_name="Philadelphia Contractor",
+            location="Philadelphia, PA",
+            location_lat=39.9526,
+            location_lng=-75.1652,
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+        no_coordinates = BusinessDirectoryListing.objects.create(
+            business_name="Unmapped Contractor",
+            location="Somewhere",
+            phone_number="555-333-3333",
+            is_published=True,
+        )
+
+        response = self.client.get("/api/business-directory/?lat=39.95&lng=-75.16")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id, no_coordinates.id])
+        self.assertIsNotNone(response.data[0]["distance_miles"])
+        self.assertIsNotNone(response.data[1]["distance_miles"])
+        self.assertIsNone(response.data[2]["distance_miles"])
+
+    def test_public_listing_endpoint_uses_authenticated_profile_location_fallback(self):
+        user = User.objects.create_user(username="directoryorigin", password="pw123456")
+        Profile.objects.update_or_create(
+            user=user,
+            defaults={
+                "profile_type": Profile.ProfileType.HOMEOWNER,
+                "service_lat": 39.9526,
+                "service_lng": -75.1652,
+            },
+        )
+        user.profile.refresh_from_db()
+        far = BusinessDirectoryListing.objects.create(
+            business_name="Boston Contractor",
+            location="Boston, MA",
+            location_lat=42.3601,
+            location_lng=-71.0589,
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        near = BusinessDirectoryListing.objects.create(
+            business_name="Philadelphia Contractor",
+            location="Philadelphia, PA",
+            location_lat=39.9526,
+            location_lng=-75.1652,
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+
+        self.client.force_authenticate(user)
+        response = self.client.get("/api/business-directory/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id])
+        self.assertEqual(response.data[0]["distance_miles"], 0.0)
+
+    def test_listing_rejects_partial_coordinates(self):
+        response = self.client.post(
+            "/api/business-directory/",
+            {
+                "business_name": "Partial Coordinates LLC",
+                "location": "Media, PA",
+                "location_lat": 39.9168,
+                "phone_number": "555-101-2020",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("latitude and longitude", str(response.data).lower())
 
     def test_logged_in_user_can_report_public_directory_listing(self):
         reporter = User.objects.create_user(username="directoryreporter", password="pw123456")
@@ -871,6 +968,57 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.data[0]["business_name"], "Dashboard Contractor")
 
 
+class ContractorSearchGeoOrderingTests(APITestCase):
+    def setUp(self):
+        self.viewer = User.objects.create_user(username="viewer", password="pw123456")
+        Profile.objects.update_or_create(
+            user=self.viewer,
+            defaults={"profile_type": Profile.ProfileType.HOMEOWNER},
+        )
+
+    def _create_contractor(self, username, display_name, lat=None, lng=None):
+        user = User.objects.create_user(username=username, password="pw123456", is_active=True)
+        profile, _ = Profile.objects.update_or_create(
+            user=user,
+            defaults={
+                "profile_type": Profile.ProfileType.CONTRACTOR,
+                "display_name": display_name,
+                "service_location": display_name,
+                "service_lat": lat,
+                "service_lng": lng,
+            },
+        )
+        return profile
+
+    def test_contractor_search_sorts_by_query_coordinates(self):
+        far = self._create_contractor("bostonpro", "Boston Pro", 42.3601, -71.0589)
+        near = self._create_contractor("phillypro", "Philadelphia Pro", 39.9526, -75.1652)
+        no_coordinates = self._create_contractor("unmappedpro", "Unmapped Pro")
+
+        self.client.force_authenticate(self.viewer)
+        response = self.client.get("/api/profiles/contractors/search/?lat=39.95&lng=-75.16")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id, no_coordinates.id])
+        self.assertIsNotNone(response.data[0]["distance_miles"])
+        self.assertIsNotNone(response.data[1]["distance_miles"])
+        self.assertIsNone(response.data[2]["distance_miles"])
+
+    def test_contractor_search_uses_authenticated_profile_location_fallback(self):
+        self.viewer.profile.service_lat = 39.9526
+        self.viewer.profile.service_lng = -75.1652
+        self.viewer.profile.save(update_fields=["service_lat", "service_lng"])
+        far = self._create_contractor("bostonpro", "Boston Pro", 42.3601, -71.0589)
+        near = self._create_contractor("phillypro", "Philadelphia Pro", 39.9526, -75.1652)
+
+        self.client.force_authenticate(self.viewer)
+        response = self.client.get("/api/profiles/contractors/search/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id])
+        self.assertEqual(response.data[0]["distance_miles"], 0.0)
+
+
 class ImportBusinessDirectoryCommandTests(TestCase):
     def write_json(self, payload):
         handle = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
@@ -885,6 +1033,9 @@ class ImportBusinessDirectoryCommandTests(TestCase):
                 {
                     "name_of_the_business": "M&D Home Renovations",
                     "location": "Media, PA",
+                    "lat": 39.9168,
+                    "lng": -75.3877,
+                    "radius_miles": 20,
                     "phone_number": "(484) 250-4883",
                     "website": "manddhomerenovations.com",
                     "specialties": [
@@ -900,6 +1051,9 @@ class ImportBusinessDirectoryCommandTests(TestCase):
         listing = BusinessDirectoryListing.objects.get()
         self.assertEqual(listing.business_name, "M&D Home Renovations")
         self.assertEqual(listing.location, "Media, PA")
+        self.assertEqual(listing.location_lat, 39.9168)
+        self.assertEqual(listing.location_lng, -75.3877)
+        self.assertEqual(listing.service_radius_miles, 20)
         self.assertEqual(listing.website, "https://manddhomerenovations.com")
         self.assertEqual(listing.specialties, ["Kitchen & Bath Renovation", "Custom Builds"])
         self.assertTrue(listing.is_published)
@@ -944,3 +1098,40 @@ class ImportBusinessDirectoryCommandTests(TestCase):
         call_command("import_business_directory", path, "--dry-run")
 
         self.assertFalse(BusinessDirectoryListing.objects.exists())
+
+
+class GeocodeBusinessDirectoryCommandTests(TestCase):
+    @patch("accounts.management.commands.geocode_business_directory.geocode_with_google_maps")
+    def test_geocode_business_directory_updates_missing_coordinates(self, geocode_mock):
+        geocode_mock.return_value.lat = 39.9168
+        geocode_mock.return_value.lng = -75.3877
+        BusinessDirectoryListing.objects.create(
+            business_name="Needs Coordinates",
+            location="Media, PA",
+            phone_number="555-123-4567",
+            is_published=True,
+        )
+
+        call_command("geocode_business_directory")
+
+        listing = BusinessDirectoryListing.objects.get()
+        self.assertEqual(listing.location_lat, 39.9168)
+        self.assertEqual(listing.location_lng, -75.3877)
+        geocode_mock.assert_called_once_with("Media, PA")
+
+    @patch("accounts.management.commands.geocode_business_directory.geocode_with_google_maps")
+    def test_geocode_business_directory_dry_run_does_not_write(self, geocode_mock):
+        geocode_mock.return_value.lat = 39.9168
+        geocode_mock.return_value.lng = -75.3877
+        BusinessDirectoryListing.objects.create(
+            business_name="Dry Run Coordinates",
+            location="Media, PA",
+            phone_number="555-123-4567",
+            is_published=True,
+        )
+
+        call_command("geocode_business_directory", "--dry-run")
+
+        listing = BusinessDirectoryListing.objects.get()
+        self.assertIsNone(listing.location_lat)
+        self.assertIsNone(listing.location_lng)

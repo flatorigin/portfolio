@@ -46,6 +46,9 @@ def normalize_business_directory_item(item, *, default_publish):
     normalized = {
         "business_name": item.get("business_name") or item.get("name_of_the_business") or item.get("name") or "",
         "location": item.get("location") or "",
+        "location_lat": item.get("location_lat", item.get("lat", item.get("latitude"))),
+        "location_lng": item.get("location_lng", item.get("lng", item.get("longitude"))),
+        "service_radius_miles": item.get("service_radius_miles", item.get("radius_miles")),
         "specialties": item.get("specialties") or [],
         "phone_number": item.get("phone_number") or item.get("phone") or "",
         "website": item.get("website") or "",
@@ -94,6 +97,9 @@ def import_business_directory_payload(payload, *, default_publish=False, dry_run
 
             listing.business_name = validated["business_name"]
             listing.location = validated["location"]
+            listing.location_lat = validated.get("location_lat")
+            listing.location_lng = validated.get("location_lng")
+            listing.service_radius_miles = validated.get("service_radius_miles")
             listing.specialties = validated.get("specialties", [])
             listing.phone_number = validated.get("phone_number", "")
             listing.website = validated.get("website", "")

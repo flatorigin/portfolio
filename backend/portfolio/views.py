@@ -22,6 +22,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from accounts.ai import AIServiceError, generate_text
+from accounts.geo_distance import get_request_origin, sort_by_distance
 from accounts.models import (
     AIConfiguration,
     AIUsageEvent,
@@ -585,7 +586,24 @@ class ProjectViewSet(viewsets.ModelViewSet):
             )
             .order_by("-updated_at")
         )
-        ser = self.get_serializer(qs, many=True, context={"request": request})
+        origin = get_request_origin(request)
+        distance_lookup = {}
+        if origin:
+            projects = list(qs.select_related("owner__profile"))
+            fallback_order = {project.pk: index for index, project in enumerate(projects)}
+            projects, distance_lookup = sort_by_distance(
+                projects,
+                origin,
+                lambda project: getattr(getattr(project.owner, "profile", None), "service_lat", None),
+                lambda project: getattr(getattr(project.owner, "profile", None), "service_lng", None),
+                lambda project: fallback_order.get(project.pk, 0),
+            )
+            qs = projects
+        ser = self.get_serializer(
+            qs,
+            many=True,
+            context={"request": request, "distance_lookup": distance_lookup},
+        )
         return Response(ser.data)
 
 

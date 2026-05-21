@@ -51,6 +51,49 @@ class PrivateProjectAccessTests(APITestCase):
         ids = [item["id"] for item in response.data]
         self.assertNotIn(self.private_job.id, ids)
 
+    def test_public_job_feed_sorts_by_owner_profile_coordinates(self):
+        near_owner = User.objects.create_user(username="nearowner", password="pw123456")
+        Profile.objects.update_or_create(
+            user=near_owner,
+            defaults={
+                "profile_type": Profile.ProfileType.HOMEOWNER,
+                "service_lat": 39.9526,
+                "service_lng": -75.1652,
+            },
+        )
+        far_owner = User.objects.create_user(username="farowner", password="pw123456")
+        Profile.objects.update_or_create(
+            user=far_owner,
+            defaults={
+                "profile_type": Profile.ProfileType.HOMEOWNER,
+                "service_lat": 42.3601,
+                "service_lng": -71.0589,
+            },
+        )
+        far_job = Project.objects.create(
+            owner=far_owner,
+            title="Boston kitchen",
+            is_job_posting=True,
+            is_public=True,
+            is_private=False,
+            post_privacy="public",
+        )
+        near_job = Project.objects.create(
+            owner=near_owner,
+            title="Philadelphia deck",
+            is_job_posting=True,
+            is_public=True,
+            is_private=False,
+            post_privacy="public",
+        )
+
+        response = self.client.get("/api/projects/job-postings/?lat=39.9526&lng=-75.1652")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near_job.id, far_job.id])
+        self.assertEqual(response.data[0]["distance_miles"], 0.0)
+        self.assertIsNotNone(response.data[1]["distance_miles"])
+
     def test_contractor_search_filters_to_active_unfrozen_contractors(self):
         contractor = User.objects.create_user(username="deckpro", password="pw123456")
         Profile.objects.create(

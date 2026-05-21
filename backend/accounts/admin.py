@@ -57,6 +57,8 @@ class BusinessDirectoryListingAdmin(admin.ModelAdmin):
     list_display = (
         "business_name",
         "location",
+        "coordinates_display",
+        "service_radius_miles",
         "phone_number",
         "website",
         "specialties_display",
@@ -71,6 +73,9 @@ class BusinessDirectoryListingAdmin(admin.ModelAdmin):
     fields = (
         "business_name",
         "location",
+        "location_lat",
+        "location_lng",
+        "service_radius_miles",
         "specialties",
         "phone_number",
         "website",
@@ -83,6 +88,12 @@ class BusinessDirectoryListingAdmin(admin.ModelAdmin):
     @admin.display(description="Specialties")
     def specialties_display(self, obj):
         return ", ".join(obj.specialties or [])
+
+    @admin.display(description="Coordinates")
+    def coordinates_display(self, obj):
+        if obj.location_lat is None or obj.location_lng is None:
+            return ""
+        return f"{obj.location_lat:.5f}, {obj.location_lng:.5f}"
 
     def get_urls(self):
         urls = super().get_urls()

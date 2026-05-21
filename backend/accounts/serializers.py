@@ -105,6 +105,7 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
     website = serializers.CharField(required=False, allow_blank=True, max_length=500)
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
+    distance_miles = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessDirectoryListing
@@ -112,14 +113,18 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
             "id",
             "business_name",
             "location",
+            "location_lat",
+            "location_lng",
+            "service_radius_miles",
             "specialties",
             "phone_number",
             "website",
             "like_count",
             "liked_by_me",
+            "distance_miles",
             "created_at",
         ]
-        read_only_fields = ["id", "like_count", "liked_by_me", "created_at"]
+        read_only_fields = ["id", "like_count", "liked_by_me", "distance_miles", "created_at"]
 
     def get_like_count(self, obj):
         return BusinessDirectoryListingLike.objects.filter(listing=obj).count()
@@ -132,6 +137,9 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
             liker=request.user,
             listing=obj,
         ).exists()
+
+    def get_distance_miles(self, obj):
+        return self.context.get("distance_lookup", {}).get(obj.pk)
 
     def validate_business_name(self, value):
         value = str(value or "").strip()
@@ -176,11 +184,18 @@ class BusinessDirectoryListingSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        instance = getattr(self, "instance", None)
         phone = str(attrs.get("phone_number", "") or "").strip()
         website = str(attrs.get("website", "") or "").strip()
         if not phone and not website:
             raise serializers.ValidationError(
                 {"detail": "Provide either a phone number or a website."}
+            )
+        location_lat = attrs.get("location_lat", getattr(instance, "location_lat", None))
+        location_lng = attrs.get("location_lng", getattr(instance, "location_lng", None))
+        if (location_lat is None) != (location_lng is None):
+            raise serializers.ValidationError(
+                {"location": "Location coordinates must include both latitude and longitude."}
             )
         return attrs
 
@@ -931,6 +946,7 @@ class ContractorSearchResultSerializer(ProfileBaseMixin, serializers.ModelSerial
     avatar_url = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
     member_since_label = serializers.ReadOnlyField()
+    distance_miles = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
@@ -944,6 +960,7 @@ class ContractorSearchResultSerializer(ProfileBaseMixin, serializers.ModelSerial
             "avatar_url",
             "logo_url",
             "member_since_label",
+            "distance_miles",
         ]
 
     def get_logo_url(self, obj):
@@ -952,3 +969,6 @@ class ContractorSearchResultSerializer(ProfileBaseMixin, serializers.ModelSerial
         if image and hasattr(image, "url"):
             return self._build_abs_url(request, image.url)
         return None
+
+    def get_distance_miles(self, obj):
+        return self.context.get("distance_lookup", {}).get(obj.pk)

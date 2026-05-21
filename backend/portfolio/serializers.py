@@ -358,6 +358,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
     saved_by_me = serializers.SerializerMethodField()
+    distance_miles = serializers.SerializerMethodField()
 
     cover_image_ref = serializers.PrimaryKeyRelatedField(
         queryset=ProjectImage.objects.all(),
@@ -411,6 +412,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "like_count",
             "liked_by_me",
             "saved_by_me",
+            "distance_miles",
             "cover_image_ref",
             "cover_image_id",
             "cover_image_file",
@@ -425,6 +427,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "images",
             "cover_image_url",
             "invited_contractors",
+            "distance_miles",
         ]
 
     def _normalize_invite_usernames(self, value):
@@ -637,6 +640,9 @@ class ProjectSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated:
             return False
         return ProjectFavorite.objects.filter(project=obj, user=user).exists()
+
+    def get_distance_miles(self, obj):
+        return self.context.get("distance_lookup", {}).get(obj.pk)
 
     def _sync_project_invites(self, project, invite_usernames=None):
         if not project.is_job_posting or not project.is_private:
