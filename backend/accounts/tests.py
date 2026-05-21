@@ -551,6 +551,30 @@ class BusinessDirectoryAdminImportTests(TestCase):
         self.assertTrue(listing.is_published)
         self.assertContains(response, "Imported business directory listings: 1 created, 0 updated, 0 skipped.")
 
+    def test_admin_json_import_infers_canada_country_code_from_location(self):
+        response = self.upload_json(
+            [
+                {
+                    "business_name": "Espadan Innovative Design Corp.",
+                    "location": "Richmond Hill, ON, Canada",
+                    "specialties": [
+                        "Carpentry",
+                        "Custom Craftsmanship",
+                        "Engineering Services",
+                    ],
+                    "is_published": True,
+                    "phone_number": "(647) 278-2757",
+                    "website": "https://espadan.ca",
+                }
+            ]
+        )
+
+        self.assertEqual(response.status_code, 200)
+        listing = BusinessDirectoryListing.objects.get()
+        self.assertEqual(listing.business_name, "Espadan Innovative Design Corp.")
+        self.assertEqual(listing.country_code, "CA")
+        self.assertTrue(listing.is_published)
+
     def test_admin_json_import_dry_run_does_not_write(self):
         response = self.upload_json(
             [
