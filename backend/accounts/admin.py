@@ -57,6 +57,7 @@ class BusinessDirectoryListingAdmin(admin.ModelAdmin):
     list_display = (
         "business_name",
         "location",
+        "country_code",
         "coordinates_display",
         "service_radius_miles",
         "phone_number",
@@ -67,12 +68,13 @@ class BusinessDirectoryListingAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_editable = ("is_published", "is_removed")
-    list_filter = ("is_published", "is_removed", "created_at")
+    list_filter = ("country_code", "is_published", "is_removed", "created_at")
     search_fields = ("business_name", "location", "phone_number", "website", "specialties")
     readonly_fields = ("created_at", "updated_at")
     fields = (
         "business_name",
         "location",
+        "country_code",
         "location_lat",
         "location_lng",
         "service_radius_miles",

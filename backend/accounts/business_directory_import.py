@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 
 from django.db import transaction
 
+from accounts.geo_distance import infer_country_code_from_location, normalize_country_code
 from accounts.models import BusinessDirectoryListing
 from accounts.serializers import BusinessDirectoryListingSerializer
 
@@ -43,9 +44,14 @@ def parse_business_directory_json(raw):
 
 
 def normalize_business_directory_item(item, *, default_publish):
+    location = item.get("location") or ""
+    country_code = normalize_country_code(
+        item.get("country_code") or item.get("country") or item.get("countryCode")
+    ) or infer_country_code_from_location(location)
     normalized = {
         "business_name": item.get("business_name") or item.get("name_of_the_business") or item.get("name") or "",
-        "location": item.get("location") or "",
+        "location": location,
+        "country_code": country_code,
         "location_lat": item.get("location_lat", item.get("lat", item.get("latitude"))),
         "location_lng": item.get("location_lng", item.get("lng", item.get("longitude"))),
         "service_radius_miles": item.get("service_radius_miles", item.get("radius_miles")),
@@ -97,6 +103,7 @@ def import_business_directory_payload(payload, *, default_publish=False, dry_run
 
             listing.business_name = validated["business_name"]
             listing.location = validated["location"]
+            listing.country_code = validated.get("country_code", "")
             listing.location_lat = validated.get("location_lat")
             listing.location_lng = validated.get("location_lng")
             listing.service_radius_miles = validated.get("service_radius_miles")

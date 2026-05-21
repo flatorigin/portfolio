@@ -10,6 +10,7 @@ class GeocodeResult:
     lat: float
     lng: float
     formatted_address: str = ""
+    country_code: str = ""
 
 
 class GeocodingError(Exception):
@@ -56,8 +57,15 @@ def geocode_with_google_maps(query, *, api_key=None, timeout=10):
     except (KeyError, TypeError, ValueError) as exc:
         raise GeocodingError("Geocoding result did not include valid coordinates.") from exc
 
+    country_code = ""
+    for component in first.get("address_components", []):
+        if "country" in component.get("types", []):
+            country_code = str(component.get("short_name") or "").upper()
+            break
+
     return GeocodeResult(
         lat=lat,
         lng=lng,
         formatted_address=first.get("formatted_address", ""),
+        country_code=country_code,
     )

@@ -24,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .ai import AIServiceError, generate_text
-from .geo_distance import get_request_origin, localized_distance_sort, sort_by_distance
+from .geo_distance import get_request_country_code, get_request_origin, localized_distance_sort, sort_by_distance
 from .models import (
     AIConfiguration,
     AIUsageEvent,
@@ -725,6 +725,8 @@ class BusinessDirectoryListingView(APIView):
                 lambda listing: listing.location_lat,
                 lambda listing: listing.location_lng,
                 lambda listing: ((listing.business_name or "").lower(), listing.pk),
+                country_getter=lambda listing: listing.country_code or listing.location,
+                origin_country_code=get_request_country_code(request, origin),
             )
         serializer = BusinessDirectoryListingSerializer(
             listings,
