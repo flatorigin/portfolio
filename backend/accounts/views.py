@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .ai import AIServiceError, generate_text
+from .geo_distance import get_request_origin, sort_by_distance
 from .models import (
     AIConfiguration,
     AIUsageEvent,
@@ -681,10 +682,28 @@ class ContractorSearchView(APIView):
             if project_filter:
                 qs = qs.filter(project_filter)
 
+        origin = get_request_origin(request)
+        distance_lookup = {}
+        if origin:
+            profiles, distance_lookup = sort_by_distance(
+                list(qs.distinct()),
+                origin,
+                lambda profile: profile.service_lat,
+                lambda profile: profile.service_lng,
+                lambda profile: (
+                    (profile.display_name or "").lower(),
+                    (profile.user.username or "").lower(),
+                    profile.pk,
+                ),
+            )
+            profiles = profiles[:20]
+        else:
+            profiles = qs.distinct()[:20]
+
         serializer = ContractorSearchResultSerializer(
-            qs.distinct()[:20],
+            profiles,
             many=True,
-            context={"request": request},
+            context={"request": request, "distance_lookup": distance_lookup},
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -697,7 +716,21 @@ class BusinessDirectoryListingView(APIView):
             is_published=True,
             is_removed=False,
         ).order_by("business_name", "id")
-        serializer = BusinessDirectoryListingSerializer(listings, many=True, context={"request": request})
+        origin = get_request_origin(request)
+        distance_lookup = {}
+        if origin:
+            listings, distance_lookup = sort_by_distance(
+                list(listings),
+                origin,
+                lambda listing: listing.location_lat,
+                lambda listing: listing.location_lng,
+                lambda listing: ((listing.business_name or "").lower(), listing.pk),
+            )
+        serializer = BusinessDirectoryListingSerializer(
+            listings,
+            many=True,
+            context={"request": request, "distance_lookup": distance_lookup},
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):

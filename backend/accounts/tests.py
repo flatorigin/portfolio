@@ -813,6 +813,74 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.data[0]["location_lng"], -75.3877)
         self.assertEqual(response.data[0]["service_radius_miles"], 25)
         self.assertIn("Hidden specialty", response.data[0]["specialties"])
+        self.assertIsNone(response.data[0]["distance_miles"])
+
+    def test_public_listing_endpoint_sorts_by_query_coordinates(self):
+        far = BusinessDirectoryListing.objects.create(
+            business_name="Boston Contractor",
+            location="Boston, MA",
+            location_lat=42.3601,
+            location_lng=-71.0589,
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        near = BusinessDirectoryListing.objects.create(
+            business_name="Philadelphia Contractor",
+            location="Philadelphia, PA",
+            location_lat=39.9526,
+            location_lng=-75.1652,
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+        no_coordinates = BusinessDirectoryListing.objects.create(
+            business_name="Unmapped Contractor",
+            location="Somewhere",
+            phone_number="555-333-3333",
+            is_published=True,
+        )
+
+        response = self.client.get("/api/business-directory/?lat=39.95&lng=-75.16")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id, no_coordinates.id])
+        self.assertIsNotNone(response.data[0]["distance_miles"])
+        self.assertIsNotNone(response.data[1]["distance_miles"])
+        self.assertIsNone(response.data[2]["distance_miles"])
+
+    def test_public_listing_endpoint_uses_authenticated_profile_location_fallback(self):
+        user = User.objects.create_user(username="directoryorigin", password="pw123456")
+        Profile.objects.update_or_create(
+            user=user,
+            defaults={
+                "profile_type": Profile.ProfileType.HOMEOWNER,
+                "service_lat": 39.9526,
+                "service_lng": -75.1652,
+            },
+        )
+        user.profile.refresh_from_db()
+        far = BusinessDirectoryListing.objects.create(
+            business_name="Boston Contractor",
+            location="Boston, MA",
+            location_lat=42.3601,
+            location_lng=-71.0589,
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        near = BusinessDirectoryListing.objects.create(
+            business_name="Philadelphia Contractor",
+            location="Philadelphia, PA",
+            location_lat=39.9526,
+            location_lng=-75.1652,
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+
+        self.client.force_authenticate(user)
+        response = self.client.get("/api/business-directory/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id])
+        self.assertEqual(response.data[0]["distance_miles"], 0.0)
 
     def test_listing_rejects_partial_coordinates(self):
         response = self.client.post(
@@ -898,6 +966,57 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data[0]["kind"], "business_directory_listing")
         self.assertEqual(response.data[0]["business_name"], "Dashboard Contractor")
+
+
+class ContractorSearchGeoOrderingTests(APITestCase):
+    def setUp(self):
+        self.viewer = User.objects.create_user(username="viewer", password="pw123456")
+        Profile.objects.update_or_create(
+            user=self.viewer,
+            defaults={"profile_type": Profile.ProfileType.HOMEOWNER},
+        )
+
+    def _create_contractor(self, username, display_name, lat=None, lng=None):
+        user = User.objects.create_user(username=username, password="pw123456", is_active=True)
+        profile, _ = Profile.objects.update_or_create(
+            user=user,
+            defaults={
+                "profile_type": Profile.ProfileType.CONTRACTOR,
+                "display_name": display_name,
+                "service_location": display_name,
+                "service_lat": lat,
+                "service_lng": lng,
+            },
+        )
+        return profile
+
+    def test_contractor_search_sorts_by_query_coordinates(self):
+        far = self._create_contractor("bostonpro", "Boston Pro", 42.3601, -71.0589)
+        near = self._create_contractor("phillypro", "Philadelphia Pro", 39.9526, -75.1652)
+        no_coordinates = self._create_contractor("unmappedpro", "Unmapped Pro")
+
+        self.client.force_authenticate(self.viewer)
+        response = self.client.get("/api/profiles/contractors/search/?lat=39.95&lng=-75.16")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id, no_coordinates.id])
+        self.assertIsNotNone(response.data[0]["distance_miles"])
+        self.assertIsNotNone(response.data[1]["distance_miles"])
+        self.assertIsNone(response.data[2]["distance_miles"])
+
+    def test_contractor_search_uses_authenticated_profile_location_fallback(self):
+        self.viewer.profile.service_lat = 39.9526
+        self.viewer.profile.service_lng = -75.1652
+        self.viewer.profile.save(update_fields=["service_lat", "service_lng"])
+        far = self._create_contractor("bostonpro", "Boston Pro", 42.3601, -71.0589)
+        near = self._create_contractor("phillypro", "Philadelphia Pro", 39.9526, -75.1652)
+
+        self.client.force_authenticate(self.viewer)
+        response = self.client.get("/api/profiles/contractors/search/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [near.id, far.id])
+        self.assertEqual(response.data[0]["distance_miles"], 0.0)
 
 
 class ImportBusinessDirectoryCommandTests(TestCase):
