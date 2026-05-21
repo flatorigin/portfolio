@@ -2,6 +2,7 @@ from math import asin, cos, radians, sin, sqrt
 
 
 EARTH_RADIUS_MILES = 3958.7613
+DEFAULT_LOCAL_DIRECTORY_RADIUS_MILES = 250
 
 
 def haversine_miles(lat1, lng1, lat2, lng2):
@@ -61,3 +62,36 @@ def sort_by_distance(items, origin, lat_getter, lng_getter, fallback_key):
         return 0, distance, fallback_key(item)
 
     return sorted(items, key=sort_key), distance_lookup
+
+
+def localized_distance_sort(
+    items,
+    origin,
+    lat_getter,
+    lng_getter,
+    fallback_key,
+    max_distance_miles=DEFAULT_LOCAL_DIRECTORY_RADIUS_MILES,
+):
+    if not origin:
+        return items, {}
+
+    origin_lat, origin_lng = origin
+    distance_lookup = {}
+    local_items = []
+
+    for item in items:
+        lat = lat_getter(item)
+        lng = lng_getter(item)
+        if lat is None or lng is None:
+            continue
+
+        distance = haversine_miles(origin_lat, origin_lng, lat, lng)
+        if distance > max_distance_miles:
+            continue
+
+        rounded_distance = round(distance, 1)
+        distance_lookup[item.pk] = rounded_distance
+        local_items.append((item, distance, fallback_key(item)))
+
+    local_items.sort(key=lambda row: (row[1], row[2]))
+    return [item for item, _, _ in local_items], distance_lookup

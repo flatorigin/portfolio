@@ -24,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .ai import AIServiceError, generate_text
-from .geo_distance import get_request_origin, sort_by_distance
+from .geo_distance import get_request_origin, localized_distance_sort, sort_by_distance
 from .models import (
     AIConfiguration,
     AIUsageEvent,
@@ -719,7 +719,7 @@ class BusinessDirectoryListingView(APIView):
         origin = get_request_origin(request)
         distance_lookup = {}
         if origin:
-            listings, distance_lookup = sort_by_distance(
+            listings, distance_lookup = localized_distance_sort(
                 list(listings),
                 origin,
                 lambda listing: listing.location_lat,
