@@ -717,7 +717,7 @@ class BusinessDirectoryListingView(APIView):
             is_removed=False,
         ).order_by("business_name", "id")
         origin = get_request_origin(request)
-        origin_country_code = get_request_country_code(request, origin)
+        origin_country_code = get_request_country_code(request, origin) or "US"
         country_getter = lambda listing: listing.country_code or listing.location
         fallback_key = lambda listing: ((listing.business_name or "").lower(), listing.pk)
         distance_lookup = {}
