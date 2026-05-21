@@ -816,11 +816,11 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertIsNone(response.data[0]["distance_miles"])
 
     def test_public_listing_endpoint_sorts_by_query_coordinates(self):
-        far = BusinessDirectoryListing.objects.create(
-            business_name="Boston Contractor",
-            location="Boston, MA",
-            location_lat=42.3601,
-            location_lng=-71.0589,
+        regional = BusinessDirectoryListing.objects.create(
+            business_name="Baltimore Contractor",
+            location="Baltimore, MD",
+            location_lat=39.2904,
+            location_lng=-76.6122,
             phone_number="555-111-1111",
             is_published=True,
         )
@@ -830,6 +830,14 @@ class BusinessDirectoryListingTests(APITestCase):
             location_lat=39.9526,
             location_lng=-75.1652,
             phone_number="555-222-2222",
+            is_published=True,
+        )
+        far = BusinessDirectoryListing.objects.create(
+            business_name="Los Angeles Contractor",
+            location="Los Angeles, CA",
+            location_lat=34.0522,
+            location_lng=-118.2437,
+            phone_number="555-444-4444",
             is_published=True,
         )
         no_coordinates = BusinessDirectoryListing.objects.create(
@@ -842,10 +850,12 @@ class BusinessDirectoryListingTests(APITestCase):
         response = self.client.get("/api/business-directory/?lat=39.95&lng=-75.16")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual([item["id"] for item in response.data], [near.id, far.id, no_coordinates.id])
+        self.assertEqual([item["id"] for item in response.data], [near.id, regional.id])
         self.assertIsNotNone(response.data[0]["distance_miles"])
         self.assertIsNotNone(response.data[1]["distance_miles"])
-        self.assertIsNone(response.data[2]["distance_miles"])
+        returned_ids = {item["id"] for item in response.data}
+        self.assertNotIn(far.id, returned_ids)
+        self.assertNotIn(no_coordinates.id, returned_ids)
 
     def test_public_listing_endpoint_uses_authenticated_profile_location_fallback(self):
         user = User.objects.create_user(username="directoryorigin", password="pw123456")
@@ -858,11 +868,11 @@ class BusinessDirectoryListingTests(APITestCase):
             },
         )
         user.profile.refresh_from_db()
-        far = BusinessDirectoryListing.objects.create(
-            business_name="Boston Contractor",
-            location="Boston, MA",
-            location_lat=42.3601,
-            location_lng=-71.0589,
+        regional = BusinessDirectoryListing.objects.create(
+            business_name="Baltimore Contractor",
+            location="Baltimore, MD",
+            location_lat=39.2904,
+            location_lng=-76.6122,
             phone_number="555-111-1111",
             is_published=True,
         )
@@ -879,7 +889,7 @@ class BusinessDirectoryListingTests(APITestCase):
         response = self.client.get("/api/business-directory/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual([item["id"] for item in response.data], [near.id, far.id])
+        self.assertEqual([item["id"] for item in response.data], [near.id, regional.id])
         self.assertEqual(response.data[0]["distance_miles"], 0.0)
 
     def test_listing_rejects_partial_coordinates(self):
