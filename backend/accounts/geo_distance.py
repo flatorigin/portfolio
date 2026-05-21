@@ -2,7 +2,14 @@ from math import asin, cos, radians, sin, sqrt
 
 
 EARTH_RADIUS_MILES = 3958.7613
-DEFAULT_LOCAL_DIRECTORY_RADIUS_MILES = 250
+
+COUNTRY_BOUNDS = {
+    "CA": (41.0, 84.0, -142.0, -52.0),
+    "MX": (14.0, 33.0, -119.0, -86.0),
+    "US": (18.0, 72.0, -172.0, -66.0),
+    "GB": (49.0, 61.0, -9.0, 2.5),
+    "IE": (51.0, 56.0, -11.0, -5.0),
+}
 
 
 def haversine_miles(lat1, lng1, lat2, lng2):
@@ -64,34 +71,50 @@ def sort_by_distance(items, origin, lat_getter, lng_getter, fallback_key):
     return sorted(items, key=sort_key), distance_lookup
 
 
+def infer_country_code(lat, lng):
+    lat = parse_coordinate(lat)
+    lng = parse_coordinate(lng)
+    if lat is None or lng is None:
+        return None
+
+    for code, (min_lat, max_lat, min_lng, max_lng) in COUNTRY_BOUNDS.items():
+        if min_lat <= lat <= max_lat and min_lng <= lng <= max_lng:
+            return code
+    return None
+
+
 def localized_distance_sort(
     items,
     origin,
     lat_getter,
     lng_getter,
     fallback_key,
-    max_distance_miles=DEFAULT_LOCAL_DIRECTORY_RADIUS_MILES,
 ):
     if not origin:
         return items, {}
 
     origin_lat, origin_lng = origin
+    origin_country = infer_country_code(origin_lat, origin_lng)
     distance_lookup = {}
-    local_items = []
+    mapped_items = []
+    unmapped_items = []
 
     for item in items:
         lat = lat_getter(item)
         lng = lng_getter(item)
         if lat is None or lng is None:
+            unmapped_items.append(item)
+            continue
+
+        item_country = infer_country_code(lat, lng)
+        if origin_country and item_country and item_country != origin_country:
             continue
 
         distance = haversine_miles(origin_lat, origin_lng, lat, lng)
-        if distance > max_distance_miles:
-            continue
-
         rounded_distance = round(distance, 1)
         distance_lookup[item.pk] = rounded_distance
-        local_items.append((item, distance, fallback_key(item)))
+        mapped_items.append((item, distance, fallback_key(item)))
 
-    local_items.sort(key=lambda row: (row[1], row[2]))
-    return [item for item, _, _ in local_items], distance_lookup
+    mapped_items.sort(key=lambda row: (row[1], row[2]))
+    unmapped_items.sort(key=fallback_key)
+    return [item for item, _, _ in mapped_items] + unmapped_items, distance_lookup
