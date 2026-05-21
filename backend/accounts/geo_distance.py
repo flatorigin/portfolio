@@ -5,8 +5,8 @@ from math import asin, cos, radians, sin, sqrt
 EARTH_RADIUS_MILES = 3958.7613
 
 COUNTRY_BOUNDS = {
-    "US": (18.0, 72.0, -172.0, -66.0),
     "CA": (41.0, 84.0, -142.0, -52.0),
+    "US": (18.0, 72.0, -172.0, -66.0),
     "MX": (14.0, 33.0, -119.0, -86.0),
     "GB": (49.0, 61.0, -9.0, 2.5),
     "IE": (51.0, 56.0, -11.0, -5.0),
@@ -160,6 +160,24 @@ def sort_by_distance(items, origin, lat_getter, lng_getter, fallback_key):
     return sorted(items, key=sort_key), distance_lookup
 
 
+def item_country_code(item, country_getter=None):
+    raw_country = country_getter(item) if country_getter else ""
+    return normalize_country_code(raw_country) or infer_country_code_from_location(raw_country)
+
+
+def filter_by_country(items, country_code, country_getter, fallback_key):
+    country_code = normalize_country_code(country_code)
+    if not country_code:
+        return items
+
+    filtered = []
+    for item in items:
+        item_country = item_country_code(item, country_getter)
+        if not item_country or item_country == country_code:
+            filtered.append(item)
+    return sorted(filtered, key=fallback_key)
+
+
 def infer_country_code(lat, lng):
     lat = parse_coordinate(lat)
     lng = parse_coordinate(lng)
@@ -197,12 +215,7 @@ def localized_distance_sort(
             unmapped_items.append(item)
             continue
 
-        raw_country = country_getter(item) if country_getter else ""
-        item_country = (
-            normalize_country_code(raw_country)
-            or infer_country_code_from_location(raw_country)
-            or infer_country_code(lat, lng)
-        )
+        item_country = item_country_code(item, country_getter) or infer_country_code(lat, lng)
         if origin_country and item_country and item_country != origin_country:
             continue
 

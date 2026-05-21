@@ -24,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .ai import AIServiceError, generate_text
-from .geo_distance import get_request_country_code, get_request_origin, localized_distance_sort, sort_by_distance
+from .geo_distance import filter_by_country, get_request_country_code, get_request_origin, localized_distance_sort, sort_by_distance
 from .models import (
     AIConfiguration,
     AIUsageEvent,
@@ -717,6 +717,9 @@ class BusinessDirectoryListingView(APIView):
             is_removed=False,
         ).order_by("business_name", "id")
         origin = get_request_origin(request)
+        origin_country_code = get_request_country_code(request, origin)
+        country_getter = lambda listing: listing.country_code or listing.location
+        fallback_key = lambda listing: ((listing.business_name or "").lower(), listing.pk)
         distance_lookup = {}
         if origin:
             listings, distance_lookup = localized_distance_sort(
@@ -724,9 +727,16 @@ class BusinessDirectoryListingView(APIView):
                 origin,
                 lambda listing: listing.location_lat,
                 lambda listing: listing.location_lng,
-                lambda listing: ((listing.business_name or "").lower(), listing.pk),
-                country_getter=lambda listing: listing.country_code or listing.location,
-                origin_country_code=get_request_country_code(request, origin),
+                fallback_key,
+                country_getter=country_getter,
+                origin_country_code=origin_country_code,
+            )
+        elif origin_country_code:
+            listings = filter_by_country(
+                list(listings),
+                origin_country_code,
+                country_getter,
+                fallback_key,
             )
         serializer = BusinessDirectoryListingSerializer(
             listings,
