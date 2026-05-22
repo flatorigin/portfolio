@@ -9,6 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { SectionTitle, Badge, Card, Button, Input, GhostButton, SymbolIcon } from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
+import { geocodeLocationQuery } from "../lib/googleMaps";
 import {
   getCachedLocationOrigin,
   formatDistanceMiles,
@@ -102,6 +103,7 @@ export default function Explore() {
   const [directoryListings, setDirectoryListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [locationOrigin, setLocationOrigin] = useState(getCachedLocationOrigin);
+  const [locationSearchOrigin, setLocationSearchOrigin] = useState(null);
 
   // ✅ favorites state
   // favMap[projectId] = true/false
@@ -143,6 +145,36 @@ export default function Explore() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    const locationQuery = filters.location.trim();
+    if (locationQuery.length < 3) {
+      setLocationSearchOrigin(null);
+      return undefined;
+    }
+
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await geocodeLocationQuery(locationQuery);
+        if (!alive) return;
+        setLocationSearchOrigin(
+          result?.center
+            ? { ...result.center, country_code: result.country_code || "" }
+            : null
+        );
+      } catch (err) {
+        if (!alive) return;
+        console.warn("[Explore] location filter geocode failed", err);
+        setLocationSearchOrigin(null);
+      }
+    }, 700);
+
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [filters.location]);
 
   // Listen for auth changes (same tab and other tabs)
   useEffect(() => {
@@ -320,7 +352,9 @@ export default function Explore() {
 	      const [{ data }, { data: homeownerRefs }, { data: directoryData }] = await Promise.all([
 	        api.get("/projects/"),
 	        api.get("/profiles/homeowner-references/").catch(() => ({ data: [] })),
-	        api.get("/business-directory/", { params: locationParams(locationOrigin) }).catch(() => ({ data: [] })),
+	        api.get("/business-directory/", {
+            params: locationParams(locationSearchOrigin || locationOrigin),
+          }).catch(() => ({ data: [] })),
 	      ]);
 	      if (!alive) return;
 
@@ -387,7 +421,7 @@ export default function Explore() {
    return () => {
      alive = false;
    };
-	  }, [locationOrigin]);
+	  }, [locationOrigin, locationSearchOrigin]);
 
   // 2) Favorites reactive: update when authed changes (and when projects list changes)
   useEffect(() => {
@@ -480,7 +514,9 @@ export default function Explore() {
         filters.maxBudget !== "";
 
       const listingLocation = String(listing.location || "").toLowerCase();
-      if (locationQuery && !listingLocation.includes(locationQuery)) return false;
+      if (locationQuery && !locationSearchOrigin && !listingLocation.includes(locationQuery)) {
+        return false;
+      }
       if (hasNumericFilters) return false;
       if (!nameQuery) return true;
 
@@ -498,7 +534,7 @@ export default function Explore() {
 
       return haystack.includes(nameQuery);
     });
-  }, [directoryListings, filters]);
+  }, [directoryListings, filters, locationSearchOrigin]);
 
   const clearFilters = () => {
     setFilters({
