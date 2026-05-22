@@ -16,6 +16,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from portfolio.models import MessageThread, PrivateMessage, Project, ProjectImage
+from .geocoding import GeocodeResult, GeocodingError
 from .models import (
     AIConfiguration,
     AIUsageEvent,
@@ -910,6 +911,62 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual([item["id"] for item in us_response.data], [us_listing.id])
         self.assertEqual(canada_response.status_code, status.HTTP_200_OK)
         self.assertEqual([item["id"] for item in canada_response.data], [canada_listing.id])
+
+    @patch("accounts.views.geocode_with_google_maps")
+    def test_public_listing_endpoint_uses_typed_origin_location(self, geocode_mock):
+        geocode_mock.return_value = GeocodeResult(
+            lat=43.8828,
+            lng=-79.4403,
+            country_code="CA",
+        )
+        BusinessDirectoryListing.objects.create(
+            business_name="Media Contractor",
+            location="Media, PA",
+            country_code="US",
+            location_lat=39.9168,
+            location_lng=-75.3877,
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        canada_listing = BusinessDirectoryListing.objects.create(
+            business_name="Richmond Hill Contractor",
+            location="Richmond Hill, ON, Canada",
+            country_code="CA",
+            location_lat=43.8688,
+            location_lng=-79.4137,
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+
+        response = self.client.get("/api/business-directory/?origin_location=Richmond%20Hill%2C%20ON")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [canada_listing.id])
+        self.assertIsNotNone(response.data[0]["distance_miles"])
+        geocode_mock.assert_called_once_with("Richmond Hill, ON")
+
+    @patch("accounts.views.geocode_with_google_maps")
+    def test_public_listing_endpoint_falls_back_to_text_location_when_origin_geocode_fails(self, geocode_mock):
+        geocode_mock.side_effect = GeocodingError("No result")
+        BusinessDirectoryListing.objects.create(
+            business_name="Media Contractor",
+            location="Media, PA",
+            country_code="US",
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        canada_listing = BusinessDirectoryListing.objects.create(
+            business_name="Richmond Hill Contractor",
+            location="Richmond Hill, ON, Canada",
+            country_code="CA",
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+
+        response = self.client.get("/api/business-directory/?origin_location=Richmond%20Hill")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [canada_listing.id])
 
     def test_public_listing_endpoint_excludes_unmapped_foreign_country_with_origin(self):
         us_listing = BusinessDirectoryListing.objects.create(

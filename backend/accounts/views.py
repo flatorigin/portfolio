@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .ai import AIServiceError, generate_text
+from .geocoding import GeocodingError, geocode_with_google_maps
 from .geo_distance import filter_by_country, get_request_country_code, get_request_origin, localized_distance_sort, sort_by_distance
 from .models import (
     AIConfiguration,
@@ -712,12 +713,30 @@ class BusinessDirectoryListingView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        origin_location = str(
+            request.query_params.get("origin_location")
+            or request.query_params.get("location_query")
+            or ""
+        ).strip()
         listings = BusinessDirectoryListing.objects.filter(
             is_published=True,
             is_removed=False,
         ).order_by("business_name", "id")
         origin = get_request_origin(request)
-        origin_country_code = get_request_country_code(request, origin) or "US"
+        origin_country_code = ""
+        origin_location_geocode_failed = False
+        if origin_location:
+            try:
+                result = geocode_with_google_maps(origin_location)
+                origin = (result.lat, result.lng)
+                origin_country_code = result.country_code
+            except GeocodingError:
+                origin_location_geocode_failed = True
+                logger.info("Could not geocode directory origin_location=%s", origin_location)
+                listings = listings.filter(location__icontains=origin_location)
+        origin_country_code = origin_country_code or get_request_country_code(request, origin)
+        if not origin_country_code and not origin_location_geocode_failed:
+            origin_country_code = "US"
         country_getter = lambda listing: listing.country_code or listing.location
         fallback_key = lambda listing: ((listing.business_name or "").lower(), listing.pk)
         distance_lookup = {}
