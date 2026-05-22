@@ -102,6 +102,8 @@ export default function Explore() {
   const [directoryListings, setDirectoryListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [locationOrigin, setLocationOrigin] = useState(getCachedLocationOrigin);
+  const [debouncedLocationQuery, setDebouncedLocationQuery] = useState("");
+  const initialLoadRef = useRef(true);
 
   // ✅ favorites state
   // favMap[projectId] = true/false
@@ -143,6 +145,17 @@ export default function Explore() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    const nextLocationQuery = filters.location.trim();
+    const timer = window.setTimeout(() => {
+      setDebouncedLocationQuery(nextLocationQuery.length >= 3 ? nextLocationQuery : "");
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.location]);
 
   // Listen for auth changes (same tab and other tabs)
   useEffect(() => {
@@ -313,8 +326,10 @@ export default function Explore() {
  // 1) Load projects once (stable)
  useEffect(() => {
    let alive = true;
-   const locationQuery = filters.location.trim();
-   setLoading(true);
+   const locationQuery = debouncedLocationQuery.trim();
+   if (initialLoadRef.current) {
+     setLoading(true);
+   }
 
 	  (async () => {
 	    try {
@@ -386,14 +401,17 @@ export default function Explore() {
 	         setDirectoryListings([]);
 	       }
      } finally {
-       if (alive) setLoading(false);
+       if (alive) {
+         setLoading(false);
+         initialLoadRef.current = false;
+       }
      }
    })();
 
    return () => {
      alive = false;
    };
-	  }, [locationOrigin, filters.location]);
+	  }, [locationOrigin, debouncedLocationQuery]);
 
   // 2) Favorites reactive: update when authed changes (and when projects list changes)
   useEffect(() => {
