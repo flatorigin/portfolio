@@ -213,11 +213,14 @@ def localized_distance_sort(
     for item in items:
         lat = lat_getter(item)
         lng = lng_getter(item)
+        item_country = item_country_code(item, country_getter)
         if lat is None or lng is None:
+            if origin_country and item_country and item_country != origin_country:
+                continue
             unmapped_items.append(item)
             continue
 
-        item_country = item_country_code(item, country_getter) or infer_country_code(lat, lng)
+        item_country = item_country or infer_country_code(lat, lng)
         if origin_country and item_country and item_country != origin_country:
             continue
 

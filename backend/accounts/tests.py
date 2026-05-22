@@ -911,6 +911,27 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(canada_response.status_code, status.HTTP_200_OK)
         self.assertEqual([item["id"] for item in canada_response.data], [canada_listing.id])
 
+    def test_public_listing_endpoint_excludes_unmapped_foreign_country_with_origin(self):
+        us_listing = BusinessDirectoryListing.objects.create(
+            business_name="Media Contractor",
+            location="Media, PA",
+            country_code="US",
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        BusinessDirectoryListing.objects.create(
+            business_name="Richmond Hill Contractor",
+            location="Richmond Hill, ON, Canada",
+            country_code="CA",
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+
+        response = self.client.get("/api/business-directory/?lat=39.95&lng=-75.16&country_code=US")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [us_listing.id])
+
     def test_public_listing_endpoint_filters_by_country_code_without_coordinates(self):
         us_listing = BusinessDirectoryListing.objects.create(
             business_name="Media Contractor",
