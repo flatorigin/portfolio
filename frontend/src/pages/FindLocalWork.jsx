@@ -8,6 +8,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Button, Card } from "../ui";
+import {
+  getCachedLocationOrigin,
+  formatDistanceMiles,
+  locationParams,
+  requestLocationOrigin,
+} from "../utils/locationOrigin";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -77,6 +83,7 @@ export default function FindLocalWork() {
   const [loading, setLoading] = useState(true);
   const [loadingBidMeta, setLoadingBidMeta] = useState(false);
   const [error, setError] = useState("");
+  const [locationOrigin, setLocationOrigin] = useState(getCachedLocationOrigin);
   const [filters, setFilters] = useState({
     name: "",
     location: "",
@@ -86,6 +93,16 @@ export default function FindLocalWork() {
     maxBudget: "",
   });
   const [activeSearchField, setActiveSearchField] = useState("name");
+
+  useEffect(() => {
+    let alive = true;
+    requestLocationOrigin().then((origin) => {
+      if (alive && origin) setLocationOrigin(origin);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,7 +152,9 @@ export default function FindLocalWork() {
 
     (async () => {
       try {
-        const { data } = await api.get("/projects/job-postings/");
+        const { data } = await api.get("/projects/job-postings/", {
+          params: locationParams(locationOrigin),
+        });
         if (cancelled) return;
 
         const arr = Array.isArray(data)
@@ -167,7 +186,7 @@ export default function FindLocalWork() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locationOrigin]);
 
   const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
@@ -363,6 +382,7 @@ export default function FindLocalWork() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProjects.map((p) => {
                 const coverSrc = pickCover(p);
+                const distanceLabel = formatDistanceMiles(p.distance_miles);
                 const meta = bidMeta?.[p.id] || {
                   totalCount: 0,
                   openCount: 0,
@@ -422,6 +442,12 @@ export default function FindLocalWork() {
                             <span>{p.location}</span>
                           </>
                         )}
+                        {distanceLabel ? (
+                          <>
+                            <span className="mx-1 text-slate-300">•</span>
+                            <span className="font-semibold text-slate-600">{distanceLabel}</span>
+                          </>
+                        ) : null}
                       </div>
 
                       {(p.job_summary || p.summary) && (

@@ -9,6 +9,12 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { SectionTitle, Badge, Card, Button, Input, GhostButton, SymbolIcon } from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
+import {
+  getCachedLocationOrigin,
+  formatDistanceMiles,
+  locationParams,
+  requestLocationOrigin,
+} from "../utils/locationOrigin";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 
@@ -95,6 +101,7 @@ export default function Explore() {
   const [projects, setProjects] = useState([]);
   const [directoryListings, setDirectoryListings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [locationOrigin, setLocationOrigin] = useState(getCachedLocationOrigin);
 
   // ✅ favorites state
   // favMap[projectId] = true/false
@@ -126,6 +133,16 @@ export default function Explore() {
   useEffect(() => {
     authRef.current = { authed, me };
   }, [authed, me]);
+
+  useEffect(() => {
+    let alive = true;
+    requestLocationOrigin().then((origin) => {
+      if (alive && origin) setLocationOrigin(origin);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Listen for auth changes (same tab and other tabs)
   useEffect(() => {
@@ -303,7 +320,7 @@ export default function Explore() {
 	      const [{ data }, { data: homeownerRefs }, { data: directoryData }] = await Promise.all([
 	        api.get("/projects/"),
 	        api.get("/profiles/homeowner-references/").catch(() => ({ data: [] })),
-	        api.get("/business-directory/").catch(() => ({ data: [] })),
+	        api.get("/business-directory/", { params: locationParams(locationOrigin) }).catch(() => ({ data: [] })),
 	      ]);
 	      if (!alive) return;
 
@@ -370,7 +387,7 @@ export default function Explore() {
    return () => {
      alive = false;
    };
-	  }, []);
+	  }, [locationOrigin]);
 
   // 2) Favorites reactive: update when authed changes (and when projects list changes)
   useEffect(() => {
@@ -823,6 +840,7 @@ export default function Explore() {
                 const visibleSpecialties = specialties.slice(0, 4);
                 const liked = !!directoryLikeMap[listing.id];
                 const likeCount = Number(directoryLikeCounts[listing.id] ?? listing.like_count ?? 0);
+                const distanceLabel = formatDistanceMiles(listing.distance_miles);
                 return (
                   <Card
                     key={`directory-${listing.id}`}
@@ -837,6 +855,11 @@ export default function Explore() {
                         {listing.location ? (
                           <div className="mt-1 text-sm font-medium text-slate-500">
                             {listing.location}
+                          </div>
+                        ) : null}
+                        {distanceLabel ? (
+                          <div className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                            {distanceLabel}
                           </div>
                         ) : null}
                       </div>
