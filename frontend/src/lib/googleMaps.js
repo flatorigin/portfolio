@@ -5,7 +5,7 @@ const MILES_TO_METERS = 1609.344;
 
 let loaderConfigured = false;
 let configuredKey = "";
-const resolvedCenterCache = new Map();
+const resolvedLocationCache = new Map();
 
 export function normalizeLocationQuery(raw) {
   const value = (raw || "").trim();
@@ -93,9 +93,9 @@ export async function geocodeLocationQuery(rawQuery) {
   const normalizedQuery = normalizeLocationQuery(rawQuery);
   if (!normalizedQuery) return null;
 
-  const cachedCenter = resolvedCenterCache.get(normalizedQuery);
-  if (cachedCenter) {
-    return { center: cachedCenter, normalizedQuery, fromCache: true };
+  const cachedLocation = resolvedLocationCache.get(normalizedQuery);
+  if (cachedLocation) {
+    return { ...cachedLocation, normalizedQuery, fromCache: true };
   }
 
   const { Geocoder } = await loadGoogleMaps();
@@ -109,7 +109,11 @@ export async function geocodeLocationQuery(rawQuery) {
 
   const location = firstResult.geometry.location;
   const center = { lat: location.lat(), lng: location.lng() };
-  resolvedCenterCache.set(normalizedQuery, center);
+  const countryComponent = (firstResult.address_components || []).find((component) =>
+    Array.isArray(component.types) && component.types.includes("country")
+  );
+  const country_code = String(countryComponent?.short_name || "").trim().toUpperCase();
+  resolvedLocationCache.set(normalizedQuery, { center, country_code });
 
-  return { center, normalizedQuery, fromCache: false };
+  return { center, country_code, normalizedQuery, fromCache: false };
 }
