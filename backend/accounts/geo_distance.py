@@ -105,6 +105,31 @@ def infer_country_code_from_location(location):
     return ""
 
 
+def infer_country_code_from_request_headers(request):
+    meta = getattr(request, "META", {}) or {}
+    for header in (
+        "HTTP_CF_IPCOUNTRY",
+        "HTTP_X_VERCEL_IP_COUNTRY",
+        "HTTP_CLOUDFRONT_VIEWER_COUNTRY",
+        "HTTP_X_COUNTRY_CODE",
+        "HTTP_X_APPENGINE_COUNTRY",
+    ):
+        country_code = normalize_country_code(meta.get(header))
+        if country_code:
+            return country_code
+
+    accept_language = str(meta.get("HTTP_ACCEPT_LANGUAGE") or "")
+    for language in accept_language.split(","):
+        language = language.split(";", 1)[0].strip()
+        if "-" not in language:
+            continue
+        country_code = normalize_country_code(language.rsplit("-", 1)[-1])
+        if country_code:
+            return country_code
+
+    return ""
+
+
 def get_request_origin(request):
     lat = parse_coordinate(
         request.query_params.get("lat") or request.query_params.get("location_lat")
@@ -140,7 +165,7 @@ def get_request_country_code(request, origin=None):
 
     if origin:
         return infer_country_code(*origin) or ""
-    return ""
+    return infer_country_code_from_request_headers(request)
 
 
 def sort_by_distance(items, origin, lat_getter, lng_getter, fallback_key):

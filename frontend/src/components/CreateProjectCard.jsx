@@ -9,6 +9,12 @@ import { flushSync } from "react-dom";
 import api from "../api";
 import AiWriteButton from "./AiWriteButton";
 import { Card, Input, Textarea, Button, Badge, SymbolIcon } from "../ui";
+import {
+  getCachedLocationOrigin,
+  formatDistanceMiles,
+  locationParams,
+  requestLocationOrigin,
+} from "../utils/locationOrigin";
 
 const PROJECT_MEDIA_ACCEPT =
   "image/jpeg,image/png,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm";
@@ -191,6 +197,7 @@ function ContractorInvitePicker({ selected = [], onChange }) {
   const [searchMode, setSearchMode] = useState("all");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [locationOrigin, setLocationOrigin] = useState(getCachedLocationOrigin);
   const selectedList = Array.isArray(selected) ? selected : [];
   const selectedSet = new Set(selectedList.map((username) => String(username).toLowerCase()));
   const availableResults = results.filter(
@@ -201,6 +208,16 @@ function ContractorInvitePicker({ selected = [], onChange }) {
 
   useEffect(() => {
     let active = true;
+    requestLocationOrigin().then((origin) => {
+      if (active && origin) setLocationOrigin(origin);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
@@ -208,6 +225,7 @@ function ContractorInvitePicker({ selected = [], onChange }) {
           params: {
             ...(query.trim() ? { q: query.trim() } : {}),
             search_by: searchMode,
+            ...locationParams(locationOrigin),
           },
         });
         if (active) setResults(Array.isArray(data) ? data : []);
@@ -222,7 +240,7 @@ function ContractorInvitePicker({ selected = [], onChange }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [query, searchMode]);
+  }, [query, searchMode, locationOrigin]);
 
   const addContractor = (username) => {
     const value = String(username || "").trim();
@@ -309,6 +327,7 @@ function ContractorInvitePicker({ selected = [], onChange }) {
           availableResults.map((profile) => {
             const username = profile.username || "";
             const image = profile.avatar_url || profile.logo_url || "";
+            const distanceLabel = formatDistanceMiles(profile.distance_miles);
             return (
               <div
                 key={username}
@@ -328,6 +347,7 @@ function ContractorInvitePicker({ selected = [], onChange }) {
                   <div className="truncate text-xs text-slate-500">
                     @{username}
                     {profile.service_location ? ` · ${profile.service_location}` : ""}
+                    {distanceLabel ? ` · ${distanceLabel}` : ""}
                   </div>
                   {profile.hero_headline || profile.bio ? (
                     <div className="mt-1 line-clamp-1 text-xs text-slate-500">
