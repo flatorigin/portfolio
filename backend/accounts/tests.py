@@ -932,6 +932,30 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([item["id"] for item in response.data], [us_listing.id])
 
+    def test_public_listing_endpoint_infers_country_from_loose_location_text(self):
+        us_listing = BusinessDirectoryListing.objects.create(
+            business_name="Darby Handyman",
+            location="Darby pa",
+            country_code="",
+            phone_number="555-111-1111",
+            is_published=True,
+        )
+        canada_listing = BusinessDirectoryListing.objects.create(
+            business_name="Chic Carpentry & Cabinetry Co.",
+            location="Richmond Hill, ON, Canada",
+            country_code="CA",
+            phone_number="555-222-2222",
+            is_published=True,
+        )
+
+        us_response = self.client.get("/api/business-directory/?country_code=US")
+        canada_response = self.client.get("/api/business-directory/?country_code=CA")
+
+        self.assertEqual(us_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in us_response.data], [us_listing.id])
+        self.assertEqual(canada_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in canada_response.data], [canada_listing.id])
+
     def test_public_listing_endpoint_defaults_to_us_country_filter(self):
         us_listing = BusinessDirectoryListing.objects.create(
             business_name="Media Contractor",

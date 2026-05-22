@@ -100,6 +100,8 @@ def infer_country_code_from_location(location):
         return "CA"
     if "USA" in words or "UNITED" in words and "STATES" in words:
         return "US"
+    if words & US_STATES:
+        return "US"
     return ""
 
 
@@ -173,7 +175,7 @@ def filter_by_country(items, country_code, country_getter, fallback_key):
     filtered = []
     for item in items:
         item_country = item_country_code(item, country_getter)
-        if not item_country or item_country == country_code:
+        if item_country == country_code:
             filtered.append(item)
     return sorted(filtered, key=fallback_key)
 
