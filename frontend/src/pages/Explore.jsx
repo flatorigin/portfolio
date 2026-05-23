@@ -541,6 +541,57 @@ export default function Explore() {
     });
   };
 
+  const activeFilterBadges = useMemo(() => {
+    const badges = [];
+    const trimmedName = filters.name.trim();
+    const trimmedLocation = filters.location.trim();
+
+    if (trimmedName) {
+      badges.push({
+        key: "name",
+        label: `Project name: ${trimmedName}`,
+        clear: () => setFilters((prev) => ({ ...prev, name: "" })),
+      });
+    }
+    if (trimmedLocation) {
+      badges.push({
+        key: "location",
+        label: `Location: ${trimmedLocation}`,
+        clear: () => setFilters((prev) => ({ ...prev, location: "" })),
+      });
+    }
+    if (filters.minSqf || filters.maxSqf) {
+      const value =
+        filters.minSqf && filters.maxSqf
+          ? `${filters.minSqf} - ${filters.maxSqf}`
+          : filters.minSqf
+          ? `${filters.minSqf}+`
+          : `up to ${filters.maxSqf}`;
+      badges.push({
+        key: "sqf",
+        label: `Sqf: ${value}`,
+        clear: () => setFilters((prev) => ({ ...prev, minSqf: "", maxSqf: "" })),
+      });
+    }
+    if (filters.minBudget || filters.maxBudget) {
+      const value =
+        filters.minBudget && filters.maxBudget
+          ? `$${filters.minBudget} - $${filters.maxBudget}`
+          : filters.minBudget
+          ? `$${filters.minBudget}+`
+          : `up to $${filters.maxBudget}`;
+      badges.push({
+        key: "budget",
+        label: `Budget: ${value}`,
+        clear: () => setFilters((prev) => ({ ...prev, minBudget: "", maxBudget: "" })),
+      });
+    }
+
+    return badges;
+  }, [filters]);
+
+  const hasActiveFilters = activeFilterBadges.length > 0;
+
   const activeSearchValue =
     activeSearchField === "name"
       ? filters.name
@@ -697,13 +748,35 @@ export default function Explore() {
 
             <Button
               type="button"
-              variant="outline"
+              disabled={!hasActiveFilters}
               onClick={clearFilters}
-              className="h-10 whitespace-nowrap"
+              className={
+                "h-10 whitespace-nowrap " +
+                (hasActiveFilters
+                  ? "bg-slate-950 text-white hover:bg-slate-800"
+                  : "border border-slate-200 bg-slate-100 text-slate-400 hover:opacity-100")
+              }
             >
               Clear filters
             </Button>
           </div>
+
+          {activeFilterBadges.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activeFilterBadges.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={filter.clear}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-white hover:text-slate-950"
+                  title={`Remove ${filter.label}`}
+                >
+                  <span className="truncate">{filter.label}</span>
+                  <SymbolIcon name="close" className="text-[15px]" />
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="mt-2 text-xs text-slate-500">
 		            Showing {filteredProjects.length + filteredDirectoryListings.length} of {projects.length + directoryListings.length} items
