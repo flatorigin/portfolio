@@ -7,7 +7,15 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { SectionTitle, Badge, Card, Button, Input, GhostButton, SymbolIcon } from "../ui";
+import {
+  SectionTitle,
+  Badge,
+  Card,
+  Button,
+  Input,
+  GhostButton,
+  SymbolIcon,
+} from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
 import {
   getCachedLocationOrigin,
@@ -60,8 +68,8 @@ function buildThumbPack(project) {
   const images = Array.isArray(project?.images)
     ? project.images
     : Array.isArray(project?.reference_gallery)
-    ? project.reference_gallery
-    : [];
+      ? project.reference_gallery
+      : [];
   const mapped = images
     .map((it) => ({
       url: extractMediaUrl(it),
@@ -149,7 +157,9 @@ export default function Explore() {
   useEffect(() => {
     const nextLocationQuery = filters.location.trim();
     const timer = window.setTimeout(() => {
-      setDebouncedLocationQuery(nextLocationQuery.length >= 3 ? nextLocationQuery : "");
+      setDebouncedLocationQuery(
+        nextLocationQuery.length >= 3 ? nextLocationQuery : "",
+      );
     }, 450);
 
     return () => {
@@ -183,7 +193,7 @@ export default function Explore() {
       typeof p?.is_owner === "boolean"
         ? p.is_owner
         : (p?.owner_username || "") === (me || ""),
-    [me]
+    [me],
   );
 
   // ✅ toggle favorite (save/unsave)
@@ -226,7 +236,7 @@ export default function Explore() {
         setFavBusyId(null);
       }
     },
-    [favBusyId, favMap, isOwner]
+    [favBusyId, favMap, isOwner],
   );
 
   const toggleLike = useCallback(
@@ -255,7 +265,10 @@ export default function Explore() {
 
         setLikeMap((prev) => ({ ...prev, [p.id]: !!data?.liked }));
         if (data?.like_count !== undefined) {
-          setLikeCounts((prev) => ({ ...prev, [p.id]: Number(data.like_count || 0) }));
+          setLikeCounts((prev) => ({
+            ...prev,
+            [p.id]: Number(data.like_count || 0),
+          }));
         }
         window.dispatchEvent(new CustomEvent("projects:liked_changed"));
       } catch (err) {
@@ -264,13 +277,17 @@ export default function Explore() {
         setLikeCounts((prev) => ({ ...prev, [p.id]: prevCount }));
 
         const data = err?.response?.data;
-        const msg = data?.detail || data?.message || err?.message || "Could not update like.";
+        const msg =
+          data?.detail ||
+          data?.message ||
+          err?.message ||
+          "Could not update like.";
         alert(typeof msg === "string" ? msg : JSON.stringify(msg));
       } finally {
         setLikeBusyId(null);
       }
     },
-    [isOwner, likeBusyId, likeCounts, likeMap]
+    [isOwner, likeBusyId, likeCounts, likeMap],
   );
 
   const toggleDirectoryLike = useCallback(
@@ -286,7 +303,9 @@ export default function Explore() {
       if (directoryLikeBusyId === listing.id) return;
 
       const currently = !!directoryLikeMap[listing.id];
-      const prevCount = Number(directoryLikeCounts[listing.id] ?? listing.like_count ?? 0);
+      const prevCount = Number(
+        directoryLikeCounts[listing.id] ?? listing.like_count ?? 0,
+      );
 
       setDirectoryLikeBusyId(listing.id);
       setDirectoryLikeMap((prev) => ({ ...prev, [listing.id]: !currently }));
@@ -300,7 +319,10 @@ export default function Explore() {
           ? await api.delete(`/business-directory/${listing.id}/like/`)
           : await api.post(`/business-directory/${listing.id}/like/`);
 
-        setDirectoryLikeMap((prev) => ({ ...prev, [listing.id]: !!data?.liked }));
+        setDirectoryLikeMap((prev) => ({
+          ...prev,
+          [listing.id]: !!data?.liked,
+        }));
         if (data?.like_count !== undefined) {
           setDirectoryLikeCounts((prev) => ({
             ...prev,
@@ -309,109 +331,138 @@ export default function Explore() {
         }
         window.dispatchEvent(new CustomEvent("profiles:liked_changed"));
       } catch (err) {
-        console.error("[Explore] toggleDirectoryLike failed", err?.response || err);
+        console.error(
+          "[Explore] toggleDirectoryLike failed",
+          err?.response || err,
+        );
         setDirectoryLikeMap((prev) => ({ ...prev, [listing.id]: currently }));
-        setDirectoryLikeCounts((prev) => ({ ...prev, [listing.id]: prevCount }));
+        setDirectoryLikeCounts((prev) => ({
+          ...prev,
+          [listing.id]: prevCount,
+        }));
 
         const data = err?.response?.data;
-        const msg = data?.detail || data?.message || err?.message || "Could not update like.";
+        const msg =
+          data?.detail ||
+          data?.message ||
+          err?.message ||
+          "Could not update like.";
         alert(typeof msg === "string" ? msg : JSON.stringify(msg));
       } finally {
         setDirectoryLikeBusyId(null);
       }
     },
-    [directoryLikeBusyId, directoryLikeCounts, directoryLikeMap]
+    [directoryLikeBusyId, directoryLikeCounts, directoryLikeMap],
   );
 
- // 1) Load projects once (stable)
- useEffect(() => {
-   let alive = true;
-   const locationQuery = debouncedLocationQuery.trim();
-   if (initialLoadRef.current) {
-     setLoading(true);
-   }
+  // 1) Load projects once (stable)
+  useEffect(() => {
+    let alive = true;
+    const locationQuery = debouncedLocationQuery.trim();
+    if (initialLoadRef.current) {
+      setLoading(true);
+    }
 
-	  (async () => {
-	    try {
-	      const [{ data }, { data: homeownerRefs }, { data: directoryData }] = await Promise.all([
-	        api.get("/projects/"),
-	        api.get("/profiles/homeowner-references/").catch(() => ({ data: [] })),
-	        api.get("/business-directory/", {
-            params: {
-              ...locationParams(locationOrigin),
-              ...(locationQuery.length >= 3 ? { origin_location: locationQuery } : {}),
-            },
-          }).catch(() => ({ data: [] })),
-	      ]);
-	      if (!alive) return;
+    (async () => {
+      try {
+        const [{ data }, { data: homeownerRefs }, { data: directoryData }] =
+          await Promise.all([
+            api.get("/projects/"),
+            api
+              .get("/profiles/homeowner-references/")
+              .catch(() => ({ data: [] })),
+            api
+              .get("/business-directory/", {
+                params: {
+                  ...locationParams(locationOrigin),
+                  ...(locationQuery.length >= 3
+                    ? { origin_location: locationQuery }
+                    : {}),
+                },
+              })
+              .catch(() => ({ data: [] })),
+          ]);
+        if (!alive) return;
 
-       const arr = Array.isArray(data) ? data : [];
+        const arr = Array.isArray(data) ? data : [];
 
-       // ✅ Explore = only PUBLIC + NOT job postings
-       const exploreProjects = arr.filter(
-         (p) =>
-           (p?.is_public === undefined || p?.is_public === true) &&
-           !p?.is_job_posting
-       );
+        // ✅ Explore = only PUBLIC + NOT job postings
+        const exploreProjects = arr.filter(
+          (p) =>
+            (p?.is_public === undefined || p?.is_public === true) &&
+            !p?.is_job_posting,
+        );
 
-	      const referenceCards = (Array.isArray(homeownerRefs) ? homeownerRefs : []).map((profile) => ({
-	        id: `homeowner-reference-${profile.username || profile.id}`,
-	        _kind: "homeowner_reference_gallery",
-	        title: `${profile.display_name || profile.username || "Homeowner"} reference gallery`,
-	        summary: profile.bio || "Style and quality references shared by the homeowner.",
-	        category: "Reference gallery",
-	        location: profile.service_location || "",
-	        owner_username: profile.username || "",
-	        is_public: true,
-	        is_job_posting: false,
-	        cover_image_url: profile.cover_image_url || "",
-	        images: Array.isArray(profile.reference_gallery) ? profile.reference_gallery : [],
-	        reference_count: profile.reference_count || 0,
-	        profile_url: `/profiles/${profile.username}`,
-	      }));
-	      const exploreItems = [...referenceCards, ...exploreProjects];
+        const referenceCards = (
+          Array.isArray(homeownerRefs) ? homeownerRefs : []
+        ).map((profile) => ({
+          id: `homeowner-reference-${profile.username || profile.id}`,
+          _kind: "homeowner_reference_gallery",
+          title: `${profile.display_name || profile.username || "Homeowner"} reference gallery`,
+          summary:
+            profile.bio ||
+            "Style and quality references shared by the homeowner.",
+          category: "Reference gallery",
+          location: profile.service_location || "",
+          owner_username: profile.username || "",
+          is_public: true,
+          is_job_posting: false,
+          cover_image_url: profile.cover_image_url || "",
+          images: Array.isArray(profile.reference_gallery)
+            ? profile.reference_gallery
+            : [],
+          reference_count: profile.reference_count || 0,
+          profile_url: `/profiles/${profile.username}`,
+        }));
+        const exploreItems = [...referenceCards, ...exploreProjects];
 
-	      setProjects(exploreItems);
-	      const directoryItems = Array.isArray(directoryData) ? directoryData : [];
-	      setDirectoryListings(directoryItems);
-	      setDirectoryLikeCounts(
-	        Object.fromEntries(
-	          directoryItems.map((listing) => [listing.id, Number(listing?.like_count || 0)])
-	        )
-	      );
-	      setDirectoryLikeMap(
-	        Object.fromEntries(
-	          directoryItems.map((listing) => [listing.id, !!listing?.liked_by_me])
-	        )
-	      );
-	      setLikeCounts(
-	        Object.fromEntries(
-	          exploreItems.map((p) => [p.id, Number(p?.like_count || 0)])
-	        )
-	      );
-	      setLikeMap(
-	        Object.fromEntries(
-	          exploreItems.map((p) => [p.id, !!p?.liked_by_me])
-	        )
-	      );
-	     } catch (e) {
-	       console.error("[Explore] projects fetch failed", e?.response || e);
-	       if (alive) {
-	         setProjects([]);
-	         setDirectoryListings([]);
-	       }
-     } finally {
-       if (alive) {
-         setLoading(false);
-         initialLoadRef.current = false;
-       }
-     }
-   })();
+        setProjects(exploreItems);
+        const directoryItems = Array.isArray(directoryData)
+          ? directoryData
+          : [];
+        setDirectoryListings(directoryItems);
+        setDirectoryLikeCounts(
+          Object.fromEntries(
+            directoryItems.map((listing) => [
+              listing.id,
+              Number(listing?.like_count || 0),
+            ]),
+          ),
+        );
+        setDirectoryLikeMap(
+          Object.fromEntries(
+            directoryItems.map((listing) => [
+              listing.id,
+              !!listing?.liked_by_me,
+            ]),
+          ),
+        );
+        setLikeCounts(
+          Object.fromEntries(
+            exploreItems.map((p) => [p.id, Number(p?.like_count || 0)]),
+          ),
+        );
+        setLikeMap(
+          Object.fromEntries(exploreItems.map((p) => [p.id, !!p?.liked_by_me])),
+        );
+      } catch (e) {
+        console.error("[Explore] projects fetch failed", e?.response || e);
+        if (alive) {
+          setProjects([]);
+          setDirectoryListings([]);
+        }
+      } finally {
+        if (alive) {
+          setLoading(false);
+          initialLoadRef.current = false;
+        }
+      }
+    })();
 
-   return () => {
-     alive = false;
-   };
-	  }, [locationOrigin, debouncedLocationQuery]);
+    return () => {
+      alive = false;
+    };
+  }, [locationOrigin, debouncedLocationQuery]);
 
   // 2) Favorites reactive: update when authed changes (and when projects list changes)
   useEffect(() => {
@@ -474,7 +525,10 @@ export default function Explore() {
       const sqf = Number(p.sqf ?? 0) || 0;
       const budget = Number(p.budget ?? 0) || 0;
 
-      if (filters.name.trim() && !name.includes(filters.name.toLowerCase().trim()))
+      if (
+        filters.name.trim() &&
+        !name.includes(filters.name.toLowerCase().trim())
+      )
         return false;
 
       if (
@@ -486,8 +540,10 @@ export default function Explore() {
       if (filters.minSqf !== "" && sqf < Number(filters.minSqf)) return false;
       if (filters.maxSqf !== "" && sqf > Number(filters.maxSqf)) return false;
 
-      if (filters.minBudget !== "" && budget < Number(filters.minBudget)) return false;
-      if (filters.maxBudget !== "" && budget > Number(filters.maxBudget)) return false;
+      if (filters.minBudget !== "" && budget < Number(filters.minBudget))
+        return false;
+      if (filters.maxBudget !== "" && budget > Number(filters.maxBudget))
+        return false;
 
       return true;
     });
@@ -514,7 +570,9 @@ export default function Explore() {
       if (hasNumericFilters) return false;
       if (!nameQuery) return true;
 
-      const specialties = Array.isArray(listing.specialties) ? listing.specialties : [];
+      const specialties = Array.isArray(listing.specialties)
+        ? listing.specialties
+        : [];
       const haystack = [
         listing.business_name,
         listing.location,
@@ -565,12 +623,13 @@ export default function Explore() {
         filters.minSqf && filters.maxSqf
           ? `${filters.minSqf} - ${filters.maxSqf}`
           : filters.minSqf
-          ? `${filters.minSqf}+`
-          : `up to ${filters.maxSqf}`;
+            ? `${filters.minSqf}+`
+            : `up to ${filters.maxSqf}`;
       badges.push({
         key: "sqf",
         label: `Sqf: ${value}`,
-        clear: () => setFilters((prev) => ({ ...prev, minSqf: "", maxSqf: "" })),
+        clear: () =>
+          setFilters((prev) => ({ ...prev, minSqf: "", maxSqf: "" })),
       });
     }
     if (filters.minBudget || filters.maxBudget) {
@@ -578,12 +637,13 @@ export default function Explore() {
         filters.minBudget && filters.maxBudget
           ? `$${filters.minBudget} - $${filters.maxBudget}`
           : filters.minBudget
-          ? `$${filters.minBudget}+`
-          : `up to $${filters.maxBudget}`;
+            ? `$${filters.minBudget}+`
+            : `up to $${filters.maxBudget}`;
       badges.push({
         key: "budget",
         label: `Budget: ${value}`,
-        clear: () => setFilters((prev) => ({ ...prev, minBudget: "", maxBudget: "" })),
+        clear: () =>
+          setFilters((prev) => ({ ...prev, minBudget: "", maxBudget: "" })),
       });
     }
 
@@ -596,35 +656,36 @@ export default function Explore() {
     activeSearchField === "name"
       ? filters.name
       : activeSearchField === "location"
-      ? filters.location
-      : activeSearchField === "sqf"
-      ? filters.minSqf
-      : filters.minBudget;
+        ? filters.location
+        : activeSearchField === "sqf"
+          ? filters.minSqf
+          : filters.minBudget;
 
   const activeSearchLabel =
     activeSearchField === "name"
       ? "Project name"
       : activeSearchField === "location"
-      ? "Location"
-      : activeSearchField === "sqf"
-      ? "Sqf"
-      : "Budget";
+        ? "Location"
+        : activeSearchField === "sqf"
+          ? "Sqf"
+          : "Budget";
 
   const activeSearchPlaceholder =
     activeSearchField === "name"
       ? "Kitchen remodel"
       : activeSearchField === "location"
-      ? "City, area, etc."
-      : activeSearchField === "sqf"
-      ? "Minimum sqf"
-      : "Minimum budget";
+        ? "City, area, etc."
+        : activeSearchField === "sqf"
+          ? "Minimum sqf"
+          : "Minimum budget";
 
   const updateActiveSearch = (e) => {
     const value = e.target.value;
     setFilters((prev) => {
       if (activeSearchField === "name") return { ...prev, name: value };
       if (activeSearchField === "location") return { ...prev, location: value };
-      if (activeSearchField === "sqf") return { ...prev, minSqf: value, maxSqf: "" };
+      if (activeSearchField === "sqf")
+        return { ...prev, minSqf: value, maxSqf: "" };
       return { ...prev, minBudget: value, maxBudget: "" };
     });
   };
@@ -754,7 +815,7 @@ export default function Explore() {
                 "h-10 whitespace-nowrap " +
                 (hasActiveFilters
                   ? "bg-slate-950 text-white hover:bg-slate-800"
-                  : "border border-slate-200 bg-slate-100 text-slate-400 hover:opacity-100")
+                  : "border border-slate-100 bg-slate-50 text-slate-300 hover:opacity-100")
               }
             >
               Clear filters
@@ -779,7 +840,8 @@ export default function Explore() {
           ) : null}
 
           <div className="mt-2 text-xs text-slate-500">
-		            Showing {filteredProjects.length + filteredDirectoryListings.length} of {projects.length + directoryListings.length} items
+            Showing {filteredProjects.length + filteredDirectoryListings.length}{" "}
+            of {projects.length + directoryListings.length} items
           </div>
         </div>
       </Card>
@@ -789,9 +851,9 @@ export default function Explore() {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
 
-	          const isReferenceGallery = p._kind === "homeowner_reference_gallery";
-	          const saved = !!favMap[p.id];
-	          const canSave = authed && !isOwner(p) && !isReferenceGallery;
+          const isReferenceGallery = p._kind === "homeowner_reference_gallery";
+          const saved = !!favMap[p.id];
+          const canSave = authed && !isOwner(p) && !isReferenceGallery;
           const liked = !!likeMap[p.id];
           const likeCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
 
@@ -814,12 +876,15 @@ export default function Explore() {
                     style={{
                       gridTemplateColumns: `repeat(${Math.min(
                         3,
-                        pack.thumbs.length
+                        pack.thumbs.length,
                       )}, 1fr)`,
                     }}
                   >
                     {pack.thumbs.map((item, i) => (
-                      <div key={(item.thumb || item.url) + i} className="relative h-24 overflow-hidden rounded-md bg-slate-100">
+                      <div
+                        key={(item.thumb || item.url) + i}
+                        className="relative h-24 overflow-hidden rounded-md bg-slate-100"
+                      >
                         <img
                           src={item.thumb || item.url}
                           alt=""
@@ -828,7 +893,11 @@ export default function Explore() {
                         {item.mediaType === "video" ? (
                           <span className="absolute inset-0 flex items-center justify-center text-white">
                             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60">
-                              <SymbolIcon name="play_arrow" fill={1} className="text-[22px]" />
+                              <SymbolIcon
+                                name="play_arrow"
+                                fill={1}
+                                className="text-[22px]"
+                              />
                             </span>
                           </span>
                         ) : null}
@@ -844,7 +913,9 @@ export default function Explore() {
 
               <div className="p-4">
                 <div className="mb-1 flex items-center gap-2">
-                  <div className="truncate text-base font-semibold">{p.title}</div>
+                  <div className="truncate text-base font-semibold">
+                    {p.title}
+                  </div>
                   {p.category ? <Badge>{p.category}</Badge> : null}
                 </div>
 
@@ -852,18 +923,18 @@ export default function Explore() {
                   {p.summary || <span className="opacity-60">No summary</span>}
                 </div>
 
-	                <div className="mt-2 text-xs text-slate-500">
-	                  {isReferenceGallery
-	                    ? `${p.reference_count || pack.thumbs.length} reference image${Number(p.reference_count || pack.thumbs.length) === 1 ? "" : "s"}`
-	                    : `by ${p.owner_username}`}
-	                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  {isReferenceGallery
+                    ? `${p.reference_count || pack.thumbs.length} reference image${Number(p.reference_count || pack.thumbs.length) === 1 ? "" : "s"}`
+                    : `by ${p.owner_username}`}
+                </div>
 
-	                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-	                  {isReferenceGallery ? (
-	                    <span className="inline-flex rounded-full px-2 py-1 font-medium text-slate-700">
-	                      View profile
-	                    </span>
-	                  ) : canSave ? (
+                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                  {isReferenceGallery ? (
+                    <span className="inline-flex rounded-full px-2 py-1 font-medium text-slate-700">
+                      View profile
+                    </span>
+                  ) : canSave ? (
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
@@ -872,18 +943,26 @@ export default function Explore() {
                       aria-label={liked ? "Unlike project" : "Like project"}
                       title={liked ? "Unlike project" : "Like project"}
                     >
-                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
+                      <SymbolIcon
+                        name="favorite"
+                        fill={liked ? 1 : 0}
+                        className="text-[18px]"
+                      />
                       <span>{likeCount}</span>
                     </button>
                   ) : (
                     <div className="inline-flex items-center gap-1 rounded-full px-2 py-1">
-                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
+                      <SymbolIcon
+                        name="favorite"
+                        fill={liked ? 1 : 0}
+                        className="text-[18px]"
+                      />
                       <span>{likeCount}</span>
                     </div>
                   )}
 
                   <div className="inline-flex items-center gap-1.5">
-	                    {authed && isOwner(p) && !isReferenceGallery ? (
+                    {authed && isOwner(p) && !isReferenceGallery ? (
                       <button
                         type="button"
                         className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
@@ -906,7 +985,11 @@ export default function Explore() {
                         aria-label={saved ? "Unsave project" : "Save project"}
                         title={saved ? "Unsave project" : "Save project"}
                       >
-                        <SymbolIcon name="bookmark" fill={saved ? 1 : 0} className="text-[20px]" />
+                        <SymbolIcon
+                          name="bookmark"
+                          fill={saved ? 1 : 0}
+                          className="text-[20px]"
+                        />
                       </button>
                     ) : null}
                   </div>
@@ -915,14 +998,14 @@ export default function Explore() {
             </Card>
           );
 
-	          return (
-	            <Link
-	              key={p.id}
-	              to={isReferenceGallery ? p.profile_url : `/projects/${p.id}`}
-	              className="block text-inherit no-underline"
-	            >
-	              {card}
-	            </Link>
+          return (
+            <Link
+              key={p.id}
+              to={isReferenceGallery ? p.profile_url : `/projects/${p.id}`}
+              className="block text-inherit no-underline"
+            >
+              {card}
+            </Link>
           );
         })}
       </div>
@@ -939,11 +1022,17 @@ export default function Explore() {
           {filteredDirectoryListings.length > 0 ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
               {filteredDirectoryListings.map((listing) => {
-                const specialties = Array.isArray(listing.specialties) ? listing.specialties : [];
+                const specialties = Array.isArray(listing.specialties)
+                  ? listing.specialties
+                  : [];
                 const visibleSpecialties = specialties.slice(0, 4);
                 const liked = !!directoryLikeMap[listing.id];
-                const likeCount = Number(directoryLikeCounts[listing.id] ?? listing.like_count ?? 0);
-                const distanceLabel = formatDistanceMiles(listing.distance_miles);
+                const likeCount = Number(
+                  directoryLikeCounts[listing.id] ?? listing.like_count ?? 0,
+                );
+                const distanceLabel = formatDistanceMiles(
+                  listing.distance_miles,
+                );
                 return (
                   <Card
                     key={`directory-${listing.id}`}
@@ -971,14 +1060,21 @@ export default function Explore() {
                         <ReportContentButton
                           targetType="business_directory_listing"
                           targetId={listing.id}
-                          subject={listing.business_name || "Business directory listing"}
-                          label={<SymbolIcon name="flag" className="text-[16px]" />}
+                          subject={
+                            listing.business_name ||
+                            "Business directory listing"
+                          }
+                          label={
+                            <SymbolIcon name="flag" className="text-[16px]" />
+                          }
                           title="Report listing"
                           ariaLabel="Report listing"
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                         />
                         <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                          Business information may be sourced from publicly available information. Business owners may request edits or removal.
+                          Business information may be sourced from publicly
+                          available information. Business owners may request
+                          edits or removal.
                         </div>
                       </div>
                     </div>
@@ -1012,10 +1108,22 @@ export default function Explore() {
                         className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
                         onClick={(e) => toggleDirectoryLike(e, listing)}
                         disabled={directoryLikeBusyId === listing.id}
-                        aria-label={liked ? "Unlike directory listing" : "Like directory listing"}
-                        title={liked ? "Unlike directory listing" : "Like directory listing"}
+                        aria-label={
+                          liked
+                            ? "Unlike directory listing"
+                            : "Like directory listing"
+                        }
+                        title={
+                          liked
+                            ? "Unlike directory listing"
+                            : "Like directory listing"
+                        }
                       >
-                        <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[18px]" />
+                        <SymbolIcon
+                          name="favorite"
+                          fill={liked ? 1 : 0}
+                          className="text-[18px]"
+                        />
                         <span>{likeCount}</span>
                       </button>
 
@@ -1029,7 +1137,9 @@ export default function Explore() {
                           Visit Website
                         </a>
                       ) : (
-                        <span className="text-xs text-slate-400">Reviewed listing</span>
+                        <span className="text-xs text-slate-400">
+                          Reviewed listing
+                        </span>
                       )}
                     </div>
                   </Card>
