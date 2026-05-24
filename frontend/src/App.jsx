@@ -20,13 +20,19 @@ export default function App() {
   // Full-bleed layouts (e.g. profile hero full-width)
   const isFullBleed =
     pathname === "/" ||
-    pathname === "/guides" ||
+    pathname === "/homeowners" ||
+    pathname === "/contractors" ||
+    pathname.startsWith("/guides") ||
     pathname === "/terms" ||
     pathname === "/privacy" ||
     pathname === "/copyright" ||
     pathname.startsWith("/profiles/") ||
     pathname.startsWith("/public/") ||
     false;
+  const hideShellNav =
+    pathname === "/" ||
+    pathname === "/homeowners" ||
+    pathname === "/contractors";
 
   // user + menu state
   const [me, setMe] = useState(null);
@@ -168,6 +174,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FBF9F7]">
+      {!hideShellNav ? (
       <header className="relative z-30 border-b border-slate-200 bg-white">
         <Container className="py-3">
           <nav className="flex items-center gap-2">
@@ -363,6 +370,7 @@ export default function App() {
           </nav>
         </Container>
       </header>
+      ) : null}
 
       <main className="w-full">
         {isFullBleed ? (

@@ -1,7 +1,11 @@
 // frontend/src/router.jsx
 import { createBrowserRouter } from "react-router-dom";
 import App from "./App";
+import LandingPage from "./pages/LandingPage";
+import HomeownerLandingPage from "./pages/HomeownerLandingPage";
+import ContractorLandingPage from "./pages/ContractorLandingPage";
 import Explore from "./pages/Explore";
+import ProjectGuides from "./pages/ProjectGuides";
 import Dashboard from "./pages/Dashboard";
 import ProfileEdit from "./pages/EditProfile";
 import ProjectDetail from "./pages/ProjectDetail";
@@ -21,7 +25,12 @@ export const router = createBrowserRouter([
     path: "/",
     element: <App />,
     children: [
-      { index: true, element: <Explore /> },
+      { index: true, element: <LandingPage /> },
+      { path: "homeowners", element: <HomeownerLandingPage /> },
+      { path: "contractors", element: <ContractorLandingPage /> },
+      { path: "explore", element: <Explore /> },
+      { path: "guides", element: <ProjectGuides /> },
+      { path: "guides/:audience", element: <ProjectGuides /> },
       { path: "work", element: <FindLocalWork /> },
       { path: "profile/edit", element: <ProfileEdit /> },
       { path: "dashboard", element: <Dashboard /> },

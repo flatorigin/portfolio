@@ -7,6 +7,8 @@ import App from "./App.jsx";
 
 const Explore = lazy(() => import("./pages/Explore.jsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
+const HomeownerLandingPage = lazy(() => import("./pages/HomeownerLandingPage.jsx"));
+const ContractorLandingPage = lazy(() => import("./pages/ContractorLandingPage.jsx"));
 const ProjectGuides = lazy(() => import("./pages/ProjectGuides.jsx"));
 const TermsAndSafety = lazy(() => import("./pages/TermsAndSafety.jsx"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.jsx"));
@@ -53,8 +55,11 @@ createRoot(document.getElementById("root")).render(
         <Route path="/" element={<App />}>
           {/* "/" → landing page */}
           <Route index element={<LandingPage />} />
+          <Route path="homeowners" element={<HomeownerLandingPage />} />
+          <Route path="contractors" element={<ContractorLandingPage />} />
           <Route path="explore" element={<Explore />} />
           <Route path="guides" element={<ProjectGuides />} />
+          <Route path="guides/:audience" element={<ProjectGuides />} />
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />
