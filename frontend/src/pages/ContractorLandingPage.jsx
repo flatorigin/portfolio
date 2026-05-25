@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import api from "../api";
+import { roleLandingPath } from "../landingRole";
 import { Badge, Button, Card, Container, SymbolIcon } from "../ui";
 
 const profileImages = [
@@ -16,12 +19,32 @@ const features = [
 
 function LandingNav() {
   const authed = !!localStorage.getItem("access");
+  const [profileType, setProfileType] = useState("");
+
+  useEffect(() => {
+    if (!authed) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (!cancelled) setProfileType(data?.profile_type || "");
+      } catch {
+        if (!cancelled) setProfileType("");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
       <Container className="py-3">
         <nav className="flex items-center gap-6">
-          <Link to="/" className="text-base font-bold tracking-tight text-slate-900">
+          <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-base font-bold tracking-tight text-slate-900">
             FlatOrigin
           </Link>
           <div className="hidden items-center gap-2 md:flex">
@@ -31,19 +54,17 @@ function LandingNav() {
             <a href="#how-it-works" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
               How it works
             </a>
-            <Link to="/register?role=contractor" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
-              Pricing
-            </Link>
             <Link to="/guides" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
               Guides
             </Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <Link
-              to="/homeowners"
+              to="/homeowner"
+              title="This toggle is only for viewing/previewing the other landing page."
               className="hidden h-9 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex"
             >
-              Switch to Homeowner
+              View Homeowner Side
             </Link>
             <Link
               to={authed ? "/dashboard" : "/login"}

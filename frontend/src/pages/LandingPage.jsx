@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Navigate } from "react-router-dom";
+import api from "../api";
 import { Card, Container, SymbolIcon } from "../ui";
 import homeownerIllustration from "../assets/landing/homeowner.webp";
 import contractorIllustration from "../assets/landing/contractor.webp";
@@ -9,7 +11,7 @@ const roleCards = [
     intro: "Plan projects with more clarity.",
     features: ["Save project ideas", "Compare contractor bids", "Private or public posting"],
     cta: "Continue as Homeowner",
-    to: "/homeowners",
+    to: "/homeowner",
     image: homeownerIllustration,
   },
   {
@@ -17,7 +19,7 @@ const roleCards = [
     intro: "Show your work professionally.",
     features: ["Public contractor profile", "Portfolio showcase", "Bid on local projects"],
     cta: "Continue as Contractor",
-    to: "/contractors",
+    to: "/contractor",
     image: contractorIllustration,
   },
 ];
@@ -90,6 +92,44 @@ function RoleCard({ card }) {
 }
 
 export default function LandingPage() {
+  const authed = !!localStorage.getItem("access");
+  const [profileType, setProfileType] = useState(authed ? null : "");
+
+  useEffect(() => {
+    if (!authed) {
+      setProfileType("");
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (!cancelled) setProfileType(data?.profile_type || "");
+      } catch {
+        if (!cancelled) setProfileType("");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
+
+  if (authed && profileType === null) {
+    return (
+      <div className="min-h-screen bg-[#FBF9F7] text-slate-900">
+        <GatewayNav />
+        <Container className="py-16 text-sm text-slate-500">Loading…</Container>
+      </div>
+    );
+  }
+
+  if (authed && (profileType === "homeowner" || profileType === "contractor")) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-[#FBF9F7] text-slate-900">
       <GatewayNav />
@@ -130,10 +170,10 @@ export default function LandingPage() {
             FlatOrigin
           </Link>
           <div className="flex flex-wrap gap-4">
-            <Link to="/homeowners" className="hover:text-slate-900">
+            <Link to="/homeowner" className="hover:text-slate-900">
               About
             </Link>
-            <Link to="/homeowners#how-it-works" className="hover:text-slate-900">
+            <Link to="/homeowner#how-it-works" className="hover:text-slate-900">
               How it works
             </Link>
             <Link to="/guides" className="hover:text-slate-900">

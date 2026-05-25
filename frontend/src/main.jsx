@@ -55,8 +55,10 @@ createRoot(document.getElementById("root")).render(
         <Route path="/" element={<App />}>
           {/* "/" → landing page */}
           <Route index element={<LandingPage />} />
-          <Route path="homeowners" element={<HomeownerLandingPage />} />
-          <Route path="contractors" element={<ContractorLandingPage />} />
+          <Route path="homeowner" element={<HomeownerLandingPage />} />
+          <Route path="contractor" element={<ContractorLandingPage />} />
+          <Route path="homeowners" element={<Navigate to="/homeowner" replace />} />
+          <Route path="contractors" element={<Navigate to="/contractor" replace />} />
           <Route path="explore" element={<Explore />} />
           <Route path="guides" element={<ProjectGuides />} />
           <Route path="guides/:audience" element={<ProjectGuides />} />
