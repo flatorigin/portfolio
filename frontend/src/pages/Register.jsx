@@ -1,15 +1,19 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "../api";
 import { register } from "../auth";
 import { Card, Input, PasswordInput, Button, SymbolIcon } from "../ui";
 
 export default function Register() {
+  const [searchParams] = useSearchParams();
+  const requestedRole = searchParams.get("role");
+  const initialProfileType =
+    requestedRole === "homeowner" || requestedRole === "contractor" ? requestedRole : "";
   const [form, setForm] = useState({
     username: "",
     email: "",
     password: "",
-    profile_type: "",
+    profile_type: initialProfileType,
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

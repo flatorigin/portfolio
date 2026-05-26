@@ -52,6 +52,8 @@ class Profile(models.Model):
 
     # About
     bio = models.TextField(blank=True, default="")
+    contractor_primary_category = models.CharField(max_length=120, blank=True, default="")
+    contractor_categories = models.JSONField(default=list, blank=True)
 
     # Optional contact info (NEW)
     contact_email = models.EmailField(blank=True, default="")
@@ -199,6 +201,8 @@ class Profile(models.Model):
         if not self.is_deactivated:
             self.deactivated_at = None
         if self.profile_type != self.ProfileType.CONTRACTOR:
+            self.contractor_primary_category = ""
+            self.contractor_categories = []
             self.license_number = ""
             self.license_state = ""
             self.insurance_provider = ""

@@ -10,11 +10,142 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import AiWriteButton from "../components/AiWriteButton";
 import { logout } from "../auth";
-import { SectionTitle, Card, Input, Textarea, Button, GhostButton } from "../ui";
+import { SectionTitle, Card, Input, Textarea, Button, GhostButton, SymbolIcon } from "../ui";
 import LanguageMultiSelect from "../components/LanguageMultiSelect";
 import { geocodeLocationQuery, normalizeLocationQuery } from "../lib/googleMaps";
 
 const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
+
+const CONTRACTOR_CATEGORY_GROUPS = [
+  {
+    title: "General Construction",
+    options: [
+      "General Contractor",
+      "Residential Builder",
+      "Commercial Builder",
+      "Custom Home Builder",
+      "Remodeling Contractor",
+      "Renovation Contractor",
+      "Design-Build Contractor",
+    ],
+  },
+  {
+    title: "Structural & Framing",
+    options: [
+      "Framing Contractor",
+      "Concrete Contractor",
+      "Foundation Contractor",
+      "Masonry Contractor",
+      "Structural Steel Contractor",
+      "Rebar Contractor",
+      "Demolition Contractor",
+    ],
+  },
+  {
+    title: "Exterior & Roofing",
+    options: [
+      "Roofing Contractor",
+      "Siding Contractor",
+      "Stucco Contractor",
+      "Exterior Painting Contractor",
+      "Window Installer",
+      "Door Installer",
+      "Gutter Contractor",
+      "Deck Builder",
+      "Fence Contractor",
+      "Garage Door Installer",
+    ],
+  },
+  {
+    title: "Interior Trades",
+    options: [
+      "Drywall Contractor",
+      "Insulation Contractor",
+      "Interior Painter",
+      "Flooring Contractor",
+      "Tile Contractor",
+      "Carpet Installer",
+      "Finish Carpenter",
+      "Cabinet Maker / Installer",
+      "Countertop Installer",
+      "Wallpaper Installer",
+      "Trim & Millwork Contractor",
+    ],
+  },
+  {
+    title: "Mechanical / Utility Trades",
+    options: [
+      "Electrician",
+      "HVAC Contractor",
+      "Plumber",
+      "Fire Sprinkler Contractor",
+      "Elevator Contractor",
+      "Generator Installer",
+      "Solar Installer",
+      "Low Voltage Contractor",
+      "Smart Home Installer",
+      "Security System Installer",
+    ],
+  },
+  {
+    title: "Site & Outdoor Work",
+    options: [
+      "Excavation Contractor",
+      "Landscaping Contractor",
+      "Hardscaping Contractor",
+      "Asphalt / Paving Contractor",
+      "Retaining Wall Contractor",
+      "Pool Contractor",
+      "Irrigation Contractor",
+      "Tree Service Contractor",
+      "Septic System Contractor",
+      "Waterproofing Contractor",
+    ],
+  },
+  {
+    title: "Specialty Trades",
+    options: [
+      "Glass & Mirror Contractor",
+      "Epoxy Flooring Contractor",
+      "Restoration Contractor",
+      "Historic Restoration Specialist",
+      "Chimney Contractor",
+      "Scaffolding Contractor",
+      "Acoustical Ceiling Contractor",
+      "Metal Fabrication Contractor",
+      "Welding Contractor",
+      "Stone Fabrication Contractor",
+    ],
+  },
+  {
+    title: "Industrial / Commercial Specialties",
+    options: [
+      "Commercial Kitchen Installer",
+      "Office Fit-Out Contractor",
+      "Warehouse Construction Contractor",
+      "Retail Build-Out Contractor",
+      "Medical Facility Contractor",
+      "Industrial Mechanical Contractor",
+      "Telecommunications Contractor",
+      "Data Center Contractor",
+    ],
+  },
+  {
+    title: "Emerging / Modern Specialties",
+    options: [
+      "EV Charger Installer",
+      "Energy Efficiency Contractor",
+      "Modular Home Installer",
+      "Prefab Structure Contractor",
+      "Tiny Home Builder",
+      "Outdoor Living Specialist",
+      "Home Automation Contractor",
+    ],
+  },
+];
+
+const CONTRACTOR_CATEGORY_OPTIONS = CONTRACTOR_CATEGORY_GROUPS.flatMap((group) => group.options);
+const MAX_CONTRACTOR_CATEGORIES = 10;
 
 function getProfileComplete(form) {
   return Boolean(
@@ -56,6 +187,129 @@ function VerificationStatusBadge({ status, label }) {
   );
 }
 
+function normalizeCategories(value) {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set();
+  return value
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, MAX_CONTRACTOR_CATEGORIES);
+}
+
+function ContractorCategoryPicker({ open, selected, onChange, onClose }) {
+  if (!open) return null;
+
+  const selectedCategories = normalizeCategories(selected);
+  const selectedSet = new Set(selectedCategories);
+
+  const toggleCategory = (category) => {
+    if (selectedSet.has(category)) {
+      onChange?.(selectedCategories.filter((item) => item !== category));
+      return;
+    }
+
+    if (selectedCategories.length >= MAX_CONTRACTOR_CATEGORIES) return;
+    onChange?.([...selectedCategories, category]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-8">
+      <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-950">
+              Select contracting categories
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Choose up to {MAX_CONTRACTOR_CATEGORIES}. These help search, but only your primary title appears on your public profile.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            aria-label="Close category picker"
+          >
+            <SymbolIcon name="close" className="text-[20px]" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-5 py-5 sm:px-6">
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-slate-700">
+              {selectedCategories.length}/{MAX_CONTRACTOR_CATEGORIES} selected
+            </span>
+            {selectedCategories.map((category) => (
+              <span
+                key={category}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+              >
+                {category}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            {CONTRACTOR_CATEGORY_GROUPS.map((group) => (
+              <section key={group.title} className="rounded-2xl border border-slate-200 p-4">
+                <h4 className="text-sm font-semibold text-slate-950">{group.title}</h4>
+                <div className="mt-3 grid gap-2">
+                  {group.options.map((category) => {
+                    const checked = selectedSet.has(category);
+                    const disabled = !checked && selectedCategories.length >= MAX_CONTRACTOR_CATEGORIES;
+
+                    return (
+                      <label
+                        key={category}
+                        className={[
+                          "flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm",
+                          checked
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                          disabled ? "cursor-not-allowed opacity-45" : "",
+                        ].join(" ")}
+                      >
+                        <span>{category}</span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => toggleCategory(category)}
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 sm:px-6">
+          <button
+            type="button"
+            onClick={() => onChange?.([])}
+            className="text-sm font-medium text-slate-500 hover:text-slate-900"
+          >
+            Clear selections
+          </button>
+          <Button type="button" onClick={onClose} className="min-w-[120px]">
+            Done
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function toUrl(raw) {
   if (!raw) return "";
   if (/^(data:|blob:)/i.test(raw)) return raw;
@@ -84,6 +338,8 @@ export default function EditProfile() {
     contact_email: "",
     contact_phone: "",
     bio: "",
+    contractor_primary_category: "",
+    contractor_categories: [],
     license_number: "",
     license_state: "",
     insurance_provider: "",
@@ -104,6 +360,7 @@ export default function EditProfile() {
 
   const [showDmOptOutModal, setShowDmOptOutModal] = useState(false);
   const [dmReasonDraft, setDmReasonDraft] = useState("");
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
   const complete = getProfileComplete(form);
 
@@ -177,6 +434,8 @@ export default function EditProfile() {
           contact_email: data.contact_email || "",
           contact_phone: data.contact_phone || "",
           bio: data.bio || "",
+          contractor_primary_category: data.contractor_primary_category || "",
+          contractor_categories: normalizeCategories(data.contractor_categories),
           license_number: data.license_number || "",
           license_state: data.license_state || "",
           insurance_provider: data.insurance_provider || "",
@@ -336,6 +595,8 @@ export default function EditProfile() {
       data.append("contact_email", form.contact_email || "");
       data.append("contact_phone", form.contact_phone || "");
       data.append("bio", form.bio || "");
+      data.append("contractor_primary_category", form.contractor_primary_category || "");
+      data.append("contractor_categories", JSON.stringify(normalizeCategories(form.contractor_categories)));
       data.append("license_number", form.license_number || "");
       data.append("license_state", form.license_state || "");
       data.append("insurance_provider", form.insurance_provider || "");
@@ -390,6 +651,11 @@ export default function EditProfile() {
         contact_email: updated.contact_email ?? form.contact_email,
         contact_phone: updated.contact_phone ?? form.contact_phone,
         bio: updated.bio ?? form.bio,
+        contractor_primary_category:
+          updated.contractor_primary_category ?? form.contractor_primary_category,
+        contractor_categories: Array.isArray(updated.contractor_categories)
+          ? normalizeCategories(updated.contractor_categories)
+          : form.contractor_categories,
         license_number: updated.license_number ?? form.license_number,
         license_state: updated.license_state ?? form.license_state,
         insurance_provider: updated.insurance_provider ?? form.insurance_provider,
@@ -462,6 +728,7 @@ export default function EditProfile() {
       ? "Homeowner"
       : "";
   const isHomeownerProfile = form.profile_type === "homeowner";
+  const isContractorProfile = form.profile_type === "contractor";
 
   const needsProfileTypeSelection = !loading && !form.profile_type;
 
@@ -485,6 +752,92 @@ export default function EditProfile() {
       setSavingProfileType(false);
     }
   };
+
+  const contractorCategories = normalizeCategories(form.contractor_categories);
+  const primaryCategoryOptions = normalizeCategories([
+    form.contractor_primary_category,
+    ...contractorCategories,
+    ...CONTRACTOR_CATEGORY_OPTIONS,
+  ]);
+
+  const renderContractorCategoriesSection = () => (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">
+            Contracting categories
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Pick one public title and up to {MAX_CONTRACTOR_CATEGORIES} searchable categories. Extra categories help homeowners find you but do not appear as profile badges.
+          </p>
+        </div>
+        <GhostButton
+          type="button"
+          onClick={() => setShowCategoryPicker(true)}
+          className="shrink-0"
+        >
+          Choose categories
+        </GhostButton>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Public contractor title
+          </label>
+          <Input
+            list="contractor-primary-category-options"
+            value={form.contractor_primary_category}
+            onChange={updateField("contractor_primary_category")}
+            placeholder="e.g. General Contractor"
+            maxLength={120}
+          />
+          <datalist id="contractor-primary-category-options">
+            {primaryCategoryOptions.map((category) => (
+              <option key={category} value={category} />
+            ))}
+          </datalist>
+          <p className="mt-1 text-[11px] text-slate-500">
+            This is the one category shown publicly on your profile.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Searchable categories
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowCategoryPicker(true)}
+            className="flex min-h-[42px] w-full items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm hover:bg-slate-50"
+          >
+            <span className={contractorCategories.length ? "text-slate-900" : "text-slate-400"}>
+              {contractorCategories.length
+                ? `${contractorCategories.length} selected`
+                : "Select up to 10 categories"}
+            </span>
+            <SymbolIcon name="keyboard_arrow_down" className="text-[20px] text-slate-400" />
+          </button>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Search uses every selected category, including categories that are not shown publicly.
+          </p>
+        </div>
+      </div>
+
+      {contractorCategories.length ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {contractorCategories.map((category) => (
+            <span
+              key={category}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+            >
+              {category}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 
   const renderContactVisibilitySection = () => (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -949,6 +1302,8 @@ export default function EditProfile() {
                 </div>
               </div>
 
+              {isContractorProfile ? renderContractorCategoriesSection() : null}
+
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3">
                   <p className="text-sm font-semibold text-slate-900">
@@ -1318,6 +1673,18 @@ export default function EditProfile() {
           </div>
         </div>
       )}
+
+      <ContractorCategoryPicker
+        open={showCategoryPicker}
+        selected={form.contractor_categories}
+        onChange={(next) =>
+          setForm((prev) => ({
+            ...prev,
+            contractor_categories: normalizeCategories(next),
+          }))
+        }
+        onClose={() => setShowCategoryPicker(false)}
+      />
 
       {showDmOptOutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">

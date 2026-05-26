@@ -640,6 +640,8 @@ class ContractorSearchView(APIView):
                 | Q(service_location__icontains=query)
                 | Q(bio__icontains=query)
                 | Q(hero_headline__icontains=query)
+                | Q(contractor_primary_category__icontains=query)
+                | Q(contractor_categories__icontains=query)
             )
             project_filter = Q()
             if search_by in {"all", "job_title"}:
@@ -673,6 +675,8 @@ class ContractorSearchView(APIView):
                     | Q(service_location__icontains=term)
                     | Q(bio__icontains=term)
                     | Q(hero_headline__icontains=term)
+                    | Q(contractor_primary_category__icontains=term)
+                    | Q(contractor_categories__icontains=term)
                     | Q(user__projects__title__icontains=term)
                     | Q(user__projects__category__icontains=term)
                     | Q(user__projects__service_categories__icontains=term)

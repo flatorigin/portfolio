@@ -1,7 +1,9 @@
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import api from "../api";
 import { Button, Card, Container } from "../ui";
 
-const guideCategories = [
+const homeownerGuideCategories = [
   {
     id: "planning",
     title: "Planning a Project",
@@ -110,41 +112,6 @@ const guideCategories = [
     ],
   },
   {
-    id: "contractors",
-    title: "For Contractors",
-    intro: "Use your portfolio and bid details to build trust before a homeowner calls.",
-    guides: [
-      {
-        title: "Make your profile easier to hire from",
-        points: [
-          "Show finished work with clear titles.",
-          "Add service area and trade focus.",
-          "Use project captions to explain what you did.",
-          "Keep contact details and messaging preferences current.",
-        ],
-      },
-      {
-        title: "Write a bid homeowners can compare",
-        points: [
-          "Use a realistic price type.",
-          "Explain your approach in plain language.",
-          "List what is included and excluded.",
-          "Give a timeline you can stand behind.",
-          "Add payment terms and a valid-until date.",
-        ],
-      },
-      {
-        title: "Use messaging for clarification",
-        points: [
-          "Ask project-specific questions before changing your bid.",
-          "Keep negotiation tied to the project.",
-          "Summarize changes clearly if the owner asks for a revision.",
-          "Avoid moving important scope decisions into scattered messages without updating the bid.",
-        ],
-      },
-    ],
-  },
-  {
     id: "examples",
     title: "Example Job Posts",
     intro: "A clear post helps contractors understand the work faster.",
@@ -179,7 +146,139 @@ const guideCategories = [
   },
 ];
 
-const quickChecklists = [
+const contractorGuideCategories = [
+  {
+    id: "profile",
+    title: "Build a Strong Profile",
+    intro: "Make it easy for homeowners to understand what you do and where you work.",
+    guides: [
+      {
+        title: "Make your profile easier to hire from",
+        points: [
+          "Use a clear business or display name.",
+          "Add service area and trade focus.",
+          "Show finished work with clear project titles.",
+          "Use captions to explain what you did and what problem you solved.",
+          "Keep contact details and messaging preferences current.",
+        ],
+      },
+      {
+        title: "Choose useful specialties",
+        points: [
+          "Use specialties homeowners actually search for, such as decks, flooring, painting, kitchens, trim, or fencing.",
+          "Avoid listing every possible task if it weakens the focus of your profile.",
+          "Put your strongest services first.",
+          "Match specialties to the type of work shown in your portfolio.",
+        ],
+      },
+      {
+        title: "Show work that builds confidence",
+        points: [
+          "Use clear before, during, and after photos when possible.",
+          "Keep the cover image focused on the finished result.",
+          "Add enough context for the homeowner to understand the scope.",
+          "Avoid using only inspiration images. Real completed work is stronger.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "bidding",
+    title: "Bidding on Projects",
+    intro: "Use clear bid details to help homeowners compare without guessing.",
+    guides: [
+      {
+        title: "Write a bid homeowners can compare",
+        points: [
+          "Use a realistic price type.",
+          "Explain your approach in plain language.",
+          "List what is included and excluded.",
+          "Give a timeline you can stand behind.",
+          "Add payment terms and a valid-until date.",
+        ],
+      },
+      {
+        title: "Ask before you price unclear work",
+        points: [
+          "Ask for missing measurements, photos, access details, or finish expectations.",
+          "Separate unknown conditions from known scope.",
+          "Explain what could change the final price.",
+          "Update the bid if the homeowner clarifies the scope.",
+        ],
+      },
+      {
+        title: "Keep scope and price connected",
+        points: [
+          "Make sure the price matches the exact work described.",
+          "Call out material assumptions.",
+          "Mention cleanup, disposal, and protection if they are included.",
+          "Do not bury important exclusions in vague language.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "messaging",
+    title: "Project Communication",
+    intro: "Keep conversations tied to the project so decisions stay organized.",
+    guides: [
+      {
+        title: "Use messaging for clarification",
+        points: [
+          "Ask project-specific questions before changing your bid.",
+          "Keep negotiation tied to the project.",
+          "Summarize changes clearly if the owner asks for a revision.",
+          "Avoid moving important scope decisions into scattered messages without updating the bid.",
+        ],
+      },
+      {
+        title: "Send helpful follow-ups",
+        points: [
+          "Confirm the next step after a homeowner replies.",
+          "Keep scheduling notes specific.",
+          "Reference the project area, materials, or requested scope so the message is easy to connect.",
+          "Use short, direct messages when a decision is needed.",
+        ],
+      },
+      {
+        title: "Protect trust before the first visit",
+        points: [
+          "Be clear about whether the first visit is free or paid.",
+          "Mention what information you need before visiting.",
+          "Avoid overpromising before seeing hidden conditions.",
+          "Keep your profile, photos, and bid details consistent.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "local-work",
+    title: "Finding Local Work",
+    intro: "Use location and specialty focus to find projects that match your business.",
+    guides: [
+      {
+        title: "Focus on the right service area",
+        points: [
+          "Keep your location and service area accurate.",
+          "Prioritize projects that fit your travel range.",
+          "Use your profile text to explain where you usually work.",
+          "Update your location if your business moves or expands.",
+        ],
+      },
+      {
+        title: "Choose projects that fit your strengths",
+        points: [
+          "Match the project category to your strongest specialties.",
+          "Look for posts with enough detail to price responsibly.",
+          "Ask follow-up questions when photos or measurements are missing.",
+          "Pass on work that does not fit your license, insurance, or trade focus.",
+        ],
+      },
+    ],
+  },
+];
+
+const homeownerQuickChecklists = [
   "Project summary",
   "Current photos",
   "Location",
@@ -192,32 +291,156 @@ const quickChecklists = [
   "Cleanup and disposal",
 ];
 
+const contractorQuickChecklists = [
+  "Service area",
+  "Trade focus",
+  "Completed project photos",
+  "Project captions",
+  "Specialties",
+  "Bid scope",
+  "Included work",
+  "Excluded work",
+  "Timeline",
+  "Payment terms",
+];
+
+const guideCopy = {
+  homeowner: {
+    eyebrow: "Homeowner Guides",
+    title: "Practical guides for posting better projects and comparing bids.",
+    intro:
+      "Use these checklists and examples to describe work clearly, invite the right contractors, and compare bids with fewer surprises.",
+    primaryCta: "Create a project",
+    secondaryCta: "Browse job postings",
+    secondaryTo: "/work",
+    whyTitle: "Find the right help beyond the few people you already know.",
+    whyCopy:
+      "A clear job post gives homeowners and contractors a better way to match the work to the right skill set. The goal is not to push contractors into lower pricing. The goal is to understand the scope, compare real options, and use the project budget with more confidence.",
+    whyCards: [
+      [
+        "Search beyond your circle",
+        "Most people start with only the contractors they already know. Sharing a focused job post helps more relevant professionals understand the work and respond.",
+      ],
+      [
+        "Use the budget better",
+        "Comparing structured bids helps you see what is included, what is excluded, and which proposal gives the clearest value for the budget.",
+      ],
+      [
+        "Match the right specialist",
+        "Some projects need a handoff or multiple trades. Clear scope makes it easier for contractors to take the part that fits their skill set and coordinate the rest.",
+      ],
+    ],
+    checklistTitle: "Before you ask for bids",
+    checklistCopy:
+      "You do not need every answer before posting, but the more of these you include, the easier it is for contractors to respond seriously.",
+    finalTitle: "Ready to turn the guide into a real project?",
+    finalCopy:
+      "Start with a clear project post, add photos, choose public or private, and invite contractors when you are ready.",
+    finalLink: "Browse portfolios first",
+    finalLinkTo: "/explore",
+  },
+  contractor: {
+    eyebrow: "Contractor Guides",
+    title: "Practical guides for building trust and winning better-fit work.",
+    intro:
+      "Use these checklists to sharpen your profile, explain your bids clearly, and keep project communication organized.",
+    primaryCta: "Open dashboard",
+    secondaryCta: "Find local work",
+    secondaryTo: "/work",
+    whyTitle: "Make your work easier for homeowners to trust.",
+    whyCopy:
+      "A focused contractor profile and clear bid details help homeowners understand what you do, where you work, and how your proposal compares. The goal is to present real work clearly and avoid confusion before a project starts.",
+    whyCards: [
+      [
+        "Lead with real work",
+        "Completed project photos and captions show what you can actually do, not just a list of services.",
+      ],
+      [
+        "Make bids easier to compare",
+        "Clear scope, timeline, terms, and exclusions help homeowners understand the value of your proposal.",
+      ],
+      [
+        "Stay local and relevant",
+        "Accurate service areas and specialties help you focus on projects that fit your business.",
+      ],
+    ],
+    checklistTitle: "Before you send a bid",
+    checklistCopy:
+      "A stronger profile and cleaner proposal make it easier for homeowners to respond seriously.",
+    finalTitle: "Ready to turn the guide into your next project?",
+    finalCopy:
+      "Keep your profile current, browse local work, and send clear bids when the project fits your business.",
+    finalLink: "View local projects",
+    finalLinkTo: "/work",
+  },
+};
+
 export default function ProjectGuides() {
+  const { audience } = useParams();
+  const [profileType, setProfileType] = useState("");
+
+  const explicitAudience =
+    audience === "contractors"
+      ? "contractor"
+      : audience === "homeowners"
+      ? "homeowner"
+      : "";
+
+  useEffect(() => {
+    if (explicitAudience || !localStorage.getItem("access")) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (!cancelled) setProfileType(data?.profile_type || "");
+      } catch {
+        if (!cancelled) setProfileType("");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [explicitAudience]);
+
+  const guideAudience = explicitAudience || (profileType === "contractor" ? "contractor" : "homeowner");
+  const categories = useMemo(
+    () => (guideAudience === "contractor" ? contractorGuideCategories : homeownerGuideCategories),
+    [guideAudience]
+  );
+  const quickChecklists =
+    guideAudience === "contractor" ? contractorQuickChecklists : homeownerQuickChecklists;
+  const copy = guideCopy[guideAudience];
+
   return (
     <div className="bg-[#FBF9F7] pb-20 text-slate-900">
       <section className="border-b border-[#ECE7DF] bg-[radial-gradient(circle_at_top_left,#EEF3FF,transparent_34%),linear-gradient(180deg,#FBF9F7_0%,#F7F3EC_100%)]">
         <Container className="py-14 sm:py-18">
           <div className="max-w-4xl">
             <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">
-              Project Guides
+              {copy.eyebrow}
             </div>
             <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
-              Practical guides for posting better projects and comparing bids.
+              {copy.title}
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
-              Use these checklists and examples to describe work clearly, invite the right contractors, and compare bids with fewer surprises.
+              {copy.intro}
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link to="/dashboard">
                 <Button className="rounded-full bg-[#4F5D83] px-7 py-3 text-base font-semibold hover:bg-[#445273]">
-                  Create a project
+                  {copy.primaryCta}
                 </Button>
               </Link>
               <Link
-                to="/work"
+                to={copy.secondaryTo}
                 className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-7 py-3 text-base font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Browse job postings
+                {copy.secondaryCta}
               </Link>
             </div>
           </div>
@@ -238,7 +461,7 @@ export default function ProjectGuides() {
                 >
                   Why this matters
                 </a>
-                {guideCategories.map((category) => (
+                {categories.map((category) => (
                   <a
                     key={category.id}
                     href={`#${category.id}`}
@@ -260,36 +483,22 @@ export default function ProjectGuides() {
                 Why this matters
               </div>
               <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
-                Find the right help beyond the few people you already know.
+                {copy.whyTitle}
               </h2>
               <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
-                A clear job post gives homeowners and contractors a better way to match the work to the right skill set. The goal is not to push contractors into lower pricing. The goal is to understand the scope, compare real options, and use the project budget with more confidence.
+                {copy.whyCopy}
               </p>
               <div className="mt-6 grid gap-4 md:grid-cols-3">
-                <div className="rounded-2xl border border-[#E9E5DC] bg-[#FBF9F7] p-5">
-                  <h3 className="text-base font-semibold text-slate-950">
-                    Search beyond your circle
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Most people start with only the contractors they already know. Sharing a focused job post helps more relevant professionals understand the work and respond.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-[#E9E5DC] bg-[#FBF9F7] p-5">
-                  <h3 className="text-base font-semibold text-slate-950">
-                    Use the budget better
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Comparing structured bids helps you see what is included, what is excluded, and which proposal gives the clearest value for the budget.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-[#E9E5DC] bg-[#FBF9F7] p-5">
-                  <h3 className="text-base font-semibold text-slate-950">
-                    Match the right specialist
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Some projects need a handoff or multiple trades. Clear scope makes it easier for contractors to take the part that fits their skill set and coordinate the rest.
-                  </p>
-                </div>
+                {copy.whyCards.map(([title, text]) => (
+                  <div key={title} className="rounded-2xl border border-[#E9E5DC] bg-[#FBF9F7] p-5">
+                    <h3 className="text-base font-semibold text-slate-950">
+                      {title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      {text}
+                    </p>
+                  </div>
+                ))}
               </div>
             </section>
 
@@ -300,10 +509,10 @@ export default function ProjectGuides() {
                     Quick checklist
                   </div>
                   <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-                    Before you ask for bids
+                    {copy.checklistTitle}
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                    You do not need every answer before posting, but the more of these you include, the easier it is for contractors to respond seriously.
+                    {copy.checklistCopy}
                   </p>
                 </div>
               </div>
@@ -316,7 +525,7 @@ export default function ProjectGuides() {
               </div>
             </section>
 
-            {guideCategories.map((category) => (
+            {categories.map((category) => (
               <section key={category.id} id={category.id} className="scroll-mt-28">
                 <div className="mb-5">
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">
@@ -347,22 +556,22 @@ export default function ProjectGuides() {
 
             <section className="rounded-[2rem] border border-[#E2DDD4] bg-[#F1ECE4] px-6 py-10 text-center sm:px-12">
               <h2 className="text-3xl font-bold tracking-tight text-slate-950">
-                Ready to turn the guide into a real project?
+                {copy.finalTitle}
               </h2>
               <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Start with a clear project post, add photos, choose public or private, and invite contractors when you are ready.
+                {copy.finalCopy}
               </p>
               <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link to="/dashboard">
                   <Button className="min-w-[180px] rounded-full bg-[#4F5D83] px-8 py-3 text-base font-semibold hover:bg-[#445273]">
-                    Create a project
+                    {copy.primaryCta}
                   </Button>
                 </Link>
                 <Link
-                  to="/explore"
+                  to={copy.finalLinkTo}
                   className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-950"
                 >
-                  Browse portfolios first
+                  {copy.finalLink}
                 </Link>
               </div>
             </section>
