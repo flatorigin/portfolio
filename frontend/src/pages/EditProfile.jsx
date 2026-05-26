@@ -1476,40 +1476,6 @@ export default function EditProfile() {
             </div>
           </Card>
 
-          {isContractorProfile ? (
-            <Card className="flex h-[280px] flex-col overflow-hidden p-0">
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  About
-                </div>
-                <div className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-700">
-                  {form.bio ? form.bio : "No bio added yet."}
-                </div>
-              </div>
-
-              <div className="shrink-0 border-t border-slate-200 px-5 py-4">
-                <div className="overflow-x-auto">
-                  <div className="flex w-max items-center gap-2 pr-2">
-                    {contractorCategories.length ? (
-                      contractorCategories.map((category) => (
-                        <span
-                          key={category}
-                          className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700"
-                        >
-                          {category}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="whitespace-nowrap text-sm text-slate-400">
-                        No categories selected yet.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ) : null}
-
           <Card className="space-y-4 p-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Security
