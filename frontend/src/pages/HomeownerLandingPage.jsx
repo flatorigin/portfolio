@@ -107,46 +107,46 @@ function LandingNav() {
 }
 
 function ProjectPreview() {
+  const jobs = [
+    {
+      title: "Kitchen Renovation",
+      location: "Media, PA",
+      budget: "$15,000 - $25,000",
+      image: kitchenImage,
+    },
+    {
+      title: "Deck Rebuild",
+      location: "Media, PA",
+      budget: "$8,000 - $12,000",
+      image: deckImage,
+    },
+  ];
+
   return (
-    <Card className="p-5">
-      <div className="text-sm font-semibold text-slate-900">Kitchen Renovation</div>
-      <div className="mt-4 flex gap-5 border-b border-slate-100 text-xs font-semibold text-slate-500">
-        {["Overview", "Photos", "Files", "Bids", "Messages"].map((tab, index) => (
-          <span key={tab} className={index === 0 ? "border-b-2 border-slate-900 pb-2 text-slate-900" : "pb-2"}>
-            {tab}
-          </span>
-        ))}
-      </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <img
-          src="https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=700&q=80"
-          alt=""
-          className="h-28 w-full rounded-xl object-cover"
-        />
-        <img
-          src="https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=700&q=80"
-          alt=""
-          className="h-28 w-full rounded-xl object-cover"
-        />
-      </div>
-      <div className="mt-5 grid grid-cols-2 gap-4 border-b border-slate-100 pb-5 text-sm">
-        <div>
-          <div className="text-xs font-semibold text-slate-500">Budget</div>
-          <div className="mt-1 font-semibold text-slate-900">$15,000 - $25,000</div>
+    <Card className="grid h-[360px] grid-rows-2 gap-4 p-5">
+      {jobs.map((job) => (
+        <div
+          key={job.title}
+          className="grid min-h-0 grid-cols-[120px_minmax(0,1fr)] gap-4 rounded-2xl border border-slate-200 bg-white p-3"
+        >
+          <img
+            src={job.image}
+            alt=""
+            className="h-full min-h-0 w-full rounded-xl object-cover"
+          />
+          <div className="flex min-w-0 flex-col justify-center">
+            <div className="truncate text-base font-semibold text-slate-950">
+              {job.title}
+            </div>
+            <div className="mt-2 text-sm font-medium text-slate-500">
+              {job.location}
+            </div>
+            <div className="mt-3 text-sm font-semibold text-slate-700">
+              {job.budget}
+            </div>
+          </div>
         </div>
-        <div>
-          <div className="text-xs font-semibold text-slate-500">Status</div>
-          <div className="mt-1 font-semibold text-slate-900">Planning</div>
-        </div>
-      </div>
-      <div className="mt-5">
-        <div className="text-sm font-semibold text-slate-900">Project Notes</div>
-        <ul className="mt-3 space-y-2 text-sm text-slate-600">
-          <li>• Open up the space</li>
-          <li>• New cabinets and countertops</li>
-          <li>• Better lighting</li>
-        </ul>
-      </div>
+      ))}
     </Card>
   );
 }

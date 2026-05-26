@@ -80,29 +80,46 @@ function LandingNav() {
 }
 
 function ContractorProfilePreview() {
+  const projects = [
+    {
+      title: "Deck Build",
+      location: "Media, PA",
+      specialty: "Carpentry",
+      image: profileImages[1],
+    },
+    {
+      title: "Kitchen Finish",
+      location: "Media, PA",
+      specialty: "Interior",
+      image: profileImages[2],
+    },
+  ];
+
   return (
-    <Card className="p-5">
-      <div className="flex items-center gap-5">
-        <img
-          src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80"
-          alt=""
-          className="h-24 w-24 rounded-full object-cover"
-        />
-        <div>
-          <div className="text-xl font-semibold text-slate-900">Smith Home Improvements</div>
-          <div className="mt-1 text-sm font-medium text-slate-500">Decks - Carpentry - Exterior</div>
-          <div className="mt-3 text-sm font-semibold text-slate-600">Media, PA</div>
-          <div className="mt-2 text-sm text-slate-500">15+ Projects Completed</div>
+    <Card className="grid h-[360px] grid-rows-2 gap-4 p-5">
+      {projects.map((project) => (
+        <div
+          key={project.title}
+          className="grid min-h-0 grid-cols-[120px_minmax(0,1fr)] gap-4 rounded-2xl border border-slate-200 bg-white p-3"
+        >
+          <img
+            src={project.image}
+            alt=""
+            className="h-full min-h-0 w-full rounded-xl object-cover"
+          />
+          <div className="flex min-w-0 flex-col justify-center">
+            <div className="truncate text-base font-semibold text-slate-950">
+              {project.title}
+            </div>
+            <div className="mt-2 text-sm font-medium text-slate-500">
+              {project.location}
+            </div>
+            <div className="mt-3 text-sm font-semibold text-slate-700">
+              {project.specialty}
+            </div>
+          </div>
         </div>
-      </div>
-      <Button className="mt-6 h-11 w-full">
-        View Profile
-      </Button>
-      <div className="mt-5 grid grid-cols-3 gap-3">
-        {profileImages.map((image) => (
-          <img key={image} src={image} alt="" className="h-24 rounded-xl object-cover" />
-        ))}
-      </div>
+      ))}
     </Card>
   );
 }

@@ -795,6 +795,7 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "coverage_radius_miles",
             "bio",
             "contractor_primary_category",
+            "contractor_categories",
             "contact_email",
             "contact_phone",
             "logo",

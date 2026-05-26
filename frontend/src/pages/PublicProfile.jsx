@@ -88,6 +88,26 @@ function extractHeroFromProfile(profile) {
   return "";
 }
 
+function normalizeCategoryBadges(profile) {
+  const raw = [
+    profile?.contractor_primary_category,
+    ...(Array.isArray(profile?.contractor_categories)
+      ? profile.contractor_categories
+      : []),
+  ];
+  const seen = new Set();
+
+  return raw
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 export default function PublicProfile() {
   const { username } = useParams();
   const navigate = useNavigate();
@@ -120,6 +140,7 @@ export default function PublicProfile() {
   );
   const isHomeownerProfile = profile?.profile_type === "homeowner";
   const profileRoleLabel = isHomeownerProfile ? "homeowner" : "contractor";
+  const categoryBadges = useMemo(() => normalizeCategoryBadges(profile), [profile]);
 
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
@@ -822,15 +843,32 @@ export default function PublicProfile() {
       {/* MAIN CONTENT */}
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-12">
         <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-          <Card className="rounded-2xl border border-slate-200 shadow-sm">
-            <div className="p-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <Card className="flex h-[320px] flex-col overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                 About
               </div>
-              <div className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-slate-700">
+              <div className="mt-4 whitespace-pre-line text-[17px] leading-8 text-slate-700">
                 {profile.bio ? profile.bio : "No bio added yet."}
               </div>
             </div>
+
+            {!isHomeownerProfile && categoryBadges.length ? (
+              <div className="shrink-0 border-t border-slate-200 px-6 py-4">
+                <div className="overflow-x-auto">
+                  <div className="flex w-max items-center gap-2 pr-2">
+                    {categoryBadges.map((category) => (
+                      <span
+                        key={category}
+                        className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-sm font-medium text-slate-700"
+                      >
+                        {category}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </Card>
 
           <Card className="rounded-2xl border border-slate-200 shadow-sm">

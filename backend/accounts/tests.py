@@ -278,6 +278,21 @@ class AccountSecurityTests(APITestCase):
         self.assertNotIn("contact_email", response.data)
         self.assertNotIn("contact_phone", response.data)
 
+    def test_public_profile_returns_contractor_categories(self):
+        profile = self.user.profile
+        profile.profile_type = Profile.ProfileType.CONTRACTOR
+        profile.public_profile_enabled = True
+        profile.contractor_primary_category = "General Contractor"
+        profile.contractor_categories = ["Deck Builder", "Finish Carpenter"]
+        profile.save()
+
+        self.client.force_authenticate(user=None)
+        response = self.client.get(f"/api/profiles/{self.user.username}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["contractor_primary_category"], "General Contractor")
+        self.assertEqual(response.data["contractor_categories"], ["Deck Builder", "Finish Carpenter"])
+
     def test_public_profile_returns_contact_info_when_owner_allows_it(self):
         profile = self.user.profile
         profile.public_profile_enabled = True
