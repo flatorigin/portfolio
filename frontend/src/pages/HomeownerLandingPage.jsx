@@ -175,6 +175,8 @@ function FeatureStrip() {
 }
 
 export default function HomeownerLandingPage() {
+  const authed = !!localStorage.getItem("access");
+
   return (
     <div className="bg-[#FBF9F7] text-slate-900">
       <LandingNav />
@@ -259,15 +261,15 @@ export default function HomeownerLandingPage() {
                 </p>
               </div>
               <div className="text-center">
-                <Link to="/register?role=homeowner">
+                <Link to={authed ? "/dashboard" : "/register?role=homeowner"}>
                   <Button className="h-11 min-w-56">
-                    Create Free Account
+                    {authed ? "Open Dashboard" : "Create Free Account"}
                   </Button>
                 </Link>
                 <div className="mt-3 text-xs text-slate-500">
-                  {localStorage.getItem("access") ? "Ready to continue? " : "Already have an account? "}
-                  <Link to={localStorage.getItem("access") ? "/dashboard" : "/login"} className="font-semibold text-slate-700 hover:text-slate-950">
-                    {localStorage.getItem("access") ? "Open dashboard" : "Sign in"}
+                  {authed ? "Ready to continue? " : "Already have an account? "}
+                  <Link to={authed ? "/explore" : "/login"} className="font-semibold text-slate-700 hover:text-slate-950">
+                    {authed ? "Explore projects" : "Sign in"}
                   </Link>
                 </div>
               </div>

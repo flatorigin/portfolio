@@ -8,11 +8,20 @@ import {
   locationParams,
   requestLocationOrigin,
 } from "../utils/locationOrigin";
+import bathroomMessage1 from "../assets/landing/projects/bathroom-message-1.jpg";
+import bathroomMessage2 from "../assets/landing/projects/bathroom-message-2.jpg";
+import bathroomMessage3 from "../assets/landing/projects/bathroom-message-3.jpg";
 
 const profileImages = [
   "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=500&q=80",
   "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=500&q=80",
   "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=500&q=80",
+];
+
+const bathroomMessageImages = [
+  bathroomMessage1,
+  bathroomMessage2,
+  bathroomMessage3,
 ];
 
 const features = [
@@ -289,6 +298,59 @@ function FeatureStrip() {
   );
 }
 
+function WebProfilePreview() {
+  const portfolioItems = [
+    ["Deck rebuild", "Before / after", profileImages[1]],
+    ["Kitchen finish", "Completed work", profileImages[2]],
+    ["Exterior refresh", "Portfolio photo", profileImages[0]],
+  ];
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+          FO
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-slate-950">
+            Your public web profile
+          </div>
+          <div className="truncate text-xs text-slate-500">
+            Portfolio, service area, specialties, and contact flow
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {portfolioItems.map(([title, label, image]) => (
+          <div key={title} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <img src={image} alt="" className="h-28 w-full object-cover" />
+            <div className="p-3">
+              <div className="truncate text-sm font-semibold text-slate-950">
+                {title}
+              </div>
+              <div className="mt-1 truncate text-xs text-slate-500">
+                {label}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+        {["Decks", "Carpentry", "Exterior Repairs"].map((tag) => (
+          <span
+            key={tag}
+            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function MessagePreview() {
   return (
     <Card className="p-5">
@@ -301,7 +363,7 @@ function MessagePreview() {
           Sure, here are a few more.
         </div>
         <div className="flex gap-2 pl-3">
-          {profileImages.map((image) => (
+          {bathroomMessageImages.map((image) => (
             <img key={image} src={image} alt="" className="h-14 w-16 rounded-lg object-cover" />
           ))}
         </div>
@@ -312,12 +374,14 @@ function MessagePreview() {
 
 function LocalMapPreview() {
   return (
-    <Card className="relative min-h-[220px] overflow-hidden bg-slate-100">
-      <div className="absolute inset-0 opacity-60">
-        <div className="absolute left-0 top-16 h-px w-full rotate-6 bg-white" />
-        <div className="absolute left-0 top-32 h-px w-full -rotate-6 bg-white" />
-        <div className="absolute left-1/3 top-0 h-full w-px rotate-12 bg-white" />
+    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl bg-slate-100">
+      <div className="absolute inset-0 opacity-50">
+        <div className="absolute left-0 top-1/4 h-px w-full rotate-6 bg-white" />
+        <div className="absolute left-0 top-2/3 h-px w-full -rotate-6 bg-white" />
+        <div className="absolute left-1/4 top-0 h-full w-px rotate-12 bg-white" />
         <div className="absolute left-2/3 top-0 h-full w-px -rotate-12 bg-white" />
+        <div className="absolute left-0 top-1/2 h-px w-full bg-white/80" />
+        <div className="absolute left-1/2 top-0 h-full w-px bg-white/80" />
       </div>
       {[
         ["20%", "45%"],
@@ -333,11 +397,13 @@ function LocalMapPreview() {
           <SymbolIcon name={index % 2 ? "location_on" : "person"} fill={1} className="text-[22px]" />
         </span>
       ))}
-    </Card>
+    </div>
   );
 }
 
 export default function ContractorLandingPage() {
+  const authed = !!localStorage.getItem("access");
+
   return (
     <div className="bg-[#FBF9F7] text-slate-900">
       <LandingNav />
@@ -380,7 +446,22 @@ export default function ContractorLandingPage() {
           <section className="mt-16 grid gap-8 lg:grid-cols-[0.6fr_1fr]">
             <div>
               <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">
-                Browse projects posted by homeowners
+                Use your FlatOrigin profile as a public web profile
+              </h2>
+              <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
+                Bring scattered project photos, specialties, and service details into one clean portfolio page you can share as your website.
+              </p>
+              <Link to="/register?role=contractor" className="mt-5 inline-flex text-sm font-medium text-slate-900">
+                Create your profile {"->"}
+              </Link>
+            </div>
+            <WebProfilePreview />
+          </section>
+
+          <section className="mt-16 grid gap-8 lg:grid-cols-[0.6fr_1fr]">
+            <div>
+              <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">
+                Find homeowner project opportunities
               </h2>
               <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
                 Find local opportunities that fit your expertise. Send proposals and grow your business.
@@ -392,24 +473,28 @@ export default function ContractorLandingPage() {
             <ProjectFeedPreview />
           </section>
 
-          <section className="mt-8 grid gap-8 lg:grid-cols-2">
-            <MessagePreview />
-            <Card className="p-8">
+          <section className="mt-8 grid gap-8 lg:grid-cols-[0.6fr_1fr]">
+            <div>
               <h2 className="text-2xl font-bold leading-tight tracking-tight text-slate-900">
                 Communicate without middlemen.
               </h2>
-              <p className="mt-4 text-base leading-7 text-slate-600">
+              <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
                 Keep all conversations, proposals, and updates organized in one place.
               </p>
               <Link to="/guides" className="mt-6 inline-flex text-sm font-medium text-slate-900">
                 Learn More {"->"}
               </Link>
-            </Card>
+            </div>
+            <MessagePreview />
           </section>
 
-          <section className="mt-8 grid gap-8 lg:grid-cols-[0.55fr_1fr]">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-slate-900">Built around local work</h2>
+          <section className="relative mt-8 min-h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 sm:p-10">
+            <LocalMapPreview />
+            <div className="absolute inset-0 bg-gradient-to-r from-white via-white/90 to-white/35" />
+            <div className="relative max-w-md">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                Built around local work
+              </h2>
               <p className="mt-4 text-base leading-7 text-slate-600">
                 Connect with homeowners in your area and grow your business locally.
               </p>
@@ -417,7 +502,6 @@ export default function ContractorLandingPage() {
                 See How It Works {"->"}
               </a>
             </div>
-            <LocalMapPreview />
           </section>
 
           <section className="mt-8 rounded-2xl border border-[#E2DDD4] bg-[#F1ECE4] p-8 sm:p-10">
@@ -429,15 +513,15 @@ export default function ContractorLandingPage() {
                 </p>
               </div>
               <div className="text-center">
-                <Link to="/register?role=contractor">
+                <Link to={authed ? "/profile/edit" : "/register?role=contractor"}>
                   <Button className="h-11 min-w-56">
-                    Join as Contractor
+                    {authed ? "Edit Contractor Profile" : "Join as Contractor"}
                   </Button>
                 </Link>
                 <div className="mt-3 text-xs text-slate-500">
-                  {localStorage.getItem("access") ? "Ready to continue? " : "Already have an account? "}
-                  <Link to={localStorage.getItem("access") ? "/dashboard" : "/login"} className="font-semibold text-slate-700 hover:text-slate-950">
-                    {localStorage.getItem("access") ? "Open dashboard" : "Sign in"}
+                  {authed ? "Ready to continue? " : "Already have an account? "}
+                  <Link to={authed ? "/work" : "/login"} className="font-semibold text-slate-700 hover:text-slate-950">
+                    {authed ? "Find local work" : "Sign in"}
                   </Link>
                 </div>
               </div>
