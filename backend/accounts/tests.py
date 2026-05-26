@@ -363,6 +363,52 @@ class MeProfilePersistenceTests(APITestCase):
         self.assertEqual(follow_up.data["service_lat"], 42.3601)
         self.assertEqual(follow_up.data["service_lng"], -71.0589)
 
+    def test_profile_type_only_patch_does_not_require_complete_profile_fields(self):
+        user = User.objects.create_user(
+            username="profiletypeonly",
+            email="profiletypeonly@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        self.client.force_authenticate(user)
+
+        response = self.client.patch(
+            "/api/users/me/",
+            {"profile_type": Profile.ProfileType.CONTRACTOR},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["profile_type"], Profile.ProfileType.CONTRACTOR)
+
+        user.profile.refresh_from_db()
+        self.assertEqual(user.profile.profile_type, Profile.ProfileType.CONTRACTOR)
+
+    def test_contractor_categories_round_trip_on_profile_patch(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.patch(
+            "/api/users/me/",
+            {
+                "contractor_primary_category": "General Contractor",
+                "contractor_categories": [
+                    "Finish Carpenter",
+                    "Deck Builder",
+                    "Finish Carpenter",
+                    "",
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["contractor_primary_category"], "General Contractor")
+        self.assertEqual(response.data["contractor_categories"], ["Finish Carpenter", "Deck Builder"])
+
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.contractor_primary_category, "General Contractor")
+        self.assertEqual(self.user.profile.contractor_categories, ["Finish Carpenter", "Deck Builder"])
+
     def test_contractor_verification_fields_round_trip_on_profile_patch(self):
         self.client.force_authenticate(self.user)
 
@@ -601,11 +647,13 @@ class VerificationStatusTests(TestCase):
             password="pw12345678",
             is_active=True,
         )
-        profile = Profile.objects.create(
+        profile, _ = Profile.objects.update_or_create(
             user=user,
-            profile_type=Profile.ProfileType.CONTRACTOR,
-            verification_status=Profile.VerificationStatus.VERIFIED,
-            verification_expires_at=timezone.localdate() - timedelta(days=1),
+            defaults={
+                "profile_type": Profile.ProfileType.CONTRACTOR,
+                "verification_status": Profile.VerificationStatus.VERIFIED,
+                "verification_expires_at": timezone.localdate() - timedelta(days=1),
+            },
         )
 
         self.assertEqual(profile.effective_verification_status, Profile.VerificationStatus.EXPIRED)

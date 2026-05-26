@@ -262,6 +262,8 @@ class ProfileAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
                 "service_location",
                 "coverage_radius_miles",
                 "bio",
+                "contractor_primary_category",
+                "contractor_categories",
                 "languages",
             )
         }),

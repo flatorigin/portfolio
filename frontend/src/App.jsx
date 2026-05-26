@@ -228,13 +228,19 @@ export default function App() {
       ? "Contractor"
       : "";
   const logoPath = authed ? roleLandingPath(me?.profile_type) : "/";
-  const previewPath = me?.profile_type === "homeowner" ? "/contractor" : "/homeowner";
-  const previewLabel =
-    me?.profile_type === "homeowner"
-      ? "View Contractor Side"
+  const isGuidesPath = pathname.startsWith("/guides");
+  const currentGuideAudience =
+    pathname === "/guides/contractors"
+      ? "contractor"
+      : pathname === "/guides/homeowners"
+      ? "homeowner"
       : me?.profile_type === "contractor"
-      ? "View Homeowner Side"
-      : "";
+      ? "contractor"
+      : "homeowner";
+  const previewPath =
+    currentGuideAudience === "homeowner" ? "/guides/contractors" : "/guides/homeowners";
+  const previewLabel =
+    currentGuideAudience === "homeowner" ? "View Contractor Guides" : "View Homeowner Guides";
   const workNavLabel = me?.profile_type === "contractor" ? "Find Local Work" : "Sample Projects";
 
   const avatarInitial =
@@ -319,10 +325,10 @@ export default function App() {
               className="relative ml-auto flex items-center gap-3"
               ref={menuRef}
             >
-              {authed && previewLabel && pathname !== "/dashboard" ? (
+              {authed && previewLabel && isGuidesPath ? (
                 <Link
                   to={previewPath}
-                  title="This toggle is only for viewing/previewing the other landing page."
+                  title="This toggle is only for viewing/previewing the other guide page."
                   className="hidden h-9 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex"
                 >
                   {previewLabel}

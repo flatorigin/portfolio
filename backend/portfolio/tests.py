@@ -14,6 +14,18 @@ from apps.bids.models import Bid
 User = get_user_model()
 
 
+def set_profile_type(user, profile_type, **defaults):
+    profile, _ = Profile.objects.update_or_create(
+        user=user,
+        defaults={
+            "profile_type": profile_type,
+            **defaults,
+        },
+    )
+    user._state.fields_cache["profile"] = profile
+    return profile
+
+
 class PrivateProjectAccessTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw123456")
@@ -96,27 +108,27 @@ class PrivateProjectAccessTests(APITestCase):
 
     def test_contractor_search_filters_to_active_unfrozen_contractors(self):
         contractor = User.objects.create_user(username="deckpro", password="pw123456")
-        Profile.objects.create(
-            user=contractor,
-            profile_type=Profile.ProfileType.CONTRACTOR,
+        set_profile_type(
+            contractor,
+            Profile.ProfileType.CONTRACTOR,
             display_name="Deck Pro",
             service_location="Media, PA",
             contact_email="deck@example.com",
             contact_phone="555-111-2222",
         )
         homeowner = User.objects.create_user(username="homeowner", password="pw123456")
-        Profile.objects.create(
-            user=homeowner,
-            profile_type=Profile.ProfileType.HOMEOWNER,
+        set_profile_type(
+            homeowner,
+            Profile.ProfileType.HOMEOWNER,
             display_name="Home Owner",
             service_location="Media, PA",
             contact_email="home@example.com",
             contact_phone="555-111-3333",
         )
         frozen = User.objects.create_user(username="frozenpro", password="pw123456")
-        Profile.objects.create(
-            user=frozen,
-            profile_type=Profile.ProfileType.CONTRACTOR,
+        set_profile_type(
+            frozen,
+            Profile.ProfileType.CONTRACTOR,
             display_name="Frozen Pro",
             service_location="Media, PA",
             contact_email="frozen@example.com",
@@ -135,19 +147,21 @@ class PrivateProjectAccessTests(APITestCase):
 
     def test_contractor_search_can_use_project_keywords(self):
         deck_contractor = User.objects.create_user(username="deckbuilder", password="pw123456")
-        Profile.objects.create(
-            user=deck_contractor,
-            profile_type=Profile.ProfileType.CONTRACTOR,
+        set_profile_type(
+            deck_contractor,
+            Profile.ProfileType.CONTRACTOR,
             display_name="Outdoor Structure Co",
             service_location="Media, PA",
             bio="Deck rebuilds, pergolas, and exterior carpentry.",
+            contractor_primary_category="General Contractor",
+            contractor_categories=["Finish Carpenter", "Deck Builder"],
             contact_email="deckbuilder@example.com",
             contact_phone="555-111-7777",
         )
         painter = User.objects.create_user(username="painter", password="pw123456")
-        Profile.objects.create(
-            user=painter,
-            profile_type=Profile.ProfileType.CONTRACTOR,
+        set_profile_type(
+            painter,
+            Profile.ProfileType.CONTRACTOR,
             display_name="Interior Paint Co",
             service_location="Media, PA",
             bio="Interior painting and drywall repair.",
@@ -163,11 +177,32 @@ class PrivateProjectAccessTests(APITestCase):
         self.assertIn("deckbuilder", usernames)
         self.assertNotIn("painter", usernames)
 
+    def test_contractor_search_matches_hidden_contractor_categories(self):
+        contractor = User.objects.create_user(username="hiddenfinish", password="pw123456")
+        set_profile_type(
+            contractor,
+            Profile.ProfileType.CONTRACTOR,
+            display_name="All Around Builder",
+            service_location="Media, PA",
+            contractor_primary_category="General Contractor",
+            contractor_categories=["Finish Carpenter", "Cabinet Maker / Installer"],
+            contact_email="hiddenfinish@example.com",
+            contact_phone="555-111-9999",
+        )
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.get("/api/profiles/contractors/search/?q=finish%20carpenter")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [item["username"] for item in response.data]
+        self.assertIn("hiddenfinish", usernames)
+        self.assertEqual(response.data[0]["contractor_primary_category"], "General Contractor")
+
     def test_contractor_search_matches_contractor_project_titles(self):
         deck_contractor = User.objects.create_user(username="outdoorpro", password="pw123456")
-        Profile.objects.create(
-            user=deck_contractor,
-            profile_type=Profile.ProfileType.CONTRACTOR,
+        set_profile_type(
+            deck_contractor,
+            Profile.ProfileType.CONTRACTOR,
             display_name="Outdoor Structure Co",
             service_location="Media, PA",
             bio="Exterior work.",
@@ -182,9 +217,9 @@ class PrivateProjectAccessTests(APITestCase):
             is_public=True,
         )
         painter = User.objects.create_user(username="paintonly", password="pw123456")
-        Profile.objects.create(
-            user=painter,
-            profile_type=Profile.ProfileType.CONTRACTOR,
+        set_profile_type(
+            painter,
+            Profile.ProfileType.CONTRACTOR,
             display_name="Interior Paint Co",
             service_location="Media, PA",
             bio="Interior painting only.",
@@ -204,9 +239,9 @@ class PrivateProjectAccessTests(APITestCase):
         first = User.objects.create_user(username="firstpro", password="pw123456")
         second = User.objects.create_user(username="secondpro", password="pw123456")
         for user in (first, second):
-            Profile.objects.create(
-                user=user,
-                profile_type=Profile.ProfileType.CONTRACTOR,
+            set_profile_type(
+                user,
+                Profile.ProfileType.CONTRACTOR,
                 display_name=user.username,
                 service_location="Media, PA",
                 contact_email=f"{user.username}@example.com",
@@ -240,9 +275,9 @@ class PrivateProjectAccessTests(APITestCase):
 
     def test_private_job_multipart_creation_accepts_invited_contractors_json(self):
         contractor = User.objects.create_user(username="formpro", password="pw123456")
-        Profile.objects.create(
-            user=contractor,
-            profile_type=Profile.ProfileType.CONTRACTOR,
+        set_profile_type(
+            contractor,
+            Profile.ProfileType.CONTRACTOR,
             display_name="Form Pro",
             service_location="Media, PA",
             contact_email="formpro@example.com",
@@ -324,10 +359,10 @@ class MessagePrefillTests(APITestCase):
         self.contractor_two = User.objects.create_user(username="contractortwo", password="pw123456")
         self.other_homeowner = User.objects.create_user(username="otherhome", password="pw123456")
 
-        Profile.objects.create(user=self.homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
-        Profile.objects.create(user=self.contractor, profile_type=Profile.ProfileType.CONTRACTOR)
-        Profile.objects.create(user=self.contractor_two, profile_type=Profile.ProfileType.CONTRACTOR)
-        Profile.objects.create(user=self.other_homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
+        set_profile_type(self.homeowner, Profile.ProfileType.HOMEOWNER)
+        set_profile_type(self.contractor, Profile.ProfileType.CONTRACTOR)
+        set_profile_type(self.contractor_two, Profile.ProfileType.CONTRACTOR)
+        set_profile_type(self.other_homeowner, Profile.ProfileType.HOMEOWNER)
 
         self.project = Project.objects.create(
             owner=self.homeowner,
@@ -472,8 +507,8 @@ class ProjectPlannerTests(APITestCase):
     def setUp(self):
         self.homeowner = User.objects.create_user(username="plannerhome", password="pw123456")
         self.contractor = User.objects.create_user(username="plannerpro", password="pw123456")
-        Profile.objects.create(user=self.homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
-        Profile.objects.create(user=self.contractor, profile_type=Profile.ProfileType.CONTRACTOR)
+        set_profile_type(self.homeowner, Profile.ProfileType.HOMEOWNER)
+        set_profile_type(self.contractor, Profile.ProfileType.CONTRACTOR)
         config = AIConfiguration.get_solo()
         config.enabled = True
         config.project_helper_enabled = True

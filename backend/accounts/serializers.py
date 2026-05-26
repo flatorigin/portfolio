@@ -77,6 +77,34 @@ class ProfileBaseMixin:
             raise serializers.ValidationError("Phone number is required.")
         return value
 
+    def validate_contractor_primary_category(self, value):
+        return str(value or "").strip()[:120]
+
+    def validate_contractor_categories(self, value):
+        if value in (None, ""):
+            return []
+        if isinstance(value, str):
+            import json
+            try:
+                value = json.loads(value)
+            except Exception:
+                raise serializers.ValidationError("Contractor categories must be a list.")
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Contractor categories must be a list.")
+
+        cleaned = []
+        seen = set()
+        for item in value:
+            text = str(item or "").strip()
+            key = text.lower()
+            if text and key not in seen:
+                cleaned.append(text[:120])
+                seen.add(key)
+
+        if len(cleaned) > 10:
+            raise serializers.ValidationError("Choose up to 10 contractor categories.")
+        return cleaned
+
 
 class HomeownerReferenceImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
@@ -473,6 +501,8 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "show_contact_phone",
             "public_profile_enabled",
             "bio",
+            "contractor_primary_category",
+            "contractor_categories",
             "license_number",
             "license_state",
             "insurance_provider",
@@ -609,6 +639,8 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "service_lng",
             "coverage_radius_miles",
             "bio",
+            "contractor_primary_category",
+            "contractor_categories",
             "contact_email",
             "contact_phone",
             "license_number",
@@ -762,6 +794,7 @@ class PublicUserProfileSerializer(serializers.ModelSerializer):
             "service_lng",
             "coverage_radius_miles",
             "bio",
+            "contractor_primary_category",
             "contact_email",
             "contact_phone",
             "logo",
@@ -966,6 +999,7 @@ class ContractorSearchResultSerializer(ProfileBaseMixin, serializers.ModelSerial
             "service_location",
             "bio",
             "hero_headline",
+            "contractor_primary_category",
             "avatar_url",
             "logo_url",
             "member_since_label",

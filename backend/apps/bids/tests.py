@@ -11,12 +11,21 @@ from .models import Bid
 User = get_user_model()
 
 
+def set_profile_type(user, profile_type):
+    profile, _ = Profile.objects.update_or_create(
+        user=user,
+        defaults={"profile_type": profile_type},
+    )
+    user._state.fields_cache["profile"] = profile
+    return profile
+
+
 class BidFlowTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw123456")
         self.contractor = User.objects.create_user(username="contractor", password="pw123456")
-        Profile.objects.create(user=self.owner, profile_type=Profile.ProfileType.HOMEOWNER)
-        Profile.objects.create(user=self.contractor, profile_type=Profile.ProfileType.CONTRACTOR)
+        set_profile_type(self.owner, Profile.ProfileType.HOMEOWNER)
+        set_profile_type(self.contractor, Profile.ProfileType.CONTRACTOR)
         self.project = Project.objects.create(
             owner=self.owner,
             title="Kitchen remodel",
@@ -123,7 +132,7 @@ class BidFlowTests(APITestCase):
             status=Bid.STATUS_ACCEPTED,
         )
         other = User.objects.create_user(username="other", password="pw123456")
-        Profile.objects.create(user=other, profile_type=Profile.ProfileType.CONTRACTOR)
+        set_profile_type(other, Profile.ProfileType.CONTRACTOR)
 
         self.client.force_authenticate(user=other)
         response = self.client.post(
@@ -146,7 +155,7 @@ class BidFlowTests(APITestCase):
             accepted_at=self.project.created_at,
         )
         other = User.objects.create_user(username="other", password="pw123456")
-        Profile.objects.create(user=other, profile_type=Profile.ProfileType.CONTRACTOR)
+        set_profile_type(other, Profile.ProfileType.CONTRACTOR)
 
         self.client.force_authenticate(user=self.owner)
         response = self.client.post(
@@ -221,7 +230,7 @@ class BidFlowTests(APITestCase):
             status=ProjectInvite.STATUS_INVITED,
         )
         other = User.objects.create_user(username="outsider", password="pw123456")
-        Profile.objects.create(user=other, profile_type=Profile.ProfileType.CONTRACTOR)
+        set_profile_type(other, Profile.ProfileType.CONTRACTOR)
 
         self.client.force_authenticate(user=other)
         response = self.client.post(
@@ -238,7 +247,7 @@ class BidFlowTests(APITestCase):
 
     def test_homeowner_cannot_submit_bid(self):
         homeowner = User.objects.create_user(username="homeowner_bidder", password="pw123456")
-        Profile.objects.create(user=homeowner, profile_type=Profile.ProfileType.HOMEOWNER)
+        set_profile_type(homeowner, Profile.ProfileType.HOMEOWNER)
 
         self.client.force_authenticate(user=homeowner)
         response = self.client.post(
@@ -259,7 +268,7 @@ class BidFlowTests(APITestCase):
             for i in range(1, 7)
         ]
         for user in extra_contractors:
-            Profile.objects.create(user=user, profile_type=Profile.ProfileType.CONTRACTOR)
+            set_profile_type(user, Profile.ProfileType.CONTRACTOR)
         for index, user in enumerate(extra_contractors[:6], start=1):
             Bid.objects.create(
                 project=self.project,
@@ -272,7 +281,7 @@ class BidFlowTests(APITestCase):
             )
 
         seventh = User.objects.create_user(username="contractor7", password="pw123456")
-        Profile.objects.create(user=seventh, profile_type=Profile.ProfileType.CONTRACTOR)
+        set_profile_type(seventh, Profile.ProfileType.CONTRACTOR)
         self.client.force_authenticate(user=seventh)
         response = self.client.post(
             f"/api/projects/{self.project.id}/bids/",
