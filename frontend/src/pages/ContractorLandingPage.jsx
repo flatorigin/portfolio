@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 import api from "../api";
 import { roleLandingPath } from "../landingRole";
 import { Badge, Button, Card, Container, SymbolIcon } from "../ui";
+import {
+  getCachedLocationOrigin,
+  locationParams,
+  requestLocationOrigin,
+} from "../utils/locationOrigin";
 
 const profileImages = [
   "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=500&q=80",
@@ -16,6 +21,21 @@ const features = [
   ["chat_bubble", "Communicate Directly", "Message homeowners and discuss details."],
   ["handshake", "Get Quality Leads", "Bid on projects that match your skills."],
 ];
+
+function toUrl(raw) {
+  if (!raw) return "";
+  const value = String(raw).trim();
+  if (/^(data:|blob:)/i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const base = (api?.defaults?.baseURL || "").replace(/\/+$/, "");
+  const origin = base.replace(/\/api\/?$/, "");
+  return value.startsWith("/") ? `${origin}${value}` : `${origin}/${value}`;
+}
+
+function pickCover(project) {
+  return toUrl(project?.cover_image_url || "") || toUrl(project?.cover_image || "") || "";
+}
 
 function LandingNav() {
   const authed = !!localStorage.getItem("access");
@@ -96,22 +116,24 @@ function ContractorProfilePreview() {
   ];
 
   return (
-    <Card className="grid h-[360px] grid-rows-2 gap-4 p-5">
+    <Card className="grid h-[360px] gap-4 p-5 sm:grid-cols-2">
       {projects.map((project) => (
         <div
           key={project.title}
-          className="grid min-h-0 grid-cols-[120px_minmax(0,1fr)] gap-4 rounded-2xl border border-slate-200 bg-white p-3"
+          className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white"
         >
-          <img
-            src={project.image}
-            alt=""
-            className="h-full min-h-0 w-full rounded-xl object-cover"
-          />
-          <div className="flex min-w-0 flex-col justify-center">
-            <div className="truncate text-base font-semibold text-slate-950">
+          <div className="h-40 bg-slate-100">
+            <img
+              src={project.image}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col justify-center p-4">
+            <div className="line-clamp-2 text-base font-semibold leading-snug text-slate-950">
               {project.title}
             </div>
-            <div className="mt-2 text-sm font-medium text-slate-500">
+            <div className="mt-2 truncate text-sm font-medium text-slate-500">
               {project.location}
             </div>
             <div className="mt-3 text-sm font-semibold text-slate-700">
@@ -120,6 +142,133 @@ function ContractorProfilePreview() {
           </div>
         </div>
       ))}
+    </Card>
+  );
+}
+
+function ProjectFeedPreview() {
+  const [locationOrigin, setLocationOrigin] = useState(getCachedLocationOrigin);
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    requestLocationOrigin().then((origin) => {
+      if (alive && origin) setLocationOrigin(origin);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadJobs() {
+      setLoading(true);
+      try {
+        const { data } = await api.get("/projects/job-postings/", {
+          params: locationParams(locationOrigin),
+        });
+        if (cancelled) return;
+
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.results)
+          ? data.results
+          : [];
+        const activeJobs = list.filter(
+          (project) =>
+            !!project?.is_job_posting &&
+            (project?.is_public === undefined || project.is_public === true) &&
+            (project?.is_private === undefined || project.is_private === false) &&
+            (project?.job_is_published === undefined || project.job_is_published === true)
+        );
+
+        setJobs(activeJobs.slice(0, 2));
+      } catch (err) {
+        console.warn("[ContractorLandingPage] job preview failed", err?.response || err);
+        if (!cancelled) setJobs([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadJobs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locationOrigin]);
+
+  const fallbackJobs = [
+    {
+      id: "fallback-deck",
+      title: "Deck Construction",
+      location: "Find local postings",
+      budget: "",
+      cover: profileImages[1],
+      to: "/work",
+    },
+    {
+      id: "fallback-remodel",
+      title: "Bathroom Remodel",
+      location: "Find local postings",
+      budget: "",
+      cover: profileImages[2],
+      to: "/work",
+    },
+  ];
+
+  const visibleJobs = jobs.length ? jobs : fallbackJobs;
+
+  return (
+    <Card className="grid gap-4 p-5 sm:grid-cols-2">
+      {visibleJobs.map((job) => {
+        const cover = pickCover(job) || job.cover || "";
+        const budget = job.budget ? `$${Number(job.budget).toLocaleString()}` : "";
+        const summary = job.job_summary || job.summary || job.highlights || "";
+
+        return (
+        <Link
+          key={job.id || job.title}
+          to="/work"
+          className="group flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <div className="h-32 bg-slate-100">
+            {cover ? (
+              <img
+                src={cover}
+                alt=""
+                className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                Job posting
+              </div>
+            )}
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col p-4">
+            <div className="line-clamp-2 text-base font-semibold leading-snug text-slate-950">
+              {loading && !jobs.length ? "Loading local work..." : job.title}
+            </div>
+            <div className="mt-2 truncate text-sm font-medium text-slate-500">
+              {job.location || "Local project"}
+            </div>
+            {budget ? (
+              <div className="mt-2 text-sm font-semibold text-slate-700">
+                {budget}
+              </div>
+            ) : null}
+            {summary ? (
+              <div className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">
+                {summary}
+              </div>
+            ) : null}
+          </div>
+        </Link>
+        );
+      })}
     </Card>
   );
 }
@@ -136,42 +285,6 @@ function FeatureStrip() {
           <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
         </div>
       ))}
-    </Card>
-  );
-}
-
-function ProjectFeedPreview() {
-  const rows = [
-    ["New Deck Construction", "Media, PA", "$8,000 - $12,000"],
-    ["Bathroom Remodel", "Swarthmore, PA", "$8,000 - $16,000"],
-    ["Interior Painting", "Springfield, PA", "$3,000 - $8,000"],
-  ];
-
-  return (
-    <Card className="p-5">
-      <div className="mb-4 text-sm font-semibold text-slate-900">Recent Projects</div>
-      <div className="mb-4 flex gap-2 text-[11px] font-semibold text-slate-500">
-        {["All Categories", "Decks", "Bathrooms", "Kitchens", "Painting"].map((item) => (
-          <span key={item} className="rounded-full bg-slate-50 px-3 py-1">
-            {item}
-          </span>
-        ))}
-      </div>
-      <div className="space-y-4">
-        {rows.map(([title, location, budget]) => (
-          <div key={title} className="grid grid-cols-[52px_1fr_auto] items-center gap-3">
-            <div className="h-12 rounded-lg bg-slate-100" />
-            <div>
-              <div className="text-sm font-semibold text-slate-900">{title}</div>
-              <div className="text-xs text-slate-500">{location}</div>
-              <div className="text-xs font-semibold text-slate-600">Budget: {budget}</div>
-            </div>
-            <span className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700">
-              View Details
-            </span>
-          </div>
-        ))}
-      </div>
     </Card>
   );
 }
