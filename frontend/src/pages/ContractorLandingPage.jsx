@@ -8,9 +8,10 @@ import {
   locationParams,
   requestLocationOrigin,
 } from "../utils/locationOrigin";
-import bathroomMessage1 from "../assets/landing/projects/bathroom-message-1.jpg";
-import bathroomMessage2 from "../assets/landing/projects/bathroom-message-2.jpg";
-import bathroomMessage3 from "../assets/landing/projects/bathroom-message-3.jpg";
+import bathroomMessage1 from "../assets/landing/projects/bathroom-message-1.webp";
+import bathroomMessage2 from "../assets/landing/projects/bathroom-message-2.webp";
+import bathroomMessage3 from "../assets/landing/projects/bathroom-message-3.webp";
+import mapAvatarImage from "../assets/landing/maps/map-avatar.webp";
 
 const profileImages = [
   "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=500&q=80",
@@ -25,9 +26,21 @@ const bathroomMessageImages = [
 ];
 
 const features = [
-  ["construction", "Showcase Your Work", "Display completed projects and specialties."],
-  ["travel_explore", "Find Local Work", "Browse homeowner projects in your area."],
-  ["chat_bubble", "Communicate Directly", "Message homeowners and discuss details."],
+  [
+    "construction",
+    "Showcase Your Work",
+    "Display completed projects and specialties.",
+  ],
+  [
+    "travel_explore",
+    "Find Local Work",
+    "Browse homeowner projects in your area.",
+  ],
+  [
+    "chat_bubble",
+    "Communicate Directly",
+    "Message homeowners and discuss details.",
+  ],
   ["handshake", "Get Quality Leads", "Bid on projects that match your skills."],
 ];
 
@@ -43,7 +56,11 @@ function toUrl(raw) {
 }
 
 function pickCover(project) {
-  return toUrl(project?.cover_image_url || "") || toUrl(project?.cover_image || "") || "";
+  return (
+    toUrl(project?.cover_image_url || "") ||
+    toUrl(project?.cover_image || "") ||
+    ""
+  );
 }
 
 function LandingNav() {
@@ -73,17 +90,29 @@ function LandingNav() {
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
       <Container className="py-3">
         <nav className="flex items-center gap-6">
-          <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-base font-bold tracking-tight text-slate-900">
+          <Link
+            to={authed ? roleLandingPath(profileType) : "/"}
+            className="text-base font-bold tracking-tight text-slate-900"
+          >
             FlatOrigin
           </Link>
           <div className="hidden items-center gap-2 md:flex">
-            <Link to="/work" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            <Link
+              to="/work"
+              className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+            >
               Find Work
             </Link>
-            <a href="#how-it-works" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            <a
+              href="#how-it-works"
+              className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+            >
               How it works
             </a>
-            <Link to="/guides" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            <Link
+              to="/guides"
+              className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+            >
               Guides
             </Link>
           </div>
@@ -184,19 +213,24 @@ function ProjectFeedPreview() {
         const list = Array.isArray(data)
           ? data
           : Array.isArray(data?.results)
-          ? data.results
-          : [];
+            ? data.results
+            : [];
         const activeJobs = list.filter(
           (project) =>
             !!project?.is_job_posting &&
             (project?.is_public === undefined || project.is_public === true) &&
-            (project?.is_private === undefined || project.is_private === false) &&
-            (project?.job_is_published === undefined || project.job_is_published === true)
+            (project?.is_private === undefined ||
+              project.is_private === false) &&
+            (project?.job_is_published === undefined ||
+              project.job_is_published === true),
         );
 
         setJobs(activeJobs.slice(0, 2));
       } catch (err) {
-        console.warn("[ContractorLandingPage] job preview failed", err?.response || err);
+        console.warn(
+          "[ContractorLandingPage] job preview failed",
+          err?.response || err,
+        );
         if (!cancelled) setJobs([]);
       } finally {
         if (!cancelled) setLoading(false);
@@ -235,47 +269,49 @@ function ProjectFeedPreview() {
     <Card className="grid gap-4 p-5 sm:grid-cols-2">
       {visibleJobs.map((job) => {
         const cover = pickCover(job) || job.cover || "";
-        const budget = job.budget ? `$${Number(job.budget).toLocaleString()}` : "";
+        const budget = job.budget
+          ? `$${Number(job.budget).toLocaleString()}`
+          : "";
         const summary = job.job_summary || job.summary || job.highlights || "";
 
         return (
-        <Link
-          key={job.id || job.title}
-          to="/work"
-          className="group flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow-md"
-        >
-          <div className="h-32 bg-slate-100">
-            {cover ? (
-              <img
-                src={cover}
-                alt=""
-                className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-slate-400">
-                Job posting
-              </div>
-            )}
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col p-4">
-            <div className="line-clamp-2 text-base font-semibold leading-snug text-slate-950">
-              {loading && !jobs.length ? "Loading local work..." : job.title}
+          <Link
+            key={job.id || job.title}
+            to="/work"
+            className="group flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="h-32 bg-slate-100">
+              {cover ? (
+                <img
+                  src={cover}
+                  alt=""
+                  className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                  Job posting
+                </div>
+              )}
             </div>
-            <div className="mt-2 truncate text-sm font-medium text-slate-500">
-              {job.location || "Local project"}
+            <div className="flex min-h-0 flex-1 flex-col p-4">
+              <div className="line-clamp-2 text-base font-semibold leading-snug text-slate-950">
+                {loading && !jobs.length ? "Loading local work..." : job.title}
+              </div>
+              <div className="mt-2 truncate text-sm font-medium text-slate-500">
+                {job.location || "Local project"}
+              </div>
+              {budget ? (
+                <div className="mt-2 text-sm font-semibold text-slate-700">
+                  {budget}
+                </div>
+              ) : null}
+              {summary ? (
+                <div className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">
+                  {summary}
+                </div>
+              ) : null}
             </div>
-            {budget ? (
-              <div className="mt-2 text-sm font-semibold text-slate-700">
-                {budget}
-              </div>
-            ) : null}
-            {summary ? (
-              <div className="mt-3 line-clamp-2 text-xs leading-5 text-slate-500">
-                {summary}
-              </div>
-            ) : null}
-          </div>
-        </Link>
+          </Link>
         );
       })}
     </Card>
@@ -286,7 +322,10 @@ function FeatureStrip() {
   return (
     <Card id="how-it-works" className="grid overflow-hidden md:grid-cols-4">
       {features.map(([icon, title, copy]) => (
-        <div key={title} className="border-slate-100 p-6 md:border-r md:last:border-r-0">
+        <div
+          key={title}
+          className="border-slate-100 p-6 md:border-r md:last:border-r-0"
+        >
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
             <SymbolIcon name={icon} className="text-[22px]" />
           </span>
@@ -323,7 +362,10 @@ function WebProfilePreview() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         {portfolioItems.map(([title, label, image]) => (
-          <div key={title} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div
+            key={title}
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+          >
             <img src={image} alt="" className="h-28 w-full object-cover" />
             <div className="p-3">
               <div className="truncate text-sm font-semibold text-slate-950">
@@ -354,7 +396,9 @@ function WebProfilePreview() {
 function MessagePreview() {
   return (
     <Card className="p-5">
-      <div className="mb-4 text-sm font-semibold text-slate-900">Bathroom Remodel</div>
+      <div className="mb-4 text-sm font-semibold text-slate-900">
+        Bathroom Remodel
+      </div>
       <div className="space-y-4">
         <div className="ml-auto max-w-[76%] rounded-2xl bg-[#EEF4FF] px-4 py-3 text-sm text-slate-700">
           Can you share more photos of the current bathroom?
@@ -364,7 +408,12 @@ function MessagePreview() {
         </div>
         <div className="flex gap-2 pl-3">
           {bathroomMessageImages.map((image) => (
-            <img key={image} src={image} alt="" className="h-14 w-16 rounded-lg object-cover" />
+            <img
+              key={image}
+              src={image}
+              alt=""
+              className="h-14 w-16 rounded-lg object-cover"
+            />
           ))}
         </div>
       </div>
@@ -375,28 +424,7 @@ function MessagePreview() {
 function LocalMapPreview() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl bg-slate-100">
-      <div className="absolute inset-0 opacity-50">
-        <div className="absolute left-0 top-1/4 h-px w-full rotate-6 bg-white" />
-        <div className="absolute left-0 top-2/3 h-px w-full -rotate-6 bg-white" />
-        <div className="absolute left-1/4 top-0 h-full w-px rotate-12 bg-white" />
-        <div className="absolute left-2/3 top-0 h-full w-px -rotate-12 bg-white" />
-        <div className="absolute left-0 top-1/2 h-px w-full bg-white/80" />
-        <div className="absolute left-1/2 top-0 h-full w-px bg-white/80" />
-      </div>
-      {[
-        ["20%", "45%"],
-        ["45%", "62%"],
-        ["62%", "38%"],
-        ["78%", "55%"],
-      ].map(([left, top], index) => (
-        <span
-          key={`${left}-${top}`}
-          className="absolute flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg"
-          style={{ left, top }}
-        >
-          <SymbolIcon name={index % 2 ? "location_on" : "person"} fill={1} className="text-[22px]" />
-        </span>
-      ))}
+      <img src={mapAvatarImage} alt="" className="h-full w-full object-cover" />
     </div>
   );
 }
@@ -420,7 +448,8 @@ export default function ContractorLandingPage() {
                 Connect with real homeowners.
               </h1>
               <p className="mt-5 max-w-xl text-base leading-7 text-slate-600">
-                Build a focused public profile, showcase completed projects, and bid on homeowner projects directly.
+                Build a focused public profile, showcase completed projects, and
+                bid on homeowner projects directly.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Link to="/register?role=contractor">
@@ -449,9 +478,13 @@ export default function ContractorLandingPage() {
                 Use your FlatOrigin profile as a public web profile
               </h2>
               <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
-                Bring scattered project photos, specialties, and service details into one clean portfolio page you can share as your website.
+                Bring scattered project photos, specialties, and service details
+                into one clean portfolio page you can share as your website.
               </p>
-              <Link to="/register?role=contractor" className="mt-5 inline-flex text-sm font-medium text-slate-900">
+              <Link
+                to="/register?role=contractor"
+                className="mt-5 inline-flex text-sm font-medium text-slate-900"
+              >
                 Create your profile {"->"}
               </Link>
             </div>
@@ -464,9 +497,13 @@ export default function ContractorLandingPage() {
                 Find homeowner project opportunities
               </h2>
               <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
-                Find local opportunities that fit your expertise. Send proposals and grow your business.
+                Find local opportunities that fit your expertise. Send proposals
+                and grow your business.
               </p>
-              <Link to="/work" className="mt-5 inline-flex text-sm font-medium text-slate-900">
+              <Link
+                to="/work"
+                className="mt-5 inline-flex text-sm font-medium text-slate-900"
+              >
                 Explore Projects {"->"}
               </Link>
             </div>
@@ -479,9 +516,13 @@ export default function ContractorLandingPage() {
                 Communicate without middlemen.
               </h2>
               <p className="mt-4 max-w-md text-base leading-7 text-slate-600">
-                Keep all conversations, proposals, and updates organized in one place.
+                Keep all conversations, proposals, and updates organized in one
+                place.
               </p>
-              <Link to="/guides" className="mt-6 inline-flex text-sm font-medium text-slate-900">
+              <Link
+                to="/guides"
+                className="mt-6 inline-flex text-sm font-medium text-slate-900"
+              >
                 Learn More {"->"}
               </Link>
             </div>
@@ -496,9 +537,13 @@ export default function ContractorLandingPage() {
                 Built around local work
               </h2>
               <p className="mt-4 text-base leading-7 text-slate-600">
-                Connect with homeowners in your area and grow your business locally.
+                Connect with homeowners in your area and grow your business
+                locally.
               </p>
-              <a href="#how-it-works" className="mt-6 inline-flex text-sm font-medium text-slate-900">
+              <a
+                href="#how-it-works"
+                className="mt-6 inline-flex text-sm font-medium text-slate-900"
+              >
                 See How It Works {"->"}
               </a>
             </div>
@@ -507,20 +552,28 @@ export default function ContractorLandingPage() {
           <section className="mt-8 rounded-2xl border border-[#E2DDD4] bg-[#F1ECE4] p-8 sm:p-10">
             <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-slate-950">Start building your contractor profile today</h2>
+                <h2 className="text-2xl font-bold text-slate-950">
+                  Start building your contractor profile today
+                </h2>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Join FlatOrigin and connect with homeowners looking for your expertise.
+                  Join FlatOrigin and connect with homeowners looking for your
+                  expertise.
                 </p>
               </div>
               <div className="text-center">
-                <Link to={authed ? "/profile/edit" : "/register?role=contractor"}>
+                <Link
+                  to={authed ? "/profile/edit" : "/register?role=contractor"}
+                >
                   <Button className="h-11 min-w-56">
                     {authed ? "Edit Contractor Profile" : "Join as Contractor"}
                   </Button>
                 </Link>
                 <div className="mt-3 text-xs text-slate-500">
                   {authed ? "Ready to continue? " : "Already have an account? "}
-                  <Link to={authed ? "/work" : "/login"} className="font-semibold text-slate-700 hover:text-slate-950">
+                  <Link
+                    to={authed ? "/work" : "/login"}
+                    className="font-semibold text-slate-700 hover:text-slate-950"
+                  >
                     {authed ? "Find local work" : "Sign in"}
                   </Link>
                 </div>
