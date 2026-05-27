@@ -28,8 +28,7 @@ import {
 const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
 
 const LOGO_HINT_SESSION_KEY = "flatorigin:edit-profile:logo-hint-dismissed";
-const BANNER_HINT_SESSION_KEY =
-  "flatorigin:edit-profile:banner-hint-dismissed";
+const BANNER_HINT_SESSION_KEY = "flatorigin:edit-profile:banner-hint-dismissed";
 
 const CONTRACTOR_CATEGORY_GROUPS = [
   {
@@ -1284,9 +1283,8 @@ export default function EditProfile() {
                         />
                         Choose hero image…
                         <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden w-72 whitespace-normal rounded-xl bg-slate-950 p-3 text-left text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
-                          This image will show at the top of your public
-                          profile page. Recommended: wide image (e.g.
-                          1600x600).
+                          This image will show at the top of your public profile
+                          page. Recommended: wide image (e.g. 1600x600).
                         </span>
                       </label>
                       {showBannerMobileHint ? (
@@ -1296,9 +1294,8 @@ export default function EditProfile() {
                             setShowBannerMobileHint(false);
                           }}
                         >
-                          This image will show at the top of your public
-                          profile page. Recommended: wide image (e.g.
-                          1600x600).
+                          This image will show at the top of your public profile
+                          page. Recommended: wide image (e.g. 1600x600).
                         </MobileUploadHint>
                       ) : null}
                     </div>
@@ -1717,7 +1714,7 @@ export default function EditProfile() {
 
             <Card className="space-y-4 p-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Security
+                Account Settings
               </div>
 
               <div className="rounded-xl border border-slate-200 p-4">
@@ -1781,17 +1778,11 @@ export default function EditProfile() {
               </div>
 
               <div className="rounded-xl border border-slate-200 p-4">
-                <div className="flex items-start justify-between gap-3">
+                <div className="relative flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      Email
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {form.email || "No account email"}
-                    </div>
                     {!form.email_verified ? (
-                      <div className="mt-2">
-                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                      <div className="-mt-1 absolute left-12">
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
                           Not verified
                         </span>
                       </div>
@@ -1802,6 +1793,12 @@ export default function EditProfile() {
                         </span>
                       </div>
                     )}
+                    <div className="text-sm font-semibold text-slate-900">
+                      Email
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {form.email || "No account email"}
+                    </div>
                   </div>
                   {!form.email_verified ? (
                     <GhostButton
