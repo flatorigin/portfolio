@@ -454,6 +454,8 @@ export default function EditProfile() {
   });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
+  const [accountStatusOpen, setAccountStatusOpen] = useState(false);
+  const [serviceAreaOpen, setServiceAreaOpen] = useState(false);
 
   const [savedMapModel, setSavedMapModel] = useState({
     service_location: "",
@@ -1777,24 +1779,22 @@ export default function EditProfile() {
                 ) : null}
               </div>
 
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="relative flex items-start justify-between gap-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    {!form.email_verified ? (
-                      <div className="-mt-1 absolute left-12">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-900">
+                        Email
+                      </div>
+                      {!form.email_verified ? (
                         <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
                           Not verified
                         </span>
-                      </div>
-                    ) : (
-                      <div className="mt-2">
+                      ) : (
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
                           Verified
                         </span>
-                      </div>
-                    )}
-                    <div className="text-sm font-semibold text-slate-900">
-                      Email
+                      )}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       {form.email || "No account email"}
@@ -1814,36 +1814,102 @@ export default function EditProfile() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                <div className="text-sm font-semibold text-rose-900">
-                  Deactivate and delete account
-                </div>
-                <div className="mt-2 text-xs leading-5 text-rose-800">
-                  Deactivate hides your public profile. Delete permanently
-                  removes the account, blocks this email from registering again
-                  automatically, and is not the right tool for cleanup requests.
-                  Contact the admin if you need help.
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <GhostButton
-                    type="button"
-                    disabled={deactivationBusy}
-                    onClick={toggleDeactivated}
-                  >
-                    {deactivationBusy
-                      ? "Updating..."
-                      : form.is_deactivated
-                        ? "Reactivate profile"
-                        : "Deactivate profile"}
-                  </GhostButton>
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteModal(true)}
-                    className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
-                  >
-                    Delete account
-                  </button>
-                </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setAccountStatusOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <div className="text-sm font-semibold text-slate-900">
+                    Account Status
+                  </div>
+                  <span className="text-sm text-slate-500">
+                    {accountStatusOpen ? "Hide" : "Open"}
+                  </span>
+                </button>
+
+                {accountStatusOpen ? (
+                  <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                    <div className="text-xs leading-5 text-rose-800">
+                      Deactivate hides your public profile. Delete permanently
+                      removes the account, blocks this email from registering
+                      again automatically, and is not the right tool for cleanup
+                      requests. Contact the admin if you need help.
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <GhostButton
+                        type="button"
+                        disabled={deactivationBusy}
+                        onClick={toggleDeactivated}
+                      >
+                        {deactivationBusy
+                          ? "Updating..."
+                          : form.is_deactivated
+                            ? "Reactivate profile"
+                            : "Deactivate profile"}
+                      </GhostButton>
+                      <button
+                        type="button"
+                        onClick={() => setShowDeleteModal(true)}
+                        className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                      >
+                        Delete account
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setServiceAreaOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      Service area
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {form.service_location
+                        ? `Your service area is defined as ${form.service_location}.`
+                        : "Your service area is not defined yet."}
+                    </div>
+                  </div>
+                  <span className="text-sm text-slate-500">
+                    {serviceAreaOpen ? "Hide" : "Open"}
+                  </span>
+                </button>
+
+                {serviceAreaOpen ? (
+                  <div className="mt-3">
+                    <Suspense
+                      fallback={
+                        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                          Loading map…
+                        </div>
+                      }
+                    >
+                      <ServiceAreaMap
+                        deferUpdatesUntilSave={true}
+                        locationQuery={form.service_location}
+                        radiusMiles={form.coverage_radius_miles}
+                        savedLocationQuery={savedMapModel.service_location}
+                        savedRadiusMiles={savedMapModel.coverage_radius_miles}
+                        resolvedCenter={
+                          savedMapModel.service_lat !== null &&
+                          savedMapModel.service_lng !== null
+                            ? {
+                                lat: Number(savedMapModel.service_lat),
+                                lng: Number(savedMapModel.service_lng),
+                              }
+                            : null
+                        }
+                        heightClassName="h-64"
+                      />
+                    </Suspense>
+                  </div>
+                ) : null}
               </div>
 
               {securityError ? (
@@ -1856,40 +1922,6 @@ export default function EditProfile() {
               ) : null}
             </Card>
 
-            <Card className="space-y-3 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Service area preview
-              </div>
-              <p className="text-xs text-slate-600">
-                Map updates only after Save (prevents jumping while typing).
-              </p>
-
-              <Suspense
-                fallback={
-                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-                    Loading map…
-                  </div>
-                }
-              >
-                <ServiceAreaMap
-                  deferUpdatesUntilSave={true}
-                  locationQuery={form.service_location}
-                  radiusMiles={form.coverage_radius_miles}
-                  savedLocationQuery={savedMapModel.service_location}
-                  savedRadiusMiles={savedMapModel.coverage_radius_miles}
-                  resolvedCenter={
-                    savedMapModel.service_lat !== null &&
-                    savedMapModel.service_lng !== null
-                      ? {
-                          lat: Number(savedMapModel.service_lat),
-                          lng: Number(savedMapModel.service_lng),
-                        }
-                      : null
-                  }
-                  heightClassName="h-64"
-                />
-              </Suspense>
-            </Card>
           </div>
         </div>
       )}
