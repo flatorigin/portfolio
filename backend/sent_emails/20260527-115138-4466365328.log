@@ -1,0 +1,16 @@
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Subject: Reset your password
+From: FlatOrigin <no-reply@flatorigin.com>
+To: babakpouradam@gmail.com
+Date: Wed, 27 May 2026 11:51:38 -0000
+Message-ID: <177988269859.5230.17517774453765578755@1.0.0.127.in-addr.arpa>
+
+You requested a password reset.
+
+Click the link below to set a new password:
+http://localhost:5173/reset-password?uid=Ng&token=d98jm2-a42229f5d17e67d86e83f43bd122b83a
+
+If you didn't request this, you can ignore this email.
+-------------------------------------------------------------------------------

@@ -137,6 +137,68 @@ function LandingNav() {
   );
 }
 
+function ContractorSetupBanner() {
+  const authed = !!localStorage.getItem("access");
+  const [showBanner, setShowBanner] = useState(false);
+
+  useEffect(() => {
+    if (!authed) {
+      setShowBanner(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProfile() {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (cancelled) return;
+        setShowBanner(
+          data?.profile_type === "contractor" &&
+            !data?.contractor_onboarding_completed_at
+        );
+      } catch {
+        if (!cancelled) setShowBanner(false);
+      }
+    }
+
+    loadProfile();
+
+    const handleProfileChanged = () => loadProfile();
+    window.addEventListener("profile:changed", handleProfileChanged);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("profile:changed", handleProfileChanged);
+    };
+  }, [authed]);
+
+  if (!showBanner) return null;
+
+  return (
+    <div className="border-b border-slate-200 bg-white">
+      <Container>
+        <div className="flex min-h-20 flex-col justify-center gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-950">
+              Continue your free contractor setup
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Finish your profile so homeowners can browse your work. No credit card required.
+            </p>
+          </div>
+          <Link
+            to="/onboarding/contractor"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            Continue contractor setup
+          </Link>
+        </div>
+      </Container>
+    </div>
+  );
+}
+
 function ContractorProfilePreview() {
   const projects = [
     {
@@ -431,10 +493,52 @@ function LocalMapPreview() {
 
 export default function ContractorLandingPage() {
   const authed = !!localStorage.getItem("access");
+  const [me, setMe] = useState(null);
+
+  useEffect(() => {
+    if (!authed) {
+      setMe(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProfile() {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (!cancelled) setMe(data);
+      } catch {
+        if (!cancelled) setMe(null);
+      }
+    }
+
+    loadProfile();
+
+    const handleProfileChanged = () => loadProfile();
+    window.addEventListener("profile:changed", handleProfileChanged);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("profile:changed", handleProfileChanged);
+    };
+  }, [authed]);
+
+  const onboardingComplete = !!me?.contractor_onboarding_completed_at;
+  const primaryCtaPath = authed
+    ? onboardingComplete
+      ? "/profile/edit"
+      : "/onboarding/contractor"
+    : "/register?role=contractor";
+  const primaryCtaLabel = authed
+    ? onboardingComplete
+      ? "Complete your profile"
+      : "Continue Contractor Setup"
+    : "Create Contractor Profile";
 
   return (
     <div className="bg-[#FBF9F7] text-slate-900">
       <LandingNav />
+      <ContractorSetupBanner />
       <main>
         <Container className="py-10 sm:py-14">
           <section className="grid items-center gap-12 lg:grid-cols-[1fr_0.82fr]">
@@ -452,9 +556,9 @@ export default function ContractorLandingPage() {
                 bid on homeowner projects directly.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link to="/register?role=contractor">
+                <Link to={primaryCtaPath}>
                   <Button className="h-11 min-w-56">
-                    Create Contractor Profile
+                    {primaryCtaLabel}
                   </Button>
                 </Link>
                 <Link
@@ -482,10 +586,10 @@ export default function ContractorLandingPage() {
                 into one clean portfolio page you can share as your website.
               </p>
               <Link
-                to="/register?role=contractor"
+                to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
                 className="mt-5 inline-flex text-sm font-medium text-slate-900"
               >
-                Create your profile {"->"}
+                {authed ? "Continue setup" : "Create your profile"} {"->"}
               </Link>
             </div>
             <WebProfilePreview />
@@ -561,11 +665,9 @@ export default function ContractorLandingPage() {
                 </p>
               </div>
               <div className="text-center">
-                <Link
-                  to={authed ? "/profile/edit" : "/register?role=contractor"}
-                >
+                <Link to={primaryCtaPath}>
                   <Button className="h-11 min-w-56">
-                    {authed ? "Edit Contractor Profile" : "Join as Contractor"}
+                    {primaryCtaLabel}
                   </Button>
                 </Link>
                 <div className="mt-3 text-xs text-slate-500">

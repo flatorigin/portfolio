@@ -1,0 +1,38 @@
+Content-Type: multipart/alternative;
+ boundary="===============2956682015659639066=="
+MIME-Version: 1.0
+Subject: Account activation on FlatOrigin
+From: FlatOrigin <no-reply@flatorigin.com>
+To: babakpouradam@gmail.com
+Date: Wed, 27 May 2026 04:43:55 -0000
+Message-ID: <177985703506.95902.17951194708101456517@babaks-macbook-pro.local>
+
+--===============2956682015659639066==
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+You're receiving this email because you need to finish activation process on FlatOrigin.
+
+Please go to the following page to activate account:
+http://localhost:5173/activate/MzA/d97zt7-4242f830967b936d29da913ea189647a
+
+Thanks for using our site!
+
+The FlatOrigin team
+--===============2956682015659639066==
+Content-Type: text/html; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+<p>You're receiving this email because you need to finish activation process on FlatOrigin.</p>
+
+<p>Please go to the following page to activate account:</p>
+<p><a href="http://localhost:5173/activate/MzA/d97zt7-4242f830967b936d29da913ea189647a">http://localhost:5173/activate/MzA/d97zt7-4242f830967b936d29da913ea189647a</a></p>
+
+<p>Thanks for using our site!</p>
+
+<p>The FlatOrigin team</p>
+--===============2956682015659639066==--
+
+-------------------------------------------------------------------------------

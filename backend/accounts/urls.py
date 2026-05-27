@@ -3,6 +3,7 @@ from django.urls import path
 
 from .views import (
     AIAssistView,
+    ContractorOnboardingView,
     MeView,
     SecurityChangePasswordView,
     SecurityDeactivateView,
@@ -27,6 +28,7 @@ app_name = "accounts"
 
 urlpatterns = [
     path("users/me/", MeView.as_view(), name="users-me"),
+    path("users/me/contractor-onboarding/", ContractorOnboardingView.as_view(), name="contractor-onboarding"),
     path("users/me/security/change-password/", SecurityChangePasswordView.as_view(), name="security-change-password"),
     path("users/me/security/send-verification/", SecuritySendVerificationEmailView.as_view(), name="security-send-verification"),
     path("users/me/security/deactivate/", SecurityDeactivateView.as_view(), name="security-deactivate"),

@@ -17,7 +17,7 @@ from django.utils import timezone
 from djoser import signals
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework import status
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -45,6 +45,7 @@ from .serializers import (
     ChangePasswordSerializer,
     HomeownerReferenceImageSerializer,
     ProfileSerializer,
+    ContractorOnboardingSerializer,
     PublicUserProfileSerializer,
     PublicHomeownerReferenceGallerySerializer,
     LikedProfileCardSerializer,
@@ -428,6 +429,63 @@ class MeView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(serializer.data)
+
+
+class ContractorOnboardingView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+
+    def _get_profile(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        if profile.profile_type == Profile.ProfileType.HOMEOWNER:
+            raise PermissionDenied("Homeowner accounts cannot use contractor onboarding.")
+        if not profile.profile_type:
+            profile.profile_type = Profile.ProfileType.CONTRACTOR
+            profile.save(update_fields=["profile_type"])
+        return profile
+
+    def get(self, request, *args, **kwargs):
+        profile = self._get_profile(request)
+        serializer = ContractorOnboardingSerializer(profile, context={"request": request})
+        return Response(serializer.data)
+
+    def patch(self, request, *args, **kwargs):
+        profile = self._get_profile(request)
+        serializer = ContractorOnboardingSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(profile_type=Profile.ProfileType.CONTRACTOR)
+        return Response(serializer.data)
+
+    def post(self, request, *args, **kwargs):
+        profile = self._get_profile(request)
+        action = str(request.data.get("action") or "").strip().lower()
+
+        if action == "complete":
+            if not profile.is_contractor_onboarding_ready:
+                raise ValidationError({"detail": "Finish the required onboarding steps before completing setup."})
+            profile.contractor_onboarding_completed_at = timezone.now()
+            profile.contractor_onboarding_dismissed_at = None
+            profile.public_profile_enabled = True
+            profile.save(
+                update_fields=[
+                    "contractor_onboarding_completed_at",
+                    "contractor_onboarding_dismissed_at",
+                    "public_profile_enabled",
+                ]
+            )
+        elif action == "dismiss":
+            profile.contractor_onboarding_dismissed_at = timezone.now()
+            profile.save(update_fields=["contractor_onboarding_dismissed_at"])
+        else:
+            raise ValidationError({"action": "Use action='complete' or action='dismiss'."})
+
+        serializer = ContractorOnboardingSerializer(profile, context={"request": request})
         return Response(serializer.data)
 
 
