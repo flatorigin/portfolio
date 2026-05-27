@@ -122,6 +122,8 @@ class Profile(models.Model):
     is_frozen = models.BooleanField(default=False)
     frozen_at = models.DateTimeField(null=True, blank=True)
     frozen_reason = models.TextField(blank=True, default="")
+    contractor_onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+    contractor_onboarding_dismissed_at = models.DateTimeField(null=True, blank=True)
 
     @property
     def is_profile_complete(self):
@@ -129,6 +131,18 @@ class Profile(models.Model):
             (self.service_location or "").strip()
             and (self.contact_email or "").strip()
             and (self.contact_phone or "").strip()
+        )
+
+    @property
+    def is_contractor_onboarding_ready(self):
+        if self.profile_type != self.ProfileType.CONTRACTOR:
+            return False
+        return bool(
+            (self.display_name or "").strip()
+            and (self.service_location or "").strip()
+            and (self.contractor_primary_category or "").strip()
+            and len(self.contractor_categories or []) > 0
+            and (self.bio or "").strip()
         )
 
     @property
@@ -203,6 +217,8 @@ class Profile(models.Model):
         if self.profile_type != self.ProfileType.CONTRACTOR:
             self.contractor_primary_category = ""
             self.contractor_categories = []
+            self.contractor_onboarding_completed_at = None
+            self.contractor_onboarding_dismissed_at = None
             self.license_number = ""
             self.license_state = ""
             self.insurance_provider = ""

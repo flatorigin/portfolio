@@ -424,6 +424,72 @@ class MeProfilePersistenceTests(APITestCase):
         self.assertEqual(self.user.profile.contractor_primary_category, "General Contractor")
         self.assertEqual(self.user.profile.contractor_categories, ["Finish Carpenter", "Deck Builder"])
 
+    def test_contractor_onboarding_allows_step_by_step_partial_save(self):
+        user = User.objects.create_user(
+            username="onboardingcontractor",
+            email="onboarding@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        self.client.force_authenticate(user)
+
+        response = self.client.patch(
+            "/api/users/me/contractor-onboarding/",
+            {"display_name": "Onboarding Contracting"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["profile_type"], Profile.ProfileType.CONTRACTOR)
+        self.assertEqual(response.data["display_name"], "Onboarding Contracting")
+
+        user.profile.refresh_from_db()
+        self.assertEqual(user.profile.profile_type, Profile.ProfileType.CONTRACTOR)
+        self.assertEqual(user.profile.display_name, "Onboarding Contracting")
+
+    def test_contractor_onboarding_complete_requires_required_steps(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/me/contractor-onboarding/",
+            {"action": "complete"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(self.user.profile.contractor_onboarding_completed_at)
+
+    def test_contractor_onboarding_can_complete_when_ready(self):
+        profile = self.user.profile
+        profile.profile_type = Profile.ProfileType.CONTRACTOR
+        profile.display_name = "Ready Contractor"
+        profile.service_location = "Media, PA"
+        profile.contractor_primary_category = "General Contractor"
+        profile.contractor_categories = ["Deck Builder"]
+        profile.bio = "We build decks and handle exterior carpentry."
+        profile.save()
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/me/contractor-onboarding/",
+            {"action": "complete"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.contractor_onboarding_completed_at)
+        self.assertTrue(profile.public_profile_enabled)
+
+    def test_homeowner_cannot_use_contractor_onboarding(self):
+        self.user.profile.profile_type = Profile.ProfileType.HOMEOWNER
+        self.user.profile.save()
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get("/api/users/me/contractor-onboarding/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_contractor_verification_fields_round_trip_on_profile_patch(self):
         self.client.force_authenticate(self.user)
 

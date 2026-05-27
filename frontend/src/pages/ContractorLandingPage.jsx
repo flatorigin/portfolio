@@ -452,9 +452,9 @@ export default function ContractorLandingPage() {
                 bid on homeowner projects directly.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link to="/register?role=contractor">
+                <Link to={authed ? "/onboarding/contractor" : "/register?role=contractor"}>
                   <Button className="h-11 min-w-56">
-                    Create Contractor Profile
+                    {authed ? "Start Contractor Setup" : "Create Contractor Profile"}
                   </Button>
                 </Link>
                 <Link
@@ -482,10 +482,10 @@ export default function ContractorLandingPage() {
                 into one clean portfolio page you can share as your website.
               </p>
               <Link
-                to="/register?role=contractor"
+                to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
                 className="mt-5 inline-flex text-sm font-medium text-slate-900"
               >
-                Create your profile {"->"}
+                {authed ? "Continue setup" : "Create your profile"} {"->"}
               </Link>
             </div>
             <WebProfilePreview />
@@ -562,10 +562,10 @@ export default function ContractorLandingPage() {
               </div>
               <div className="text-center">
                 <Link
-                  to={authed ? "/profile/edit" : "/register?role=contractor"}
+                  to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
                 >
                   <Button className="h-11 min-w-56">
-                    {authed ? "Edit Contractor Profile" : "Join as Contractor"}
+                    {authed ? "Continue Contractor Setup" : "Join as Contractor"}
                   </Button>
                 </Link>
                 <div className="mt-3 text-xs text-slate-500">

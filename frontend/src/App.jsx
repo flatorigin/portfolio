@@ -38,6 +38,7 @@ export default function App() {
     pathname === "/homeowner" ||
     pathname === "/contractor" ||
     pathname.startsWith("/guides") ||
+    pathname.startsWith("/onboarding/") ||
     pathname === "/terms" ||
     pathname === "/privacy" ||
     pathname === "/copyright" ||
@@ -47,7 +48,8 @@ export default function App() {
   const hideShellNav =
     pathname === "/" ||
     pathname === "/homeowner" ||
-    pathname === "/contractor";
+    pathname === "/contractor" ||
+    pathname.startsWith("/onboarding/");
 
   // user + menu state
   const [me, setMe] = useState(null);

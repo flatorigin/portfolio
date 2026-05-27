@@ -478,6 +478,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     saved_by_me = serializers.SerializerMethodField()
 
     is_profile_complete = serializers.ReadOnlyField()
+    is_contractor_onboarding_ready = serializers.ReadOnlyField()
     profile_status = serializers.ReadOnlyField()
     effective_verification_status = serializers.ReadOnlyField()
     verification_badge_label = serializers.ReadOnlyField()
@@ -529,6 +530,9 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "hero_blurb",
             "is_profile_complete",
             "profile_status",
+            "is_contractor_onboarding_ready",
+            "contractor_onboarding_completed_at",
+            "contractor_onboarding_dismissed_at",
             "languages",
             "languages_display",
             "member_since_label",
@@ -554,6 +558,9 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "saved_by_me",
             "is_profile_complete",
             "profile_status",
+            "is_contractor_onboarding_ready",
+            "contractor_onboarding_completed_at",
+            "contractor_onboarding_dismissed_at",
         ]
 
     def validate_languages(self, value):
@@ -621,6 +628,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     saved_by_me = serializers.SerializerMethodField()
 
     is_profile_complete = serializers.ReadOnlyField()
+    is_contractor_onboarding_ready = serializers.ReadOnlyField()
     profile_status = serializers.ReadOnlyField()
     effective_verification_status = serializers.ReadOnlyField()
     verification_badge_label = serializers.ReadOnlyField()
@@ -672,6 +680,9 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "hero_blurb",
             "is_profile_complete",
             "profile_status",
+            "is_contractor_onboarding_ready",
+            "contractor_onboarding_completed_at",
+            "contractor_onboarding_dismissed_at",
             "languages",
             "languages_display",
             "member_since_label",
@@ -697,6 +708,9 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "saved_by_me",
             "is_profile_complete",
             "profile_status",
+            "is_contractor_onboarding_ready",
+            "contractor_onboarding_completed_at",
+            "contractor_onboarding_dismissed_at",
             "is_frozen",
             "is_deactivated",
             "deactivated_at",
@@ -759,6 +773,48 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class ContractorOnboardingSerializer(ProfileBaseMixin, serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    is_contractor_onboarding_ready = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "username",
+            "email",
+            "profile_type",
+            "display_name",
+            "service_location",
+            "contact_email",
+            "contact_phone",
+            "contractor_primary_category",
+            "contractor_categories",
+            "bio",
+            "show_contact_email",
+            "show_contact_phone",
+            "public_profile_enabled",
+            "allow_direct_messages",
+            "is_contractor_onboarding_ready",
+            "contractor_onboarding_completed_at",
+            "contractor_onboarding_dismissed_at",
+        ]
+        read_only_fields = [
+            "id",
+            "username",
+            "email",
+            "is_contractor_onboarding_ready",
+            "contractor_onboarding_completed_at",
+            "contractor_onboarding_dismissed_at",
+        ]
+
+    def validate_profile_type(self, value):
+        if value and value != Profile.ProfileType.CONTRACTOR:
+            raise serializers.ValidationError("Contractor onboarding is only for contractor profiles.")
+        return value or Profile.ProfileType.CONTRACTOR
 
 
 class PublicUserProfileSerializer(serializers.ModelSerializer):
