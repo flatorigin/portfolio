@@ -440,6 +440,7 @@ export default function EditProfile() {
   const [savingProfileType, setSavingProfileType] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [mapWarning, setMapWarning] = useState("");
   const [securityMessage, setSecurityMessage] = useState("");
   const [securityError, setSecurityError] = useState("");
   const [sendingVerification, setSendingVerification] = useState(false);
@@ -683,6 +684,7 @@ export default function EditProfile() {
     setSaving(true);
     setError("");
     setMessage("");
+    setMapWarning("");
 
     try {
       const normalizedDraftLocation = normalizeLocationQuery(
@@ -704,8 +706,15 @@ export default function EditProfile() {
           : null;
 
       if (!resolvedCenter && normalizedDraftLocation) {
-        const result = await geocodeLocationQuery(normalizedDraftLocation);
-        resolvedCenter = result?.center || null;
+        try {
+          const result = await geocodeLocationQuery(normalizedDraftLocation);
+          resolvedCenter = result?.center || null;
+        } catch (geocodeError) {
+          console.warn("[EditProfile] geocoding skipped", geocodeError);
+          setMapWarning(
+            "Your profile details can still be saved, but the map location could not be updated. Add a valid Google Maps API key locally to update the map preview.",
+          );
+        }
       }
 
       const data = new FormData();
@@ -859,6 +868,10 @@ export default function EditProfile() {
       setBannerFile(null);
     } catch (err) {
       console.error("[EditProfile] save error", err?.response || err);
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        setError("Your session expired. Please log in again to edit your profile.");
+        return;
+      }
       const detail =
         err?.response?.data?.detail ||
         err?.response?.data?.non_field_errors ||
@@ -1676,6 +1689,11 @@ export default function EditProfile() {
               {error && (
                 <p className="whitespace-pre-wrap text-xs text-red-600">
                   {error}
+                </p>
+              )}
+              {mapWarning && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                  {mapWarning}
                 </p>
               )}
               {message && <p className="text-xs text-emerald-600">{message}</p>}

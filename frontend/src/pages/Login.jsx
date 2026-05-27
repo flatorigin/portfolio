@@ -1,7 +1,7 @@
 // frontend/src/pages/Login.jsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import api from "../api";
+import { login } from "../auth";
 import { Card, Input, PasswordInput, Button } from "../ui";
 
 export default function Login() {
@@ -14,12 +14,10 @@ export default function Login() {
     e.preventDefault();
     setError("");
     try {
-      const { data } = await api.post("/auth/jwt/create/", {
+      await login({
         username,
         password,
       });
-      localStorage.setItem("access", data.access);
-      localStorage.setItem("refresh", data.refresh);
       navigate("/dashboard");
     } catch (err) {
       const detail = String(err?.response?.data?.detail || "").toLowerCase();

@@ -19,6 +19,8 @@ import PublicProfile from "./pages/PublicProfile";
 import MessagesThread from "./pages/MessagesThread";
 import FindLocalWork from "./pages/FindLocalWork";
 import ProjectPlanDetail from "./pages/ProjectPlanDetail";
+import HomeownerOnboarding from "./pages/HomeownerOnboarding";
+import ContractorOnboarding from "./pages/ContractorOnboarding";
 
 export const router = createBrowserRouter([
   {
@@ -37,6 +39,8 @@ export const router = createBrowserRouter([
       { path: "profile/edit", element: <ProfileEdit /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "dashboard/planner/:planId", element: <ProjectPlanDetail /> },
+      { path: "onboarding/homeowner", element: <HomeownerOnboarding /> },
+      { path: "onboarding/contractor", element: <ContractorOnboarding /> },
       { path: "projects/:id", element: <ProjectDetail /> },
       { path: "messages/:threadId?", element: <MessagesThread /> },
       { path: "profiles/:username", element: <PublicProfile /> },

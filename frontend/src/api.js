@@ -15,7 +15,11 @@ function clearAuthAndRedirect() {
   localStorage.removeItem("access");
   localStorage.removeItem("refresh");
   localStorage.removeItem("username");
-  window.dispatchEvent(new CustomEvent("auth:changed"));
+  window.dispatchEvent(
+    new CustomEvent("auth:changed", {
+      detail: { reason: "auth-expired" },
+    }),
+  );
 
   if (!redirectingToLogin && window.location.pathname !== "/login") {
     redirectingToLogin = true;
@@ -52,6 +56,11 @@ api.interceptors.response.use(
     const refreshToken = localStorage.getItem("refresh");
 
     if ((status === 401 || status === 403) && hasAccessToken && !refreshToken) {
+      clearAuthAndRedirect();
+      return Promise.reject(error);
+    }
+
+    if ((status === 401 || status === 403) && !hasAccessToken) {
       clearAuthAndRedirect();
       return Promise.reject(error);
     }
