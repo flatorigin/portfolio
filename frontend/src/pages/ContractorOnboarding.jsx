@@ -223,6 +223,7 @@ export default function ContractorOnboarding() {
     setError("");
     try {
       await api.post("/users/me/contractor-onboarding/", { action: "complete" });
+      window.dispatchEvent(new CustomEvent("profile:changed"));
       navigate("/profile/edit");
     } catch (err) {
       console.error("[ContractorOnboarding] complete error", err?.response || err);
@@ -470,26 +471,26 @@ export default function ContractorOnboarding() {
             {message ? <div className="mt-5 text-xs text-emerald-600">{message}</div> : null}
 
             <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <Button
+              <button
                 type="button"
                 disabled={saving || stepIndex === 0}
                 onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
-                className="bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Back
-              </Button>
+              </button>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button
+                <button
                   type="button"
                   disabled={saving}
                   onClick={saveCurrentStep}
-                  className="bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Save
-                </Button>
+                </button>
                 {step.id === "finish" ? (
                   <Button type="button" disabled={saving} onClick={completeOnboarding}>
-                    Finish setup
+                    Complete your profile
                   </Button>
                 ) : (
                   <Button type="button" disabled={saving} onClick={nextStep}>

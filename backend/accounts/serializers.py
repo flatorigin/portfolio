@@ -577,6 +577,16 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
     def validate(self, attrs):
         instance = getattr(self, "instance", None)
 
+        toggle_only_fields = {
+            "profile_type",
+            "public_profile_enabled",
+            "allow_direct_messages",
+            "show_contact_email",
+            "show_contact_phone",
+        }
+        if attrs and set(attrs.keys()).issubset(toggle_only_fields):
+            return attrs
+
         service_location = attrs.get(
             "service_location",
             getattr(instance, "service_location", ""),

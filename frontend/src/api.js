@@ -48,18 +48,22 @@ api.interceptors.response.use(
 
     // ✅ Some endpoints return 403 instead of 401 when auth fails/expired.
     // So treat 401 OR 403 as "refreshable" IF we have a refresh token.
-    if (
-      (status === 401 || status === 403) &&
-      !original?._retry &&
-      localStorage.getItem("refresh")
-    ) {
+    const hasAccessToken = !!localStorage.getItem("access");
+    const refreshToken = localStorage.getItem("refresh");
+
+    if ((status === 401 || status === 403) && hasAccessToken && !refreshToken) {
+      clearAuthAndRedirect();
+      return Promise.reject(error);
+    }
+
+    if ((status === 401 || status === 403) && !original?._retry && refreshToken) {
       original._retry = true;
 
       try {
         if (!refreshPromise) {
           refreshPromise = axios
             .post(`${api.defaults.baseURL}/auth/jwt/refresh/`, {
-              refresh: localStorage.getItem("refresh"),
+              refresh: refreshToken,
             })
             .finally(() => {
               refreshPromise = null;
