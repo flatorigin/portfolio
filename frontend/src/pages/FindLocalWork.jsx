@@ -52,10 +52,7 @@ function getBidSummaryMeta(bids) {
     if (openStatuses.has(status)) openCount += 1;
 
     const createdAt =
-      latest?.created_at ||
-      bid?.updated_at ||
-      bid?.created_at ||
-      null;
+      latest?.created_at || bid?.updated_at || bid?.created_at || null;
 
     if (createdAt) {
       const ts = new Date(createdAt).getTime();
@@ -124,7 +121,7 @@ export default function FindLocalWork() {
               console.warn(
                 "[FindLocalWork] bid summary failed for project",
                 p.id,
-                err?.response || err
+                err?.response || err,
               );
               return [
                 p.id,
@@ -136,7 +133,7 @@ export default function FindLocalWork() {
                 },
               ];
             }
-          })
+          }),
         );
 
         if (!cancelled) {
@@ -160,13 +157,13 @@ export default function FindLocalWork() {
         const arr = Array.isArray(data)
           ? data
           : Array.isArray(data?.results)
-          ? data.results
-          : [];
+            ? data.results
+            : [];
 
         const onlyPublicJobs = arr.filter(
           (p) =>
             !!p?.is_job_posting &&
-            (p?.is_public === undefined || p?.is_public === true)
+            (p?.is_public === undefined || p?.is_public === true),
         );
 
         setProjects(onlyPublicJobs);
@@ -195,7 +192,10 @@ export default function FindLocalWork() {
       const sqf = Number(p.sqf ?? 0) || 0;
       const budget = Number(p.budget ?? 0) || 0;
 
-      if (filters.name.trim() && !name.includes(filters.name.toLowerCase().trim()))
+      if (
+        filters.name.trim() &&
+        !name.includes(filters.name.toLowerCase().trim())
+      )
         return false;
 
       if (
@@ -207,8 +207,10 @@ export default function FindLocalWork() {
       if (filters.minSqf !== "" && sqf < Number(filters.minSqf)) return false;
       if (filters.maxSqf !== "" && sqf > Number(filters.maxSqf)) return false;
 
-      if (filters.minBudget !== "" && budget < Number(filters.minBudget)) return false;
-      if (filters.maxBudget !== "" && budget > Number(filters.maxBudget)) return false;
+      if (filters.minBudget !== "" && budget < Number(filters.minBudget))
+        return false;
+      if (filters.maxBudget !== "" && budget > Number(filters.maxBudget))
+        return false;
 
       return true;
     });
@@ -249,8 +251,8 @@ export default function FindLocalWork() {
         filters.minSqf && filters.maxSqf
           ? `${filters.minSqf} - ${filters.maxSqf}`
           : filters.minSqf
-          ? `${filters.minSqf}+`
-          : `up to ${filters.maxSqf}`;
+            ? `${filters.minSqf}+`
+            : `up to ${filters.maxSqf}`;
       badges.push({
         key: "sqf",
         label: `Sqf: ${value}`,
@@ -263,8 +265,8 @@ export default function FindLocalWork() {
         filters.minBudget && filters.maxBudget
           ? `$${filters.minBudget} - $${filters.maxBudget}`
           : filters.minBudget
-          ? `$${filters.minBudget}+`
-          : `up to $${filters.maxBudget}`;
+            ? `$${filters.minBudget}+`
+            : `up to $${filters.maxBudget}`;
       badges.push({
         key: "budget",
         label: `Budget: ${value}`,
@@ -282,35 +284,36 @@ export default function FindLocalWork() {
     activeSearchField === "name"
       ? filters.name
       : activeSearchField === "location"
-      ? filters.location
-      : activeSearchField === "sqf"
-      ? filters.minSqf
-      : filters.minBudget;
+        ? filters.location
+        : activeSearchField === "sqf"
+          ? filters.minSqf
+          : filters.minBudget;
 
   const activeSearchLabel =
     activeSearchField === "name"
       ? "Project name"
       : activeSearchField === "location"
-      ? "Location"
-      : activeSearchField === "sqf"
-      ? "Sqf"
-      : "Budget";
+        ? "Location"
+        : activeSearchField === "sqf"
+          ? "Sqf"
+          : "Budget";
 
   const activeSearchPlaceholder =
     activeSearchField === "name"
       ? "Kitchen remodel"
       : activeSearchField === "location"
-      ? "City, area, etc."
-      : activeSearchField === "sqf"
-      ? "Minimum sqf"
-      : "Minimum budget";
+        ? "City, area, etc."
+        : activeSearchField === "sqf"
+          ? "Minimum sqf"
+          : "Minimum budget";
 
   const updateActiveSearch = (e) => {
     const value = e.target.value;
     setFilters((prev) => {
       if (activeSearchField === "name") return { ...prev, name: value };
       if (activeSearchField === "location") return { ...prev, location: value };
-      if (activeSearchField === "sqf") return { ...prev, minSqf: value, maxSqf: "" };
+      if (activeSearchField === "sqf")
+        return { ...prev, minSqf: value, maxSqf: "" };
       return { ...prev, minBudget: value, maxBudget: "" };
     });
   };
@@ -326,7 +329,10 @@ export default function FindLocalWork() {
             Browse published <span className="font-medium">job postings</span>.
           </p>
         </div>
-        <Link to="/explore" className="text-xs text-slate-600 hover:text-slate-900">
+        <Link
+          to="/explore"
+          className="text-xs text-slate-600 hover:text-slate-900"
+        >
           ← Back to Explore
         </Link>
       </div>
@@ -521,7 +527,9 @@ export default function FindLocalWork() {
                         {distanceLabel ? (
                           <>
                             <span className="mx-1 text-slate-300">•</span>
-                            <span className="font-semibold text-slate-600">{distanceLabel}</span>
+                            <span className="font-semibold text-slate-600">
+                              {distanceLabel}
+                            </span>
                           </>
                         ) : null}
                       </div>
@@ -554,8 +562,8 @@ export default function FindLocalWork() {
                             {loadingBidMeta && bidMeta[p.id] === undefined
                               ? "Loading…"
                               : meta.openCount > 0
-                              ? `${meta.openCount} open`
-                              : "No open bids"}
+                                ? `${meta.openCount} open`
+                                : "No open bids"}
                           </div>
                         </div>
                       </div>

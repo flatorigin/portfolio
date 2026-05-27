@@ -1071,7 +1071,7 @@ export default function Explore() {
                           ariaLabel="Report listing"
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                         />
-                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl bg-slate-950 p-3 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                           Business information may be sourced from publicly
                           available information. Business owners may request
                           edits or removal.

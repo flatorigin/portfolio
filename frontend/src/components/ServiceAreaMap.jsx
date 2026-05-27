@@ -284,11 +284,6 @@ export default function ServiceAreaMap({
       >
         <div ref={containerRef} className="h-full w-full" />
       </div>
-      <div className="mt-2 text-[11px] text-slate-500">
-        Geocoding requires{" "}
-        <span className="font-medium">Geocoding API</span>, billing, and correct
-        HTTP referrer restrictions.
-      </div>
     </div>
   );
 }

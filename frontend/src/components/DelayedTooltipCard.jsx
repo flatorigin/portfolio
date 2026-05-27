@@ -27,7 +27,7 @@ export default function DelayedTooltipCard({ children, tooltip }) {
       {children}
 
       {showTip && (
-        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-[280px] rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow-xl">
+        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-[280px] rounded-xl bg-slate-950 p-3 text-xs leading-5 text-white shadow-xl">
           {tooltip}
         </div>
       )}

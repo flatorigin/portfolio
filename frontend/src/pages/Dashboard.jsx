@@ -57,7 +57,7 @@ function AwardedIcon({ className = "" }) {
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-200 bg-amber-50/95 text-amber-700 shadow-sm backdrop-blur">
         <SymbolIcon name="workspace_premium" className="text-[20px]" fill={1} weight={500} />
       </span>
-      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden -translate-x-1/2 rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white shadow-lg group-hover:block">
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-[11px] font-semibold text-white shadow-lg group-hover:block">
         Awarded
       </span>
     </span>
