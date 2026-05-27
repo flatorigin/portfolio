@@ -27,7 +27,7 @@ function DisabledActionWithTooltip({ label, message }) {
         {label}
       </button>
 
-      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
         {message}
       </div>
     </div>
@@ -550,7 +550,7 @@ export default function PublicProfile() {
                           ariaLabel="Report profile"
                           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                         />
-                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-32 rounded-lg bg-slate-900 px-2 py-1.5 text-center text-[11px] text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-32 rounded-xl bg-slate-950 p-3 text-center text-[11px] text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                           Report profile
                         </div>
                       </div>
@@ -586,11 +586,11 @@ export default function PublicProfile() {
                     </button>
 
                     {!profile.allow_direct_messages ? (
-                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                         This user has not opted in to receive direct messages.
                       </div>
                     ) : authed && isMine ? (
-                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                         You can’t message your own profile.
                       </div>
                     ) : null}
@@ -915,7 +915,7 @@ export default function PublicProfile() {
                         ariaLabel="Report profile"
                         className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
                       />
-                      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-32 rounded-lg bg-slate-900 px-2 py-1.5 text-center text-[11px] text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-32 rounded-xl bg-slate-950 p-3 text-center text-[11px] text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                         Report profile
                       </div>
                     </div>
@@ -974,12 +974,12 @@ export default function PublicProfile() {
                   ) : null}
 
                   {!profile.allow_direct_messages && (
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                       This user has not opted in to receive direct messages.
                     </div>
                   )}
                   {profile.allow_direct_messages && authed && isMine && (
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
                       You can’t message your own profile.
                     </div>
                   )}

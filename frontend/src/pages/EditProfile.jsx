@@ -5,7 +5,7 @@
 // Map updates ONLY after successful Save (not while typing)
 // Adds direct-message opt-out modal with reason capture
 // =======================================
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
 import AiWriteButton from "../components/AiWriteButton";
@@ -26,6 +26,10 @@ import {
 } from "../lib/googleMaps";
 
 const ServiceAreaMap = lazy(() => import("../components/ServiceAreaMap"));
+
+const LOGO_HINT_SESSION_KEY = "flatorigin:edit-profile:logo-hint-dismissed";
+const BANNER_HINT_SESSION_KEY =
+  "flatorigin:edit-profile:banner-hint-dismissed";
 
 const CONTRACTOR_CATEGORY_GROUPS = [
   {
@@ -346,6 +350,38 @@ function toUrl(raw) {
   return raw.startsWith("/") ? `${origin}${raw}` : `${origin}/${raw}`;
 }
 
+function rememberSessionDismissal(key) {
+  try {
+    window.sessionStorage.setItem(key, "1");
+  } catch {
+    // Ignore storage failures; the close button should still hide it now.
+  }
+}
+
+function wasDismissedThisSession(key) {
+  try {
+    return window.sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function MobileUploadHint({ children, onClose }) {
+  return (
+    <div className="absolute right-0 top-full z-20 mt-2 w-72 max-w-[calc(100vw-3rem)] rounded-xl bg-slate-950 p-3 pr-10 text-left text-xs leading-5 text-white shadow-lg md:hidden">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close tooltip"
+        className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-sm leading-none text-white/80 hover:bg-white/10 hover:text-white"
+      >
+        &times;
+      </button>
+      {children}
+    </div>
+  );
+}
+
 export default function EditProfile() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -392,9 +428,13 @@ export default function EditProfile() {
 
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const logoHintRef = useRef(null);
+  const [showLogoMobileHint, setShowLogoMobileHint] = useState(false);
 
   const [bannerPreview, setBannerPreview] = useState(null);
   const [bannerFile, setBannerFile] = useState(null);
+  const bannerHintRef = useRef(null);
+  const [showBannerMobileHint, setShowBannerMobileHint] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -511,6 +551,60 @@ export default function EditProfile() {
     };
   }, []);
 
+  useEffect(() => {
+    const node = bannerHintRef.current;
+    if (
+      loading ||
+      bannerPreview ||
+      !node ||
+      !("IntersectionObserver" in window) ||
+      wasDismissedThisSession(BANNER_HINT_SESSION_KEY) ||
+      !window.matchMedia("(max-width: 767px)").matches
+    ) {
+      setShowBannerMobileHint(false);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setShowBannerMobileHint(true);
+        }
+      },
+      { threshold: 0.65 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [bannerPreview, loading]);
+
+  useEffect(() => {
+    const node = logoHintRef.current;
+    if (
+      loading ||
+      avatarPreview ||
+      !node ||
+      !("IntersectionObserver" in window) ||
+      wasDismissedThisSession(LOGO_HINT_SESSION_KEY) ||
+      !window.matchMedia("(max-width: 767px)").matches
+    ) {
+      setShowLogoMobileHint(false);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setShowLogoMobileHint(true);
+        }
+      },
+      { threshold: 0.65 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [avatarPreview, loading]);
+
   const updateField = (key) => (e) => {
     const value = e.target.value;
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -543,6 +637,7 @@ export default function EditProfile() {
     setLogoFile(file);
 
     if (file) {
+      setShowLogoMobileHint(false);
       const reader = new FileReader();
       reader.onload = () => setAvatarPreview(reader.result);
       reader.readAsDataURL(file);
@@ -569,6 +664,7 @@ export default function EditProfile() {
       return;
     }
 
+    setShowBannerMobileHint(false);
     const reader = new FileReader();
     reader.onload = () => setBannerPreview(reader.result);
     reader.readAsDataURL(file);
@@ -1111,7 +1207,9 @@ export default function EditProfile() {
 
   return (
     <div>
-      <SectionTitle>Edit profile</SectionTitle>
+      <header className="flex min-h-14 items-center mb-1">
+        <SectionTitle className="!mb-0">Edit Profile</SectionTitle>
+      </header>
 
       {loading ? (
         <p className="text-sm text-slate-600">Loading your profile…</p>
@@ -1153,19 +1251,19 @@ export default function EditProfile() {
                   <h2 className="text-2xl font-semibold leading-tight text-slate-950">
                     Your homeowner profile stays private.
                   </h2>
-	                  <p className="mt-3 text-sm leading-6 text-slate-600">
-	                    The information you provide here is used for account
-	                    credibility and project communication only. You stay in
-	                    control of what contact details are shown publicly.
-	                  </p>
-	                  <p className="mt-3 border-t border-[#E6D8CC] pt-3 text-xs leading-5 text-slate-500">
-	                    Review badges on contractor profiles appear after admin
-	                    review. You should still review contractor details,
-	                    experience, licenses, and insurance before starting a
-	                    project.
-	                  </p>
-	                </div>
-	              ) : null}
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    The information you provide here is used for account
+                    credibility and project communication only. You stay in
+                    control of what contact details are shown publicly.
+                  </p>
+                  <p className="mt-3 border-t border-[#E6D8CC] pt-3 text-xs leading-5 text-slate-500">
+                    Review badges on contractor profiles appear after admin
+                    review. You should still review contractor details,
+                    experience, licenses, and insurance before starting a
+                    project.
+                  </p>
+                </div>
+              ) : null}
 
               {!isHomeownerProfile ? (
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -1174,21 +1272,36 @@ export default function EditProfile() {
                       <p className="text-sm font-medium text-slate-800">
                         Hero banner (public profile header)
                       </p>
-                      <p className="text-xs text-slate-500">
-                        This image will show at the top of your public profile
-                        page. Recommended: wide image (e.g. 1600×600).
-                      </p>
                     </div>
 
-                    <label className="inline-flex w-fit cursor-pointer items-center whitespace-nowrap rounded-lg border border-slate-300 px-4 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleBannerChange}
-                      />
-                      Choose hero image…
-                    </label>
+                    <div ref={bannerHintRef} className="relative">
+                      <label className="group relative inline-flex w-fit cursor-pointer items-center whitespace-nowrap rounded-lg border border-slate-300 px-4 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleBannerChange}
+                        />
+                        Choose hero image…
+                        <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden w-72 whitespace-normal rounded-xl bg-slate-950 p-3 text-left text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
+                          This image will show at the top of your public
+                          profile page. Recommended: wide image (e.g.
+                          1600x600).
+                        </span>
+                      </label>
+                      {showBannerMobileHint ? (
+                        <MobileUploadHint
+                          onClose={() => {
+                            rememberSessionDismissal(BANNER_HINT_SESSION_KEY);
+                            setShowBannerMobileHint(false);
+                          }}
+                        >
+                          This image will show at the top of your public
+                          profile page. Recommended: wide image (e.g.
+                          1600x600).
+                        </MobileUploadHint>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
@@ -1237,14 +1350,11 @@ export default function EditProfile() {
                     </div>
                   )}
 
-                  <div>
+                  <div ref={logoHintRef} className="relative">
                     <p className="text-sm font-medium text-slate-800">
                       Logo / profile image
                     </p>
-                    <p className="text-xs text-slate-500">
-                      This will be shown on your public profile and projects.
-                    </p>
-                    <label className="mt-2 inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    <label className="group relative mt-2 inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
                       <input
                         type="file"
                         accept="image/*"
@@ -1252,7 +1362,20 @@ export default function EditProfile() {
                         onChange={handleLogoChange}
                       />
                       Choose image…
+                      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 whitespace-normal rounded-xl bg-slate-950 p-3 text-left text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
+                        This will be shown on your public profile and projects.
+                      </span>
                     </label>
+                    {showLogoMobileHint ? (
+                      <MobileUploadHint
+                        onClose={() => {
+                          rememberSessionDismissal(LOGO_HINT_SESSION_KEY);
+                          setShowLogoMobileHint(false);
+                        }}
+                      >
+                        This will be shown on your public profile and projects.
+                      </MobileUploadHint>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
