@@ -399,6 +399,18 @@ class MeProfilePersistenceTests(APITestCase):
         user.profile.refresh_from_db()
         self.assertEqual(user.profile.profile_type, Profile.ProfileType.CONTRACTOR)
 
+    def test_me_response_includes_homeowner_onboarding_fields(self):
+        self.user.profile.profile_type = Profile.ProfileType.HOMEOWNER
+        self.user.profile.save()
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get("/api/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("is_homeowner_onboarding_ready", response.data)
+        self.assertIn("homeowner_onboarding_completed_at", response.data)
+        self.assertIn("homeowner_onboarding_dismissed_at", response.data)
+
     def test_contractor_categories_round_trip_on_profile_patch(self):
         self.client.force_authenticate(self.user)
 
@@ -487,6 +499,70 @@ class MeProfilePersistenceTests(APITestCase):
         self.client.force_authenticate(self.user)
 
         response = self.client.get("/api/users/me/contractor-onboarding/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_homeowner_onboarding_allows_step_by_step_partial_save(self):
+        user = User.objects.create_user(
+            username="onboardinghomeowner",
+            email="homeowner-onboarding@example.com",
+            password="pw12345678",
+            is_active=True,
+        )
+        self.client.force_authenticate(user)
+
+        response = self.client.patch(
+            "/api/users/me/homeowner-onboarding/",
+            {"display_name": "Homeowner User"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["profile_type"], Profile.ProfileType.HOMEOWNER)
+        self.assertEqual(response.data["display_name"], "Homeowner User")
+
+        user.profile.refresh_from_db()
+        self.assertEqual(user.profile.profile_type, Profile.ProfileType.HOMEOWNER)
+        self.assertEqual(user.profile.display_name, "Homeowner User")
+
+    def test_homeowner_onboarding_complete_requires_required_steps(self):
+        self.user.profile.profile_type = Profile.ProfileType.HOMEOWNER
+        self.user.profile.save()
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/me/homeowner-onboarding/",
+            {"action": "complete"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(self.user.profile.homeowner_onboarding_completed_at)
+
+    def test_homeowner_onboarding_can_complete_when_ready(self):
+        profile = self.user.profile
+        profile.profile_type = Profile.ProfileType.HOMEOWNER
+        profile.display_name = "Ready Homeowner"
+        profile.service_location = "Media, PA"
+        profile.contact_email = "ready@example.com"
+        profile.contact_phone = "555-222-3333"
+        profile.save()
+        self.client.force_authenticate(self.user)
+
+        response = self.client.post(
+            "/api/users/me/homeowner-onboarding/",
+            {"action": "complete"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.homeowner_onboarding_completed_at)
+
+    def test_contractor_cannot_use_homeowner_onboarding(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get("/api/users/me/homeowner-onboarding/")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 

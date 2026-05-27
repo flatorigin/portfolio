@@ -124,6 +124,8 @@ class Profile(models.Model):
     frozen_reason = models.TextField(blank=True, default="")
     contractor_onboarding_completed_at = models.DateTimeField(null=True, blank=True)
     contractor_onboarding_dismissed_at = models.DateTimeField(null=True, blank=True)
+    homeowner_onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+    homeowner_onboarding_dismissed_at = models.DateTimeField(null=True, blank=True)
 
     @property
     def is_profile_complete(self):
@@ -143,6 +145,17 @@ class Profile(models.Model):
             and (self.contractor_primary_category or "").strip()
             and len(self.contractor_categories or []) > 0
             and (self.bio or "").strip()
+        )
+
+    @property
+    def is_homeowner_onboarding_ready(self):
+        if self.profile_type != self.ProfileType.HOMEOWNER:
+            return False
+        return bool(
+            (self.display_name or "").strip()
+            and (self.service_location or "").strip()
+            and (self.contact_email or "").strip()
+            and (self.contact_phone or "").strip()
         )
 
     @property

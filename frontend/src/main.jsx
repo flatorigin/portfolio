@@ -10,6 +10,7 @@ const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
 const HomeownerLandingPage = lazy(() => import("./pages/HomeownerLandingPage.jsx"));
 const ContractorLandingPage = lazy(() => import("./pages/ContractorLandingPage.jsx"));
 const ContractorOnboarding = lazy(() => import("./pages/ContractorOnboarding.jsx"));
+const HomeownerOnboarding = lazy(() => import("./pages/HomeownerOnboarding.jsx"));
 const ProjectGuides = lazy(() => import("./pages/ProjectGuides.jsx"));
 const TermsAndSafety = lazy(() => import("./pages/TermsAndSafety.jsx"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy.jsx"));
@@ -108,6 +109,14 @@ createRoot(document.getElementById("root")).render(
             element={
               <RequireAuth>
                 <ContractorOnboarding />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="onboarding/homeowner"
+            element={
+              <RequireAuth>
+                <HomeownerOnboarding />
               </RequireAuth>
             }
           />

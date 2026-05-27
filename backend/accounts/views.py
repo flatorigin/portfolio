@@ -8,6 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.db.models import Q
 from django.db import transaction
+from django.db.utils import DatabaseError, OperationalError
 from django.core.mail import get_connection, send_mail
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.encoding import force_bytes, force_str
@@ -44,6 +45,7 @@ from .serializers import (
     BusinessDirectoryListingSerializer,
     ChangePasswordSerializer,
     HomeownerReferenceImageSerializer,
+    HomeownerOnboardingSerializer,
     ProfileSerializer,
     ContractorOnboardingSerializer,
     PublicUserProfileSerializer,
@@ -56,6 +58,12 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+class ProfileUnavailable(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "Profile data is temporarily unavailable. Please apply pending migrations and try again."
+    default_code = "profile_unavailable"
 PROJECT_SEARCH_STOPWORDS = {
     "and",
     "the",
@@ -410,13 +418,53 @@ class MeView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_profile(self, request):
-        profile, _ = Profile.objects.get_or_create(user=request.user)
+        try:
+            profile, created = Profile.objects.get_or_create(user=request.user)
+        except (OperationalError, DatabaseError):
+            logger.exception(
+                "Profile lookup failed for user_id=%s username=%s. This often means pending migrations or a broken profile table.",
+                getattr(request.user, "id", None),
+                getattr(request.user, "username", ""),
+            )
+            raise ProfileUnavailable()
+
+        if created:
+            logger.info(
+                "Created missing profile row for user_id=%s username=%s",
+                request.user.id,
+                request.user.username,
+            )
+
+        valid_profile_types = {
+            "",
+            Profile.ProfileType.CONTRACTOR,
+            Profile.ProfileType.HOMEOWNER,
+        }
+        if profile.profile_type not in valid_profile_types:
+            logger.warning(
+                "Invalid profile_type=%r for profile_id=%s user_id=%s; resetting to blank.",
+                profile.profile_type,
+                profile.id,
+                request.user.id,
+            )
+            profile.profile_type = ""
+            profile.save(update_fields=["profile_type"])
+
         return profile
 
     def get(self, request, *args, **kwargs):
         profile = self._get_profile(request)
-        serializer = ProfileSerializer(profile, context={"request": request})
-        return Response(serializer.data)
+        try:
+            serializer = ProfileSerializer(profile, context={"request": request})
+            return Response(serializer.data)
+        except Exception:
+            logger.exception(
+                "Failed to serialize /users/me/ for profile_id=%s user_id=%s profile_type=%r",
+                getattr(profile, "id", None),
+                getattr(request.user, "id", None),
+                getattr(profile, "profile_type", None),
+            )
+            raise
 
     def patch(self, request, *args, **kwargs):
         profile = self._get_profile(request)
@@ -427,9 +475,28 @@ class MeView(APIView):
             partial=True,
             context={"request": request},
         )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        if not serializer.is_valid():
+            logger.warning(
+                "Profile update validation failed for profile_id=%s user_id=%s errors=%s payload_keys=%s",
+                profile.id,
+                request.user.id,
+                serializer.errors,
+                sorted(request.data.keys()),
+            )
+            raise ValidationError(serializer.errors)
+
+        try:
+            serializer.save()
+            return Response(serializer.data)
+        except Exception:
+            logger.exception(
+                "Failed to save /users/me/ for profile_id=%s user_id=%s profile_type=%r payload_keys=%s",
+                profile.id,
+                request.user.id,
+                profile.profile_type,
+                sorted(request.data.keys()),
+            )
+            raise
 
 
 class ContractorOnboardingView(APIView):
@@ -486,6 +553,61 @@ class ContractorOnboardingView(APIView):
             raise ValidationError({"action": "Use action='complete' or action='dismiss'."})
 
         serializer = ContractorOnboardingSerializer(profile, context={"request": request})
+        return Response(serializer.data)
+
+
+class HomeownerOnboardingView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+
+    def _get_profile(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        if profile.profile_type == Profile.ProfileType.CONTRACTOR:
+            raise PermissionDenied("Contractor accounts cannot use homeowner onboarding.")
+        if not profile.profile_type:
+            profile.profile_type = Profile.ProfileType.HOMEOWNER
+            profile.save(update_fields=["profile_type"])
+        return profile
+
+    def get(self, request, *args, **kwargs):
+        profile = self._get_profile(request)
+        serializer = HomeownerOnboardingSerializer(profile, context={"request": request})
+        return Response(serializer.data)
+
+    def patch(self, request, *args, **kwargs):
+        profile = self._get_profile(request)
+        serializer = HomeownerOnboardingSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(profile_type=Profile.ProfileType.HOMEOWNER)
+        return Response(serializer.data)
+
+    def post(self, request, *args, **kwargs):
+        profile = self._get_profile(request)
+        action = str(request.data.get("action") or "").strip().lower()
+
+        if action == "complete":
+            if not profile.is_homeowner_onboarding_ready:
+                raise ValidationError({"detail": "Finish the required onboarding steps before completing setup."})
+            profile.homeowner_onboarding_completed_at = timezone.now()
+            profile.homeowner_onboarding_dismissed_at = None
+            profile.save(
+                update_fields=[
+                    "homeowner_onboarding_completed_at",
+                    "homeowner_onboarding_dismissed_at",
+                ]
+            )
+        elif action == "dismiss":
+            profile.homeowner_onboarding_dismissed_at = timezone.now()
+            profile.save(update_fields=["homeowner_onboarding_dismissed_at"])
+        else:
+            raise ValidationError({"action": "Use action='complete' or action='dismiss'."})
+
+        serializer = HomeownerOnboardingSerializer(profile, context={"request": request})
         return Response(serializer.data)
 
 
