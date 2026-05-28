@@ -176,6 +176,47 @@ function FeatureStrip() {
 
 export default function HomeownerLandingPage() {
   const authed = !!localStorage.getItem("access");
+  const [me, setMe] = useState(null);
+
+  useEffect(() => {
+    if (!authed) {
+      setMe(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProfile() {
+      try {
+        const { data } = await api.get("/users/me/");
+        if (!cancelled) setMe(data);
+      } catch {
+        if (!cancelled) setMe(null);
+      }
+    }
+
+    loadProfile();
+
+    const handleProfileChanged = () => loadProfile();
+    window.addEventListener("profile:changed", handleProfileChanged);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("profile:changed", handleProfileChanged);
+    };
+  }, [authed]);
+
+  const onboardingComplete = !!me?.homeowner_onboarding_completed_at;
+  const primaryCtaPath = authed
+    ? onboardingComplete
+      ? "/dashboard"
+      : "/onboarding/homeowner"
+    : "/register?role=homeowner";
+  const primaryCtaLabel = authed
+    ? onboardingComplete
+      ? "Start a Project"
+      : "Continue Homeowner Setup"
+    : "Start a Project";
 
   return (
     <div className="bg-[#FBF9F7] text-slate-900">
@@ -194,9 +235,9 @@ export default function HomeownerLandingPage() {
                 Save ideas, organize project details, compare bids, and communicate with contractors in one place.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link to="/register?role=homeowner">
+                <Link to={primaryCtaPath}>
                   <Button className="h-11 min-w-48">
-                    Start a Project
+                    {primaryCtaLabel}
                   </Button>
                 </Link>
                 <Link
@@ -261,9 +302,13 @@ export default function HomeownerLandingPage() {
                 </p>
               </div>
               <div className="text-center">
-                <Link to={authed ? "/dashboard" : "/register?role=homeowner"}>
+                <Link to={primaryCtaPath}>
                   <Button className="h-11 min-w-56">
-                    {authed ? "Open Dashboard" : "Create Free Account"}
+                    {authed
+                      ? onboardingComplete
+                        ? "Open Dashboard"
+                        : "Continue Homeowner Setup"
+                      : "Create Free Account"}
                   </Button>
                 </Link>
                 <div className="mt-3 text-xs text-slate-500">
