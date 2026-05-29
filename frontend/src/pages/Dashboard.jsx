@@ -10,6 +10,7 @@ import ProjectEditorCard from "../components/ProjectEditorCard";
 import SavedLikesCard from "../components/SavedLikesCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
 import { SectionTitle, Card, Button, GhostButton, Badge, SymbolIcon } from "../ui";
+import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 
@@ -394,6 +395,34 @@ export default function Dashboard() {
   const [cover, setCover] = useState(null);
 
   const [editingId, setEditingId] = useState("");
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(PROJECT_CHECK_TRANSFER_KEY);
+    if (!raw) return;
+
+    try {
+      const transfer = JSON.parse(raw);
+      const mapped = transfer?.mappedProject || {};
+      if (!mapped || transfer?.mode !== "homeowner") return;
+
+      setForm((prev) => ({
+        ...prev,
+        title: mapped.title || prev.title,
+        summary: mapped.summary || prev.summary,
+        category: mapped.category || prev.category,
+        location: mapped.location || prev.location,
+        budget: mapped.budget || prev.budget,
+        is_job_posting: true,
+        job_summary: mapped.job_summary || prev.job_summary,
+        service_categories: mapped.category ? [mapped.category] : prev.service_categories,
+        post_privacy: prev.post_privacy || "public",
+      }));
+      setCreateOpen(true);
+      sessionStorage.removeItem(PROJECT_CHECK_TRANSFER_KEY);
+    } catch (err) {
+      console.warn("[Dashboard] failed to restore project checklist transfer", err);
+    }
+  }, []);
 
   useEffect(() => {
     const hasEditModal = editingId && isDesktop;

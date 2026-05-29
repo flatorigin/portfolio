@@ -31,6 +31,9 @@ const FindLocalWork = lazy(() => import("./pages/FindLocalWork.jsx"));
 const DashboardProjectsPage = lazy(() => import("./pages/DashboardProjectsPage.jsx"));
 const ProjectEditPage = lazy(() => import("./pages/ProjectEditPage.jsx"));
 const ProjectPlanDetail = lazy(() => import("./pages/ProjectPlanDetail.jsx"));
+const ProjectCheckGateway = lazy(() => import("./pages/ProjectCheckGateway.jsx"));
+const HomeownerProjectCheck = lazy(() => import("./pages/HomeownerProjectCheck.jsx"));
+const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx"));
 
 function RouteFallback() {
   return (
@@ -64,6 +67,10 @@ createRoot(document.getElementById("root")).render(
           <Route path="explore" element={<Explore />} />
           <Route path="guides" element={<ProjectGuides />} />
           <Route path="guides/:audience" element={<ProjectGuides />} />
+          <Route path="project-check" element={<ProjectCheckGateway />} />
+          <Route path="project-check/homeowner" element={<HomeownerProjectCheck />} />
+          <Route path="project-check/contractor" element={<ContractorLeadCheck />} />
+          <Route path="contractor-check" element={<ContractorLeadCheck />} />
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />
