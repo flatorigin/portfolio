@@ -9,7 +9,11 @@ const roleCards = [
   {
     title: "For homeowners",
     intro: "Plan projects with more clarity.",
-    features: ["Save project ideas", "Compare contractor bids", "Private or public posting"],
+    features: [
+      "Save project ideas",
+      "Compare contractor bids",
+      "Private or public posting",
+    ],
     cta: "Continue as Homeowner",
     to: "/homeowner",
     image: homeownerIllustration,
@@ -17,7 +21,11 @@ const roleCards = [
   {
     title: "For contractors",
     intro: "Show your work professionally.",
-    features: ["Public contractor profile", "Portfolio showcase", "Bid on local projects"],
+    features: [
+      "Public contractor profile",
+      "Portfolio showcase",
+      "Bid on local projects",
+    ],
     cta: "Continue as Contractor",
     to: "/contractor",
     image: contractorIllustration,
@@ -31,7 +39,10 @@ function GatewayNav() {
     <header className="border-b border-slate-200 bg-white">
       <Container className="py-3">
         <nav className="flex items-center justify-between gap-4">
-          <Link to="/" className="text-base font-bold tracking-tight text-slate-900">
+          <Link
+            to="/"
+            className="text-base font-bold tracking-tight text-slate-900"
+          >
             FlatOrigin
           </Link>
           <div className="flex items-center gap-3">
@@ -40,6 +51,12 @@ function GatewayNav() {
               className="hidden rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 sm:inline-flex"
             >
               Browse Projects
+            </Link>
+            <Link
+              to="/project-check"
+              className="hidden rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 sm:inline-flex"
+            >
+              Project Check
             </Link>
             <Link
               to={authed ? "/dashboard" : "/login"}
@@ -56,10 +73,7 @@ function GatewayNav() {
 
 function RoleCard({ card }) {
   return (
-    <Link
-      to={card.to}
-      className="group block text-inherit no-underline"
-    >
+    <Link to={card.to} className="group block text-inherit no-underline">
       <Card className="flex min-h-[470px] flex-col overflow-hidden p-5 transition hover:-translate-y-0.5 hover:shadow-md sm:p-6">
         <div className="aspect-[16/10] overflow-hidden rounded-xl bg-white">
           <img
@@ -139,14 +153,15 @@ export default function LandingPage() {
           <section className="flex min-h-[calc(100vh-170px)] flex-col justify-center py-12 sm:py-16">
             <div className="mx-auto max-w-2xl text-center">
               <h1 className="text-4xl font-bold leading-tight tracking-tight text-slate-950 sm:text-5xl">
-                Post real projects.
+                The place that helps
                 <br />
-                Find real work.
+                homeowners describe
                 <br />
-                Connect directly.
+                projects correctly
               </h1>
               <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-slate-600">
-                FlatOrigin helps homeowners and contractors connect around real projects without middlemen.
+                FlatOrigin helps homeowners and contractors connect around real
+                projects without middlemen.
               </p>
             </div>
 
@@ -184,7 +199,9 @@ export default function LandingPage() {
             </Link>
           </div>
         </Container>
-        <div className="pb-6 text-center text-xs text-slate-400">© 2026 FlatOrigin. All rights reserved.</div>
+        <div className="pb-6 text-center text-xs text-slate-400">
+          © 2026 FlatOrigin. All rights reserved.
+        </div>
       </footer>
     </div>
   );
