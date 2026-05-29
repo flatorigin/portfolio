@@ -24,18 +24,6 @@ export default function ProjectCheckGateway() {
   return (
     <div className="min-h-screen bg-[#FBF9F7] text-slate-900">
       <Container className="py-8 sm:py-12">
-        <div className="mb-10 flex items-center justify-between gap-4">
-          <Link to="/" className="text-base font-bold tracking-tight text-slate-900">
-            FlatOrigin
-          </Link>
-          <Link
-            to="/explore"
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Browse Projects
-          </Link>
-        </div>
-
         <section className="mx-auto flex min-h-[calc(100vh-180px)] max-w-5xl flex-col justify-center">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
