@@ -8,15 +8,19 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import {
-  SectionTitle,
   Badge,
   Card,
   Button,
-  Input,
   GhostButton,
+  EmptyState,
+  Field,
+  PageHeader,
+  Select,
+  StickySurface,
   SymbolIcon,
 } from "../ui";
-import ReportContentButton from "../components/ReportContentButton";
+import DirectoryListingCard from "../components/cards/DirectoryListingCard";
+import ExploreProjectCard from "../components/cards/ExploreProjectCard";
 import {
   getCachedLocationOrigin,
   formatDistanceMiles,
@@ -25,6 +29,8 @@ import {
 } from "../utils/locationOrigin";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+const INITIAL_VISIBLE_ITEMS = 6;
+const LOAD_MORE_BATCH_SIZE = 50;
 
 // normalize urls (same spirit as ProjectDetail)
 function toUrl(raw) {
@@ -123,6 +129,8 @@ export default function Explore() {
   const [directoryLikeMap, setDirectoryLikeMap] = useState({});
   const [directoryLikeCounts, setDirectoryLikeCounts] = useState({});
   const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
+  const [visibleProjectCount, setVisibleProjectCount] = useState(INITIAL_VISIBLE_ITEMS);
+  const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(INITIAL_VISIBLE_ITEMS);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -651,6 +659,27 @@ export default function Explore() {
   }, [filters]);
 
   const hasActiveFilters = activeFilterBadges.length > 0;
+  const visibleProjects = useMemo(
+    () => filteredProjects.slice(0, visibleProjectCount),
+    [filteredProjects, visibleProjectCount],
+  );
+  const visibleDirectoryListings = useMemo(
+    () => filteredDirectoryListings.slice(0, visibleDirectoryCount),
+    [filteredDirectoryListings, visibleDirectoryCount],
+  );
+  const remainingProjectCount = Math.max(
+    0,
+    filteredProjects.length - visibleProjectCount,
+  );
+  const remainingDirectoryCount = Math.max(
+    0,
+    filteredDirectoryListings.length - visibleDirectoryCount,
+  );
+
+  useEffect(() => {
+    setVisibleProjectCount(INITIAL_VISIBLE_ITEMS);
+    setVisibleDirectoryCount(INITIAL_VISIBLE_ITEMS);
+  }, [filters, debouncedLocationQuery]);
 
   const activeSearchValue =
     activeSearchField === "name"
@@ -693,9 +722,9 @@ export default function Explore() {
   if (loading) {
     return (
       <div>
-        <header className="flex min-h-14 items-center mb-1">
-          <SectionTitle className="!mb-0">Explore</SectionTitle>
-        </header>
+        <PageHeader eyebrow="Public marketplace" title="Explore">
+          Browse public projects, homeowner references, and approved local business listings.
+        </PageHeader>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
           {[...Array(6)].map((_, i) => (
             <Card key={i} className="overflow-hidden animate-pulse">
@@ -715,49 +744,57 @@ export default function Explore() {
   if (!projects.length && !directoryListings.length) {
     return (
       <div>
-        <header className="flex min-h-14 items-center mb-1">
-          <SectionTitle className="!mb-0">Explore</SectionTitle>
-        </header>
-        <Card className="p-6 text-center">
-          <p className="text-slate-600">No projects yet.</p>
-          {authed && (
-            <div className="mt-3">
+        <PageHeader eyebrow="Public marketplace" title="Explore">
+          Browse public projects, homeowner references, and approved local business listings.
+        </PageHeader>
+        <EmptyState
+          icon="search"
+          title="No projects yet."
+          action={
+            authed ? (
               <GhostButton onClick={() => navigate("/dashboard")}>
-                Create your first project →
+                Create your first project
               </GhostButton>
-            </div>
-          )}
-        </Card>
+            ) : null
+          }
+          className="mt-5"
+        >
+          Public projects and approved local listings will appear here.
+        </EmptyState>
       </div>
     );
   }
 
   return (
     <div>
-      <header className="flex min-h-14 items-center mb-1">
-        <SectionTitle className="!mb-0">Explore</SectionTitle>
-      </header>
+      <PageHeader eyebrow="Public marketplace" title="Explore" className="mb-5">
+        Browse public projects, homeowner references, and approved local business listings.
+      </PageHeader>
 
       {/* 🔍 Filter bar */}
-      <Card className="mb-4 p-4">
+      <StickySurface className="mb-5 p-5 sm:p-6">
         <div>
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-950">Search and filter</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Narrow results by project, location, size, or budget.
+              </p>
+            </div>
+          </div>
           <div className="flex flex-wrap items-end gap-3">
-            <div className="w-full sm:w-44">
-              <div className="mb-1 text-xs font-medium text-slate-500">
-                Search by
-              </div>
-
+            <Field label="Search by" className="w-full sm:w-44">
               <div className="relative">
-                <select
+                <Select
                   value={activeSearchField}
                   onChange={(e) => setActiveSearchField(e.target.value)}
-                  className="h-10 w-full appearance-none rounded-xl border border-slate-300 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  className="h-10 appearance-none pr-10 text-slate-700"
                 >
                   <option value="name">Project name</option>
                   <option value="location">Location</option>
                   <option value="sqf">Sqf</option>
                   <option value="budget">Budget</option>
-                </select>
+                </Select>
 
                 {/* Custom arrow */}
                 <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
@@ -777,12 +814,9 @@ export default function Explore() {
                   </svg>
                 </div>
               </div>
-            </div>
-            <div className="min-w-[280px] flex-1">
-              <div className="mb-1 text-xs font-medium text-slate-500">
-                Search project
-              </div>
-              <div className="flex h-10 w-full items-center rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-within:border-slate-500 focus-within:ring-2 focus-within:ring-slate-200">
+            </Field>
+            <Field label="Search project" className="min-w-[280px] flex-1">
+              <div className="flex h-10 w-full items-center rounded-lg border border-slate-300 bg-white px-3 shadow-xs transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200">
                 <span className="mr-1 shrink-0 whitespace-nowrap text-sm font-semibold text-slate-700">
                   {activeSearchLabel}:
                 </span>
@@ -805,7 +839,7 @@ export default function Explore() {
                   className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
                 />
               </div>
-            </div>
+            </Field>
 
             <Button
               type="button"
@@ -815,7 +849,7 @@ export default function Explore() {
                 "h-10 whitespace-nowrap " +
                 (hasActiveFilters
                   ? "bg-slate-950 text-white hover:bg-slate-800"
-                  : "border border-slate-100 bg-slate-50 text-slate-300 hover:opacity-100")
+                  : "border border-slate-200 bg-slate-50 text-slate-300 shadow-xs hover:bg-slate-50")
               }
             >
               Clear filters
@@ -844,188 +878,75 @@ export default function Explore() {
             of {projects.length + directoryListings.length} items
           </div>
         </div>
-      </Card>
+      </StickySurface>
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-        {filteredProjects.map((p) => {
+        {visibleProjects.map((p) => {
           const pack = buildThumbPack(p);
-          const coverUrl = pack.cover;
-
           const isReferenceGallery = p._kind === "homeowner_reference_gallery";
           const saved = !!favMap[p.id];
           const canSave = authed && !isOwner(p) && !isReferenceGallery;
           const liked = !!likeMap[p.id];
           const likeCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
 
-          const card = (
-            <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
-              {/* Cover banner */}
-              {coverUrl ? (
-                <div className="relative h-44 w-full bg-slate-200">
-                  <img
-                    src={coverUrl}
-                    alt={p.title || "project cover"}
-                    className="block h-full w-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-                </div>
-              ) : pack.thumbs.length ? (
-                <div className="relative">
-                  <div
-                    className="grid gap-1 bg-slate-50 p-1"
-                    style={{
-                      gridTemplateColumns: `repeat(${Math.min(
-                        3,
-                        pack.thumbs.length,
-                      )}, 1fr)`,
-                    }}
-                  >
-                    {pack.thumbs.map((item, i) => (
-                      <div
-                        key={(item.thumb || item.url) + i}
-                        className="relative h-24 overflow-hidden rounded-md bg-slate-100"
-                      >
-                        <img
-                          src={item.thumb || item.url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                        {item.mediaType === "video" ? (
-                          <span className="absolute inset-0 flex items-center justify-center text-white">
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60">
-                              <SymbolIcon
-                                name="play_arrow"
-                                fill={1}
-                                className="text-[22px]"
-                              />
-                            </span>
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="relative flex h-44 w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
-                  No media
-                </div>
-              )}
-
-              <div className="p-4">
-                <div className="mb-1 flex items-center gap-2">
-                  <div className="truncate text-base font-semibold">
-                    {p.title}
-                  </div>
-                  {p.category ? <Badge>{p.category}</Badge> : null}
-                </div>
-
-                <div className="line-clamp-2 text-sm text-slate-700">
-                  {p.summary || <span className="opacity-60">No summary</span>}
-                </div>
-
-                <div className="mt-2 text-xs text-slate-500">
-                  {isReferenceGallery
-                    ? `${p.reference_count || pack.thumbs.length} reference image${Number(p.reference_count || pack.thumbs.length) === 1 ? "" : "s"}`
-                    : `by ${p.owner_username}`}
-                </div>
-
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  {isReferenceGallery ? (
-                    <span className="inline-flex rounded-full px-2 py-1 font-medium text-slate-700">
-                      View profile
-                    </span>
-                  ) : canSave ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                      onClick={(e) => toggleLike(e, p)}
-                      disabled={likeBusyId === p.id}
-                      aria-label={liked ? "Unlike project" : "Like project"}
-                      title={liked ? "Unlike project" : "Like project"}
-                    >
-                      <SymbolIcon
-                        name="favorite"
-                        fill={liked ? 1 : 0}
-                        className="text-[18px]"
-                      />
-                      <span>{likeCount}</span>
-                    </button>
-                  ) : (
-                    <div className="inline-flex items-center gap-1 rounded-full px-2 py-1">
-                      <SymbolIcon
-                        name="favorite"
-                        fill={liked ? 1 : 0}
-                        className="text-[18px]"
-                      />
-                      <span>{likeCount}</span>
-                    </div>
-                  )}
-
-                  <div className="inline-flex items-center gap-1.5">
-                    {authed && isOwner(p) && !isReferenceGallery ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                        aria-label="Edit project"
-                        title="Edit project"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          navigate(`/dashboard?edit=${p.id}`);
-                        }}
-                      >
-                        <SymbolIcon name="edit" className="text-[20px]" />
-                      </button>
-                    ) : canSave ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                        onClick={(e) => toggleFavorite(e, p)}
-                        disabled={favBusyId === p.id}
-                        aria-label={saved ? "Unsave project" : "Save project"}
-                        title={saved ? "Unsave project" : "Save project"}
-                      >
-                        <SymbolIcon
-                          name="bookmark"
-                          fill={saved ? 1 : 0}
-                          className="text-[20px]"
-                        />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          );
-
           return (
-            <Link
+            <ExploreProjectCard
               key={p.id}
+              project={p}
+              pack={pack}
               to={isReferenceGallery ? p.profile_url : `/projects/${p.id}`}
-              className="block text-inherit no-underline"
-            >
-              {card}
-            </Link>
+              isReferenceGallery={isReferenceGallery}
+              canSave={canSave}
+              saved={saved}
+              liked={liked}
+              likeCount={likeCount}
+              likeBusy={likeBusyId === p.id}
+              favoriteBusy={favBusyId === p.id}
+              canEdit={authed && isOwner(p) && !isReferenceGallery}
+              onLike={(e) => toggleLike(e, p)}
+              onFavorite={(e) => toggleFavorite(e, p)}
+              onEdit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate(`/dashboard?edit=${p.id}`);
+              }}
+            />
           );
         })}
       </div>
+      {remainingProjectCount > 0 ? (
+        <div className="mt-6 flex justify-center">
+          <GhostButton
+            type="button"
+            onClick={() =>
+              setVisibleProjectCount((count) =>
+                Math.min(count + LOAD_MORE_BATCH_SIZE, filteredProjects.length),
+              )
+            }
+          >
+            Show more projects
+            <span className="text-slate-400">
+              ({Math.min(LOAD_MORE_BATCH_SIZE, remainingProjectCount)} more)
+            </span>
+          </GhostButton>
+        </div>
+      ) : null}
       {directoryListings.length > 0 ? (
         <div className="mt-8 border-t border-slate-200 pt-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
                 Local business/contractors directory
               </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Approved local listings appear separately from registered project cards.
+              </p>
             </div>
           </div>
 
           {filteredDirectoryListings.length > 0 ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-              {filteredDirectoryListings.map((listing) => {
-                const specialties = Array.isArray(listing.specialties)
-                  ? listing.specialties
-                  : [];
-                const visibleSpecialties = specialties.slice(0, 4);
+              {visibleDirectoryListings.map((listing) => {
                 const liked = !!directoryLikeMap[listing.id];
                 const likeCount = Number(
                   directoryLikeCounts[listing.id] ?? listing.like_count ?? 0,
@@ -1034,123 +955,43 @@ export default function Explore() {
                   listing.distance_miles,
                 );
                 return (
-                  <Card
+                  <DirectoryListingCard
                     key={`directory-${listing.id}`}
-                    className="flex min-h-[240px] flex-col rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-base font-semibold text-slate-950">
-                          {listing.business_name}
-                        </h3>
-
-                        {listing.location ? (
-                          <div className="mt-1 text-sm font-medium text-slate-500">
-                            {listing.location}
-                          </div>
-                        ) : null}
-                        {distanceLabel ? (
-                          <div className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                            {distanceLabel}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="group relative shrink-0">
-                        <ReportContentButton
-                          targetType="business_directory_listing"
-                          targetId={listing.id}
-                          subject={
-                            listing.business_name ||
-                            "Business directory listing"
-                          }
-                          label={
-                            <SymbolIcon name="flag" className="text-[16px]" />
-                          }
-                          title="Report listing"
-                          ariaLabel="Report listing"
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                        />
-                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl bg-slate-950 p-3 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                          Business information may be sourced from publicly
-                          available information. Business owners may request
-                          edits or removal.
-                        </div>
-                      </div>
-                    </div>
-
-                    {visibleSpecialties.length > 0 ? (
-                      <div className="mt-5 flex flex-wrap gap-2.5">
-                        {visibleSpecialties.map((specialty) => (
-                          <span
-                            key={specialty}
-                            className="rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1.5 text-xs font-normal text-slate-950"
-                          >
-                            {specialty}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {listing.phone_number ? (
-                      <a
-                        href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
-                      >
-                        <span className="text-slate-950">📞</span>
-                        <span>{listing.phone_number}</span>
-                      </a>
-                    ) : null}
-
-                    <div className="mt-auto flex items-center justify-between gap-3 pt-5 text-xs text-slate-500">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                        onClick={(e) => toggleDirectoryLike(e, listing)}
-                        disabled={directoryLikeBusyId === listing.id}
-                        aria-label={
-                          liked
-                            ? "Unlike directory listing"
-                            : "Like directory listing"
-                        }
-                        title={
-                          liked
-                            ? "Unlike directory listing"
-                            : "Like directory listing"
-                        }
-                      >
-                        <SymbolIcon
-                          name="favorite"
-                          fill={liked ? 1 : 0}
-                          className="text-[18px]"
-                        />
-                        <span>{likeCount}</span>
-                      </button>
-
-                      {listing.website ? (
-                        <a
-                          href={listing.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center justify-end text-sm font-semibold text-blue-500 hover:text-blue-900 hover:underline"
-                        >
-                          Visit Website
-                        </a>
-                      ) : (
-                        <span className="text-xs text-slate-400">
-                          Reviewed listing
-                        </span>
-                      )}
-                    </div>
-                  </Card>
+                    listing={listing}
+                    distanceLabel={distanceLabel}
+                    liked={liked}
+                    likeCount={likeCount}
+                    likeBusy={directoryLikeBusyId === listing.id}
+                    onLike={(e) => toggleDirectoryLike(e, listing)}
+                  />
                 );
               })}
             </div>
           ) : (
-            <Card className="p-5 text-sm text-slate-500">
+            <EmptyState icon="search" title="No matching directory listings.">
               No approved directory listings match this search.
-            </Card>
+            </EmptyState>
           )}
+          {remainingDirectoryCount > 0 ? (
+            <div className="mt-6 flex justify-center">
+              <GhostButton
+                type="button"
+                onClick={() =>
+                  setVisibleDirectoryCount((count) =>
+                    Math.min(
+                      count + LOAD_MORE_BATCH_SIZE,
+                      filteredDirectoryListings.length,
+                    ),
+                  )
+                }
+              >
+                Show more businesses
+                <span className="text-slate-400">
+                  ({Math.min(LOAD_MORE_BATCH_SIZE, remainingDirectoryCount)} more)
+                </span>
+              </GhostButton>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

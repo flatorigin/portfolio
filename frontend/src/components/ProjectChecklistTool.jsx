@@ -203,7 +203,7 @@ function FieldControl({ field, value, onChange }) {
       <select
         value={value || ""}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
       >
         <option value="">Choose</option>
         {options.map((option) => (
@@ -335,9 +335,10 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
   return (
     <div className="bg-[#FBF9F7] text-slate-900">
       <Container className="py-8 sm:py-12">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-8 rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <Badge className="border-[#E4E6EE] bg-[#F6F7FB] font-semibold uppercase tracking-[0.12em] text-slate-600">
+            <Badge className="border-slate-200 bg-slate-100 font-semibold uppercase tracking-[0.12em] text-slate-600">
               Free public tool
             </Badge>
             <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
@@ -350,16 +351,17 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
             </p>
           </div>
           <div className="flex gap-2">
-            <Link to={isContractor ? "/project-check/homeowner" : "/project-check/contractor"} className="inline-flex h-10 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <Link to={isContractor ? "/project-check/homeowner" : "/project-check/contractor"} className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-xs transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200">
               {isContractor ? "Homeowner check" : "Contractor check"}
             </Link>
           </div>
+          </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-5">
-            <Card className="p-5">
-              <div className="mb-4">
+            <Card className="p-5 sm:p-6">
+              <div className="mb-5 border-b border-slate-100 pb-4">
                 <h2 className="text-lg font-semibold text-slate-950">
                   {isContractor ? "Lead basics" : "Project basics"}
                 </h2>
@@ -384,8 +386,8 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
             </Card>
 
             {!isContractor ? (
-              <Card className="p-5">
-                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Card className="p-5 sm:p-6">
+                <div className="mb-5 flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-slate-950">
                       {activeCategory.name} details
@@ -413,7 +415,7 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
               </Card>
             ) : null}
 
-            <Card className="p-5">
+            <Card className="p-5 sm:p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-950">
@@ -429,7 +431,7 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
               </div>
               <ul className="mt-4 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
                 {questionList.map((question) => (
-                  <li key={question} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <li key={question} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
                     {question}
                   </li>
                 ))}
@@ -438,7 +440,8 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
           </div>
 
           <aside className="lg:sticky lg:top-20 lg:self-start">
-            <Card className="p-5">
+            <Card className="overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/70 p-5">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                 {isContractor ? "Lead clarity score" : "Project readiness score"}
               </div>
@@ -449,6 +452,8 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
                 <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${score}%` }} />
               </div>
+              </div>
+              <div className="p-5">
               <p className="mt-4 text-sm leading-6 text-slate-700">{scoreMessage(mode, score)}</p>
 
               <div className="mt-5 border-t border-slate-200 pt-4">
@@ -495,10 +500,11 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
               </div>
 
               {notice ? (
-                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                   {notice}
                 </div>
               ) : null}
+              </div>
             </Card>
 
             {generatedMessage ? (
@@ -506,7 +512,7 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
                 <div className="text-sm font-semibold text-slate-950">
                   Response message
                 </div>
-                <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">
                   {generatedMessage}
                 </pre>
               </Card>

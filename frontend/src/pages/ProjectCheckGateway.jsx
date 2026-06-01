@@ -26,10 +26,10 @@ export default function ProjectCheckGateway() {
       <Container className="py-8 sm:py-12">
         <section className="mx-auto flex min-h-[calc(100vh-180px)] max-w-5xl flex-col justify-center">
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               Free public tools
             </p>
-            <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-slate-950 sm:text-5xl">
+            <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-5xl">
               What do you want to check?
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-slate-600">
@@ -40,18 +40,18 @@ export default function ProjectCheckGateway() {
           <div className="mt-10 grid gap-5 md:grid-cols-2">
             {checkCards.map((card) => (
               <Link key={card.to} to={card.to} className="group block text-inherit no-underline">
-                <Card className="flex min-h-[310px] flex-col p-6 transition hover:-translate-y-0.5 hover:shadow-md sm:p-8">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                <Card className="flex min-h-[310px] flex-col p-6 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md sm:p-8">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 shadow-xs">
                     <SymbolIcon name={card.icon} className="text-[24px]" />
                   </div>
-                  <p className="mt-8 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                  <p className="mt-8 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                     {card.label}
                   </p>
-                  <h2 className="mt-3 text-2xl font-bold leading-tight tracking-tight text-slate-950">
+                  <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-tight text-slate-950">
                     {card.title}
                   </h2>
                   <p className="mt-4 text-sm leading-6 text-slate-600">{card.text}</p>
-                  <span className="mt-auto inline-flex h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-medium text-white transition group-hover:opacity-90">
+                  <span className="mt-auto inline-flex h-11 w-full items-center justify-center rounded-lg bg-slate-950 px-4 text-sm font-medium text-white shadow-xs transition group-hover:bg-slate-800">
                     {card.cta}
                   </span>
                 </Card>
