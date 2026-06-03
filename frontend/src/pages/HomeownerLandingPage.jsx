@@ -99,55 +99,22 @@ function LandingNav() {
   );
 }
 
-function ProjectPreview() {
-  const jobs = [
-    {
-      title: "Kitchen Renovation",
-      location: "Media, PA",
-      budget: "$15,000 - $25,000",
-      image: kitchenImage,
-    },
-    {
-      title: "Deck Rebuild",
-      location: "Media, PA",
-      budget: "$8,000 - $12,000",
-      image: deckImage,
-    },
-  ];
-
+function HeroVisual() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-          <SymbolIcon name="folder_open" className="text-[18px] text-slate-600" />
-        </span>
-        <span className="text-sm font-semibold text-slate-700">Your Projects</span>
+    <div className="group relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200">
+      <img
+        src={kitchenImage}
+        alt="Home renovation project"
+        className="h-full w-full object-cover opacity-90"
+      />
+      <div className="absolute inset-0 flex items-center justify-center bg-slate-900/30 transition group-hover:bg-slate-900/40">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 shadow-lg transition group-hover:scale-105">
+          <SymbolIcon name="play_arrow" className="ml-1 text-[32px] text-slate-900" />
+        </div>
       </div>
-      <div className="grid gap-4">
-        {jobs.map((job) => (
-          <div
-            key={job.title}
-            className="grid grid-cols-[100px_minmax(0,1fr)] gap-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition hover:border-slate-200 hover:bg-white"
-          >
-            <img
-              src={job.image}
-              alt=""
-              className="h-20 w-full rounded-lg object-cover"
-            />
-            <div className="flex min-w-0 flex-col justify-center">
-              <div className="truncate text-sm font-semibold text-slate-900">
-                {job.title}
-              </div>
-              <div className="mt-1.5 flex items-center gap-1 text-xs text-slate-500">
-                <SymbolIcon name="location_on" className="text-[14px]" />
-                {job.location}
-              </div>
-              <div className="mt-2 inline-flex w-fit rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                {job.budget}
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="absolute bottom-4 left-4 right-4 rounded-lg bg-white/95 p-3 backdrop-blur-sm">
+        <p className="text-xs font-medium text-slate-600">See how FlatOrigin works</p>
+        <p className="mt-0.5 text-sm font-semibold text-slate-900">2 min overview</p>
       </div>
     </div>
   );
@@ -162,16 +129,18 @@ function FeatureStrip() {
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {features.map(([icon, title, copy]) => (
-        <div key={title} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
-            <SymbolIcon name={icon} className="text-[22px]" />
-          </span>
-          <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">{copy}</p>
-        </div>
-      ))}
+    <div className="rounded-2xl bg-slate-900 px-6 py-10 sm:px-10 sm:py-12">
+      <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+        {features.map(([icon, title, copy]) => (
+          <div key={title} className="text-center lg:text-left">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 text-white">
+              <SymbolIcon name={icon} className="text-[24px]" />
+            </span>
+            <h3 className="mt-4 text-base font-semibold text-white">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">{copy}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -250,7 +219,7 @@ export default function HomeownerLandingPage() {
                 </Link>
               </div>
             </div>
-            <ProjectPreview />
+            <HeroVisual />
           </section>
 
           <section id="how-it-works" className="mt-16">
@@ -278,23 +247,23 @@ export default function HomeownerLandingPage() {
             </div>
           </section>
 
-          <section className="mt-16">
+          <section className="mt-16 rounded-2xl bg-slate-100 px-6 py-10 sm:px-10 sm:py-12">
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">Helpful before you hire</h2>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {guides.map(([icon, title, copy]) => (
                 <Link
                   key={title}
                   to="/guides"
-                  className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="group"
                 >
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition group-hover:bg-slate-900 group-hover:text-white">
-                    <SymbolIcon name={icon} className="text-[20px]" />
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm transition group-hover:bg-slate-900 group-hover:text-white">
+                    <SymbolIcon name={icon} className="text-[22px]" />
                   </span>
-                  <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
+                  <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-slate-600">{copy}</p>
-                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-900">
+                  <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-slate-900 transition group-hover:gap-2">
                     Read Guide
-                    <SymbolIcon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-0.5" />
+                    <SymbolIcon name="arrow_forward" className="text-[16px]" />
                   </span>
                 </Link>
               ))}
