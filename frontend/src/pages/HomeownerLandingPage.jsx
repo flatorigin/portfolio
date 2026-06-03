@@ -111,11 +111,11 @@ function FeatureStrip() {
     <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
       {features.map(([icon, title, copy]) => (
         <div key={title}>
-          <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white">
-            <SymbolIcon name={icon} className="text-[22px]" />
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-white">
+            <SymbolIcon name={icon} className="text-[20px]" />
           </span>
-          <h3 className="mt-5 text-base font-semibold text-slate-900">{title}</h3>
-          <p className="mt-2 text-[15px] leading-relaxed text-slate-500">{copy}</p>
+          <h3 className="mt-4 text-lg font-semibold text-slate-900">{title}</h3>
+          <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy}</p>
         </div>
       ))}
     </div>
@@ -202,16 +202,20 @@ export default function HomeownerLandingPage() {
             </button>
           </section>
 
-          <section id="how-it-works" className="mt-20 rounded-3xl bg-slate-50 px-6 py-12 sm:px-10 sm:py-16">
-            <h2 className="mb-10 text-center text-2xl font-bold tracking-tight text-slate-900">How it works</h2>
-            <FeatureStrip />
+          <section id="how-it-works" className="mt-24 rounded-3xl bg-slate-50 px-6 py-14 sm:px-10 sm:py-20">
+            <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-400">How it works</p>
+            <h2 className="mx-auto mt-3 max-w-lg text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Everything you need to plan with confidence</h2>
+            <div className="mt-14">
+              <FeatureStrip />
+            </div>
           </section>
 
-          <section className="mt-20">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+          <section className="mt-24">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Inspiration</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
               Projects people hire for
             </h2>
-            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
               {projectCards.map((project) => (
                 <Link
                   key={project.title}
@@ -226,44 +230,46 @@ export default function HomeownerLandingPage() {
                     />
                   </div>
                   <div className="mt-3">
-                    <div className="font-semibold text-slate-900">{project.title}</div>
-                    <div className="mt-0.5 text-sm text-slate-500">{project.location}</div>
+                    <div className="text-[15px] font-semibold text-slate-900">{project.title}</div>
+                    <div className="mt-0.5 text-xs text-slate-400">{project.location}</div>
                   </div>
                 </Link>
               ))}
             </div>
           </section>
 
-          <section className="mt-20">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Helpful before you hire</h2>
-            <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="mt-24">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Resources</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Helpful before you hire</h2>
+            <div className="mt-10 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
               {guides.map(([icon, title, copy]) => (
                 <Link
                   key={title}
                   to="/guides"
                   className="group"
                 >
-                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition group-hover:bg-slate-900 group-hover:text-white">
-                    <SymbolIcon name={icon} className="text-[22px]" />
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition group-hover:bg-slate-900 group-hover:text-white">
+                    <SymbolIcon name={icon} className="text-[18px]" />
                   </span>
-                  <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
-                  <p className="mt-2 text-[15px] leading-relaxed text-slate-500">{copy}</p>
-                  <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900 transition group-hover:gap-2.5">
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900">{title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy}</p>
+                  <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition group-hover:text-slate-900">
                     Read guide
-                    <SymbolIcon name="arrow_forward" className="text-[16px]" />
+                    <SymbolIcon name="arrow_forward" className="text-[14px]" />
                   </span>
                 </Link>
               ))}
             </div>
           </section>
 
-          <section className="mt-20 rounded-3xl bg-slate-900 p-8 sm:p-12">
+          <section className="mt-24 rounded-3xl bg-slate-900 p-10 sm:p-16">
             <div className="flex flex-col items-center text-center">
-              <h2 className="max-w-md text-3xl font-bold text-white">Ready to start your next project?</h2>
-              <p className="mt-4 max-w-md text-base text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Get started</p>
+              <h2 className="mt-4 max-w-md text-3xl font-bold text-white sm:text-4xl">Ready to start your next project?</h2>
+              <p className="mt-4 max-w-sm text-slate-400">
                 Create your free account and bring your project to life.
               </p>
-              <Link to={primaryCtaPath} className="mt-8">
+              <Link to={primaryCtaPath} className="mt-10">
                 <Button className="h-12 bg-white px-8 text-base text-slate-900 hover:bg-slate-100">
                   {authed
                     ? onboardingComplete
@@ -272,9 +278,9 @@ export default function HomeownerLandingPage() {
                     : "Create Free Account"}
                 </Button>
               </Link>
-              <p className="mt-4 text-sm text-slate-400">
+              <p className="mt-5 text-sm text-slate-500">
                 {authed ? "Ready to continue? " : "Already have an account? "}
-                <Link to={authed ? "/explore" : "/login"} className="font-medium text-white hover:underline">
+                <Link to={authed ? "/explore" : "/login"} className="font-medium text-slate-300 hover:text-white">
                   {authed ? "Explore projects" : "Sign in"}
                 </Link>
               </p>
