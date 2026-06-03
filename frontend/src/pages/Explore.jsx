@@ -21,6 +21,76 @@ import {
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 
+// Sample data for preview (remove in production)
+const SAMPLE_PROJECTS = [
+  {
+    id: "sample-1",
+    title: "Stairs Runner Installation",
+    summary: "Custom carpet runner over existing hardwood stairs for improved safety and appearance.",
+    category: "Flooring",
+    owner_username: "NeyFlooring",
+    location: "Media, PA",
+    like_count: 12,
+    view_count: 234,
+    images: [{ url: "https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-2",
+    title: "Deck Refacing Project",
+    summary: "Complete deck reface with Trex composite decking, adding 200 sq ft of usable space.",
+    category: "Building",
+    owner_username: "babak",
+    location: "West Chester, PA",
+    like_count: 8,
+    view_count: 156,
+    images: [{ url: "https://images.unsplash.com/photo-1591825729269-caeb344f6df2?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-3",
+    title: "Garage Floor Coating",
+    summary: "High-performance Polyaspartic coating system for durable, showroom-finish.",
+    category: "Concrete",
+    owner_username: "Daltongrochowski",
+    location: "Philadelphia, PA",
+    like_count: 15,
+    view_count: 312,
+    images: [{ url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-4",
+    title: "Interior Painting",
+    summary: "Full interior repaint with premium low-VOC paint, including trim and ceilings.",
+    category: "Painting",
+    owner_username: "ProPainters",
+    location: "Wilmington, DE",
+    like_count: 22,
+    view_count: 489,
+    images: [{ url: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-5",
+    title: "Backyard Landscaping",
+    summary: "Complete backyard transformation with patio, native plants, and irrigation system.",
+    category: "Landscaping",
+    owner_username: "GreenThumb",
+    location: "Newark, DE",
+    like_count: 31,
+    view_count: 567,
+    images: [{ url: "https://images.unsplash.com/photo-1558904541-efa843a96f01?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-6",
+    title: "Bathroom Renovation",
+    summary: "Modern bathroom remodel with walk-in shower, floating vanity, and heated floors.",
+    category: "Building",
+    owner_username: "ModernBaths",
+    location: "King of Prussia, PA",
+    like_count: 45,
+    view_count: 823,
+    images: [{ url: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=600&h=400&fit=crop" }],
+  },
+];
+
 // normalize urls (same spirit as ProjectDetail)
 function toUrl(raw) {
   if (!raw) return "";
@@ -411,7 +481,7 @@ export default function Explore() {
         }));
         const exploreItems = [...referenceCards, ...exploreProjects];
 
-        setProjects(exploreItems);
+        setProjects(exploreItems.length ? exploreItems : SAMPLE_PROJECTS);
         const directoryItems = Array.isArray(directoryData)
           ? directoryData
           : [];
@@ -443,7 +513,7 @@ export default function Explore() {
       } catch (e) {
         console.error("[Explore] projects fetch failed", e?.response || e);
         if (alive) {
-          setProjects([]);
+          setProjects(SAMPLE_PROJECTS);
           setDirectoryListings([]);
         }
       } finally {
