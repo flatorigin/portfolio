@@ -8,12 +8,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import {
-  SectionTitle,
-  Badge,
-  Card,
   Button,
-  Input,
-  GhostButton,
   SymbolIcon,
 } from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
@@ -693,19 +688,20 @@ export default function Explore() {
   if (loading) {
     return (
       <div>
-        <header className="flex min-h-14 items-center mb-1">
-          <SectionTitle className="!mb-0">Explore</SectionTitle>
+        <header className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
+          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
         </header>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
           {[...Array(6)].map((_, i) => (
-            <Card key={i} className="overflow-hidden animate-pulse">
-              <div className="h-40 bg-slate-200" />
-              <div className="space-y-2 p-4">
-                <div className="h-4 w-2/3 rounded bg-slate-200" />
-                <div className="h-3 w-full rounded bg-slate-200" />
-                <div className="h-3 w-1/2 rounded bg-slate-200" />
+            <div key={i} className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse">
+              <div className="aspect-[4/3] bg-slate-200" />
+              <div className="space-y-3 p-4">
+                <div className="h-5 w-2/3 rounded bg-slate-200" />
+                <div className="h-4 w-full rounded bg-slate-200" />
+                <div className="h-4 w-1/2 rounded bg-slate-200" />
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       </div>
@@ -715,138 +711,87 @@ export default function Explore() {
   if (!projects.length && !directoryListings.length) {
     return (
       <div>
-        <header className="flex min-h-14 items-center mb-1">
-          <SectionTitle className="!mb-0">Explore</SectionTitle>
+        <header className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
+          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
         </header>
-        <Card className="p-6 text-center">
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <p className="text-slate-600">No projects yet.</p>
           {authed && (
-            <div className="mt-3">
-              <GhostButton onClick={() => navigate("/dashboard")}>
-                Create your first project →
-              </GhostButton>
+            <div className="mt-4">
+              <Button onClick={() => navigate("/dashboard")}>
+                Create your first project
+              </Button>
             </div>
           )}
-        </Card>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <header className="flex min-h-14 items-center mb-1">
-        <SectionTitle className="!mb-0">Explore</SectionTitle>
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
+        <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
       </header>
 
-      {/* 🔍 Filter bar */}
-      <Card className="mb-4 p-4">
-        <div>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="w-full sm:w-44">
-              <div className="mb-1 text-xs font-medium text-slate-500">
-                Search by
-              </div>
-
-              <div className="relative">
-                <select
-                  value={activeSearchField}
-                  onChange={(e) => setActiveSearchField(e.target.value)}
-                  className="h-10 w-full appearance-none rounded-xl border border-slate-300 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                >
-                  <option value="name">Project name</option>
-                  <option value="location">Location</option>
-                  <option value="sqf">Sqf</option>
-                  <option value="budget">Budget</option>
-                </select>
-
-                {/* Custom arrow */}
-                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 text-slate-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-            <div className="min-w-[280px] flex-1">
-              <div className="mb-1 text-xs font-medium text-slate-500">
-                Search project
-              </div>
-              <div className="flex h-10 w-full items-center rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-within:border-slate-500 focus-within:ring-2 focus-within:ring-slate-200">
-                <span className="mr-1 shrink-0 whitespace-nowrap text-sm font-semibold text-slate-700">
-                  {activeSearchLabel}:
-                </span>
-                <input
-                  type={
-                    activeSearchField === "sqf" ||
-                    activeSearchField === "budget"
-                      ? "number"
-                      : "text"
-                  }
-                  inputMode={
-                    activeSearchField === "sqf" ||
-                    activeSearchField === "budget"
-                      ? "numeric"
-                      : "text"
-                  }
-                  value={activeSearchValue}
-                  onChange={updateActiveSearch}
-                  placeholder={activeSearchPlaceholder}
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
-                />
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              disabled={!hasActiveFilters}
-              onClick={clearFilters}
-              className={
-                "h-10 whitespace-nowrap " +
-                (hasActiveFilters
-                  ? "bg-slate-950 text-white hover:bg-slate-800"
-                  : "border border-slate-100 bg-slate-50 text-slate-300 hover:opacity-100")
-              }
-            >
-              Clear filters
-            </Button>
-          </div>
-
-          {activeFilterBadges.length ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {activeFilterBadges.map((filter) => (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={filter.clear}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-white hover:text-slate-950"
-                  title={`Remove ${filter.label}`}
-                >
-                  <span className="truncate">{filter.label}</span>
-                  <SymbolIcon name="close" className="text-[15px]" />
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="mt-2 text-xs text-slate-500">
-            Showing {filteredProjects.length + filteredDirectoryListings.length}{" "}
-            of {projects.length + directoryListings.length} items
-          </div>
+      {/* Search bar */}
+      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <SymbolIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400" />
+          <input
+            type="text"
+            value={filters.name}
+            onChange={(e) => setFilters((prev) => ({ ...prev, name: e.target.value }))}
+            placeholder="Search projects by name, category, or location..."
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100"
+          />
         </div>
-      </Card>
+        <button
+          type="button"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          <SymbolIcon name="tune" className="text-[18px]" />
+          Filters
+        </button>
+      </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+      {/* Category pills */}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={clearFilters}
+          className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+            !hasActiveFilters
+              ? "bg-slate-900 text-white"
+              : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+          }`}
+        >
+          All
+        </button>
+        {["Flooring", "Building", "Painting", "Concrete", "Landscaping", "Plumbing", "Electrical", "Cleaning"].map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setFilters((prev) => ({ ...prev, name: cat }))}
+            className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+              filters.name.toLowerCase() === cat.toLowerCase()
+                ? "bg-slate-900 text-white"
+                : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* Results count */}
+      <p className="mb-4 text-sm text-slate-500">
+        Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
+      </p>
+
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
@@ -856,146 +801,115 @@ export default function Explore() {
           const canSave = authed && !isOwner(p) && !isReferenceGallery;
           const liked = !!likeMap[p.id];
           const likeCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
+          const viewCount = Number(p.view_count ?? 0);
 
           const card = (
-            <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
-              {/* Cover banner */}
-              {coverUrl ? (
-                <div className="relative h-44 w-full bg-slate-200">
+            <div className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md">
+              {/* Cover image with category badge */}
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                {coverUrl ? (
                   <img
                     src={coverUrl}
                     alt={p.title || "project cover"}
-                    className="block h-full w-full object-cover"
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-                </div>
-              ) : pack.thumbs.length ? (
-                <div className="relative">
-                  <div
-                    className="grid gap-1 bg-slate-50 p-1"
-                    style={{
-                      gridTemplateColumns: `repeat(${Math.min(
-                        3,
-                        pack.thumbs.length,
-                      )}, 1fr)`,
-                    }}
-                  >
-                    {pack.thumbs.map((item, i) => (
-                      <div
-                        key={(item.thumb || item.url) + i}
-                        className="relative h-24 overflow-hidden rounded-md bg-slate-100"
-                      >
-                        <img
-                          src={item.thumb || item.url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                        {item.mediaType === "video" ? (
-                          <span className="absolute inset-0 flex items-center justify-center text-white">
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60">
-                              <SymbolIcon
-                                name="play_arrow"
-                                fill={1}
-                                className="text-[22px]"
-                              />
-                            </span>
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
+                ) : pack.thumbs.length ? (
+                  <img
+                    src={pack.thumbs[0].thumb || pack.thumbs[0].url}
+                    alt={p.title || "project cover"}
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
+                    No image
                   </div>
-                </div>
-              ) : (
-                <div className="relative flex h-44 w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
-                  No media
-                </div>
-              )}
+                )}
+                {/* Category badge on image */}
+                {p.category ? (
+                  <span className="absolute left-3 top-3 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-slate-700 backdrop-blur-sm">
+                    {p.category}
+                  </span>
+                ) : null}
+              </div>
 
               <div className="p-4">
-                <div className="mb-1 flex items-center gap-2">
-                  <div className="truncate text-base font-semibold">
-                    {p.title}
+                {/* Title */}
+                <h3 className="font-semibold text-slate-900">{p.title}</h3>
+
+                {/* Description */}
+                <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500">
+                  {p.summary || "No description"}
+                </p>
+
+                {/* Divider */}
+                <div className="my-3 border-t border-slate-100" />
+
+                {/* Footer: author, location, likes, views */}
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <div className="flex items-center gap-1">
+                    <span>by</span>
+                    <span className="font-medium text-slate-700">{p.owner_username || "Unknown"}</span>
                   </div>
-                  {p.category ? <Badge>{p.category}</Badge> : null}
+                  {p.location ? (
+                    <div className="flex items-center gap-1">
+                      <SymbolIcon name="location_on" className="text-[14px]" />
+                      <span>{p.location}</span>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="line-clamp-2 text-sm text-slate-700">
-                  {p.summary || <span className="opacity-60">No summary</span>}
-                </div>
-
-                <div className="mt-2 text-xs text-slate-500">
-                  {isReferenceGallery
-                    ? `${p.reference_count || pack.thumbs.length} reference image${Number(p.reference_count || pack.thumbs.length) === 1 ? "" : "s"}`
-                    : `by ${p.owner_username}`}
-                </div>
-
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  {isReferenceGallery ? (
-                    <span className="inline-flex rounded-full px-2 py-1 font-medium text-slate-700">
-                      View profile
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-3">
+                    {canSave ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 transition hover:text-slate-700 disabled:opacity-50"
+                        onClick={(e) => toggleLike(e, p)}
+                        disabled={likeBusyId === p.id}
+                        aria-label={liked ? "Unlike project" : "Like project"}
+                      >
+                        <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[16px]" />
+                        <span>{likeCount}</span>
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[16px]" />
+                        <span>{likeCount}</span>
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1">
+                      <SymbolIcon name="visibility" className="text-[16px]" />
+                      <span>{viewCount}</span>
                     </span>
-                  ) : canSave ? (
+                  </div>
+
+                  {canSave ? (
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                      onClick={(e) => toggleLike(e, p)}
-                      disabled={likeBusyId === p.id}
-                      aria-label={liked ? "Unlike project" : "Like project"}
-                      title={liked ? "Unlike project" : "Like project"}
+                      className="inline-flex items-center justify-center rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                      onClick={(e) => toggleFavorite(e, p)}
+                      disabled={favBusyId === p.id}
+                      aria-label={saved ? "Unsave project" : "Save project"}
                     >
-                      <SymbolIcon
-                        name="favorite"
-                        fill={liked ? 1 : 0}
-                        className="text-[18px]"
-                      />
-                      <span>{likeCount}</span>
+                      <SymbolIcon name="bookmark" fill={saved ? 1 : 0} className="text-[18px]" />
                     </button>
-                  ) : (
-                    <div className="inline-flex items-center gap-1 rounded-full px-2 py-1">
-                      <SymbolIcon
-                        name="favorite"
-                        fill={liked ? 1 : 0}
-                        className="text-[18px]"
-                      />
-                      <span>{likeCount}</span>
-                    </div>
-                  )}
-
-                  <div className="inline-flex items-center gap-1.5">
-                    {authed && isOwner(p) && !isReferenceGallery ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                        aria-label="Edit project"
-                        title="Edit project"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          navigate(`/dashboard?edit=${p.id}`);
-                        }}
-                      >
-                        <SymbolIcon name="edit" className="text-[20px]" />
-                      </button>
-                    ) : canSave ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                        onClick={(e) => toggleFavorite(e, p)}
-                        disabled={favBusyId === p.id}
-                        aria-label={saved ? "Unsave project" : "Save project"}
-                        title={saved ? "Unsave project" : "Save project"}
-                      >
-                        <SymbolIcon
-                          name="bookmark"
-                          fill={saved ? 1 : 0}
-                          className="text-[20px]"
-                        />
-                      </button>
-                    ) : null}
-                  </div>
+                  ) : authed && isOwner(p) && !isReferenceGallery ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(`/dashboard?edit=${p.id}`);
+                      }}
+                      aria-label="Edit project"
+                    >
+                      <SymbolIcon name="edit" className="text-[18px]" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
-            </Card>
+            </div>
           );
 
           return (
