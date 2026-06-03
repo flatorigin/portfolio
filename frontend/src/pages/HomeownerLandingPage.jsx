@@ -68,29 +68,35 @@ function LandingNav() {
   }, [authed]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
-      <Container className="py-4">
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
+      <Container className="py-3">
         <nav className="flex items-center gap-6">
           <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-lg font-bold tracking-tight text-slate-900">
             FlatOrigin
           </Link>
           <div className="hidden items-center gap-1 md:flex">
-            <Link to="/explore" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+            <Link to="/explore" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
               Browse Projects
             </Link>
-            <Link to="/guides" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+            <a href="#how-it-works" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
+              How It Works
+            </a>
+            <Link to="/guides" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
               Guides
             </Link>
-            <a href="#how-it-works" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
-              How it works
-            </a>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             <Link
               to={authed ? "/dashboard" : "/login"}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+              className="text-sm text-slate-600 transition hover:text-slate-900"
             >
               {authed ? "Dashboard" : "Sign in"}
+            </Link>
+            <Link
+              to={authed ? "/onboarding/homeowner" : "/register?role=homeowner"}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              Get Started
             </Link>
           </div>
         </nav>
@@ -108,14 +114,14 @@ function FeatureStrip() {
   ];
 
   return (
-    <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
       {features.map(([icon, title, copy]) => (
-        <div key={title}>
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-white">
-            <SymbolIcon name={icon} className="text-[20px]" />
+        <div key={title} className="text-center">
+          <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
+            <SymbolIcon name={icon} className="text-[24px]" />
           </span>
-          <h3 className="mt-4 text-lg font-semibold text-slate-900">{title}</h3>
-          <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy}</p>
+          <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">{copy}</p>
         </div>
       ))}
     </div>
@@ -202,92 +208,88 @@ export default function HomeownerLandingPage() {
             </button>
           </section>
 
-          <section id="how-it-works" className="mt-24 rounded-3xl bg-slate-50 px-6 py-14 sm:px-10 sm:py-20">
-            <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-400">How it works</p>
-            <h2 className="mx-auto mt-3 max-w-lg text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Everything you need to plan with confidence</h2>
-            <div className="mt-14">
+          <section id="how-it-works" className="mt-16 border-y border-slate-200 bg-[#F6F5F1] py-16">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
+              <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
+            </div>
+            <div className="mx-auto mt-12 max-w-5xl px-4">
               <FeatureStrip />
             </div>
           </section>
 
-          <section className="mt-24">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Inspiration</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          <section className="mt-16">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Projects people hire for
             </h2>
-            <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
               {projectCards.map((project) => (
                 <Link
                   key={project.title}
                   to="/explore"
-                  className="group"
+                  className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md"
                 >
-                  <div className="aspect-[4/3] overflow-hidden rounded-xl">
+                  <div className="aspect-[4/3] overflow-hidden">
                     <img 
                       src={project.image} 
                       alt="" 
                       className="h-full w-full object-cover transition duration-300 group-hover:scale-105" 
                     />
                   </div>
-                  <div className="mt-3">
-                    <div className="text-[15px] font-semibold text-slate-900">{project.title}</div>
-                    <div className="mt-0.5 text-xs text-slate-400">{project.location}</div>
+                  <div className="p-4">
+                    <div className="font-semibold text-slate-900">{project.title}</div>
+                    <div className="mt-1 text-sm text-slate-500">{project.location}</div>
                   </div>
                 </Link>
               ))}
             </div>
           </section>
 
-          <section className="mt-24">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Resources</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Helpful before you hire</h2>
-            <div className="mt-10 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="mt-16">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Helpful before you hire</h2>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {guides.map(([icon, title, copy]) => (
                 <Link
                   key={title}
                   to="/guides"
-                  className="group"
+                  className="group rounded-xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
                 >
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition group-hover:bg-slate-900 group-hover:text-white">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-400">
                     <SymbolIcon name={icon} className="text-[18px]" />
                   </span>
-                  <h3 className="mt-4 text-lg font-semibold text-slate-900">{title}</h3>
+                  <h3 className="mt-3 font-semibold text-slate-900">{title}</h3>
                   <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy}</p>
-                  <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition group-hover:text-slate-900">
-                    Read guide
-                    <SymbolIcon name="arrow_forward" className="text-[14px]" />
-                  </span>
                 </Link>
               ))}
             </div>
           </section>
 
-          <section className="mt-24 rounded-3xl bg-slate-900 p-10 sm:p-16">
-            <div className="flex flex-col items-center text-center">
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Get started</p>
-              <h2 className="mt-4 max-w-md text-3xl font-bold text-white sm:text-4xl">Ready to start your next project?</h2>
-              <p className="mt-4 max-w-sm text-slate-400">
-                Create your free account and bring your project to life.
-              </p>
-              <Link to={primaryCtaPath} className="mt-10">
-                <Button className="h-12 bg-white px-8 text-base text-slate-900 hover:bg-slate-100">
-                  {authed
-                    ? onboardingComplete
-                      ? "Open Dashboard"
-                      : "Continue Homeowner Setup"
-                    : "Create Free Account"}
-                </Button>
-              </Link>
-              <p className="mt-5 text-sm text-slate-500">
-                {authed ? "Ready to continue? " : "Already have an account? "}
-                <Link to={authed ? "/explore" : "/login"} className="font-medium text-slate-300 hover:text-white">
-                  {authed ? "Explore projects" : "Sign in"}
-                </Link>
-              </p>
-            </div>
-          </section>
         </Container>
       </main>
+
+      <section className="bg-slate-900 py-16">
+        <Container>
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Ready to get started?</h2>
+            <p className="mt-3 max-w-md text-slate-400">
+              Join thousands of homeowners and contractors already using FlatOrigin.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link to={primaryCtaPath}>
+                <Button className="h-11 bg-white px-6 text-slate-900 hover:bg-slate-100">
+                  Post Your Project
+                </Button>
+              </Link>
+              <Link
+                to="/explore"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-600 px-6 text-sm font-medium text-white transition hover:border-slate-500 hover:bg-slate-800"
+              >
+                Browse Projects
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </section>
 
       <footer className="border-t border-slate-200 bg-white">
         <Container className="py-10">

@@ -87,8 +87,8 @@ function LandingNav() {
   }, [authed]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
-      <Container className="py-4">
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
+      <Container className="py-3">
         <nav className="flex items-center gap-6">
           <Link
             to={authed ? roleLandingPath(profileType) : "/"}
@@ -99,29 +99,35 @@ function LandingNav() {
           <div className="hidden items-center gap-1 md:flex">
             <Link
               to="/work"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
             >
               Find Work
             </Link>
             <a
               href="#how-it-works"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
             >
-              How it works
+              How It Works
             </a>
             <Link
               to="/guides"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
             >
               Guides
             </Link>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             <Link
               to={authed ? "/dashboard" : "/login"}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+              className="text-sm text-slate-600 transition hover:text-slate-900"
             >
               {authed ? "Dashboard" : "Sign in"}
+            </Link>
+            <Link
+              to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              Get Started
             </Link>
           </div>
         </nav>
@@ -328,14 +334,14 @@ function ProjectFeedPreview() {
 
 function FeatureStrip() {
   return (
-    <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
       {features.map(([icon, title, copy]) => (
-        <div key={title}>
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-white">
-            <SymbolIcon name={icon} className="text-[20px]" />
+        <div key={title} className="text-center">
+          <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
+            <SymbolIcon name={icon} className="text-[24px]" />
           </span>
-          <h3 className="mt-4 text-lg font-semibold text-slate-900">{title}</h3>
-          <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy}</p>
+          <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">{copy}</p>
         </div>
       ))}
     </div>
@@ -478,7 +484,7 @@ export default function ContractorLandingPage() {
       <LandingNav />
       <ContractorSetupBanner />
       <main>
-        <Container className="py-12 sm:py-16">
+        <Container className="py-10 sm:py-14">
           <section className="max-w-3xl">
             <Badge className="border-[#E4E6EE] bg-[#F6F7FB] font-semibold uppercase tracking-[0.12em] text-slate-600">
               For contractors
@@ -511,122 +517,94 @@ export default function ContractorLandingPage() {
             </button>
           </section>
 
-          <section id="how-it-works" className="mt-24 rounded-3xl bg-slate-50 px-6 py-14 sm:px-10 sm:py-20">
-            <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-400">How it works</p>
-            <h2 className="mx-auto mt-3 max-w-lg text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Everything you need to grow your business</h2>
-            <div className="mt-14">
+          <section id="how-it-works" className="mt-16 border-y border-slate-200 bg-[#F6F5F1] py-16">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
+              <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
+            </div>
+            <div className="mx-auto mt-12 max-w-5xl px-4">
               <FeatureStrip />
             </div>
           </section>
 
-          <section className="mt-24">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Your profile</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          <section className="mt-16">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Use FlatOrigin as your public web profile
             </h2>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-500">
+            <p className="mt-3 max-w-xl text-slate-500">
               Bring scattered project photos, specialties, and service details
               into one clean portfolio page you can share as your website.
             </p>
-            <Link
-              to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
-              className="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition hover:text-slate-900"
-            >
-              {authed ? "Continue setup" : "Create your profile"}
-              <SymbolIcon name="arrow_forward" className="text-[14px]" />
-            </Link>
-            <div className="mt-10">
+            <div className="mt-6">
               <WebProfilePreview />
             </div>
           </section>
 
-          <section className="mt-24">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Find work</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          <section className="mt-16">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Find homeowner project opportunities
             </h2>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-500">
+            <p className="mt-3 max-w-xl text-slate-500">
               Find local opportunities that fit your expertise. Send proposals
               and grow your business.
             </p>
-            <Link
-              to="/work"
-              className="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition hover:text-slate-900"
-            >
-              Explore projects
-              <SymbolIcon name="arrow_forward" className="text-[14px]" />
-            </Link>
-            <div className="mt-10">
+            <div className="mt-6">
               <ProjectFeedPreview />
             </div>
           </section>
 
-          <section className="mt-24">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Communication</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          <section className="mt-16">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Communicate without middlemen
             </h2>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-500">
+            <p className="mt-3 max-w-xl text-slate-500">
               Keep all conversations, proposals, and updates organized in one
               place.
             </p>
-            <Link
-              to="/guides"
-              className="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition hover:text-slate-900"
-            >
-              Learn more
-              <SymbolIcon name="arrow_forward" className="text-[14px]" />
-            </Link>
-            <div className="mt-10">
+            <div className="mt-6">
               <MessagePreview />
             </div>
           </section>
 
-          <section className="relative mt-24 min-h-[300px] overflow-hidden rounded-3xl bg-slate-100">
+          <section className="relative mt-16 min-h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
             <LocalMapPreview />
             <div className="absolute inset-0 bg-gradient-to-r from-white via-white/95 to-white/30" />
-            <div className="relative px-8 py-14 sm:px-12 sm:py-20">
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Local focus</p>
-              <h2 className="mt-2 max-w-md text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            <div className="relative px-8 py-12">
+              <h2 className="max-w-md text-2xl font-bold tracking-tight text-slate-900">
                 Built around local work
               </h2>
-              <p className="mt-4 max-w-md text-base leading-relaxed text-slate-500">
+              <p className="mt-3 max-w-md text-slate-500">
                 Connect with homeowners in your area and grow your business
                 locally.
-              </p>
-              <a
-                href="#how-it-works"
-                className="mt-5 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition hover:text-slate-900"
-              >
-                See how it works
-                <SymbolIcon name="arrow_forward" className="text-[14px]" />
-              </a>
-            </div>
-          </section>
-
-          <section className="mt-24 rounded-3xl bg-slate-900 p-10 sm:p-16">
-            <div className="flex flex-col items-center text-center">
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Get started</p>
-              <h2 className="mt-4 max-w-md text-3xl font-bold text-white sm:text-4xl">Start building your contractor profile today</h2>
-              <p className="mt-4 max-w-sm text-slate-400">
-                Join FlatOrigin and connect with homeowners looking for your
-                expertise.
-              </p>
-              <Link to={primaryCtaPath} className="mt-10">
-                <Button className="h-12 bg-white px-8 text-base text-slate-900 hover:bg-slate-100">
-                  {primaryCtaLabel}
-                </Button>
-              </Link>
-              <p className="mt-5 text-sm text-slate-500">
-                {authed ? "Ready to continue? " : "Already have an account? "}
-                <Link to={authed ? "/work" : "/login"} className="font-medium text-slate-300 hover:text-white">
-                  {authed ? "Find local work" : "Sign in"}
-                </Link>
               </p>
             </div>
           </section>
         </Container>
       </main>
+
+      <section className="bg-slate-900 py-16">
+        <Container>
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Ready to get started?</h2>
+            <p className="mt-3 max-w-md text-slate-400">
+              Join thousands of homeowners and contractors already using FlatOrigin.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link to={primaryCtaPath}>
+                <Button className="h-11 bg-white px-6 text-slate-900 hover:bg-slate-100">
+                  Join as Contractor
+                </Button>
+              </Link>
+              <Link
+                to="/work"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-600 px-6 text-sm font-medium text-white transition hover:border-slate-500 hover:bg-slate-800"
+              >
+                Browse Projects
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </section>
 
       <footer className="border-t border-slate-200 bg-white">
         <Container className="py-10">
