@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import api from "../api";
-import { Container, SymbolIcon } from "../ui";
+import { Button, Container, SymbolIcon } from "../ui";
 import homeownerIllustration from "../assets/landing/homeowner.webp";
 import contractorIllustration from "../assets/landing/contractor.webp";
 
@@ -14,7 +14,7 @@ const roleCards = [
       "Get bids from local contractors",
       "Keep projects private or share publicly",
     ],
-    cta: "Get Started as Homeowner",
+    cta: "Get Started",
     to: "/homeowner",
     image: homeownerIllustration,
   },
@@ -26,18 +26,25 @@ const roleCards = [
       "Display your portfolio",
       "Bid on projects in your area",
     ],
-    cta: "Get Started as Contractor",
+    cta: "Get Started",
     to: "/contractor",
     image: contractorIllustration,
   },
+];
+
+const whyFeatures = [
+  ["shield", "No Middlemen", "Connect directly with homeowners or contractors without paying referral fees or commissions."],
+  ["payments", "Free to Use", "FlatOrigin is completely free for homeowners. Contractors pay no listing fees."],
+  ["schedule", "Save Time", "Streamlined process helps you find the right match faster than traditional methods."],
+  ["star", "Quality Focus", "Detailed project descriptions and portfolios ensure better matches and outcomes."],
 ];
 
 function GatewayNav() {
   const authed = !!localStorage.getItem("access");
 
   return (
-    <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-      <Container className="py-4">
+    <header className="border-b border-slate-200 bg-white sticky top-0 z-50">
+      <Container className="py-3">
         <nav className="flex items-center justify-between gap-4">
           <Link
             to="/"
@@ -45,24 +52,30 @@ function GatewayNav() {
           >
             FlatOrigin
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Link
               to="/explore"
-              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 sm:inline-flex"
+              className="hidden px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900 sm:inline-flex"
             >
               Browse Projects
             </Link>
             <Link
-              to="/project-check"
-              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 sm:inline-flex"
+              to="/guides"
+              className="hidden px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900 sm:inline-flex"
             >
-              Project Check
+              Guides
             </Link>
             <Link
               to={authed ? "/dashboard" : "/login"}
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
             >
               {authed ? "Dashboard" : "Sign in"}
+            </Link>
+            <Link
+              to="/register"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              Get Started
             </Link>
           </div>
         </nav>
@@ -74,35 +87,37 @@ function GatewayNav() {
 function RoleCard({ card }) {
   return (
     <Link to={card.to} className="group block text-inherit no-underline">
-      <div className="flex min-h-[480px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-slate-300">
-        <div className="aspect-[16/10] overflow-hidden rounded-xl bg-slate-50">
+      <div className="flex min-h-[420px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md">
+        <div className="aspect-[16/10] overflow-hidden">
           <img
             src={card.image}
             alt=""
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
         </div>
 
-        <h2 className="mt-6 text-2xl font-bold tracking-tight text-slate-900">
-          {card.title}
-        </h2>
-        <p className="mt-2 text-base leading-relaxed text-slate-600">{card.intro}</p>
+        <div className="flex flex-1 flex-col p-5">
+          <h2 className="text-xl font-bold tracking-tight text-slate-900">
+            {card.title}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">{card.intro}</p>
 
-        <div className="mt-5 flex-1 space-y-3">
-          {card.features.map((feature) => (
-            <div key={feature} className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                <SymbolIcon name="check" className="text-[14px] text-emerald-700" />
-              </span>
-              <span className="text-sm text-slate-700">{feature}</span>
-            </div>
-          ))}
+          <div className="mt-4 flex-1 space-y-2">
+            {card.features.map((feature) => (
+              <div key={feature} className="flex items-start gap-2">
+                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-50">
+                  <SymbolIcon name="check" className="text-[12px] text-red-400" />
+                </span>
+                <span className="text-sm text-slate-600">{feature}</span>
+              </div>
+            ))}
+          </div>
+
+          <span className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-lg bg-slate-900 text-sm font-medium text-white transition group-hover:bg-slate-800">
+            {card.cta}
+            <SymbolIcon name="arrow_forward" className="ml-2 text-[16px]" />
+          </span>
         </div>
-
-        <span className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white transition group-hover:bg-slate-800">
-          {card.cta}
-          <SymbolIcon name="arrow_forward" className="ml-2 text-[18px] transition-transform group-hover:translate-x-0.5" />
-        </span>
       </div>
     </Link>
   );
@@ -152,30 +167,70 @@ export default function LandingPage() {
       <GatewayNav />
 
       <main>
-        <Container>
-          <section className="flex min-h-[calc(100vh-200px)] flex-col justify-center py-16 sm:py-20">
-            <div className="mx-auto max-w-2xl text-center">
-              <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-                Find the right contractor for your next project
-              </h1>
-              <p className="mx-auto mt-6 max-w-lg text-lg leading-relaxed text-slate-600">
-                FlatOrigin connects homeowners and contractors around real projects - no middlemen, no hassle.
-              </p>
-            </div>
-
-            <div className="mx-auto mt-12 grid w-full max-w-4xl gap-6 md:grid-cols-2">
-              {roleCards.map((card) => (
-                <RoleCard key={card.title} card={card} />
-              ))}
-            </div>
-
-            <p className="mt-10 flex items-center justify-center gap-2 text-sm text-slate-500">
-              <SymbolIcon name="swap_horiz" className="text-[18px]" />
-              <span>You can switch between experiences anytime.</span>
+        <Container className="py-16 sm:py-20">
+          <div className="mx-auto max-w-2xl text-center">
+            <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
+              Find the right contractor for your next project
+            </h1>
+            <p className="mx-auto mt-5 max-w-lg text-lg leading-relaxed text-slate-500">
+              FlatOrigin connects homeowners and contractors around real projects - no middlemen, no hassle.
             </p>
-          </section>
+          </div>
+
+          <div className="mx-auto mt-10 grid w-full max-w-3xl gap-5 sm:grid-cols-2">
+            {roleCards.map((card) => (
+              <RoleCard key={card.title} card={card} />
+            ))}
+          </div>
+
+          <p className="mt-8 flex items-center justify-center gap-2 text-sm text-slate-400">
+            <SymbolIcon name="swap_horiz" className="text-[18px]" />
+            <span>You can switch between experiences anytime.</span>
+          </p>
         </Container>
       </main>
+
+      <section className="border-y border-slate-200 bg-[#F6F5F1] py-16">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
+          <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
+        </div>
+        <div className="mx-auto mt-12 grid max-w-5xl gap-8 px-4 sm:grid-cols-2 lg:grid-cols-4">
+          {whyFeatures.map(([icon, title, copy]) => (
+            <div key={title} className="text-center">
+              <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
+                <SymbolIcon name={icon} className="text-[24px]" />
+              </span>
+              <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-500">{copy}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="bg-slate-900 py-16">
+        <Container>
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Ready to get started?</h2>
+            <p className="mt-3 max-w-md text-slate-400">
+              Join thousands of homeowners and contractors already using FlatOrigin.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link to="/homeowner">
+                <Button className="h-11 bg-white px-6 text-slate-900 hover:bg-slate-100">
+                  Post Your Project
+                </Button>
+              </Link>
+              <Link
+                to="/contractor"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-600 px-6 text-sm font-medium text-white transition hover:border-slate-500 hover:bg-slate-800"
+              >
+                Join as Contractor
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </section>
 
       <footer className="border-t border-slate-200 bg-white">
         <Container className="py-10">
