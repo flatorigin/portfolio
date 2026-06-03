@@ -516,18 +516,20 @@ export default function ContractorLandingPage() {
               Watch how it works
             </button>
           </section>
+        </Container>
 
-          <section id="how-it-works" className="mt-16 border-y border-slate-200 bg-[#F6F5F1] py-16">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
-              <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
-            </div>
-            <div className="mx-auto mt-12 max-w-5xl px-4">
-              <FeatureStrip />
-            </div>
-          </section>
+        <section id="how-it-works" className="border-y border-slate-200 bg-[#F6F5F1] py-16">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
+            <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
+          </div>
+          <div className="mx-auto mt-12 max-w-5xl px-4">
+            <FeatureStrip />
+          </div>
+        </section>
 
-          <section className="mt-16">
+        <Container>
+          <section className="py-16">
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Use FlatOrigin as your public web profile
             </h2>
@@ -540,7 +542,7 @@ export default function ContractorLandingPage() {
             </div>
           </section>
 
-          <section className="mt-16">
+          <section>
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Find homeowner project opportunities
             </h2>
@@ -566,7 +568,7 @@ export default function ContractorLandingPage() {
             </div>
           </section>
 
-          <section className="relative mt-16 min-h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+          <section className="relative my-16 min-h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
             <LocalMapPreview />
             <div className="absolute inset-0 bg-gradient-to-r from-white via-white/95 to-white/30" />
             <div className="relative px-8 py-12">
