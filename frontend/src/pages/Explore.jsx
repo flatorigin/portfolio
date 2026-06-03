@@ -870,68 +870,78 @@ export default function Explore() {
   }
 
   return (
-    <div>
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
-        <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
-      </header>
+    <div className="-mx-4 sm:-mx-6 lg:-mx-8">
+      {/* Hero header with translucent search */}
+      <div className="relative bg-gradient-to-b from-slate-100 to-slate-50 px-4 pb-6 pt-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <header className="mb-6">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Explore Projects</h1>
+            <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
+          </header>
 
-      {/* Search bar */}
-      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <SymbolIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400" />
-          <input
-            type="text"
-            value={filters.name}
-            onChange={(e) => setFilters((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="Search projects by name, category, or location..."
-            className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100"
-          />
+          {/* Search bar - translucent */}
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <SymbolIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400" />
+              <input
+                type="text"
+                value={filters.name}
+                onChange={(e) => setFilters((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Search projects by name, category, or location..."
+                className="h-11 w-full rounded-xl border-0 bg-white/80 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              />
+            </div>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white/80 px-4 text-sm font-medium text-slate-700 transition hover:bg-white"
+            >
+              <SymbolIcon name="tune" className="text-[18px]" />
+              Filters
+            </button>
+          </div>
+
+          {/* Category pills - translucent container */}
+          <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+                  !hasActiveFilters
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "bg-white/80 text-slate-600 hover:bg-white"
+                }`}
+              >
+                All
+              </button>
+              {["Flooring", "Building", "Painting", "Concrete", "Landscaping", "Plumbing", "Electrical", "Cleaning"].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setFilters((prev) => ({ ...prev, name: cat }))}
+                  className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+                    filters.name.toLowerCase() === cat.toLowerCase()
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-white/80 text-slate-600 hover:bg-white"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <button
-          type="button"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-        >
-          <SymbolIcon name="tune" className="text-[18px]" />
-          Filters
-        </button>
       </div>
 
-      {/* Category pills */}
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={clearFilters}
-          className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
-            !hasActiveFilters
-              ? "bg-slate-900 text-white"
-              : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-          }`}
-        >
-          All
-        </button>
-        {["Flooring", "Building", "Painting", "Concrete", "Landscaping", "Plumbing", "Electrical", "Cleaning"].map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setFilters((prev) => ({ ...prev, name: cat }))}
-            className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
-              filters.name.toLowerCase() === cat.toLowerCase()
-                ? "bg-slate-900 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
+      {/* Main content area */}
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          {/* Results count */}
+          <p className="mb-4 text-sm text-slate-500">
+            Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
+          </p>
 
-      {/* Results count */}
-      <p className="mb-4 text-sm text-slate-500">
-        Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
-      </p>
-
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
@@ -1063,24 +1073,27 @@ export default function Explore() {
           );
         })}
       </div>
+        </div>
+      </div>
 
       {/* Directory Section - Full width immersive background */}
       {directoryListings.length > 0 ? (
-        <div className="-mx-4 mt-12 border-y border-slate-200 bg-[#F6F5F1] px-4 py-12 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="mb-8 flex items-start justify-between gap-4">
-            <div>
-              <h2 className="font-serif text-3xl font-normal tracking-tight text-slate-900 sm:text-4xl">
-                Local Contractor Directory
-              </h2>
-              <p className="mt-2 text-slate-500">Verified businesses in your area</p>
+        <div className="mt-12 border-y border-slate-200 bg-[#F6F5F1] px-4 py-12 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                  Local Contractor Directory
+                </h2>
+                <p className="mt-2 text-slate-500">Verified businesses in your area</p>
+              </div>
+              <button
+                type="button"
+                className="hidden shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:inline-flex"
+              >
+                View All Contractors
+              </button>
             </div>
-            <button
-              type="button"
-              className="hidden shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:inline-flex"
-            >
-              View All Contractors
-            </button>
-          </div>
 
           {filteredDirectoryListings.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -1203,6 +1216,7 @@ export default function Explore() {
           <p className="mt-8 text-center text-xs text-slate-400">
             Business information may be sourced from publicly available information. Business owners may request edits or removal.
           </p>
+          </div>
         </div>
       ) : null}
     </div>
