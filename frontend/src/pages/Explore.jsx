@@ -91,6 +91,49 @@ const SAMPLE_PROJECTS = [
   },
 ];
 
+// Sample directory listings for preview
+const SAMPLE_DIRECTORY_LISTINGS = [
+  {
+    id: "dir-1",
+    business_name: "Ney Flooring Co.",
+    location: "Media, PA",
+    specialties: ["Hardwood", "Carpet", "LVP", "Tile"],
+    phone_number: "(610) 555-1234",
+    website: "https://neyflooring.com",
+    like_count: 28,
+    distance_miles: 3.2,
+  },
+  {
+    id: "dir-2",
+    business_name: "Pro Deck Builders",
+    location: "West Chester, PA",
+    specialties: ["Decks", "Patios", "Pergolas"],
+    phone_number: "(610) 555-5678",
+    website: "https://prodeckbuilders.com",
+    like_count: 42,
+    distance_miles: 5.8,
+  },
+  {
+    id: "dir-3",
+    business_name: "Elite Concrete Solutions",
+    location: "Philadelphia, PA",
+    specialties: ["Garage Floors", "Driveways", "Stamped Concrete"],
+    phone_number: "(215) 555-9012",
+    like_count: 15,
+    distance_miles: 12.4,
+  },
+  {
+    id: "dir-4",
+    business_name: "Green Thumb Landscaping",
+    location: "Newark, DE",
+    specialties: ["Design", "Installation", "Maintenance"],
+    phone_number: "(302) 555-3456",
+    website: "https://greenthumbde.com",
+    like_count: 56,
+    distance_miles: 8.1,
+  },
+];
+
 // normalize urls (same spirit as ProjectDetail)
 function toUrl(raw) {
   if (!raw) return "";
@@ -485,7 +528,7 @@ export default function Explore() {
         const directoryItems = Array.isArray(directoryData)
           ? directoryData
           : [];
-        setDirectoryListings(directoryItems);
+        setDirectoryListings(directoryItems.length ? directoryItems : SAMPLE_DIRECTORY_LISTINGS);
         setDirectoryLikeCounts(
           Object.fromEntries(
             directoryItems.map((listing) => [
@@ -514,7 +557,7 @@ export default function Explore() {
         console.error("[Explore] projects fetch failed", e?.response || e);
         if (alive) {
           setProjects(SAMPLE_PROJECTS);
-          setDirectoryListings([]);
+          setDirectoryListings(SAMPLE_DIRECTORY_LISTINGS);
         }
       } finally {
         if (alive) {
@@ -994,22 +1037,20 @@ export default function Explore() {
         })}
       </div>
       {directoryListings.length > 0 ? (
-        <div className="mt-8 border-t border-slate-200 pt-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Local business/contractors directory
-              </h2>
-            </div>
+        <div className="mt-10 border-t border-slate-200 pt-8">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Local Contractors</h2>
+            <p className="mt-1 text-sm text-slate-500">Verified businesses in your area</p>
           </div>
 
           {filteredDirectoryListings.length > 0 ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
               {filteredDirectoryListings.map((listing) => {
                 const specialties = Array.isArray(listing.specialties)
                   ? listing.specialties
                   : [];
-                const visibleSpecialties = specialties.slice(0, 4);
+                const visibleSpecialties = specialties.slice(0, 3);
+                const extraCount = specialties.length - 3;
                 const liked = !!directoryLikeMap[listing.id];
                 const likeCount = Number(
                   directoryLikeCounts[listing.id] ?? listing.like_count ?? 0,
@@ -1018,115 +1059,113 @@ export default function Explore() {
                   listing.distance_miles,
                 );
                 return (
-                  <Card
+                  <div
                     key={`directory-${listing.id}`}
-                    className="flex min-h-[240px] flex-col rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+                    className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-base font-semibold text-slate-950">
+                    {/* Header with icon and business info */}
+                    <div className="flex items-start gap-4 p-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                        <SymbolIcon name="storefront" className="text-[24px]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate font-semibold text-slate-900">
                           {listing.business_name}
                         </h3>
-
-                        {listing.location ? (
-                          <div className="mt-1 text-sm font-medium text-slate-500">
-                            {listing.location}
-                          </div>
-                        ) : null}
-                        {distanceLabel ? (
-                          <div className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                            {distanceLabel}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="group relative shrink-0">
-                        <ReportContentButton
-                          targetType="business_directory_listing"
-                          targetId={listing.id}
-                          subject={
-                            listing.business_name ||
-                            "Business directory listing"
-                          }
-                          label={
-                            <SymbolIcon name="flag" className="text-[16px]" />
-                          }
-                          title="Report listing"
-                          ariaLabel="Report listing"
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                        />
-                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl bg-slate-950 p-3 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                          Business information may be sourced from publicly
-                          available information. Business owners may request
-                          edits or removal.
+                        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                          {listing.location ? (
+                            <span className="flex items-center gap-1">
+                              <SymbolIcon name="location_on" className="text-[14px]" />
+                              {listing.location}
+                            </span>
+                          ) : null}
+                          {distanceLabel ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                              {distanceLabel}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
 
+                    {/* Specialties */}
                     {visibleSpecialties.length > 0 ? (
-                      <div className="mt-5 flex flex-wrap gap-2.5">
+                      <div className="flex flex-wrap gap-2 px-4 pb-4">
                         {visibleSpecialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1.5 text-xs font-normal text-slate-950"
+                            className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600"
                           >
                             {specialty}
                           </span>
                         ))}
+                        {extraCount > 0 ? (
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
+                            +{extraCount} more
+                          </span>
+                        ) : null}
                       </div>
                     ) : null}
 
-                    {listing.phone_number ? (
-                      <a
-                        href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
-                      >
-                        <span className="text-slate-950">📞</span>
-                        <span>{listing.phone_number}</span>
-                      </a>
-                    ) : null}
+                    {/* Divider */}
+                    <div className="border-t border-slate-100" />
 
-                    <div className="mt-auto flex items-center justify-between gap-3 pt-5 text-xs text-slate-500">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                        onClick={(e) => toggleDirectoryLike(e, listing)}
-                        disabled={directoryLikeBusyId === listing.id}
-                        aria-label={
-                          liked
-                            ? "Unlike directory listing"
-                            : "Like directory listing"
-                        }
-                        title={
-                          liked
-                            ? "Unlike directory listing"
-                            : "Like directory listing"
-                        }
-                      >
-                        <SymbolIcon
-                          name="favorite"
-                          fill={liked ? 1 : 0}
-                          className="text-[18px]"
-                        />
-                        <span>{likeCount}</span>
-                      </button>
-
-                      {listing.website ? (
-                        <a
-                          href={listing.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center justify-end text-sm font-semibold text-blue-500 hover:text-blue-900 hover:underline"
+                    {/* Footer: contact and actions */}
+                    <div className="flex items-center justify-between gap-3 p-4">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-xs text-slate-400 transition hover:text-slate-700 disabled:opacity-50"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleDirectoryLike(e, listing);
+                          }}
+                          disabled={directoryLikeBusyId === listing.id}
+                          aria-label={liked ? "Unlike" : "Like"}
                         >
-                          Visit Website
-                        </a>
-                      ) : (
-                        <span className="text-xs text-slate-400">
-                          Reviewed listing
-                        </span>
-                      )}
+                          <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[16px]" />
+                          <span>{likeCount}</span>
+                        </button>
+
+                        {listing.phone_number ? (
+                          <a
+                            href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
+                            className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-900"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <SymbolIcon name="call" className="text-[14px]" />
+                            <span>{listing.phone_number}</span>
+                          </a>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {listing.website ? (
+                          <a
+                            href={listing.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex h-8 items-center justify-center rounded-lg bg-slate-900 px-3 text-xs font-medium text-white transition hover:bg-slate-800"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Visit Website
+                          </a>
+                        ) : null}
+                        <div className="group/report relative">
+                          <ReportContentButton
+                            targetType="business_directory_listing"
+                            targetId={listing.id}
+                            subject={listing.business_name || "Business directory listing"}
+                            label={<SymbolIcon name="more_vert" className="text-[18px]" />}
+                            title="More options"
+                            ariaLabel="More options"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </Card>
+                  </div>
                 );
               })}
             </div>
