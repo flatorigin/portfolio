@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { roleLandingPath } from "../landingRole";
-import { Badge, Button, Card, Container, SymbolIcon } from "../ui";
+import { Badge, Button, Container, SymbolIcon } from "../ui";
 import deckImage from "../assets/landing/projects/deck.webp";
 import kitchenImage from "../assets/landing/projects/kitchen.webp";
 import interiorImage from "../assets/landing/projects/interior.webp";
@@ -38,10 +38,10 @@ const projectCards = [
 ];
 
 const guides = [
-  ["How to compare bids", "Understand proposals and make confident decisions."],
-  ["What to ask contractors", "Use the right questions before hiring anyone."],
-  ["Budget planning basics", "Plan your budget and avoid hidden costs."],
-  ["What to include in a proposal", "Make sure nothing important is missed."],
+  ["balance", "How to compare bids", "Understand proposals and make confident decisions."],
+  ["forum", "What to ask contractors", "Use the right questions before hiring anyone."],
+  ["payments", "Budget planning basics", "Plan your budget and avoid hidden costs."],
+  ["checklist", "What to include in a proposal", "Make sure nothing important is missed."],
 ];
 
 function LandingNav() {
@@ -68,34 +68,27 @@ function LandingNav() {
   }, [authed]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-      <Container className="py-3">
+    <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
+      <Container className="py-4">
         <nav className="flex items-center gap-6">
-          <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-base font-bold tracking-tight text-slate-900">
+          <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-lg font-bold tracking-tight text-slate-900">
             FlatOrigin
           </Link>
-          <div className="hidden items-center gap-2 md:flex">
-            <Link to="/explore" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+          <div className="hidden items-center gap-1 md:flex">
+            <Link to="/explore" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
               Browse Projects
             </Link>
-            <Link to="/guides" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            <Link to="/guides" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
               Guides
             </Link>
-            <a href="#how-it-works" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            <a href="#how-it-works" className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
               How it works
             </a>
           </div>
-          <div className="ml-auto flex items-center gap-3">
-            <Link
-              to="/contractor"
-              title="This toggle is only for viewing/previewing the other landing page."
-              className="hidden h-9 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex"
-            >
-              View Contractor Side
-            </Link>
+          <div className="ml-auto flex items-center gap-2">
             <Link
               to={authed ? "/dashboard" : "/login"}
-              className="inline-flex h-9 items-center rounded-xl bg-slate-900 px-5 text-sm font-medium text-white hover:opacity-90"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
             >
               {authed ? "Dashboard" : "Sign in"}
             </Link>
@@ -123,31 +116,40 @@ function ProjectPreview() {
   ];
 
   return (
-    <Card className="grid h-[360px] grid-rows-2 gap-4 p-5">
-      {jobs.map((job) => (
-        <div
-          key={job.title}
-          className="grid min-h-0 grid-cols-[120px_minmax(0,1fr)] gap-4 rounded-2xl border border-slate-200 bg-white p-3"
-        >
-          <img
-            src={job.image}
-            alt=""
-            className="h-full min-h-0 w-full rounded-xl object-cover"
-          />
-          <div className="flex min-w-0 flex-col justify-center">
-            <div className="truncate text-base font-semibold text-slate-950">
-              {job.title}
-            </div>
-            <div className="mt-2 text-sm font-medium text-slate-500">
-              {job.location}
-            </div>
-            <div className="mt-3 text-sm font-semibold text-slate-700">
-              {job.budget}
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+          <SymbolIcon name="folder_open" className="text-[18px] text-slate-600" />
+        </span>
+        <span className="text-sm font-semibold text-slate-700">Your Projects</span>
+      </div>
+      <div className="grid gap-4">
+        {jobs.map((job) => (
+          <div
+            key={job.title}
+            className="grid grid-cols-[100px_minmax(0,1fr)] gap-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition hover:border-slate-200 hover:bg-white"
+          >
+            <img
+              src={job.image}
+              alt=""
+              className="h-20 w-full rounded-lg object-cover"
+            />
+            <div className="flex min-w-0 flex-col justify-center">
+              <div className="truncate text-sm font-semibold text-slate-900">
+                {job.title}
+              </div>
+              <div className="mt-1.5 flex items-center gap-1 text-xs text-slate-500">
+                <SymbolIcon name="location_on" className="text-[14px]" />
+                {job.location}
+              </div>
+              <div className="mt-2 inline-flex w-fit rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                {job.budget}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
-    </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -160,17 +162,17 @@ function FeatureStrip() {
   ];
 
   return (
-    <Card className="grid overflow-hidden md:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {features.map(([icon, title, copy]) => (
-        <div key={title} className="border-slate-100 p-6 md:border-r md:last:border-r-0">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+        <div key={title} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
             <SymbolIcon name={icon} className="text-[22px]" />
           </span>
           <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">{copy}</p>
         </div>
       ))}
-    </Card>
+    </div>
   );
 }
 
@@ -278,16 +280,22 @@ export default function HomeownerLandingPage() {
 
           <section className="mt-16">
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">Helpful before you hire</h2>
-            <div className="mt-8 grid gap-4 md:grid-cols-4">
-              {guides.map(([title, copy]) => (
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {guides.map(([icon, title, copy]) => (
                 <Link
                   key={title}
                   to="/guides"
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p>
-                  <div className="mt-6 text-sm font-medium text-slate-900">Read Guide {"->"}</div>
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition group-hover:bg-slate-900 group-hover:text-white">
+                    <SymbolIcon name={icon} className="text-[20px]" />
+                  </span>
+                  <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">{copy}</p>
+                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-900">
+                    Read Guide
+                    <SymbolIcon name="arrow_forward" className="text-[16px] transition-transform group-hover:translate-x-0.5" />
+                  </span>
                 </Link>
               ))}
             </div>
@@ -323,13 +331,54 @@ export default function HomeownerLandingPage() {
         </Container>
       </main>
 
-      <footer className="border-t border-slate-200 bg-white py-8">
-        <Container className="grid max-w-5xl gap-5 text-center text-sm font-semibold text-slate-500 sm:grid-cols-4">
-          <div>100% Free to Get Started</div>
-          <div>No Middlemen</div>
-          <div>Local Contractors</div>
-          <div>Safe and Secure</div>
+      <footer className="border-t border-slate-200 bg-white">
+        <Container className="py-10">
+          <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <Link to="/" className="text-lg font-bold text-slate-900">
+                FlatOrigin
+              </Link>
+              <p className="mt-2 max-w-xs text-sm text-slate-500">
+                Connecting homeowners with quality contractors since 2026.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+              <div className="flex flex-col gap-3">
+                <span className="font-semibold text-slate-900">Product</span>
+                <Link to="/homeowner" className="text-slate-600 hover:text-slate-900">
+                  For Homeowners
+                </Link>
+                <Link to="/contractor" className="text-slate-600 hover:text-slate-900">
+                  For Contractors
+                </Link>
+                <Link to="/explore" className="text-slate-600 hover:text-slate-900">
+                  Browse Projects
+                </Link>
+              </div>
+              <div className="flex flex-col gap-3">
+                <span className="font-semibold text-slate-900">Resources</span>
+                <Link to="/guides" className="text-slate-600 hover:text-slate-900">
+                  Guides
+                </Link>
+                <Link to="/project-check" className="text-slate-600 hover:text-slate-900">
+                  Project Check
+                </Link>
+              </div>
+              <div className="flex flex-col gap-3">
+                <span className="font-semibold text-slate-900">Account</span>
+                <Link to="/login" className="text-slate-600 hover:text-slate-900">
+                  Sign in
+                </Link>
+                <Link to="/register" className="text-slate-600 hover:text-slate-900">
+                  Create account
+                </Link>
+              </div>
+            </div>
+          </div>
         </Container>
+        <div className="border-t border-slate-100 py-6 text-center text-xs text-slate-400">
+          © 2026 FlatOrigin. All rights reserved.
+        </div>
       </footer>
     </div>
   );
