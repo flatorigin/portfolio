@@ -95,42 +95,69 @@ const SAMPLE_PROJECTS = [
 const SAMPLE_DIRECTORY_LISTINGS = [
   {
     id: "dir-1",
-    business_name: "Ney Flooring Co.",
+    business_name: "Ace Quality Painting LLC",
     location: "Media, PA",
-    specialties: ["Hardwood", "Carpet", "LVP", "Tile"],
-    phone_number: "(610) 555-1234",
-    website: "https://neyflooring.com",
-    like_count: 28,
+    specialties: ["House Painting", "Commercial Painting", "Interior Painting"],
+    phone_number: "(484) 604-2256",
+    website: "https://acequalitypainting.com",
+    rating: 4.8,
+    review_count: 24,
     distance_miles: 3.2,
   },
   {
     id: "dir-2",
-    business_name: "Pro Deck Builders",
-    location: "West Chester, PA",
-    specialties: ["Decks", "Patios", "Pergolas"],
-    phone_number: "(610) 555-5678",
-    website: "https://prodeckbuilders.com",
-    like_count: 42,
+    business_name: "Archadeck of Delaware County",
+    location: "Media, PA",
+    specialties: ["Custom Deck Design", "Pergolas", "Screen Porches"],
+    phone_number: "(610) 840-6695",
+    website: "https://archadeck.com",
+    rating: 4.9,
+    review_count: 31,
     distance_miles: 5.8,
   },
   {
     id: "dir-3",
-    business_name: "Elite Concrete Solutions",
-    location: "Philadelphia, PA",
-    specialties: ["Garage Floors", "Driveways", "Stamped Concrete"],
-    phone_number: "(215) 555-9012",
-    like_count: 15,
-    distance_miles: 12.4,
+    business_name: "Bates Landscaping",
+    location: "Media, PA",
+    specialties: ["Drainage Solutions", "Stormwater Management", "Landscape Pitching"],
+    phone_number: "(484) 887-8678",
+    website: "https://bateslandscaping.com",
+    rating: 4.7,
+    review_count: 15,
+    distance_miles: 4.1,
   },
   {
     id: "dir-4",
-    business_name: "Green Thumb Landscaping",
-    location: "Newark, DE",
-    specialties: ["Design", "Installation", "Maintenance"],
-    phone_number: "(302) 555-3456",
-    website: "https://greenthumbde.com",
-    like_count: 56,
-    distance_miles: 8.1,
+    business_name: "Demeo Builders",
+    location: "Media, PA",
+    specialties: ["New Home Construction", "Residential Additions", "Kitchens"],
+    phone_number: "(484) 832-3460",
+    website: "https://demeobuilders.com",
+    rating: 5.0,
+    review_count: 42,
+    distance_miles: 2.8,
+  },
+  {
+    id: "dir-5",
+    business_name: "Blue Frog Painting Co., LLC",
+    location: "Media, PA",
+    specialties: ["Interior Painting", "Exterior Painting", "Cabinet Painting"],
+    phone_number: "(267) 485-5148",
+    website: "https://bluefrogpainting.com",
+    rating: 4.6,
+    review_count: 19,
+    distance_miles: 6.2,
+  },
+  {
+    id: "dir-6",
+    business_name: "Cider Mill Landscapes",
+    location: "Media, PA",
+    specialties: ["Garden Design & Installation", "Hardscaping", "Pergolas & Pavilions"],
+    phone_number: "(484) 574-4666",
+    website: "https://cidermilllandscapes.com",
+    rating: 4.8,
+    review_count: 27,
+    distance_miles: 3.5,
   },
 ];
 
@@ -1036,71 +1063,95 @@ export default function Explore() {
           );
         })}
       </div>
+
+      {/* Directory Section - Full width immersive background */}
       {directoryListings.length > 0 ? (
-        <div className="mt-10 border-t border-slate-200 pt-8">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Local Contractors</h2>
-            <p className="mt-1 text-sm text-slate-500">Verified businesses in your area</p>
+        <div className="-mx-4 mt-12 border-y border-slate-200 bg-[#F6F5F1] px-4 py-12 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div className="mb-8 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-serif text-3xl font-normal tracking-tight text-slate-900 sm:text-4xl">
+                Local Contractor Directory
+              </h2>
+              <p className="mt-2 text-slate-500">Verified businesses in your area</p>
+            </div>
+            <button
+              type="button"
+              className="hidden shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:inline-flex"
+            >
+              View All Contractors
+            </button>
           </div>
 
           {filteredDirectoryListings.length > 0 ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
               {filteredDirectoryListings.map((listing) => {
                 const specialties = Array.isArray(listing.specialties)
                   ? listing.specialties
                   : [];
-                const visibleSpecialties = specialties.slice(0, 3);
-                const extraCount = specialties.length - 3;
+                const visibleSpecialties = specialties.slice(0, 2);
+                const extraCount = specialties.length - 2;
                 const liked = !!directoryLikeMap[listing.id];
-                const likeCount = Number(
-                  directoryLikeCounts[listing.id] ?? listing.like_count ?? 0,
-                );
-                const distanceLabel = formatDistanceMiles(
-                  listing.distance_miles,
-                );
+                const rating = listing.rating ?? 0;
+                const reviewCount = listing.review_count ?? 0;
+
                 return (
                   <div
                     key={`directory-${listing.id}`}
-                    className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md"
+                    className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                   >
-                    {/* Header with icon and business info */}
-                    <div className="flex items-start gap-4 p-4">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                        <SymbolIcon name="storefront" className="text-[24px]" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate font-semibold text-slate-900">
-                          {listing.business_name}
-                        </h3>
-                        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                          {listing.location ? (
-                            <span className="flex items-center gap-1">
-                              <SymbolIcon name="location_on" className="text-[14px]" />
-                              {listing.location}
-                            </span>
-                          ) : null}
-                          {distanceLabel ? (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                              {distanceLabel}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
+                    {/* Save/Like button - top right */}
+                    <button
+                      type="button"
+                      className="absolute right-4 top-4 text-slate-300 transition hover:text-slate-600 disabled:opacity-50"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleDirectoryLike(e, listing);
+                      }}
+                      disabled={directoryLikeBusyId === listing.id}
+                      aria-label={liked ? "Unlike" : "Like"}
+                    >
+                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[22px]" />
+                    </button>
+
+                    {/* Business name */}
+                    <h3 className="pr-8 text-lg font-semibold text-slate-900">
+                      {listing.business_name}
+                    </h3>
+
+                    {/* Location + Nearby badge */}
+                    <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <SymbolIcon name="location_on" className="text-[16px]" />
+                        {listing.location || "Local"}
+                      </span>
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        Nearby
+                      </span>
                     </div>
 
-                    {/* Specialties */}
+                    {/* Star rating */}
+                    {rating > 0 ? (
+                      <div className="mt-3 flex items-center gap-1.5">
+                        <SymbolIcon name="star" fill={1} className="text-[18px] text-amber-400" />
+                        <span className="font-semibold text-slate-900">{rating.toFixed(1)}</span>
+                        <span className="text-sm text-slate-500">({reviewCount} reviews)</span>
+                      </div>
+                    ) : null}
+
+                    {/* Specialty tags */}
                     {visibleSpecialties.length > 0 ? (
-                      <div className="flex flex-wrap gap-2 px-4 pb-4">
+                      <div className="mt-4 flex flex-wrap gap-2">
                         {visibleSpecialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-600"
+                            className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
                           >
                             {specialty}
                           </span>
                         ))}
                         {extraCount > 0 ? (
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
+                          <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
                             +{extraCount} more
                           </span>
                         ) : null}
@@ -1108,72 +1159,50 @@ export default function Explore() {
                     ) : null}
 
                     {/* Divider */}
-                    <div className="border-t border-slate-100" />
+                    <div className="my-4 border-t border-slate-100" />
 
-                    {/* Footer: contact and actions */}
-                    <div className="flex items-center justify-between gap-3 p-4">
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 text-xs text-slate-400 transition hover:text-slate-700 disabled:opacity-50"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleDirectoryLike(e, listing);
-                          }}
-                          disabled={directoryLikeBusyId === listing.id}
-                          aria-label={liked ? "Unlike" : "Like"}
+                    {/* Footer: phone + website */}
+                    <div className="flex items-center justify-between gap-3">
+                      {listing.phone_number ? (
+                        <a
+                          href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
+                          className="inline-flex items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[16px]" />
-                          <span>{likeCount}</span>
-                        </button>
+                          <SymbolIcon name="call" className="text-[18px]" />
+                          <span>{listing.phone_number}</span>
+                        </a>
+                      ) : (
+                        <span />
+                      )}
 
-                        {listing.phone_number ? (
-                          <a
-                            href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                            className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-900"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <SymbolIcon name="call" className="text-[14px]" />
-                            <span>{listing.phone_number}</span>
-                          </a>
-                        ) : null}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {listing.website ? (
-                          <a
-                            href={listing.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-8 items-center justify-center rounded-lg bg-slate-900 px-3 text-xs font-medium text-white transition hover:bg-slate-800"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Visit Website
-                          </a>
-                        ) : null}
-                        <div className="group/report relative">
-                          <ReportContentButton
-                            targetType="business_directory_listing"
-                            targetId={listing.id}
-                            subject={listing.business_name || "Business directory listing"}
-                            label={<SymbolIcon name="more_vert" className="text-[18px]" />}
-                            title="More options"
-                            ariaLabel="More options"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                          />
-                        </div>
-                      </div>
+                      {listing.website ? (
+                        <a
+                          href={listing.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Website
+                          <SymbolIcon name="open_in_new" className="text-[16px]" />
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <Card className="p-5 text-sm text-slate-500">
+            <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
               No approved directory listings match this search.
-            </Card>
+            </div>
           )}
+
+          {/* Footer disclaimer */}
+          <p className="mt-8 text-center text-xs text-slate-400">
+            Business information may be sourced from publicly available information. Business owners may request edits or removal.
+          </p>
         </div>
       ) : null}
     </div>
