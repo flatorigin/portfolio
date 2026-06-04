@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
-import { Badge, Button, SymbolIcon } from "../ui";
+import { Badge, SymbolIcon } from "../ui";
 import {
   getCachedLocationOrigin,
   formatDistanceMiles,
@@ -411,20 +411,19 @@ export default function FindLocalWork() {
                   </div>
                 </div>
 
-                <Button
+                <button
                   type="button"
-                  variant="outline"
                   disabled={!hasActiveFilters}
                   onClick={clearFilters}
                   className={
-                    "h-10 whitespace-nowrap rounded-xl " +
+                    "h-10 whitespace-nowrap rounded-xl px-4 text-sm font-medium transition " +
                     (hasActiveFilters
                       ? "bg-slate-900 text-white hover:bg-slate-800"
-                      : "border border-slate-200 bg-white text-slate-400 hover:opacity-100")
+                      : "border border-slate-200 bg-white text-slate-400 cursor-not-allowed")
                   }
                 >
                   Clear filters
-                </Button>
+                </button>
               </div>
 
               {activeFilterBadges.length ? (
