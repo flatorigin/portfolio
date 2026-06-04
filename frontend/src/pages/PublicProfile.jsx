@@ -841,119 +841,70 @@ export default function PublicProfile() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="mx-auto max-w-6xl px-4 pb-12 pt-12">
-        <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-          <Card className="flex h-[320px] flex-col overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <div className="mx-auto max-w-6xl px-4 pb-12 pt-10">
+        {/* About + Contact + Map row */}
+        <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+          {/* About Card */}
+          <div className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md">
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
                 About
               </div>
-              <div className="mt-4 whitespace-pre-line text-[17px] leading-8 text-slate-700">
-                {profile.bio ? profile.bio : "No bio added yet."}
-              </div>
+              {verificationBadgeLabel ? (
+                <VerificationBadge status={verificationStatus} label={verificationBadgeLabel} />
+              ) : null}
+            </div>
+            <div className="mt-4 whitespace-pre-line text-base leading-7 text-slate-700">
+              {profile.bio ? profile.bio : "No bio added yet."}
             </div>
 
             {!isHomeownerProfile && categoryBadges.length ? (
-              <div className="shrink-0 border-t border-slate-200 px-6 py-4">
-                <div className="overflow-x-auto">
-                  <div className="flex w-max items-center gap-2 pr-2">
-                    {categoryBadges.map((category) => (
-                      <span
-                        key={category}
-                        className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-sm font-medium text-slate-700"
-                      >
-                        {category}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {categoryBadges.map((category) => (
+                  <span
+                    key={category}
+                    className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
+                  >
+                    {category}
+                  </span>
+                ))}
               </div>
             ) : null}
-          </Card>
+          </div>
 
-          <Card className="rounded-2xl border border-slate-200 shadow-sm">
-            <div className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Contact
-                    </div>
-                  <h3 className="mt-2 text-lg font-semibold text-slate-900">
-                    {profile.display_name || profile.username}
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Since {memberSince}
-                  </p>
-                  {verificationBadgeLabel ? (
-                    <div className="mt-2">
-                      <VerificationBadge status={verificationStatus} label={verificationBadgeLabel} />
-                    </div>
-                  ) : null}
+          {/* Contact Card - Compact sidebar */}
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Get in touch
                 </div>
-
                 <div className="flex items-center gap-2">
                   <span
                     className={[
-                      "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
+                      "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
                       profile.profile_status === "complete"
                         ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
                         : "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
                     ].join(" ")}
                   >
-                    {profile.profile_status === "complete"
-                      ? "Profile Complete"
-                      : "Incomplete Profile"}
+                    {profile.profile_status === "complete" ? "Complete" : "Incomplete"}
                   </span>
                   {!isMine ? (
-                    <div className="group relative">
-                      <ReportContentButton
-                        targetType="profile"
-                        targetId={profile.id}
-                        subject={profile.display_name || profile.username || "Profile"}
-                        label={<SymbolIcon name="flag" className="text-[16px]" />}
-                        title="Report profile"
-                        ariaLabel="Report profile"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                      />
-                      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-32 rounded-xl bg-slate-950 p-3 text-center text-[11px] text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                        Report profile
-                      </div>
-                    </div>
+                    <ReportContentButton
+                      targetType="profile"
+                      targetId={profile.id}
+                      subject={profile.display_name || profile.username || "Profile"}
+                      label={<SymbolIcon name="flag" className="text-[14px]" />}
+                      title="Report profile"
+                      ariaLabel="Report profile"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                    />
                   ) : null}
                 </div>
               </div>
 
-              <div className="mt-5 overflow-hidden rounded-2xl bg-white">
-                <div className="grid sm:grid-cols-3">
-                  <div className="px-6 py-5">
-                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Username
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-slate-900">
-                      {profile.username}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-200 px-6 py-5 sm:border-l sm:border-t-0">
-                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Service area
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-slate-900">
-                      {profile.service_location || "—"}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-200 px-6 py-5 sm:border-l sm:border-t-0">
-                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Languages
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-slate-900">
-                      {languagesDisplay}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="mt-4 space-y-2.5">
                 <div className="group relative">
                   <button
                     type="button"
@@ -962,7 +913,7 @@ export default function PublicProfile() {
                     className={[
                       "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
                       !disableDirectMessage
-                        ? "bg-sky-600 text-white hover:bg-sky-700"
+                        ? "bg-slate-900 text-white hover:bg-slate-800"
                         : "cursor-not-allowed bg-slate-200 text-slate-400",
                     ].join(" ")}
                   >
@@ -970,7 +921,7 @@ export default function PublicProfile() {
                   </button>
 
                   {messageError ? (
-                    <p className="text-xs text-red-600">{messageError}</p>
+                    <p className="mt-1 text-xs text-red-600">{messageError}</p>
                   ) : null}
 
                   {!profile.allow_direct_messages && (
@@ -980,81 +931,90 @@ export default function PublicProfile() {
                   )}
                   {profile.allow_direct_messages && authed && isMine && (
                     <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                      You can’t message your own profile.
+                      You can&apos;t message your own profile.
                     </div>
                   )}
                 </div>
 
-                {publicContactMethods.length > 0 ? (
-                  <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
-                    {publicContactMethods.map((method) => (
-                      <a
-                        key={method.key}
-                        href={method.href}
-                        className="flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 transition hover:border-slate-300 hover:bg-slate-50"
-                      >
-                        <SymbolIcon name={method.icon} className="text-[18px] text-slate-500" />
-                        <span>{method.label}</span>
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-600 sm:col-span-2">
-                    Contact info is shared only after the {profileRoleLabel} chooses to connect.
+                {publicContactMethods.map((method) => (
+                  <a
+                    key={method.key}
+                    href={method.href}
+                    className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    <SymbolIcon name={method.icon} className="text-[18px] text-slate-500" />
+                    <span>{method.label}</span>
+                  </a>
+                ))}
+
+                {publicContactMethods.length === 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-500">
+                    Contact info shared after connecting.
                   </div>
                 )}
               </div>
+
+              {/* Languages inline */}
+              {languagesDisplay && languagesDisplay !== "—" && (
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                    Languages
+                  </div>
+                  <div className="mt-1 text-sm text-slate-700">{languagesDisplay}</div>
+                </div>
+              )}
             </div>
-          </Card>
+
+            {/* Map - Compact */}
+            {shouldRenderMap ? (
+              <div className="overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+                <Suspense
+                  fallback={
+                    <div className="flex h-40 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                      Loading map…
+                    </div>
+                  }
+                >
+                  <ServiceAreaMap
+                    locationQuery={profile?.service_location || ""}
+                    radiusMiles={profile?.coverage_radius_miles || ""}
+                    resolvedCenter={
+                      profile?.service_lat !== null &&
+                      profile?.service_lat !== undefined &&
+                      profile?.service_lng !== null &&
+                      profile?.service_lng !== undefined
+                        ? {
+                            lat: Number(profile.service_lat),
+                            lng: Number(profile.service_lng),
+                          }
+                        : null
+                    }
+                    heightClassName="h-40"
+                  />
+                </Suspense>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        {shouldRenderMap ? (
-          <div className="mt-6">
-            <Suspense
-              fallback={
-                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-                  Loading map…
-                </div>
-              }
-            >
-              <ServiceAreaMap
-                locationQuery={profile?.service_location || ""}
-                radiusMiles={profile?.coverage_radius_miles || ""}
-                resolvedCenter={
-                  profile?.service_lat !== null &&
-                  profile?.service_lat !== undefined &&
-                  profile?.service_lng !== null &&
-                  profile?.service_lng !== undefined
-                    ? {
-                        lat: Number(profile.service_lat),
-                        lng: Number(profile.service_lng),
-                      }
-                    : null
-                }
-                heightClassName="h-64"
-              />
-            </Suspense>
-          </div>
-        ) : null}
-
-        <div className="mt-10">
-          <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="mt-8">
+          <div className="mb-4 flex items-end justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-slate-900">
+              <div className="text-xl font-semibold text-slate-900">
                 Project Gallery
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="mt-1 text-sm text-slate-500">
                 {projects.length} project{projects.length === 1 ? "" : "s"}
               </div>
             </div>
           </div>
 
           {projects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-600">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500 backdrop-blur-md">
               No public projects published yet.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {projects.map((p) => {
                 const coverSrc =
                   toUrl(p.cover_image_url || "") ||
@@ -1064,9 +1024,9 @@ export default function PublicProfile() {
                   <Link
                     key={p.id}
                     to={`/projects/${p.id}`}
-                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                    className="group overflow-hidden rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md transition hover:shadow-md"
                   >
-                    <div className="h-44 bg-slate-100">
+                    <div className="h-40 bg-slate-100">
                       {coverSrc ? (
                         <img
                           src={coverSrc}
@@ -1077,7 +1037,7 @@ export default function PublicProfile() {
                           }}
                         />
                       ) : (
-                        <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                        <div className="flex h-full items-center justify-center text-xs text-slate-400">
                           No image
                         </div>
                       )}
