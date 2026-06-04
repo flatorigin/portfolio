@@ -347,7 +347,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FBF9F7]">
       {!hideShellNav ? (
-      <header className="relative z-30 border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur-md">
         <Container className="py-3">
           <nav className="flex items-center gap-2">
             {/* Left: Logo */}
