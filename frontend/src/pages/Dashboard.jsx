@@ -2016,7 +2016,6 @@ export default function Dashboard() {
           </div>
         )}
       </div>
-      )}
 
       {!isHomeownerAccount ? (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
