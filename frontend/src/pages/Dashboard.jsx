@@ -9,7 +9,7 @@ import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import SavedLikesCard from "../components/SavedLikesCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
-import { SectionTitle, Card, Button, GhostButton, Badge, SymbolIcon } from "../ui";
+import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
@@ -1175,14 +1175,14 @@ export default function Dashboard() {
             {primaryProjectHelper}
           </p>
 
-          <Button
+          <button
             type="button"
             onClick={() => setCreateOpen(true)}
             className="mt-6 inline-flex h-12 items-center gap-2.5 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
             <SymbolIcon name={primaryProjectButtonIcon} className="text-[20px]" weight={400} />
             {primaryProjectButtonLabel}
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -2227,14 +2227,14 @@ export default function Dashboard() {
                 Keep it published
               </button>
 
-              <Button
+              <button
                 type="button"
-                className="bg-red-600 text-white hover:bg-red-700"
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700 disabled:opacity-50"
                 onClick={unpublishAndEdit}
                 disabled={busy}
               >
                 {busy ? "Unpublishing…" : "Unpublish & Edit"}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
