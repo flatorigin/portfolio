@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
-import { Badge, Button, Card, SymbolIcon } from "../ui";
+import { Badge, Button, SymbolIcon } from "../ui";
 import {
   getCachedLocationOrigin,
   formatDistanceMiles,
@@ -52,7 +52,10 @@ function getBidSummaryMeta(bids) {
     if (openStatuses.has(status)) openCount += 1;
 
     const createdAt =
-      latest?.created_at || bid?.updated_at || bid?.created_at || null;
+      latest?.created_at ||
+      bid?.updated_at ||
+      bid?.created_at ||
+      null;
 
     if (createdAt) {
       const ts = new Date(createdAt).getTime();
@@ -121,7 +124,7 @@ export default function FindLocalWork() {
               console.warn(
                 "[FindLocalWork] bid summary failed for project",
                 p.id,
-                err?.response || err,
+                err?.response || err
               );
               return [
                 p.id,
@@ -133,7 +136,7 @@ export default function FindLocalWork() {
                 },
               ];
             }
-          }),
+          })
         );
 
         if (!cancelled) {
@@ -157,13 +160,13 @@ export default function FindLocalWork() {
         const arr = Array.isArray(data)
           ? data
           : Array.isArray(data?.results)
-            ? data.results
-            : [];
+          ? data.results
+          : [];
 
         const onlyPublicJobs = arr.filter(
           (p) =>
             !!p?.is_job_posting &&
-            (p?.is_public === undefined || p?.is_public === true),
+            (p?.is_public === undefined || p?.is_public === true)
         );
 
         setProjects(onlyPublicJobs);
@@ -192,10 +195,7 @@ export default function FindLocalWork() {
       const sqf = Number(p.sqf ?? 0) || 0;
       const budget = Number(p.budget ?? 0) || 0;
 
-      if (
-        filters.name.trim() &&
-        !name.includes(filters.name.toLowerCase().trim())
-      )
+      if (filters.name.trim() && !name.includes(filters.name.toLowerCase().trim()))
         return false;
 
       if (
@@ -207,10 +207,8 @@ export default function FindLocalWork() {
       if (filters.minSqf !== "" && sqf < Number(filters.minSqf)) return false;
       if (filters.maxSqf !== "" && sqf > Number(filters.maxSqf)) return false;
 
-      if (filters.minBudget !== "" && budget < Number(filters.minBudget))
-        return false;
-      if (filters.maxBudget !== "" && budget > Number(filters.maxBudget))
-        return false;
+      if (filters.minBudget !== "" && budget < Number(filters.minBudget)) return false;
+      if (filters.maxBudget !== "" && budget > Number(filters.maxBudget)) return false;
 
       return true;
     });
@@ -251,8 +249,8 @@ export default function FindLocalWork() {
         filters.minSqf && filters.maxSqf
           ? `${filters.minSqf} - ${filters.maxSqf}`
           : filters.minSqf
-            ? `${filters.minSqf}+`
-            : `up to ${filters.maxSqf}`;
+          ? `${filters.minSqf}+`
+          : `up to ${filters.maxSqf}`;
       badges.push({
         key: "sqf",
         label: `Sqf: ${value}`,
@@ -265,8 +263,8 @@ export default function FindLocalWork() {
         filters.minBudget && filters.maxBudget
           ? `$${filters.minBudget} - $${filters.maxBudget}`
           : filters.minBudget
-            ? `$${filters.minBudget}+`
-            : `up to $${filters.maxBudget}`;
+          ? `$${filters.minBudget}+`
+          : `up to $${filters.maxBudget}`;
       badges.push({
         key: "budget",
         label: `Budget: ${value}`,
@@ -284,36 +282,35 @@ export default function FindLocalWork() {
     activeSearchField === "name"
       ? filters.name
       : activeSearchField === "location"
-        ? filters.location
-        : activeSearchField === "sqf"
-          ? filters.minSqf
-          : filters.minBudget;
+      ? filters.location
+      : activeSearchField === "sqf"
+      ? filters.minSqf
+      : filters.minBudget;
 
   const activeSearchLabel =
     activeSearchField === "name"
       ? "Project name"
       : activeSearchField === "location"
-        ? "Location"
-        : activeSearchField === "sqf"
-          ? "Sqf"
-          : "Budget";
+      ? "Location"
+      : activeSearchField === "sqf"
+      ? "Sqf"
+      : "Budget";
 
   const activeSearchPlaceholder =
     activeSearchField === "name"
       ? "Kitchen remodel"
       : activeSearchField === "location"
-        ? "City, area, etc."
-        : activeSearchField === "sqf"
-          ? "Minimum sqf"
-          : "Minimum budget";
+      ? "City, area, etc."
+      : activeSearchField === "sqf"
+      ? "Minimum sqf"
+      : "Minimum budget";
 
   const updateActiveSearch = (e) => {
     const value = e.target.value;
     setFilters((prev) => {
       if (activeSearchField === "name") return { ...prev, name: value };
       if (activeSearchField === "location") return { ...prev, location: value };
-      if (activeSearchField === "sqf")
-        return { ...prev, minSqf: value, maxSqf: "" };
+      if (activeSearchField === "sqf") return { ...prev, minSqf: value, maxSqf: "" };
       return { ...prev, minBudget: value, maxBudget: "" };
     });
   };
@@ -329,10 +326,7 @@ export default function FindLocalWork() {
             Browse published <span className="font-medium">job postings</span>.
           </p>
         </div>
-        <Link
-          to="/explore"
-          className="text-xs text-slate-600 hover:text-slate-900"
-        >
+        <Link to="/explore" className="text-xs text-slate-600 hover:text-slate-900">
           ← Back to Explore
         </Link>
       </div>
@@ -342,14 +336,14 @@ export default function FindLocalWork() {
       {error && !loading && <p className="text-sm text-red-600">{error}</p>}
 
       {!loading && !error && projects.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-600">
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500 backdrop-blur-md">
           No job postings found yet. Check back soon.
         </div>
       )}
 
       {!loading && !error && projects.length > 0 && (
         <>
-          <Card className="mb-4 p-4">
+          <div className="mb-4 rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
             <div>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="w-full sm:w-44">
@@ -361,7 +355,7 @@ export default function FindLocalWork() {
                     <select
                       value={activeSearchField}
                       onChange={(e) => setActiveSearchField(e.target.value)}
-                      className="h-10 w-full appearance-none rounded-xl border border-slate-300 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                      className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                     >
                       <option value="name">Project name</option>
                       <option value="location">Location</option>
@@ -392,7 +386,7 @@ export default function FindLocalWork() {
                   <div className="mb-1 text-xs font-medium text-slate-500">
                     Search project
                   </div>
-                  <div className="flex h-10 w-full items-center rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-within:border-slate-500 focus-within:ring-2 focus-within:ring-slate-200">
+                  <div className="flex h-10 w-full items-center rounded-xl border border-slate-200 bg-white px-3 shadow-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200">
                     <span className="mr-1 shrink-0 whitespace-nowrap text-sm font-semibold text-slate-700">
                       {activeSearchLabel}:
                     </span>
@@ -423,10 +417,10 @@ export default function FindLocalWork() {
                   disabled={!hasActiveFilters}
                   onClick={clearFilters}
                   className={
-                    "h-10 whitespace-nowrap " +
+                    "h-10 whitespace-nowrap rounded-xl " +
                     (hasActiveFilters
-                      ? "bg-slate-950 text-white hover:bg-slate-800"
-                      : "border border-slate-100 bg-slate-50 text-slate-300 hover:opacity-100")
+                      ? "bg-slate-900 text-white hover:bg-slate-800"
+                      : "border border-slate-200 bg-white text-slate-400 hover:opacity-100")
                   }
                 >
                   Clear filters
@@ -440,7 +434,7 @@ export default function FindLocalWork() {
                       key={filter.key}
                       type="button"
                       onClick={filter.clear}
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-white hover:text-slate-950"
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                       title={`Remove ${filter.label}`}
                     >
                       <span className="truncate">{filter.label}</span>
@@ -450,18 +444,18 @@ export default function FindLocalWork() {
                 </div>
               ) : null}
 
-              <div className="mt-2 text-xs text-slate-500">
+              <div className="mt-3 text-xs text-slate-500">
                 Showing {filteredProjects.length} of {projects.length} projects
               </div>
             </div>
-          </Card>
+          </div>
 
           {filteredProjects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-600">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500 backdrop-blur-md">
               No job postings match those filters.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProjects.map((p) => {
                 const coverSrc = pickCover(p);
                 const distanceLabel = formatDistanceMiles(p.distance_miles);
@@ -475,7 +469,7 @@ export default function FindLocalWork() {
                   <Link
                     key={p.id}
                     to={`/projects/${p.id}`}
-                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                    className="group overflow-hidden rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md transition hover:shadow-md"
                   >
                     <div className="relative h-44 bg-slate-100">
                       {coverSrc ? (
@@ -494,16 +488,16 @@ export default function FindLocalWork() {
                       )}
 
                       <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                        <Badge className="bg-[#47576B] text-[11px] font-semibold text-white">
+                        <Badge className="bg-slate-800 text-[11px] font-semibold text-white">
                           Job posting
                         </Badge>
                         {meta.hasNewBid ? (
                           <div className="relative inline-flex h-[22px] items-center pl-3">
-                            <div className="absolute left-0 top-1/3 z-100 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-full bg-[#4A3CFF] text-[11px] font-semibold leading-none text-white shadow-[0_6px_14px_rgba(74,60,255,0.28)]">
+                            <div className="absolute left-0 top-1/3 z-100 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-semibold leading-none text-white shadow-sm">
                               {meta.openCount}
                             </div>
 
-                            <div className="rounded-full border border-indigo-600 bg-white px-3 py-1 text-[11px] font-medium text-indigo-600 shadow-sm">
+                            <div className="rounded-full border border-emerald-600 bg-white px-3 py-1 text-[11px] font-medium text-emerald-700 shadow-sm">
                               New Bid
                             </div>
                           </div>
@@ -527,9 +521,7 @@ export default function FindLocalWork() {
                         {distanceLabel ? (
                           <>
                             <span className="mx-1 text-slate-300">•</span>
-                            <span className="font-semibold text-slate-600">
-                              {distanceLabel}
-                            </span>
+                            <span className="font-semibold text-slate-600">{distanceLabel}</span>
                           </>
                         ) : null}
                       </div>
@@ -540,7 +532,7 @@ export default function FindLocalWork() {
                         </div>
                       )}
 
-                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-3 text-xs">
                           <div className="text-slate-600">
                             <span className="font-medium text-slate-800">
@@ -562,8 +554,8 @@ export default function FindLocalWork() {
                             {loadingBidMeta && bidMeta[p.id] === undefined
                               ? "Loading…"
                               : meta.openCount > 0
-                                ? `${meta.openCount} open`
-                                : "No open bids"}
+                              ? `${meta.openCount} open`
+                              : "No open bids"}
                           </div>
                         </div>
                       </div>
