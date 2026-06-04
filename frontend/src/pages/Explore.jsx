@@ -894,7 +894,7 @@ export default function Explore() {
             </div>
             <button
               type="button"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white/80 px-4 text-sm font-medium text-slate-700 transition hover:bg-white"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               <SymbolIcon name="tune" className="text-[18px]" />
               Filters
@@ -1090,7 +1090,7 @@ export default function Explore() {
               </div>
               <button
                 type="button"
-                className="hidden shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:inline-flex"
+                className="hidden h-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:inline-flex"
               >
                 View All Contractors
               </button>
@@ -1219,7 +1219,7 @@ export default function Explore() {
               <button
                 type="button"
                 onClick={() => setVisibleDirectoryCount((prev) => prev + 9)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 Show More
                 <span className="text-slate-400">

@@ -389,7 +389,7 @@ export default function App() {
                 <Link
                   to={previewPath}
                   title="This toggle is only for viewing/previewing the other guide page."
-                  className="hidden h-9 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex"
+                  className="hidden h-10 items-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 lg:inline-flex"
                 >
                   {previewLabel}
                 </Link>
