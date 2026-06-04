@@ -1156,57 +1156,57 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <header className="flex min-h-14 items-center mb-1">
         <SectionTitle className="!mb-0">Dashboard</SectionTitle>
       </header>
 
-      <Card className="rounded-2xl border border-slate-200 bg-white p-0 shadow-none">
-        <div className="flex min-h-[250px] flex-col items-center justify-center px-6 py-0 text-center">
-          <div className="mb-5 text-slate-400">
-            <SymbolIcon name={primaryProjectIcon} className="text-[52px]" weight={300} />
+      <div className="rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md">
+        <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-8 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+            <SymbolIcon name={primaryProjectIcon} className="text-[32px]" weight={400} />
           </div>
 
-          <div className="text-[1.05rem] font-semibold tracking-[-0.02em] text-slate-900">
+          <div className="text-lg font-semibold tracking-tight text-slate-900">
             {primaryProjectTitle}
           </div>
 
-          <p className="mt-3 max-w-xl text-[1.05rem] text-slate-500">
+          <p className="mt-2 max-w-md text-sm text-slate-500">
             {primaryProjectHelper}
           </p>
 
           <Button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="mt-8 inline-flex h-14 items-center gap-3 rounded-xl !bg-indigo-600 px-8 text-[1.05rem] font-semibold !text-white shadow-sm hover:!bg-indigo-700"
+            className="mt-6 inline-flex h-12 items-center gap-2.5 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
-            <SymbolIcon name={primaryProjectButtonIcon} className="text-[24px]" weight={400} />
+            <SymbolIcon name={primaryProjectButtonIcon} className="text-[20px]" weight={400} />
             {primaryProjectButtonLabel}
           </Button>
         </div>
-      </Card>
+      </div>
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
 
       <SavedLikesCard />
 
-      <Card className="p-5 border border-sky-200 bg-sky-50/40">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+        <div className="mb-4 flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">Your Job Posts</div>
-            <div className="text-xs text-slate-600">
+            <div className="text-xs text-slate-500">
               Drafts are editable. Published posts require unpublishing to edit.
             </div>
           </div>
-          <Badge className="bg-white-600 text-slate-700">{myJobPosts.length} posts</Badge>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">{myJobPosts.length} posts</span>
         </div>
 
         {myJobPosts.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-sky-200 bg-white p-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-500">
             No job posts yet. Turn on <span className="font-medium">Job Posting</span> when creating a project.
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {myJobPosts
               .slice()
               .sort((a, b) => {
@@ -1229,9 +1229,9 @@ export default function Dashboard() {
                 const hasBids = Number(p?.bid_count || bidMeta.totalCount || 0) > 0;
 
                 return (
-                  <Card
+                  <div
                     key={`job-${p.id}`}
-                    className="cursor-pointer overflow-hidden border border-sky-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
+                    className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md"
                     onClick={() => window.open(`/projects/${p.id}`, "_self")}
                     role="button"
                     tabIndex={0}
@@ -1253,28 +1253,28 @@ export default function Dashboard() {
                           }}
                         />
                       ) : (
-                        <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                        <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-400">
                           No cover
                         </div>
                       )}
 
-                      <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                        <Badge className="bg-slate-900 text-white">Job post</Badge>
+                      <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                        <Badge className="bg-slate-800 text-[10px] font-semibold text-white">Job post</Badge>
                         {isPrivateJob ? (
-                          <Badge className="inline-flex items-center gap-1 bg-[#ABBED1] text-[#27384A]">
-                            <SymbolIcon name="lock" className="text-[14px]" weight={500} />
+                          <Badge className="inline-flex items-center gap-1 bg-slate-700 text-[10px] text-white">
+                            <SymbolIcon name="lock" className="text-[12px]" weight={500} />
                             Private
                           </Badge>
                         ) : null}
                         {isAwarded ? (
                           <AwardedIcon />
                         ) : isPublished ? (
-                          <Badge className="bg-slate-900 text-white">Published</Badge>
+                          <Badge className="bg-emerald-600 text-[10px] text-white">Published</Badge>
                         ) : (
-                          <Badge className="bg-slate-200 text-slate-800">Draft</Badge>
+                          <Badge className="bg-slate-200 text-[10px] text-slate-700">Draft</Badge>
                         )}
                         {!isAwarded && hasBids ? (
-                          <Badge className="!border !border-orange-200 !bg-orange-50 !text-orange-700">
+                          <Badge className="bg-amber-500 text-[10px] text-white">
                             Bid
                           </Badge>
                         ) : null}
@@ -1282,24 +1282,24 @@ export default function Dashboard() {
                     </div>
 
                     <div className="p-4">
-                      <div className="mb-1 flex items-start justify-between gap-3">
+                      <div className="mb-1 flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="truncate font-semibold">{p.title || "Untitled job post"}</div>
+                          <div className="truncate text-sm font-semibold text-slate-900">{p.title || "Untitled job post"}</div>
                           {p.location ? (
                             <div className="text-[11px] text-slate-500">{p.location}</div>
                           ) : null}
                         </div>
-                        {p.category ? <Badge className="shrink-0">{p.category}</Badge> : null}
+                        {p.category ? <Badge className="shrink-0 bg-slate-100 text-[10px] text-slate-600">{p.category}</Badge> : null}
                       </div>
 
-                      <div className="line-clamp-2 text-sm text-slate-700">
+                      <div className="line-clamp-2 text-xs text-slate-600">
                         {p.job_summary || p.summary || <span className="opacity-60">No summary</span>}
                       </div>
 
-                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
                         <div className="flex items-center justify-between gap-3 text-xs">
-                          <div className="text-slate-600">
-                            <span className="font-medium text-slate-800">
+                          <div className="text-slate-500">
+                            <span className="font-medium text-slate-700">
                               {bidMeta.totalCount}
                             </span>{" "}
                             total bid{bidMeta.totalCount === 1 ? "" : "s"}
@@ -1308,10 +1308,10 @@ export default function Dashboard() {
                             className={
                               "font-medium " +
                               (isAwarded
-                                ? "text-amber-700"
+                                ? "text-amber-600"
                                 : bidMeta.openCount > 0
-                                ? "text-emerald-700"
-                                : "text-slate-500")
+                                ? "text-emerald-600"
+                                : "text-slate-400")
                             }
                           >
                             {isAwarded
@@ -1324,70 +1324,71 @@ export default function Dashboard() {
                       </div>
 
                       <div className="mt-3 flex w-full flex-nowrap gap-2">
-                        <GhostButton
-                          className="w-1/2 min-w-0"
+                        <button
+                          type="button"
+                          className="flex h-9 w-1/2 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                           onClick={(e) => {
                             e.stopPropagation();
                             window.open(`/projects/${p.id}`, "_self");
                           }}
                         >
                           Open
-                        </GhostButton>
+                        </button>
 
-                        <Button
-                          className="w-1/2 min-w-0"
+                        <button
                           type="button"
+                          className="flex h-9 w-1/2 items-center justify-center rounded-xl bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800"
                           onClick={(e) => {
                             e.stopPropagation();
                             openEditProject(p);
                           }}
                         >
                           Edit
-                        </Button>
+                        </button>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 );
               })}
           </div>
         )}
-      </Card>
+      </div>
 
       {!isHomeownerAccount ? (
-      <Card className="p-5">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+        <div className="mb-4 flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">Your Bids</div>
-            <div className="text-xs text-slate-600">
+            <div className="text-xs text-slate-500">
               Accepted bids stay visible here after the posting closes.
             </div>
           </div>
-          <Badge>{myBids.length} bids</Badge>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">{myBids.length} bids</span>
         </div>
 
         {myBids.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-500">
             You have not placed any bids yet.
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {myBids.map((bid) => {
               const status = (bid.status || "").toLowerCase();
               const statusBadgeClass =
                 status === "accepted"
-                  ? "border border-[#8FA5BB] bg-[#ABBED1] text-[#27384A]"
+                  ? "bg-emerald-600 text-white"
                   : status === "declined"
                   ? "bg-rose-100 text-rose-700"
                   : status === "withdrawn"
-                  ? "bg-slate-200 text-slate-700"
+                  ? "bg-slate-200 text-slate-600"
                   : status === "revision_requested"
                   ? "bg-sky-100 text-sky-700"
-                  : "bg-amber-100 text-amber-800";
+                  : "bg-amber-100 text-amber-700";
 
               return (
-                <Card
+                <div
                   key={`bid-${bid.id}`}
-                  className="overflow-hidden border border-slate-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
+                  className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md"
                 >
                   <div className="p-4">
                     <button
@@ -1395,9 +1396,9 @@ export default function Dashboard() {
                       onClick={() => setActiveBidCard(bid)}
                       className="block w-full cursor-pointer text-left"
                     >
-                      <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="mb-2 flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="truncate font-semibold">
+                          <div className="truncate text-sm font-semibold text-slate-900">
                             {bid.project_title || `Project #${bid.project}`}
                           </div>
                           {bid.project_owner_username ? (
@@ -1406,14 +1407,14 @@ export default function Dashboard() {
                               <Link
                                 to={`/profiles/${bid.project_owner_username}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                                className="font-medium text-slate-700 hover:text-slate-900 hover:underline"
                               >
                                 {bid.project_owner_username}
                               </Link>
                             </div>
                           ) : null}
                         </div>
-                        <Badge className={statusBadgeClass}>
+                        <Badge className={"shrink-0 text-[10px] " + statusBadgeClass}>
                           {status === "accepted"
                             ? "Accepted"
                             : status === "declined"
@@ -1421,59 +1422,61 @@ export default function Dashboard() {
                             : status === "withdrawn"
                             ? "Withdrawn"
                             : status === "revision_requested"
-                            ? "Revision Requested"
+                            ? "Revision"
                             : "Pending"}
                         </Badge>
                       </div>
 
-                      <div className="text-sm font-semibold text-slate-900">
+                      <div className="text-base font-semibold text-slate-900">
                         {bid.display_amount || "—"}
                       </div>
 
                       {bid.proposal_text || bid.message ? (
-                        <div className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">
+                        <div className="mt-2 line-clamp-2 text-xs text-slate-600">
                           {bid.proposal_text || bid.message}
                         </div>
                       ) : null}
 
                       {status !== "accepted" && bid.owner_response_note ? (
-                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
+                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                             Owner note
                           </div>
-                          <div className="whitespace-pre-wrap">{bid.owner_response_note}</div>
+                          <div className="line-clamp-2">{bid.owner_response_note}</div>
                         </div>
                       ) : null}
                     </button>
 
                     <div className="mt-3 flex w-full flex-nowrap gap-2">
-                      <Button
-                        className="w-full min-w-0 !bg-[#CB633A] !text-white hover:!bg-[#A94F2E]"
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center justify-center rounded-xl bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveBidCard(bid);
                         }}
                       >
                         View Bid
-                      </Button>
+                      </button>
 
-                      <GhostButton
-                        className="w-full min-w-0"
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(`/projects/${bid.project}`, "_self");
                         }}
                       >
                         Open Job
-                      </GhostButton>
+                      </button>
                     </div>
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
         )}
-      </Card>
+      </div>
       ) : null}
 
       {activeBidCard ? (
@@ -1481,22 +1484,22 @@ export default function Dashboard() {
           const activeBidStatus = (activeBidCard.status || "").toLowerCase();
           const activeBidStatusBadgeClass =
             activeBidStatus === "accepted"
-              ? "border border-[#8FA5BB] bg-[#ABBED1] text-[#27384A]"
+              ? "bg-emerald-600 text-white"
               : activeBidStatus === "declined"
               ? "bg-rose-100 text-rose-700"
               : activeBidStatus === "withdrawn"
-              ? "bg-slate-200 text-slate-700"
+              ? "bg-slate-200 text-slate-600"
               : activeBidStatus === "revision_requested"
               ? "bg-sky-100 text-sky-700"
-              : "bg-amber-100 text-amber-800";
+              : "bg-amber-100 text-amber-700";
 
           return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6" onClick={() => setActiveBidCard(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm" onClick={() => setActiveBidCard(null)}>
           <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4">
               <div>
                 <div className="text-lg font-semibold text-slate-900">
                   {activeBidCard.project_title || `Project #${activeBidCard.project}`}
@@ -1506,7 +1509,7 @@ export default function Dashboard() {
                     by{" "}
                     <Link
                       to={`/profiles/${activeBidCard.project_owner_username}`}
-                      className="font-medium text-sky-700 hover:text-sky-800 hover:underline"
+                      className="font-medium text-slate-700 hover:text-slate-900 hover:underline"
                     >
                       {activeBidCard.project_owner_username}
                     </Link>
@@ -1516,7 +1519,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => setActiveBidCard(null)}
-                className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Close
               </button>
@@ -1524,14 +1527,14 @@ export default function Dashboard() {
 
             <div className="space-y-4 px-6 py-5">
               <>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm text-slate-600">
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <div>
                       Owner:{" "}
                       {activeBidCard.project_owner_username ? (
                         <Link
                           to={`/profiles/${activeBidCard.project_owner_username}`}
-                          className="font-semibold text-sky-700 hover:text-sky-800 hover:underline"
+                          className="font-semibold text-slate-700 hover:text-slate-900 hover:underline"
                         >
                           {activeBidCard.project_owner_username}
                         </Link>
@@ -1665,9 +1668,9 @@ export default function Dashboard() {
               </div>
 
               <div className="flex justify-end">
-                <GhostButton onClick={() => window.open(`/projects/${activeBidCard.project}`, "_self")}>
+                <button type="button" onClick={() => window.open(`/projects/${activeBidCard.project}`, "_self")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                   Open Job
-                </GhostButton>
+                </button>
               </div>
             </div>
           </div>
@@ -1677,23 +1680,23 @@ export default function Dashboard() {
       ) : null}
 
       {isHomeownerAccount ? (
-      <Card className="p-5">
+      <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-800">Your Reference Gallery</div>
-            <div className="text-xs text-slate-600">
+            <div className="text-sm font-semibold text-slate-900">Your Reference Gallery</div>
+            <div className="text-xs text-slate-500">
               Upload sample inspiration to show the style and quality you want. These images can appear on your public profile when you choose to make it visible.
             </div>
           </div>
-          <Badge>{referenceGallery.length} images</Badge>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">{referenceGallery.length} images</span>
         </div>
 
         <div
           className={
-            "mb-4 rounded-2xl border px-4 py-4 transition " +
+            "mb-4 rounded-xl border px-4 py-4 transition " +
             (meUser?.public_profile_enabled
-              ? "border-emerald-300 bg-emerald-50"
-              : "border-slate-200 bg-slate-50")
+              ? "border-emerald-200 bg-emerald-50/60"
+              : "border-slate-100 bg-slate-50/60")
           }
         >
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1768,22 +1771,22 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-4">
             <div className="flex justify-end">
-              <Button
+              <button
                 type="button"
                 onClick={() => referenceUploadRef.current?.click()}
-                className="gap-2"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
               >
                 <SymbolIcon name="add_photo_alternate" className="text-[18px]" />
                 {referenceGalleryBusy ? "Uploading..." : "Add photos"}
-              </Button>
+              </button>
             </div>
 
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {referenceGallery.map((item) => {
                 const imageSrc = toUrl(item.image_url || item.image || "");
                 return (
-                  <Card key={item.id} className="overflow-hidden border border-slate-200">
-                    <div className="h-44 bg-slate-100">
+                  <div key={item.id} className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+                    <div className="h-36 bg-slate-100">
                       {imageSrc ? (
                         <img src={imageSrc} alt={item.caption || "Reference image"} className="h-full w-full object-cover" />
                       ) : null}
@@ -1801,52 +1804,53 @@ export default function Dashboard() {
                           );
                         }}
                         onBlur={() => saveReferenceCaption(item)}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-300 focus:outline-none"
                         placeholder="Short caption or style note (optional)"
                       />
                       <div className="flex justify-between gap-2">
-                        <GhostButton
-                          className="w-full"
+                        <button
+                          type="button"
+                          className="flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                           onClick={() => window.open(`/profiles/${meUser.username}`, "_self")}
                         >
                           View profile
-                        </GhostButton>
-                        <Button
+                        </button>
+                        <button
                           type="button"
-                          className="w-full !bg-rose-600 hover:!bg-rose-700"
+                          className="flex h-9 w-full items-center justify-center rounded-xl bg-rose-600 text-sm font-medium text-white transition hover:bg-rose-700"
                           onClick={() => deleteReferenceItem(item.id)}
                         >
                           Remove
-                        </Button>
+                        </button>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 );
               })}
             </div>
           </div>
         )}
-      </Card>
+      </div>
       ) : (
-      <Card className="p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-800">Your Projects</div>
-          <Badge>{list.length} shown</Badge>
+      <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-sm font-semibold text-slate-900">Your Projects</div>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">{list.length} shown</span>
         </div>
 
         {list.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            You don’t have any projects yet.
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-500">
+            You don&apos;t have any projects yet.
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {list.map((p) => {
               const coverSrc = getProjectCover(p);
 
               return (
-                <Card
+                <div
                   key={p.id}
-                  className="cursor-pointer overflow-hidden transition hover:border-indigo-200 hover:shadow-md"
+                  className="cursor-pointer overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md"
                   onClick={() => window.open(`/projects/${p.id}`, "_self")}
                   role="button"
                   tabIndex={0}
@@ -1867,10 +1871,81 @@ export default function Dashboard() {
                       }}
                     />
                   ) : (
-                    <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                    <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-400">
                       No cover
                     </div>
                   )}
+
+                  <div className="p-4">
+                    <div className="mb-1 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">{p.title}</div>
+                      </div>
+
+                      {p.category ? <Badge className="shrink-0 bg-slate-100 text-[10px] text-slate-600">{p.category}</Badge> : null}
+                    </div>
+
+                    <div className="line-clamp-2 text-xs text-slate-600">
+                      {p.summary || <span className="opacity-60">No summary</span>}
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                      {p.location ? (
+                        <div>
+                          <span className="text-slate-400">Location:</span> {p.location}
+                        </div>
+                      ) : null}
+
+                      {p.budget ? (
+                        <div>
+                          <span className="text-slate-400">Budget:</span> {p.budget}
+                        </div>
+                      ) : null}
+
+                      {p.sqf ? (
+                        <div>
+                          <span className="text-slate-400">Sq Ft:</span> {p.sqf}
+                        </div>
+                      ) : null}
+
+                      {p.highlights ? (
+                        <div className="col-span-2 truncate">
+                          <span className="text-slate-400">Highlights:</span> {p.highlights}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 flex w-full flex-nowrap gap-2">
+                      <button
+                        type="button"
+                        className="flex h-9 w-1/2 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/projects/${p.id}`, "_self");
+                        }}
+                      >
+                        Open
+                      </button>
+
+                      <button
+                        type="button"
+                        className="flex h-9 w-1/2 items-center justify-center rounded-xl bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditProject(p);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      )}
 
                   <div className="p-4">
                     <div className="mb-1 flex items-start justify-between gap-3">
@@ -1912,59 +1987,61 @@ export default function Dashboard() {
                     </div>
 
                     <div className="mt-3 flex w-full flex-nowrap gap-2">
-                      <GhostButton
-                        className="w-1/2 min-w-0"
+                      <button
+                        type="button"
+                        className="flex h-9 w-1/2 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(`/projects/${p.id}`, "_self");
                         }}
                       >
                         Open
-                      </GhostButton>
+                      </button>
 
-                      <Button
-                        className="w-1/2 min-w-0"
+                      <button
+                        type="button"
+                        className="flex h-9 w-1/2 items-center justify-center rounded-xl bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800"
                         onClick={(e) => {
                           e.stopPropagation();
                           openEditProject(p);
                         }}
                       >
                         Edit
-                      </Button>
+                      </button>
                     </div>
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
         )}
-      </Card>
+      </div>
       )}
 
       {!isHomeownerAccount ? (
-      <Card className="p-5 border border-emerald-200 bg-emerald-50/30">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+        <div className="mb-4 flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">Invited Job Posts</div>
-            <div className="text-xs text-slate-600">
+            <div className="text-xs text-slate-500">
               Private jobs you were invited to review and bid on.
             </div>
           </div>
-          <Badge className="bg-white text-slate-700">{invitedJobPosts.length} invites</Badge>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">{invitedJobPosts.length} invites</span>
         </div>
 
         {invitedJobPosts.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-emerald-200 bg-white p-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-500">
             No private job invites yet.
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {invitedJobPosts.map((p) => {
               const coverSrc = getProjectCover(p);
               return (
-                <Card
+                <div
                   key={`invite-${p.id}`}
-                  className="cursor-pointer overflow-hidden border border-emerald-200 bg-white transition hover:border-indigo-200 hover:shadow-md"
+                  className="cursor-pointer overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md"
                   onClick={() => window.open(`/projects/${p.id}`, "_self")}
                   role="button"
                   tabIndex={0}
@@ -1980,20 +2057,20 @@ export default function Dashboard() {
                       <img
                         src={coverSrc}
                         alt={p.title || "private job cover"}
-                        className="h-44 w-full object-cover"
+                        className="h-36 w-full object-cover"
                         onError={(e) => {
                           e.currentTarget.src = "/placeholder.png";
                         }}
                       />
                     ) : (
-                      <div className="flex h-44 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                      <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-400">
                         No image
                       </div>
                     )}
 
-                    <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                      <Badge className="bg-[#47576B] text-white">Private invite</Badge>
-                      <Badge className="bg-white text-slate-700">Job post</Badge>
+                    <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+                      <Badge className="bg-slate-800 text-[10px] font-semibold text-white">Private invite</Badge>
+                      <Badge className="bg-white text-[10px] text-slate-700 shadow-sm">Job post</Badge>
                     </div>
                   </div>
 
@@ -2011,29 +2088,30 @@ export default function Dashboard() {
                       ) : null}
                     </div>
                     {(p.job_summary || p.summary) ? (
-                      <div className="mt-2 line-clamp-3 text-xs text-slate-600">
+                      <div className="mt-2 line-clamp-2 text-xs text-slate-600">
                         {p.job_summary || p.summary}
                       </div>
                     ) : null}
 
-                    <div className="mt-3 flex w-full flex-nowrap gap-2">
-                      <GhostButton
-                        className="w-full min-w-0"
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center justify-center rounded-xl bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(`/projects/${p.id}`, "_self");
                         }}
                       >
                         Open Invite
-                      </GhostButton>
+                      </button>
                     </div>
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
         )}
-      </Card>
+      </div>
       ) : null}
 
       {saveToast ? (
@@ -2053,17 +2131,17 @@ export default function Dashboard() {
       ) : null}
 
       {editingId && isDesktop ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
               <div className="text-sm font-semibold text-slate-900">Edit Project</div>
-              <Button
+              <button
                 type="button"
-                variant="outline"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 onClick={() => setEditingId("")}
               >
                 Close
-              </Button>
+              </button>
             </div>
 
             <div className="p-4">
@@ -2095,17 +2173,17 @@ export default function Dashboard() {
       ) : null}
 
       {createOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
               <div className="text-sm font-semibold text-slate-900">Create Project</div>
-              <Button
+              <button
                 type="button"
-                variant="outline"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 onClick={() => setCreateOpen(false)}
               >
                 Close
-              </Button>
+              </button>
             </div>
 
             <div className="p-4">
@@ -2130,24 +2208,24 @@ export default function Dashboard() {
       ) : null}
 
       {unpublishModal?.open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-white/60 bg-white p-5 shadow-2xl">
             <div className="text-sm font-semibold text-slate-900">
               Unpublish this post to enable editing
             </div>
-            <div className="mt-2 text-sm text-slate-700">
+            <div className="mt-2 text-sm text-slate-600">
               Warning: Current post data may be lost. You can re-publish after editing.
             </div>
 
             <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
+              <button
                 type="button"
-                variant="outline"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                 onClick={() => setUnpublishModal({ open: false, project: null })}
                 disabled={busy}
               >
                 Keep it published
-              </Button>
+              </button>
 
               <Button
                 type="button"
