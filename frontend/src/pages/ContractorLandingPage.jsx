@@ -484,113 +484,175 @@ export default function ContractorLandingPage() {
       <LandingNav />
       <ContractorSetupBanner />
       <main>
-        <Container className="py-12 sm:py-16 lg:py-20">
-          <section className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-            {/* Left: Content */}
-            <div className="max-w-xl">
-              <Badge className="border-[#E4E6EE] bg-[#F6F7FB] font-semibold uppercase tracking-[0.12em] text-slate-600">
-                For contractors
-              </Badge>
-              <h1 className="mt-5 text-4xl font-bold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.5rem]">
-                Show real work. Connect with real homeowners.
-              </h1>
-              <p className="mt-6 text-lg leading-relaxed text-slate-600">
-                Build a focused public profile, showcase completed projects, and
-                bid on homeowner projects directly.
-              </p>
-              <div className="mt-8 flex flex-wrap items-center gap-4">
-                <Link
-                  to={primaryCtaPath}
-                  className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                >
-                  {primaryCtaLabel}
-                </Link>
-                <Link
-                  to="/work"
-                  className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-6 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                >
-                  Explore Projects
-                </Link>
-              </div>
-              <div className="mt-8 flex items-center gap-6 text-sm text-slate-500">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
-                    <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
-                  </span>
-                  Free to join
+        {/* Hero Section */}
+        <section className="relative overflow-hidden">
+          {/* Background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50/60 via-transparent to-slate-50/50" />
+          <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-blue-100/40 to-slate-100/30 blur-3xl" />
+          <div className="absolute -bottom-20 -right-20 h-[400px] w-[400px] rounded-full bg-gradient-to-tr from-slate-100/60 to-blue-50/40 blur-3xl" />
+          
+          <Container className="relative py-16 sm:py-20 lg:py-24">
+            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+              {/* Left: Content */}
+              <div className="max-w-xl">
+                <Badge className="border-blue-200/60 bg-blue-50 font-semibold uppercase tracking-[0.12em] text-blue-700">
+                  For contractors
+                </Badge>
+                <h1 className="mt-5 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.5rem]">
+                  Show real work. Connect with real homeowners.
+                </h1>
+                <p className="mt-6 text-pretty text-lg leading-relaxed text-slate-600">
+                  Build a focused public profile, showcase completed projects, and bid on homeowner projects directly.
+                </p>
+                <div className="mt-8 flex flex-wrap items-center gap-4">
+                  <Link
+                    to={primaryCtaPath}
+                    className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                  >
+                    {primaryCtaLabel}
+                  </Link>
+                  <Link
+                    to="/work"
+                    className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    Explore Projects
+                  </Link>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
-                    <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
-                  </span>
-                  No monthly fees
+                <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                    </span>
+                    Free to join
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                    </span>
+                    No monthly fees
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                    </span>
+                    Quality leads
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Right: Visual */}
-            <div className="relative hidden lg:block">
+              {/* Right: Visual - Profile Preview */}
               <div className="relative">
-                {/* Main profile card */}
-                <div className="relative z-10 rounded-2xl border border-white/60 bg-white/80 p-6 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
-                      JD
+                {/* Mobile/Tablet: Job cards preview */}
+                <div className="lg:hidden">
+                  <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
+                    <div className="flex-shrink-0 w-[220px] overflow-hidden rounded-2xl border border-white/60 bg-white/90 p-4 shadow-lg backdrop-blur-sm">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                          <SymbolIcon name="work" className="text-[18px] text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">Kitchen Remodel</div>
+                          <div className="text-xs text-slate-500">2.4 mi away</div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-600 mb-2">Budget: $15,000 - $25,000</div>
+                      <Badge className="bg-emerald-50 text-emerald-700 text-[10px]">New Lead</Badge>
                     </div>
-                    <div>
-                      <div className="text-base font-semibold text-slate-900">Your Public Profile</div>
-                      <div className="text-xs text-slate-500">Showcase your best work</div>
+                    <div className="flex-shrink-0 w-[220px] overflow-hidden rounded-2xl border border-white/60 bg-white/90 p-4 shadow-lg backdrop-blur-sm">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                          <SymbolIcon name="construction" className="text-[18px] text-amber-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">Deck Building</div>
+                          <div className="text-xs text-slate-500">5.1 mi away</div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-600 mb-2">Budget: $8,000 - $12,000</div>
+                      <Badge className="bg-blue-50 text-blue-700 text-[10px]">3 Bids</Badge>
+                    </div>
+                    <div className="flex-shrink-0 w-[220px] overflow-hidden rounded-2xl border border-white/60 bg-white/90 p-4 shadow-lg backdrop-blur-sm">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                          <SymbolIcon name="bathtub" className="text-[18px] text-slate-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">Bathroom Reno</div>
+                          <div className="text-xs text-slate-500">3.8 mi away</div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-600 mb-2">Budget: $10,000 - $18,000</div>
+                      <Badge className="bg-emerald-50 text-emerald-700 text-[10px]">New Lead</Badge>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <img src={profileImages[0]} alt="" className="aspect-square rounded-lg object-cover" />
-                    <img src={profileImages[1]} alt="" className="aspect-square rounded-lg object-cover" />
-                    <img src={profileImages[2]} alt="" className="aspect-square rounded-lg object-cover" />
+                </div>
+
+                {/* Desktop: Stacked profile card */}
+                <div className="relative hidden lg:block">
+                  {/* Main profile card */}
+                  <div className="relative z-10 rounded-2xl border border-white/60 bg-white/90 p-5 shadow-xl backdrop-blur-sm">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
+                          JD
+                        </div>
+                        <div>
+                          <div className="text-base font-semibold text-slate-900">Your Public Profile</div>
+                          <div className="text-xs text-slate-500">Showcase your best work</div>
+                        </div>
+                      </div>
+                      <Badge className="bg-emerald-50 text-emerald-700">Verified</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <img src={profileImages[0]} alt="" className="aspect-square rounded-xl object-cover" />
+                      <img src={profileImages[1]} alt="" className="aspect-square rounded-xl object-cover" />
+                      <img src={profileImages[2]} alt="" className="aspect-square rounded-xl object-cover" />
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {["Decks", "Kitchens", "Bathrooms"].map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {["Decks", "Kitchens", "Bathrooms"].map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-                      >
-                        {tag}
+
+                  {/* Floating job alert card */}
+                  <div className="absolute -bottom-3 -left-6 z-20 rounded-xl border border-white/70 bg-white px-4 py-3 shadow-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100">
+                        <SymbolIcon name="work" className="text-[18px] text-blue-600" />
                       </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Floating job alert card */}
-                <div className="absolute -bottom-4 -left-8 z-20 rounded-xl border border-white/60 bg-white px-4 py-3 shadow-lg">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-                      <SymbolIcon name="work" className="text-[16px] text-blue-600" />
-                    </span>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-900">New project nearby</div>
-                      <div className="text-[11px] text-slate-500">Kitchen Remodel - 2.4 mi</div>
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900">New project nearby</div>
+                        <div className="text-[11px] text-slate-500">Kitchen Remodel - 2.4 mi</div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Floating message card */}
-                <div className="absolute -right-4 top-8 z-20 rounded-xl border border-white/60 bg-white px-4 py-3 shadow-lg">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
-                      <SymbolIcon name="chat_bubble" className="text-[16px] text-emerald-600" />
-                    </span>
-                    <div>
-                      <div className="text-xs font-semibold text-slate-900">Homeowner message</div>
-                      <div className="text-[11px] text-slate-500">&quot;When can you start?&quot;</div>
+                  {/* Floating message card */}
+                  <div className="absolute -right-4 top-8 z-20 rounded-xl border border-white/70 bg-white px-4 py-3 shadow-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
+                        <SymbolIcon name="chat_bubble" className="text-[18px] text-emerald-600" />
+                      </span>
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900">Homeowner message</div>
+                        <div className="text-[11px] text-slate-500">&quot;When can you start?&quot;</div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Background decorative element */}
-                <div className="absolute -left-6 -top-6 -z-10 h-72 w-72 rounded-full bg-gradient-to-br from-blue-100/60 to-slate-100/40 blur-3xl" />
+                  {/* Background card (depth effect) */}
+                  <div className="absolute -right-3 top-4 -z-10 h-full w-full rounded-2xl border border-slate-200/50 bg-white/40" />
+                </div>
               </div>
             </div>
-          </section>
-        </Container>
+          </Container>
+        </section>
 
         <section id="how-it-works" className="border-y border-slate-200 bg-[#F6F5F1] py-16">
           <div className="text-center">
