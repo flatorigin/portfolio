@@ -316,147 +316,102 @@ export default function FindLocalWork() {
   };
 
   return (
-    <div className="py-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">
-            Find Local Work
-          </h1>
-          <p className="text-sm text-slate-600">
-            Browse published <span className="font-medium">job postings</span>.
-          </p>
-        </div>
-        <Link to="/explore" className="text-xs text-slate-600 hover:text-slate-900">
-          ← Back to Explore
-        </Link>
-      </div>
+    <div>
+      {/* Hero header - full viewport width background */}
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-[#F5F3EF] pb-6 pt-8">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <header className="mb-6">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Find Local Work</h1>
+            <p className="mt-2 text-slate-500">Browse published job postings from homeowners in your area</p>
+          </header>
 
-      {loading && <p className="text-sm text-slate-500">Loading jobs…</p>}
-
-      {error && !loading && <p className="text-sm text-red-600">{error}</p>}
-
-      {!loading && !error && projects.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500 backdrop-blur-md">
-          No job postings found yet. Check back soon.
-        </div>
-      )}
-
-      {!loading && !error && projects.length > 0 && (
-        <>
-          <div className="mb-4 rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
-            <div>
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="w-full sm:w-44">
-                  <div className="mb-1 text-xs font-medium text-slate-500">
-                    Search by
-                  </div>
-
-                  <div className="relative">
-                    <select
-                      value={activeSearchField}
-                      onChange={(e) => setActiveSearchField(e.target.value)}
-                      className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                    >
-                      <option value="name">Project name</option>
-                      <option value="location">Location</option>
-                      <option value="sqf">Sqf</option>
-                      <option value="budget">Budget</option>
-                    </select>
-
-                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 text-slate-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="min-w-[280px] flex-1">
-                  <div className="mb-1 text-xs font-medium text-slate-500">
-                    Search project
-                  </div>
-                  <div className="flex h-10 w-full items-center rounded-xl border border-slate-200 bg-white px-3 shadow-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200">
-                    <span className="mr-1 shrink-0 whitespace-nowrap text-sm font-semibold text-slate-700">
-                      {activeSearchLabel}:
-                    </span>
-                    <input
-                      type={
-                        activeSearchField === "sqf" ||
-                        activeSearchField === "budget"
-                          ? "number"
-                          : "text"
-                      }
-                      inputMode={
-                        activeSearchField === "sqf" ||
-                        activeSearchField === "budget"
-                          ? "numeric"
-                          : "text"
-                      }
-                      value={activeSearchValue}
-                      onChange={updateActiveSearch}
-                      placeholder={activeSearchPlaceholder}
-                      className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={!hasActiveFilters}
-                  onClick={clearFilters}
-                  className={
-                    "h-10 whitespace-nowrap rounded-xl px-4 text-sm font-medium transition " +
-                    (hasActiveFilters
-                      ? "bg-slate-900 text-white hover:bg-slate-800"
-                      : "border border-slate-200 bg-white text-slate-400 cursor-not-allowed")
-                  }
-                >
-                  Clear filters
-                </button>
-              </div>
-
-              {activeFilterBadges.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {activeFilterBadges.map((filter) => (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      onClick={filter.clear}
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-                      title={`Remove ${filter.label}`}
-                    >
-                      <span className="truncate">{filter.label}</span>
-                      <SymbolIcon name="close" className="text-[15px]" />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-
-              <div className="mt-3 text-xs text-slate-500">
-                Showing {filteredProjects.length} of {projects.length} projects
-              </div>
+          {/* Search bar - translucent */}
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <SymbolIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400" />
+              <input
+                type="text"
+                value={filters.name}
+                onChange={(e) => setFilters((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Search jobs by name, category, or location..."
+                className="h-11 w-full rounded-xl border-0 bg-white/80 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              />
             </div>
+            <button
+              type="button"
+              disabled={!hasActiveFilters}
+              onClick={clearFilters}
+              className={
+                "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition " +
+                (hasActiveFilters
+                  ? "bg-slate-900 text-white hover:bg-slate-800"
+                  : "border border-slate-200 bg-white text-slate-400 cursor-not-allowed")
+              }
+            >
+              Clear filters
+            </button>
           </div>
 
-          {filteredProjects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500 backdrop-blur-md">
-              No job postings match those filters.
+          {/* Category pills - translucent container */}
+          <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+                  !hasActiveFilters
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "bg-white/80 text-slate-600 hover:bg-white"
+                }`}
+              >
+                All
+              </button>
+              {["Flooring", "Building", "Painting", "Concrete", "Landscaping", "Plumbing", "Electrical", "Cleaning"].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setFilters((prev) => ({ ...prev, name: cat }))}
+                  className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+                    filters.name.toLowerCase() === cat.toLowerCase()
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-white/80 text-slate-600 hover:bg-white"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredProjects.map((p) => {
-                const coverSrc = pickCover(p);
+          </div>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="py-6">
+        {loading && <p className="text-sm text-slate-500">Loading jobs...</p>}
+
+        {error && !loading && <p className="text-sm text-red-600">{error}</p>}
+
+        {!loading && !error && projects.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500 backdrop-blur-md">
+            No job postings found yet. Check back soon.
+          </div>
+        )}
+
+        {!loading && !error && projects.length > 0 && (
+          <>
+            {/* Results count */}
+            <p className="mb-4 text-sm text-slate-500">
+              Showing <span className="font-medium text-slate-700">{filteredProjects.length}</span> of {projects.length} projects
+            </p>
+
+            {filteredProjects.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-10 text-center text-sm text-slate-500 backdrop-blur-md">
+                No job postings match those filters.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredProjects.map((p) => {
+                  const coverSrc = pickCover(p);
                 const distanceLabel = formatDistanceMiles(p.distance_miles);
                 const meta = bidMeta?.[p.id] || {
                   totalCount: 0,
@@ -566,6 +521,7 @@ export default function FindLocalWork() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }
