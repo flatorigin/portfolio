@@ -871,10 +871,10 @@ export default function Explore() {
   }
 
   return (
-    <div className="overflow-x-clip">
-      {/* Hero header with translucent search - full width background */}
-      <div className="relative pb-6 pt-8 shadow-[0_0_0_100vmax_#F5F3EF] [clip-path:inset(0_-100vmax)]" style={{ backgroundColor: '#F5F3EF' }}>
-        <div className="relative">
+    <div>
+      {/* Hero header - full viewport width background */}
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-[#F5F3EF] pb-6 pt-8">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <header className="mb-6">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Explore Projects</h1>
             <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
@@ -1075,10 +1075,10 @@ export default function Explore() {
       </div>
       </div>
 
-      {/* Directory Section - Full width background */}
+      {/* Directory Section - Full viewport width background */}
       {directoryListings.length > 0 ? (
-        <div className="relative mt-12 border-y border-slate-200 py-12 shadow-[0_0_0_100vmax_#F6F5F1] [clip-path:inset(0_-100vmax)]" style={{ backgroundColor: '#F6F5F1' }}>
-          <div className="relative">
+        <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-12 w-screen border-y border-slate-200 bg-[#F6F5F1] py-12">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
             <div className="mb-8 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
