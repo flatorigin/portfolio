@@ -826,50 +826,6 @@ export default function Explore() {
     });
   };
 
-  if (loading) {
-    return (
-      <div>
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
-          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
-        </header>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse">
-              <div className="aspect-[4/3] bg-slate-200" />
-              <div className="space-y-3 p-4">
-                <div className="h-5 w-2/3 rounded bg-slate-200" />
-                <div className="h-4 w-full rounded bg-slate-200" />
-                <div className="h-4 w-1/2 rounded bg-slate-200" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (!projects.length && !directoryListings.length) {
-    return (
-      <div>
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
-          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
-        </header>
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-          <p className="text-slate-600">No projects yet.</p>
-          {authed && (
-            <div className="mt-4">
-              <Button onClick={() => navigate("/dashboard")}>
-                Create your first project
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       {/* Hero header - full viewport width background */}
@@ -936,12 +892,41 @@ export default function Explore() {
 
       {/* Main content area */}
       <div className="py-6">
-        {/* Results count */}
-        <p className="mb-4 text-sm text-slate-500">
-          Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
-        </p>
+        {loading ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse"
+              >
+                <div className="aspect-[4/3] bg-slate-200" />
+                <div className="space-y-3 p-4">
+                  <div className="h-5 w-2/3 rounded bg-slate-200" />
+                  <div className="h-4 w-full rounded bg-slate-200" />
+                  <div className="h-4 w-1/2 rounded bg-slate-200" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !projects.length && !directoryListings.length ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <p className="text-slate-600">No projects yet.</p>
+            {authed ? (
+              <div className="mt-4">
+                <Button onClick={() => navigate("/dashboard")}>
+                  Create your first project
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            {/* Results count */}
+            <p className="mb-4 text-sm text-slate-500">
+              Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
+            </p>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
@@ -1073,10 +1058,12 @@ export default function Explore() {
           );
         })}
       </div>
+          </>
+        )}
       </div>
 
       {/* Directory Section - Full viewport width background */}
-      {directoryListings.length > 0 ? (
+      {!loading && directoryListings.length > 0 ? (
         <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-12 w-screen border-y border-slate-200 bg-[#F6F5F1] py-12">
           <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
             <div className="mb-8 flex items-start justify-between gap-4">
