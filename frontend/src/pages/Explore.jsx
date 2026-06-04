@@ -871,9 +871,9 @@ export default function Explore() {
   }
 
   return (
-    <div>
+    <div className="overflow-x-clip">
       {/* Hero header with translucent search - full width background */}
-      <div className="relative pb-6 pt-8 before:absolute before:inset-0 before:-left-[50vw] before:-right-[50vw] before:ml-[calc(50%-50vw)] before:mr-[calc(50%-50vw)] before:w-screen before:bg-gradient-to-b before:from-slate-100 before:to-slate-50">
+      <div className="relative pb-6 pt-8 shadow-[0_0_0_100vmax_#F5F3EF] [clip-path:inset(0_-100vmax)]" style={{ backgroundColor: '#F5F3EF' }}>
         <div className="relative">
           <header className="mb-6">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Explore Projects</h1>
@@ -1075,9 +1075,9 @@ export default function Explore() {
       </div>
       </div>
 
-      {/* Directory Section - Full width background using pseudo-element */}
+      {/* Directory Section - Full width background */}
       {directoryListings.length > 0 ? (
-        <div className="relative mt-12 py-12 before:absolute before:inset-0 before:-left-[50vw] before:-right-[50vw] before:ml-[calc(50%-50vw)] before:mr-[calc(50%-50vw)] before:w-screen before:border-y before:border-slate-200 before:bg-[#F6F5F1]">
+        <div className="relative mt-12 border-y border-slate-200 py-12 shadow-[0_0_0_100vmax_#F6F5F1] [clip-path:inset(0_-100vmax)]" style={{ backgroundColor: '#F6F5F1' }}>
           <div className="relative">
             <div className="mb-8 flex items-start justify-between gap-4">
               <div>
