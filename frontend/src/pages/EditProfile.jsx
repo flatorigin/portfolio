@@ -934,30 +934,30 @@ export default function EditProfile() {
   ]);
 
   const renderContractorCategoriesSection = () => (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-900">
+          <p className="text-base font-semibold text-slate-900">
             Contracting categories
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-sm text-slate-500">
             Pick one public title and up to {MAX_CONTRACTOR_CATEGORIES}{" "}
             searchable categories. Extra categories help homeowners find you but
             do not appear as profile badges.
           </p>
         </div>
-        <GhostButton
+        <button
           type="button"
           onClick={() => setShowCategoryPicker(true)}
-          className="shrink-0"
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
         >
           Choose categories
-        </GhostButton>
+        </button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">
             Public contractor title
           </label>
           <Input
@@ -972,19 +972,19 @@ export default function EditProfile() {
               <option key={category} value={category} />
             ))}
           </datalist>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1.5 text-xs text-slate-500">
             This is the one category shown publicly on your profile.
           </p>
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">
             Searchable categories
           </label>
           <button
             type="button"
             onClick={() => setShowCategoryPicker(true)}
-            className="flex min-h-[42px] w-full items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm hover:bg-slate-50"
+            className="flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-3 text-left text-sm text-slate-900 shadow-sm hover:bg-slate-50"
           >
             <span
               className={
@@ -1002,7 +1002,7 @@ export default function EditProfile() {
               className="text-[20px] text-slate-400"
             />
           </button>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1.5 text-xs text-slate-500">
             Search uses every selected category, including categories that are
             not shown publicly.
           </p>
@@ -1014,7 +1014,7 @@ export default function EditProfile() {
           {contractorCategories.map((category) => (
             <span
               key={category}
-              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
             >
               {category}
             </span>
@@ -1025,19 +1025,19 @@ export default function EditProfile() {
   );
 
   const renderContactVisibilitySection = () => (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-3">
-        <p className="text-sm font-semibold text-slate-900">
+    <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+      <div className="mb-4">
+        <p className="text-base font-semibold text-slate-900">
           Public contact visibility
         </p>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-sm text-slate-500">
           Visitors can always contact you through platform messaging. Choose
           whether your email or phone should also appear publicly.
         </p>
       </div>
 
       <div className="space-y-3">
-        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3.5">
           <div>
             <div className="text-sm font-medium text-slate-900">
               Public profile visible
@@ -1050,10 +1050,11 @@ export default function EditProfile() {
             type="checkbox"
             checked={!!form.public_profile_enabled}
             onChange={updateToggle("public_profile_enabled")}
+            className="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
           />
         </label>
 
-        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3.5">
           <div>
             <div className="text-sm font-medium text-slate-900">
               Allow direct messages
@@ -1066,6 +1067,7 @@ export default function EditProfile() {
             type="checkbox"
             checked={!!form.allow_direct_messages}
             onChange={handleDirectMessageToggle}
+            className="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
           />
         </label>
 
@@ -1076,7 +1078,7 @@ export default function EditProfile() {
           </p>
         ) : null}
 
-        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3.5">
           <div>
             <div className="text-sm font-medium text-slate-900">
               Show email publicly
@@ -1089,10 +1091,11 @@ export default function EditProfile() {
             type="checkbox"
             checked={!!form.show_contact_email}
             onChange={updateToggle("show_contact_email")}
+            className="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
           />
         </label>
 
-        <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3.5">
           <div>
             <div className="text-sm font-medium text-slate-900">
               Show phone publicly
@@ -1105,6 +1108,7 @@ export default function EditProfile() {
             type="checkbox"
             checked={!!form.show_contact_phone}
             onChange={updateToggle("show_contact_phone")}
+            className="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
           />
         </label>
       </div>
@@ -1221,41 +1225,45 @@ export default function EditProfile() {
 
   return (
     <div>
-      <header className="flex min-h-14 items-center mb-1">
-        <SectionTitle className="!mb-0">Edit Profile</SectionTitle>
-      </header>
+      {/* Full-width header section */}
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-[#F5F3EF] pb-6 pt-8">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <header>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Edit Profile</h1>
+            <p className="mt-2 text-slate-500">Manage your public profile and account settings</p>
+          </header>
+        </div>
+      </div>
 
       {loading ? (
-        <p className="text-sm text-slate-600">Loading your profile…</p>
+        <p className="mt-6 text-sm text-slate-600">Loading your profile…</p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)]">
-          <Card className="space-y-4 p-4">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="relative flex items-center justify-between gap-4">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          {/* Main form column */}
+          <div className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Profile Status Card */}
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <div className="absolute right-0 gap-2">
-                      {!isHomeownerProfile ? (
-                        <VerificationStatusBadge
-                          status={form.effective_verification_status}
-                          label={form.verification_badge_label}
-                        />
-                      ) : null}
-                      <ProfileStatusBadge complete={complete} />
-                    </div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      Profile status
-                    </p>
-                    <p className="mt-3 text-xs text-slate-600">
+                    <p className="text-base font-semibold text-slate-900">Profile status</p>
+                    <p className="mt-2 text-sm text-slate-600">
                       {profileTypeLabel
                         ? `A completed ${profileTypeLabel} profile appear more credible to visitors.`
                         : "A complete profile helps homeowners trust your business more."}
                     </p>
                     {!isHomeownerProfile ? (
-                      <p className="mt-2 text-xs text-slate-500">
-                        Review badges appear after admin review.
-                      </p>
+                      <p className="mt-1 text-xs text-slate-500">Review badges appear after admin review.</p>
                     ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {!isHomeownerProfile ? (
+                      <VerificationStatusBadge
+                        status={form.effective_verification_status}
+                        label={form.verification_badge_label}
+                      />
+                    ) : null}
+                    <ProfileStatusBadge complete={complete} />
                   </div>
                 </div>
               </div>
@@ -1280,16 +1288,16 @@ export default function EditProfile() {
               ) : null}
 
               {!isHomeownerProfile ? (
-                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-slate-800">
+                      <p className="text-base font-semibold text-slate-900">
                         Hero banner (public profile header)
                       </p>
                     </div>
 
                     <div ref={bannerHintRef} className="relative">
-                      <label className="group relative inline-flex w-fit cursor-pointer items-center whitespace-nowrap rounded-lg border border-slate-300 px-4 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                      <label className="group relative inline-flex h-10 cursor-pointer items-center justify-center whitespace-nowrap rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">
                         <input
                           type="file"
                           accept="image/*"
@@ -1349,51 +1357,54 @@ export default function EditProfile() {
               ) : null}
 
               {!isHomeownerProfile ? (
-                <div className="flex items-center gap-3">
-                  {avatarPreview ? (
-                    <img
-                      src={toUrl(avatarPreview)}
-                      alt="Current logo"
-                      className="h-16 w-16 rounded-full border border-slate-200 object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">
-                      No logo
-                    </div>
-                  )}
-
-                  <div ref={logoHintRef} className="relative">
-                    <p className="text-sm font-medium text-slate-800">
-                      Logo / profile image
-                    </p>
-                    <label className="group relative mt-2 inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleLogoChange}
+                <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                  <div className="flex items-center gap-4">
+                    {avatarPreview ? (
+                      <img
+                        src={toUrl(avatarPreview)}
+                        alt="Current logo"
+                        className="h-16 w-16 rounded-full border border-slate-200 object-cover"
                       />
-                      Choose image…
-                      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 whitespace-normal rounded-xl bg-slate-950 p-3 text-left text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
-                        This will be shown on your public profile and projects.
-                      </span>
-                    </label>
-                    {showLogoMobileHint ? (
-                      <MobileUploadHint
-                        onClose={() => {
-                          rememberSessionDismissal(LOGO_HINT_SESSION_KEY);
-                          setShowLogoMobileHint(false);
-                        }}
-                      >
-                        This will be shown on your public profile and projects.
-                      </MobileUploadHint>
-                    ) : null}
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-dashed border-slate-300 text-xs text-slate-400">
+                        No logo
+                      </div>
+                    )}
+
+                    <div ref={logoHintRef} className="relative">
+                      <p className="text-base font-semibold text-slate-900">
+                        Logo / profile image
+                      </p>
+                      <label className="group relative mt-2 inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleLogoChange}
+                        />
+                        Choose image…
+                        <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 whitespace-normal rounded-xl bg-slate-950 p-3 text-left text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 md:block">
+                          This will be shown on your public profile and projects.
+                        </span>
+                      </label>
+                      {showLogoMobileHint ? (
+                        <MobileUploadHint
+                          onClose={() => {
+                            rememberSessionDismissal(LOGO_HINT_SESSION_KEY);
+                            setShowLogoMobileHint(false);
+                          }}
+                        >
+                          This will be shown on your public profile and projects.
+                        </MobileUploadHint>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ) : null}
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+              {/* Display Name */}
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                <label className="mb-2 block text-sm font-medium text-slate-700">
                   Display name
                 </label>
                 <Input
@@ -1408,57 +1419,60 @@ export default function EditProfile() {
               </div>
 
               {!isHomeownerProfile ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                      Hero headline
-                    </label>
-                    <Input
-                      value={form.hero_headline}
-                      onChange={updateField("hero_headline")}
-                      placeholder="We’re changing the way contractors connect"
-                      maxLength={120}
-                    />
-                    <AiWriteButton
-                      className="mt-2"
-                      feature="profile_headline"
-                      payload={{
-                        current_text: form.hero_headline,
-                        notes: form.bio,
-                      }}
-                      label="Draft headline with AI"
-                      onApply={(text) =>
-                        setForm((prev) => ({ ...prev, hero_headline: text }))
-                      }
-                    />
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Short, bold line shown on your public profile hero.
-                    </p>
-                  </div>
+                <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                  <p className="mb-4 text-base font-semibold text-slate-900">Hero content</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                        Hero headline
+                      </label>
+                      <Input
+                        value={form.hero_headline}
+                        onChange={updateField("hero_headline")}
+                        placeholder="We're changing the way contractors connect"
+                        maxLength={120}
+                      />
+                      <AiWriteButton
+                        className="mt-2"
+                        feature="profile_headline"
+                        payload={{
+                          current_text: form.hero_headline,
+                          notes: form.bio,
+                        }}
+                        label="Draft headline with AI"
+                        onApply={(text) =>
+                          setForm((prev) => ({ ...prev, hero_headline: text }))
+                        }
+                      />
+                      <p className="mt-1.5 text-xs text-slate-500">
+                        Short, bold line shown on your public profile hero.
+                      </p>
+                    </div>
 
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                      Hero blurb
-                    </label>
-                    <Textarea
-                      rows={4}
-                      value={form.hero_blurb}
-                      onChange={updateField("hero_blurb")}
-                      placeholder="Connect directly with local pros who let their craftsmanship do the talking…"
-                      className="min-h-[110px]"
-                    />
-                    <AiWriteButton
-                      className="mt-2"
-                      feature="profile_blurb"
-                      payload={{
-                        current_text: form.hero_blurb,
-                        notes: form.bio,
-                      }}
-                      label="Draft blurb with AI"
-                      onApply={(text) =>
-                        setForm((prev) => ({ ...prev, hero_blurb: text }))
-                      }
-                    />
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                        Hero blurb
+                      </label>
+                      <Textarea
+                        rows={4}
+                        value={form.hero_blurb}
+                        onChange={updateField("hero_blurb")}
+                        placeholder="Connect directly with local pros who let their craftsmanship do the talking…"
+                        className="min-h-[110px]"
+                      />
+                      <AiWriteButton
+                        className="mt-2"
+                        feature="profile_blurb"
+                        payload={{
+                          current_text: form.hero_blurb,
+                          notes: form.bio,
+                        }}
+                        label="Draft blurb with AI"
+                        onApply={(text) =>
+                          setForm((prev) => ({ ...prev, hero_blurb: text }))
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -1466,21 +1480,22 @@ export default function EditProfile() {
               {isHomeownerProfile ? renderContactVisibilitySection() : null}
               {!isHomeownerProfile ? renderContactVisibilitySection() : null}
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="mb-3">
-                  <p className="text-sm font-semibold text-slate-900">
+              {/* Required Account Info */}
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                <div className="mb-4">
+                  <p className="text-base font-semibold text-slate-900">
                     Required account info
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     Service area is always public. Email and phone are required
                     for your account, but you control whether they appear on
                     your public profile.
                   </p>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
                       Service area location
                     </label>
                     <Input
@@ -1490,7 +1505,7 @@ export default function EditProfile() {
                       title="Enter a city, region, or postal code such as Media, PA, Toronto, ON, or M5V 2T6"
                       required
                     />
-                    <p className="mt-1 text-[11px] text-slate-500">
+                    <p className="mt-1.5 text-xs text-slate-500">
                       Map updates only after Save. U.S. ZIP codes and Canadian
                       postal codes are supported.
                     </p>
@@ -1498,7 +1513,7 @@ export default function EditProfile() {
 
                   {!isHomeownerProfile ? (
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         Coverage radius (miles)
                       </label>
                       <Input
@@ -1513,7 +1528,7 @@ export default function EditProfile() {
                   ) : null}
 
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
                       Contact email
                     </label>
                     <Input
@@ -1526,7 +1541,7 @@ export default function EditProfile() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
                       Contact phone
                     </label>
                     <Input
@@ -1542,12 +1557,13 @@ export default function EditProfile() {
 
               {isContractorProfile ? renderContractorCategoriesSection() : null}
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="mb-3">
-                  <p className="text-sm font-semibold text-slate-900">
+              {/* Languages Section */}
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                <div className="mb-4">
+                  <p className="text-base font-semibold text-slate-900">
                     Languages spoken
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     Select all languages you speak. These can appear on your
                     public profile.
                   </p>
@@ -1562,13 +1578,13 @@ export default function EditProfile() {
               </div>
 
               {!isHomeownerProfile ? (
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                  <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">
+                      <p className="text-base font-semibold text-slate-900">
                         License and insurance
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-sm text-slate-500">
                         Optional. Add the details you want reviewed. Your public
                         profile should only show a review badge after staff
                         review.
@@ -1580,9 +1596,9 @@ export default function EditProfile() {
                     />
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         License number
                       </label>
                       <Input
@@ -1593,7 +1609,7 @@ export default function EditProfile() {
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         License state / jurisdiction
                       </label>
                       <Input
@@ -1604,7 +1620,7 @@ export default function EditProfile() {
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         Insurance provider
                       </label>
                       <Input
@@ -1615,7 +1631,7 @@ export default function EditProfile() {
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         Insurance policy number
                       </label>
                       <Input
@@ -1626,7 +1642,7 @@ export default function EditProfile() {
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-600">
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         Insurance expiration
                       </label>
                       <Input
@@ -1659,8 +1675,8 @@ export default function EditProfile() {
               ) : null}
 
               {!isHomeownerProfile ? (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     Bio / about
                   </label>
                   <Textarea
@@ -1698,15 +1714,21 @@ export default function EditProfile() {
               )}
               {message && <p className="text-xs text-emerald-600">{message}</p>}
 
-              <Button type="submit" disabled={saving} className="mt-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-6 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+              >
                 {saving ? "Saving…" : "Save changes"}
-              </Button>
+              </button>
             </form>
-          </Card>
+          </div>
 
-          <div className="space-y-4">
-            <Card className="space-y-3 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {/* Sidebar column */}
+          <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+            {/* Account Card */}
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Account
               </div>
               <div className="flex items-center gap-3">
@@ -1730,85 +1752,91 @@ export default function EditProfile() {
                   </div>
                 </div>
               </div>
-            </Card>
+            </div>
 
-            <Card className="space-y-4 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {/* Account Settings Card */}
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+              <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Account Settings
               </div>
 
-              <div className="rounded-xl border border-slate-200 p-4">
-                <button
-                  type="button"
-                  onClick={() => setPasswordOpen((prev) => !prev)}
-                  className="flex w-full items-center justify-between text-left"
-                >
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      Change password
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Update your password any time.
-                    </div>
-                  </div>
-                  <span className="text-sm text-slate-500">
-                    {passwordOpen ? "Hide" : "Open"}
-                  </span>
-                </button>
-                {passwordOpen ? (
-                  <form onSubmit={changePassword} className="mt-3 space-y-3">
-                    <Input
-                      type="password"
-                      value={passwordForm.current_password}
-                      onChange={(e) =>
-                        setPasswordForm((prev) => ({
-                          ...prev,
-                          current_password: e.target.value,
-                        }))
-                      }
-                      placeholder="Current password"
-                    />
-                    <Input
-                      type="password"
-                      value={passwordForm.new_password}
-                      onChange={(e) =>
-                        setPasswordForm((prev) => ({
-                          ...prev,
-                          new_password: e.target.value,
-                        }))
-                      }
-                      placeholder="New password"
-                    />
-                    <Input
-                      type="password"
-                      value={passwordForm.new_password_confirm}
-                      onChange={(e) =>
-                        setPasswordForm((prev) => ({
-                          ...prev,
-                          new_password_confirm: e.target.value,
-                        }))
-                      }
-                      placeholder="Confirm new password"
-                    />
-                    <Button type="submit" disabled={changingPassword}>
-                      {changingPassword ? "Updating..." : "Change Password"}
-                    </Button>
-                  </form>
-                ) : null}
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
+              <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <button
+                    type="button"
+                    onClick={() => setPasswordOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-left"
+                  >
+                    <div>
                       <div className="text-sm font-semibold text-slate-900">
-                        Email
+                        Change password
                       </div>
-                      {!form.email_verified ? (
-                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
-                          Not verified
-                        </span>
-                      ) : (
+                      <div className="mt-1 text-xs text-slate-500">
+                        Update your password any time.
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium text-slate-500">
+                      {passwordOpen ? "Hide" : "Open"}
+                    </span>
+                  </button>
+                  {passwordOpen ? (
+                    <form onSubmit={changePassword} className="mt-4 space-y-3">
+                      <Input
+                        type="password"
+                        value={passwordForm.current_password}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            current_password: e.target.value,
+                          }))
+                        }
+                        placeholder="Current password"
+                      />
+                      <Input
+                        type="password"
+                        value={passwordForm.new_password}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            new_password: e.target.value,
+                          }))
+                        }
+                        placeholder="New password"
+                      />
+                      <Input
+                        type="password"
+                        value={passwordForm.new_password_confirm}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            new_password_confirm: e.target.value,
+                          }))
+                        }
+                        placeholder="Confirm new password"
+                      />
+                      <button
+                        type="submit"
+                        disabled={changingPassword}
+                        className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        {changingPassword ? "Updating..." : "Change Password"}
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-slate-900">
+                          Email
+                        </div>
+                        {!form.email_verified ? (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                            Not verified
+                          </span>
+                        ) : (
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
                           Verified
                         </span>
@@ -1819,20 +1847,21 @@ export default function EditProfile() {
                     </div>
                   </div>
                   {!form.email_verified ? (
-                    <GhostButton
+                    <button
                       type="button"
                       disabled={sendingVerification}
                       onClick={sendVerificationEmail}
+                      className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
                     >
                       {sendingVerification
                         ? "Sending..."
-                        : "Send confirmation email"}
-                    </GhostButton>
+                        : "Send confirmation"}
+                    </button>
                   ) : null}
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <button
                   type="button"
                   onClick={() => setAccountStatusOpen((prev) => !prev)}
@@ -1841,13 +1870,13 @@ export default function EditProfile() {
                   <div className="text-sm font-semibold text-slate-900">
                     Account Status
                   </div>
-                  <span className="text-sm text-slate-500">
+                  <span className="text-sm font-medium text-slate-500">
                     {accountStatusOpen ? "Hide" : "Open"}
                   </span>
                 </button>
 
                 {accountStatusOpen ? (
-                  <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                  <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
                     <div className="text-xs leading-5 text-rose-800">
                       Deactivate hides your public profile. Delete permanently
                       removes the account, blocks this email from registering
@@ -1855,21 +1884,22 @@ export default function EditProfile() {
                       requests. Contact the admin if you need help.
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <GhostButton
+                      <button
                         type="button"
                         disabled={deactivationBusy}
                         onClick={toggleDeactivated}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
                       >
                         {deactivationBusy
                           ? "Updating..."
                           : form.is_deactivated
                             ? "Reactivate profile"
                             : "Deactivate profile"}
-                      </GhostButton>
+                      </button>
                       <button
                         type="button"
                         onClick={() => setShowDeleteModal(true)}
-                        className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                        className="inline-flex h-9 items-center justify-center rounded-lg bg-rose-600 px-3 text-xs font-medium text-white shadow-sm hover:bg-rose-700"
                       >
                         Delete account
                       </button>
@@ -1878,7 +1908,7 @@ export default function EditProfile() {
                 ) : null}
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <button
                   type="button"
                   onClick={() => setServiceAreaOpen((prev) => !prev)}
@@ -1894,13 +1924,13 @@ export default function EditProfile() {
                         : "Your service area is not defined yet."}
                     </div>
                   </div>
-                  <span className="text-sm text-slate-500">
+                  <span className="text-sm font-medium text-slate-500">
                     {serviceAreaOpen ? "Hide" : "Open"}
                   </span>
                 </button>
 
                 {serviceAreaOpen ? (
-                  <div className="mt-3">
+                  <div className="mt-4">
                     <Suspense
                       fallback={
                         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
@@ -1929,16 +1959,17 @@ export default function EditProfile() {
                   </div>
                 ) : null}
               </div>
+              </div>
 
               {securityError ? (
-                <p className="whitespace-pre-wrap text-xs text-red-600">
+                <p className="mt-4 whitespace-pre-wrap text-xs text-red-600">
                   {securityError}
                 </p>
               ) : null}
               {securityMessage ? (
-                <p className="text-xs text-emerald-600">{securityMessage}</p>
+                <p className="mt-4 text-xs text-emerald-600">{securityMessage}</p>
               ) : null}
-            </Card>
+            </div>
 
           </div>
         </div>
