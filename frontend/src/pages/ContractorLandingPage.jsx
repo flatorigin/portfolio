@@ -728,10 +728,11 @@ export default function ContractorLandingPage() {
               Join thousands of homeowners and contractors already using FlatOrigin.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link to={primaryCtaPath}>
-                <Button className="h-11 bg-white px-6 text-slate-900 hover:bg-slate-100">
-                  Join as Contractor
-                </Button>
+              <Link
+                to={primaryCtaPath}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-6 text-sm font-medium text-slate-900 transition hover:bg-slate-100"
+              >
+                Join as Contractor
               </Link>
               <Link
                 to="/work"
