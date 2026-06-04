@@ -258,6 +258,7 @@ export default function Explore() {
   const [directoryLikeMap, setDirectoryLikeMap] = useState({});
   const [directoryLikeCounts, setDirectoryLikeCounts] = useState({});
   const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
+  const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(9);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -1097,7 +1098,7 @@ export default function Explore() {
 
           {filteredDirectoryListings.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {filteredDirectoryListings.map((listing) => {
+              {filteredDirectoryListings.slice(0, visibleDirectoryCount).map((listing) => {
                 const specialties = Array.isArray(listing.specialties)
                   ? listing.specialties
                   : [];
@@ -1211,6 +1212,22 @@ export default function Explore() {
               No approved directory listings match this search.
             </div>
           )}
+
+          {/* Show More button */}
+          {filteredDirectoryListings.length > visibleDirectoryCount ? (
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setVisibleDirectoryCount((prev) => prev + 9)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                Show More
+                <span className="text-slate-400">
+                  ({filteredDirectoryListings.length - visibleDirectoryCount} remaining)
+                </span>
+              </button>
+            </div>
+          ) : null}
 
           {/* Footer disclaimer */}
           <p className="mt-8 text-center text-xs text-slate-400">
