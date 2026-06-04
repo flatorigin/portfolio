@@ -631,9 +631,9 @@ export default function ProjectEditorCard({
                   const isCover = String(currentCoverId ?? "") === String(it.id ?? "");
 
                   return (
-                    <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
                       {/* Image/Video preview */}
-                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-slate-100">
                         {mediaType === "video" ? (
                           <>
                             {thumbnailUrl ? (
@@ -697,13 +697,13 @@ export default function ProjectEditorCard({
                       </div>
 
                       {/* Caption input and save */}
-                      <div className="p-3">
+                      <div className="shrink-0 border-t border-slate-100 bg-white p-3">
                         {isProcessing && (
                           <div className="mb-2 text-xs font-medium text-slate-500">Processing video...</div>
                         )}
                         <div className="flex items-center gap-2">
                           <input
-                            className="h-9 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none"
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none"
                             placeholder="Add caption..."
                             value={it._localCaption ?? it.caption ?? ""}
                             onChange={(e) =>
