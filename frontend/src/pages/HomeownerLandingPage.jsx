@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { roleLandingPath } from "../landingRole";
-import { Badge, Button, Container, SymbolIcon } from "../ui";
+import { Badge, Container, SymbolIcon } from "../ui";
 import deckImage from "../assets/landing/projects/deck.webp";
 import kitchenImage from "../assets/landing/projects/kitchen.webp";
 import interiorImage from "../assets/landing/projects/interior.webp";
@@ -176,36 +176,91 @@ export default function HomeownerLandingPage() {
     <div className="bg-[#FBF9F7] text-slate-900">
       <LandingNav />
       <main>
-        <Container className="py-10 sm:py-14">
-          <section className="max-w-3xl">
-            <Badge className="border-[#E4E6EE] bg-[#F6F7FB] font-semibold uppercase tracking-[0.12em] text-slate-600">
-              For homeowners
-            </Badge>
-            <h1 className="mt-5 text-4xl font-bold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-              Plan your home project with clarity
-            </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-600">
-              Save ideas, organize project details, compare bids, and communicate with contractors - all in one place.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Link to={primaryCtaPath}>
-                <Button className="h-12 px-8 text-base">
+        <Container className="py-12 sm:py-16 lg:py-20">
+          <section className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            {/* Left: Content */}
+            <div className="max-w-xl">
+              <Badge className="border-[#E4E6EE] bg-[#F6F7FB] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                For homeowners
+              </Badge>
+              <h1 className="mt-5 text-4xl font-bold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.5rem]">
+                Plan your home project with clarity
+              </h1>
+              <p className="mt-6 text-lg leading-relaxed text-slate-600">
+                Save ideas, organize project details, compare bids, and communicate with contractors - all in one place.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <Link
+                  to={primaryCtaPath}
+                  className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                >
                   {primaryCtaLabel}
-                </Button>
-              </Link>
-              <Link
-                to="/explore"
-                className="inline-flex h-12 items-center justify-center rounded-full border border-slate-300 bg-white px-6 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-              >
-                Browse Real Projects
-              </Link>
+                </Link>
+                <Link
+                  to="/explore"
+                  className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-6 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                >
+                  Browse Real Projects
+                </Link>
+              </div>
+              <div className="mt-8 flex items-center gap-6 text-sm text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                    <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                  </span>
+                  Free to start
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                    <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                  </span>
+                  No credit card
+                </div>
+              </div>
             </div>
-            <button className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-slate-900">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
-                <SymbolIcon name="play_arrow" className="ml-0.5 text-[16px] text-slate-600" />
-              </span>
-              Watch how it works
-            </button>
+
+            {/* Right: Visual */}
+            <div className="relative hidden lg:block">
+              <div className="relative">
+                {/* Main card stack */}
+                <div className="relative z-10 rounded-2xl border border-white/60 bg-white/80 p-6 shadow-xl backdrop-blur-sm">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900">
+                      <SymbolIcon name="home" className="text-[18px] text-white" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Kitchen Remodel</div>
+                      <div className="text-xs text-slate-500">3 bids received</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <img src={kitchenImage} alt="" className="aspect-square rounded-lg object-cover" />
+                    <img src={interiorImage} alt="" className="aspect-square rounded-lg object-cover" />
+                    <img src={deckImage} alt="" className="aspect-square rounded-lg object-cover" />
+                  </div>
+                  <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                    <div className="text-sm text-slate-600">Budget estimate</div>
+                    <div className="text-sm font-semibold text-slate-900">$15,000 - $25,000</div>
+                  </div>
+                </div>
+
+                {/* Floating notification card */}
+                <div className="absolute -bottom-4 -left-8 z-20 rounded-xl border border-white/60 bg-white px-4 py-3 shadow-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+                      <SymbolIcon name="check" className="text-[16px] text-emerald-600" />
+                    </span>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-900">New bid received</div>
+                      <div className="text-[11px] text-slate-500">From ABC Contractors</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Background decorative element */}
+                <div className="absolute -right-6 -top-6 -z-10 h-72 w-72 rounded-full bg-gradient-to-br from-amber-100/60 to-orange-100/40 blur-3xl" />
+              </div>
+            </div>
           </section>
         </Container>
 
