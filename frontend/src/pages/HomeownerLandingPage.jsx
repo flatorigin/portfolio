@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { roleLandingPath } from "../landingRole";
-import { Badge, Button, Card, Container, SymbolIcon } from "../ui";
+import { Badge, Container, SymbolIcon } from "../ui";
 import deckImage from "../assets/landing/projects/deck.webp";
 import kitchenImage from "../assets/landing/projects/kitchen.webp";
 import interiorImage from "../assets/landing/projects/interior.webp";
@@ -38,10 +38,10 @@ const projectCards = [
 ];
 
 const guides = [
-  ["How to compare bids", "Understand proposals and make confident decisions."],
-  ["What to ask contractors", "Use the right questions before hiring anyone."],
-  ["Budget planning basics", "Plan your budget and avoid hidden costs."],
-  ["What to include in a proposal", "Make sure nothing important is missed."],
+  ["balance", "How to compare bids", "Understand proposals and make confident decisions."],
+  ["forum", "What to ask contractors", "Use the right questions before hiring anyone."],
+  ["payments", "Budget planning basics", "Plan your budget and avoid hidden costs."],
+  ["checklist", "What to include in a proposal", "Make sure nothing important is missed."],
 ];
 
 function LandingNav() {
@@ -71,83 +71,37 @@ function LandingNav() {
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
       <Container className="py-3">
         <nav className="flex items-center gap-6">
-          <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-base font-bold tracking-tight text-slate-900">
+          <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-lg font-bold tracking-tight text-slate-900">
             FlatOrigin
           </Link>
-          <div className="hidden items-center gap-2 md:flex">
-            <Link to="/explore" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+          <div className="hidden items-center gap-1 md:flex">
+            <Link to="/explore" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
               Browse Projects
             </Link>
-            <Link to="/guides" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
+            <a href="#how-it-works" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
+              How It Works
+            </a>
+            <Link to="/guides" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
               Guides
             </Link>
-            <a href="#how-it-works" className="rounded-xl px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
-              How it works
-            </a>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <Link
-              to="/contractor"
-              title="This toggle is only for viewing/previewing the other landing page."
-              className="hidden h-9 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:inline-flex"
-            >
-              View Contractor Side
-            </Link>
-            <Link
               to={authed ? "/dashboard" : "/login"}
-              className="inline-flex h-9 items-center rounded-xl bg-slate-900 px-5 text-sm font-medium text-white hover:opacity-90"
+              className="text-sm text-slate-600 transition hover:text-slate-900"
             >
               {authed ? "Dashboard" : "Sign in"}
+            </Link>
+            <Link
+              to={authed ? "/onboarding/homeowner" : "/register?role=homeowner"}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              Get Started
             </Link>
           </div>
         </nav>
       </Container>
     </header>
-  );
-}
-
-function ProjectPreview() {
-  const jobs = [
-    {
-      title: "Kitchen Renovation",
-      location: "Media, PA",
-      budget: "$15,000 - $25,000",
-      image: kitchenImage,
-    },
-    {
-      title: "Deck Rebuild",
-      location: "Media, PA",
-      budget: "$8,000 - $12,000",
-      image: deckImage,
-    },
-  ];
-
-  return (
-    <Card className="grid h-[360px] grid-rows-2 gap-4 p-5">
-      {jobs.map((job) => (
-        <div
-          key={job.title}
-          className="grid min-h-0 grid-cols-[120px_minmax(0,1fr)] gap-4 rounded-2xl border border-slate-200 bg-white p-3"
-        >
-          <img
-            src={job.image}
-            alt=""
-            className="h-full min-h-0 w-full rounded-xl object-cover"
-          />
-          <div className="flex min-w-0 flex-col justify-center">
-            <div className="truncate text-base font-semibold text-slate-950">
-              {job.title}
-            </div>
-            <div className="mt-2 text-sm font-medium text-slate-500">
-              {job.location}
-            </div>
-            <div className="mt-3 text-sm font-semibold text-slate-700">
-              {job.budget}
-            </div>
-          </div>
-        </div>
-      ))}
-    </Card>
   );
 }
 
@@ -160,17 +114,17 @@ function FeatureStrip() {
   ];
 
   return (
-    <Card className="grid overflow-hidden md:grid-cols-4">
+    <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
       {features.map(([icon, title, copy]) => (
-        <div key={title} className="border-slate-100 p-6 md:border-r md:last:border-r-0">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-            <SymbolIcon name={icon} className="text-[22px]" />
+        <div key={title} className="text-center">
+          <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
+            <SymbolIcon name={icon} className="text-[24px]" />
           </span>
-          <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
+          <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">{copy}</p>
         </div>
       ))}
-    </Card>
+    </div>
   );
 }
 
@@ -222,114 +176,275 @@ export default function HomeownerLandingPage() {
     <div className="bg-[#FBF9F7] text-slate-900">
       <LandingNav />
       <main>
-        <Container className="py-10 sm:py-14">
-          <section className="grid items-center gap-12 lg:grid-cols-[1fr_0.82fr]">
-            <div>
-              <Badge className="border-[#E4E6EE] bg-[#F6F7FB] font-semibold uppercase tracking-[0.12em] text-slate-600">
-                For homeowners
-              </Badge>
-              <h1 className="mt-5 max-w-2xl text-4xl font-bold leading-tight tracking-tight text-slate-950 sm:text-5xl">
-                Plan your home project with more clarity.
-              </h1>
-              <p className="mt-5 max-w-xl text-base leading-7 text-slate-600">
-                Save ideas, organize project details, compare bids, and communicate with contractors in one place.
-              </p>
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link to={primaryCtaPath}>
-                  <Button className="h-11 min-w-48">
+        {/* Hero Section */}
+        <section className="relative overflow-hidden">
+          {/* Background gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-50/80 via-transparent to-rose-50/50" />
+          <div className="absolute -right-40 -top-40 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-amber-100/40 to-orange-100/30 blur-3xl" />
+          <div className="absolute -bottom-20 -left-20 h-[400px] w-[400px] rounded-full bg-gradient-to-tr from-slate-100/60 to-amber-50/40 blur-3xl" />
+          
+          <Container className="relative py-16 sm:py-20 lg:py-24">
+            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+              {/* Left: Content */}
+              <div className="max-w-xl">
+                <Badge className="border-amber-200/60 bg-amber-50 font-semibold uppercase tracking-[0.12em] text-amber-700">
+                  For homeowners
+                </Badge>
+                <h1 className="mt-5 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.5rem]">
+                  Plan your home project with clarity
+                </h1>
+                <p className="mt-6 text-pretty text-lg leading-relaxed text-slate-600">
+                  Save ideas, organize project details, compare bids, and communicate with contractors - all in one place.
+                </p>
+                <div className="mt-8 flex flex-wrap items-center gap-4">
+                  <Link
+                    to={primaryCtaPath}
+                    className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                  >
                     {primaryCtaLabel}
-                  </Button>
-                </Link>
-                <Link
-                  to="/explore"
-                  className="inline-flex h-11 min-w-48 items-center justify-center rounded-xl border border-slate-300 bg-white px-6 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Browse Real Projects
-                </Link>
+                  </Link>
+                  <Link
+                    to="/explore"
+                    className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    Browse Real Projects
+                  </Link>
+                </div>
+                <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                    </span>
+                    Free to start
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                    </span>
+                    No credit card
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                    </span>
+                    Cancel anytime
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Visual - Project Preview Stack */}
+              <div className="relative">
+                {/* Mobile/Tablet: Horizontal scroll preview */}
+                <div className="lg:hidden">
+                  <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
+                    {projectCards.slice(0, 3).map((project) => (
+                      <div
+                        key={project.title}
+                        className="flex-shrink-0 w-[200px] overflow-hidden rounded-2xl border border-white/60 bg-white/80 shadow-lg backdrop-blur-sm"
+                      >
+                        <img src={project.image} alt="" className="h-32 w-full object-cover" />
+                        <div className="p-3">
+                          <div className="text-sm font-semibold text-slate-900">{project.title}</div>
+                          <div className="text-xs text-slate-500">{project.location}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Desktop: Stacked cards layout */}
+                <div className="relative hidden lg:block">
+                  {/* Main project card */}
+                  <div className="relative z-10 rounded-2xl border border-white/60 bg-white/90 p-5 shadow-xl backdrop-blur-sm">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900">
+                          <SymbolIcon name="home" className="text-[18px] text-white" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">Kitchen Remodel</div>
+                          <div className="text-xs text-slate-500">Media, PA</div>
+                        </div>
+                      </div>
+                      <Badge className="bg-emerald-50 text-emerald-700">3 bids</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <img src={kitchenImage} alt="" className="aspect-square rounded-xl object-cover" />
+                      <img src={interiorImage} alt="" className="aspect-square rounded-xl object-cover" />
+                      <img src={deckImage} alt="" className="aspect-square rounded-xl object-cover" />
+                    </div>
+                    <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                      <div className="text-sm text-slate-600">Budget estimate</div>
+                      <div className="text-sm font-semibold text-slate-900">$15,000 - $25,000</div>
+                    </div>
+                  </div>
+
+                  {/* Floating notification card */}
+                  <div className="absolute -bottom-3 -left-6 z-20 rounded-xl border border-white/70 bg-white px-4 py-3 shadow-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
+                        <SymbolIcon name="check" className="text-[18px] text-emerald-600" />
+                      </span>
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900">New bid received</div>
+                        <div className="text-[11px] text-slate-500">From ABC Contractors</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Floating stats card */}
+                  <div className="absolute -right-4 top-8 z-20 rounded-xl border border-white/70 bg-white px-4 py-3 shadow-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100">
+                        <SymbolIcon name="trending_up" className="text-[18px] text-amber-600" />
+                      </span>
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900">$2.4M+ projects</div>
+                        <div className="text-[11px] text-slate-500">Posted this month</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Background card (depth effect) */}
+                  <div className="absolute -right-3 top-4 -z-10 h-full w-full rounded-2xl border border-slate-200/50 bg-white/40" />
+                </div>
               </div>
             </div>
-            <ProjectPreview />
-          </section>
+          </Container>
+        </section>
 
-          <section id="how-it-works" className="mt-16">
+        <section id="how-it-works" className="border-y border-slate-200 bg-[#F6F5F1] py-16">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
+            <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
+          </div>
+          <div className="mx-auto mt-12 max-w-5xl px-4">
             <FeatureStrip />
-          </section>
+          </div>
+        </section>
 
-          <section className="mt-16">
+        <Container>
+          <section className="py-16">
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-              See the kind of work people actually hire for
+              Projects people hire for
             </h2>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
               {projectCards.map((project) => (
                 <Link
                   key={project.title}
                   to="/explore"
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md"
                 >
-                  <img src={project.image} alt="" className="h-28 w-full object-cover" />
-                  <div className="p-3">
-                    <div className="text-sm font-semibold text-slate-900">{project.title}</div>
-                    <div className="mt-1 text-xs font-medium text-slate-500">{project.location}</div>
+                  <div className="aspect-[4/3] overflow-hidden">
+                    <img 
+                      src={project.image} 
+                      alt="" 
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105" 
+                    />
+                  </div>
+                  <div className="p-4">
+                    <div className="font-semibold text-slate-900">{project.title}</div>
+                    <div className="mt-1 text-sm text-slate-500">{project.location}</div>
                   </div>
                 </Link>
               ))}
             </div>
           </section>
 
-          <section className="mt-16">
+          <section className="pb-16">
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">Helpful before you hire</h2>
-            <div className="mt-8 grid gap-4 md:grid-cols-4">
-              {guides.map(([title, copy]) => (
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {guides.map(([icon, title, copy]) => (
                 <Link
                   key={title}
                   to="/guides"
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="group rounded-xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
                 >
-                  <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p>
-                  <div className="mt-6 text-sm font-medium text-slate-900">Read Guide {"->"}</div>
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-400">
+                    <SymbolIcon name={icon} className="text-[18px]" />
+                  </span>
+                  <h3 className="mt-3 font-semibold text-slate-900">{title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy}</p>
                 </Link>
               ))}
-            </div>
-          </section>
-
-          <section className="mt-16 rounded-2xl border border-[#E2DDD4] bg-[#F1ECE4] p-8 sm:p-10">
-            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-950">Ready to start your next project?</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Create your free account and bring your project to life.
-                </p>
-              </div>
-              <div className="text-center">
-                <Link to={primaryCtaPath}>
-                  <Button className="h-11 min-w-56">
-                    {authed
-                      ? onboardingComplete
-                        ? "Open Dashboard"
-                        : "Continue Homeowner Setup"
-                      : "Create Free Account"}
-                  </Button>
-                </Link>
-                <div className="mt-3 text-xs text-slate-500">
-                  {authed ? "Ready to continue? " : "Already have an account? "}
-                  <Link to={authed ? "/explore" : "/login"} className="font-semibold text-slate-700 hover:text-slate-950">
-                    {authed ? "Explore projects" : "Sign in"}
-                  </Link>
-                </div>
-              </div>
             </div>
           </section>
         </Container>
       </main>
 
-      <footer className="border-t border-slate-200 bg-white py-8">
-        <Container className="grid max-w-5xl gap-5 text-center text-sm font-semibold text-slate-500 sm:grid-cols-4">
-          <div>100% Free to Get Started</div>
-          <div>No Middlemen</div>
-          <div>Local Contractors</div>
-          <div>Safe and Secure</div>
+      <section className="bg-slate-900 py-16">
+        <Container>
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Ready to get started?</h2>
+            <p className="mt-3 max-w-md text-slate-400">
+              Join thousands of homeowners and contractors already using FlatOrigin.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link
+                to={primaryCtaPath}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-6 text-sm font-medium text-slate-900 transition hover:bg-slate-100"
+              >
+                Post Your Project
+              </Link>
+              <Link
+                to="/explore"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-600 px-6 text-sm font-medium text-white transition hover:border-slate-500 hover:bg-slate-800"
+              >
+                Browse Projects
+              </Link>
+            </div>
+          </div>
         </Container>
+      </section>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <Container className="py-10">
+          <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <Link to="/" className="text-lg font-bold text-slate-900">
+                FlatOrigin
+              </Link>
+              <p className="mt-2 max-w-xs text-sm text-slate-500">
+                Connecting homeowners with quality contractors since 2026.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+              <div className="flex flex-col gap-3">
+                <span className="font-semibold text-slate-900">Product</span>
+                <Link to="/homeowner" className="text-slate-600 hover:text-slate-900">
+                  For Homeowners
+                </Link>
+                <Link to="/contractor" className="text-slate-600 hover:text-slate-900">
+                  For Contractors
+                </Link>
+                <Link to="/explore" className="text-slate-600 hover:text-slate-900">
+                  Browse Projects
+                </Link>
+              </div>
+              <div className="flex flex-col gap-3">
+                <span className="font-semibold text-slate-900">Resources</span>
+                <Link to="/guides" className="text-slate-600 hover:text-slate-900">
+                  Guides
+                </Link>
+                <Link to="/project-check" className="text-slate-600 hover:text-slate-900">
+                  Project Check
+                </Link>
+              </div>
+              <div className="flex flex-col gap-3">
+                <span className="font-semibold text-slate-900">Account</span>
+                <Link to="/login" className="text-slate-600 hover:text-slate-900">
+                  Sign in
+                </Link>
+                <Link to="/register" className="text-slate-600 hover:text-slate-900">
+                  Create account
+                </Link>
+              </div>
+            </div>
+          </div>
+        </Container>
+        <div className="border-t border-slate-100 py-6 text-center text-xs text-slate-400">
+          © 2026 FlatOrigin. All rights reserved.
+        </div>
       </footer>
     </div>
   );

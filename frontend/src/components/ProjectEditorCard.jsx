@@ -622,16 +622,18 @@ export default function ProjectEditorCard({
                 No media yet.
               </div>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
                 {images.filter(Boolean).map((it) => {
                   const mediaType = mediaTypeFor(it);
                   const mediaUrl = it.url || it.image || it.image_url || it.file || "/placeholder.png";
                   const thumbnailUrl = it.thumbnail || mediaUrl;
                   const isProcessing = it.processing_status && it.processing_status !== "ready";
+                  const isCover = String(currentCoverId ?? "") === String(it.id ?? "");
 
                   return (
-                    <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="rounded-xl border border-slate-200 bg-white p-3">
-                      <div className="relative mb-2 h-36 w-full overflow-hidden rounded-md bg-slate-100">
+                    <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      {/* Image/Video preview */}
+                      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-slate-100">
                         {mediaType === "video" ? (
                           <>
                             {thumbnailUrl ? (
@@ -647,7 +649,7 @@ export default function ProjectEditorCard({
                               <div className="flex h-full items-center justify-center text-xs text-slate-500">Video</div>
                             )}
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white">
+                              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white">
                                 <SymbolIcon name="play_arrow" fill={1} className="text-[24px]" />
                               </span>
                             </div>
@@ -662,58 +664,67 @@ export default function ProjectEditorCard({
                             }}
                           />
                         )}
-                      </div>
-                      {isProcessing ? (
-                        <div className="mb-2 text-xs font-medium text-slate-500">Processing video…</div>
-                      ) : null}
 
-                      <input
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                        placeholder="Caption…"
-                        value={it._localCaption ?? it.caption ?? ""}
-                        onChange={(e) =>
-                          setImages((prev) =>
-                            prev
-                              .filter(Boolean)
-                              .map((x) =>
-                                x.id === it.id ? { ...x, _localCaption: e.target.value } : x
-                              )
-                          )
-                        }
-                      />
+                        {/* Cover badge */}
+                        {isCover && mediaType === "image" && (
+                          <div className="absolute left-2 top-2 rounded-md bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white">
+                            Cover
+                          </div>
+                        )}
 
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <label className="flex items-center gap-1 text-[11px] text-slate-600">
-                          <input
-                            type="radio"
-                            name="cover-image"
-                            className="h-3 w-3"
-                            checked={String(currentCoverId ?? "") === String(it.id ?? "")}
-                            onChange={() => handleMakeCover(it)}
-                            disabled={mediaType !== "image"}
-                          />
-                          <span>
-                            {mediaType !== "image"
-                              ? "Video"
-                              : String(currentCoverId ?? "") === String(it.id ?? "")
-                                ? "Cover image"
-                                : "Make cover"}
-                          </span>
-                        </label>
-
-                        <div className="flex items-center gap-2">
-                          <GhostButton
+                        {/* Hover actions overlay */}
+                        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                          {mediaType === "image" && !isCover && (
+                            <button
+                              type="button"
+                              onClick={() => handleMakeCover(it)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+                              title="Set as cover"
+                            >
+                              <SymbolIcon name="photo_camera" className="text-[18px]" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
                             onClick={() => it.id && onDeleteImage?.(it)}
                             disabled={!it.id || busy}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-red-600 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
+                            title="Delete"
                           >
-                            Delete
-                          </GhostButton>
-                          <Button
+                            <SymbolIcon name="delete" className="text-[18px]" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Caption input and save */}
+                      <div className="shrink-0 border-t border-slate-100 bg-white p-3">
+                        {isProcessing && (
+                          <div className="mb-2 text-xs font-medium text-slate-500">Processing video...</div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <input
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none"
+                            placeholder="Add caption..."
+                            value={it._localCaption ?? it.caption ?? ""}
+                            onChange={(e) =>
+                              setImages((prev) =>
+                                prev
+                                  .filter(Boolean)
+                                  .map((x) =>
+                                    x.id === it.id ? { ...x, _localCaption: e.target.value } : x
+                                  )
+                              )
+                            }
+                          />
+                          <button
+                            type="button"
                             onClick={() => onSaveImageCaption?.(it)}
                             disabled={it._saving || it._localCaption === it.caption}
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+                            title="Save caption"
                           >
-                            {it._saving ? "Saving…" : "Save caption"}
-                          </Button>
+                            <SymbolIcon name="check" className="text-[18px]" />
+                          </button>
                         </div>
                       </div>
                     </figure>

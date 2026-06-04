@@ -1675,11 +1675,12 @@ export default function ProjectDetail() {
 
         <div
           className={
-            "border-b border-slate-100 text-white " +
-            (project?.is_job_posting ? "bg-[#CB633A]" : "bg-slate-900/95")
+            "border-b border-slate-100 text-white backdrop-blur-md " +
+            (project?.is_job_posting ? "bg-slate-800/90" : "bg-slate-900/90")
           }
         >
           {project?.is_job_posting ? (
+            <>
             <div className="px-5 py-4 sm:px-6 sm:py-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
@@ -1699,7 +1700,7 @@ export default function ProjectDetail() {
                     ) : null}
                   </div>
                   <div className="mt-2">
-                    <span className="inline-flex items-center rounded-full bg-[#5C7EA3] px-4 py-1 text-[10px] font-semibold tracking-wide text-white">
+                    <span className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-1 text-[10px] font-semibold tracking-wide text-white">
                       JOB POSTING
                     </span>
                   </div>
@@ -1718,145 +1719,7 @@ export default function ProjectDetail() {
                           disabled={likeBusy}
                           aria-label={isLiked ? "Unlike project" : "Like project"}
                           title={isLiked ? "Unlike project" : "Like project"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white transition hover:bg-[#DE8964] disabled:opacity-60"
-                        >
-                          <LikeCircleIcon active={isLiked} className="text-[9px]" />
-                        </button>
-                      ) : (
-                        <span
-                          aria-hidden="true"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white/90"
-                        >
-                          <LikeCircleIcon className="text-[9px]" />
-                        </span>
-                      )}
-                    </div>
-
-                    {authed && project && !isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={toggleSave}
-                        disabled={saveBusy}
-                        aria-label={isSaved ? "Unsave project" : "Save project"}
-                        title={isSaved ? "Unsave project" : "Save project"}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white transition hover:bg-[#DE8964] disabled:opacity-60"
-                      >
-                        <SaveCircleIcon active={isSaved} className="text-[9px]" />
-                      </button>
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white/90"
-                      >
-                        <SaveCircleIcon className="text-[9px]" />
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-1">
-                    {project?.id ? (
-                      <Link
-                        to={`/projects/${project.id}/print`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
-                      >
-                        Printable job post
-                      </Link>
-                    ) : null}
-
-                    {canSharePublicJob ? (
-                      <button
-                        type="button"
-                        onClick={shareProject}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
-                      >
-                        Share job
-                      </button>
-                    ) : null}
-
-                    {project?.owner_username ? (
-                      <Link
-                        to={`/profiles/${project.owner_username}`}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
-                      >
-                        Public Profile
-                      </Link>
-                    ) : null}
-
-                    {project?.owner_username && authed && !isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => setMsgOpen(true)}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
-                      >
-                        Message
-                      </button>
-                    ) : null}
-
-                    {!isOwnerUser ? (
-                      <ReportContentButton
-                        targetType="project"
-                        targetId={project?.id}
-                        subject={project?.title || `Project #${id}`}
-                        label="Report"
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
-                      />
-                    ) : null}
-
-                    {isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isEditing) {
-                            setIsEditing(false);
-                            return;
-                          }
-                          requestEditProject();
-                        }}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
-                      >
-                        {isEditing ? "Close editor" : "Edit job post"}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
-            </div>
-          ) : (
-            <div className="px-5 py-4 sm:px-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-xl font-semibold sm:text-2xl">{project?.title || `Project #${id}`}</h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
-                    {project?.category && (
-                      <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
-                        {project.category}
-                      </span>
-                    )}
-                    {project?.owner_username && (
-                      <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
-                        by {project.owner_username}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-4 sm:items-end">
-                  <div className="flex items-center justify-end gap-3 text-white">
-                    <div className="flex items-center gap-1.5">
-                      <span className="min-w-[1ch] text-[18px] font-medium text-white/92">
-                        {Number.isFinite(likeCount) ? likeCount : 0}
-                      </span>
-                      {authed && project && !isOwnerUser ? (
-                        <button
-                          type="button"
-                          onClick={toggleLike}
-                          disabled={likeBusy}
-                          aria-label={isLiked ? "Unlike project" : "Like project"}
-                          title={isLiked ? "Unlike project" : "Like project"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/18 disabled:opacity-60"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
                         >
                           <LikeCircleIcon active={isLiked} className="text-[9px]" />
                         </button>
@@ -1877,7 +1740,7 @@ export default function ProjectDetail() {
                         disabled={saveBusy}
                         aria-label={isSaved ? "Unsave project" : "Save project"}
                         title={isSaved ? "Unsave project" : "Save project"}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/18 disabled:opacity-60"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
                       >
                         <SaveCircleIcon active={isSaved} className="text-[9px]" />
                       </button>
@@ -1890,74 +1753,238 @@ export default function ProjectDetail() {
                       </span>
                     )}
                   </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-1">
-                    {project?.id ? (
-                      <Link
-                        to={`/projects/${project.id}/print`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        Printable project
-                      </Link>
-                    ) : null}
-
-                    {isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isEditing) {
-                            setIsEditing(false);
-                            return;
-                          }
-                          requestEditProject();
-                        }}
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        {isEditing ? "Close editor" : "Edit project"}
-                      </button>
-                    ) : null}
-
-                    {project?.owner_username ? (
-                      <Link
-                        to={`/profiles/${project.owner_username}`}
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        Public Profile
-                      </Link>
-                    ) : null}
-
-                    {project?.owner_username && authed && !isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => setMsgOpen(true)}
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        Message
-                      </button>
-                    ) : null}
-
-                    {!isOwnerUser ? (
-                      <ReportContentButton
-                        targetType="project"
-                        targetId={project?.id}
-                        subject={project?.title || `Project #${id}`}
-                        label="Report"
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      />
-                    ) : null}
-                  </div>
                 </div>
               </div>
               {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
             </div>
+
+            {/* Action buttons row - below dark header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-2">
+                {project?.id ? (
+                  <Link
+                    to={`/projects/${project.id}/print`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="print" className="text-[16px]" />
+                    Print
+                  </Link>
+                ) : null}
+
+                {canSharePublicJob ? (
+                  <button
+                    type="button"
+                    onClick={shareProject}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="share" className="text-[16px]" />
+                    Share
+                  </button>
+                ) : null}
+
+                {project?.owner_username ? (
+                  <Link
+                    to={`/profiles/${project.owner_username}`}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="person" className="text-[16px]" />
+                    Profile
+                  </Link>
+                ) : null}
+
+                {project?.owner_username && authed && !isOwnerUser ? (
+                  <button
+                    type="button"
+                    onClick={() => setMsgOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="chat_bubble" className="text-[16px]" />
+                    Message
+                  </button>
+                ) : null}
+
+                {!isOwnerUser ? (
+                  <ReportContentButton
+                    targetType="project"
+                    targetId={project?.id}
+                    subject={project?.title || `Project #${id}`}
+                    label="Report"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  />
+                ) : null}
+              </div>
+
+              {isOwnerUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditing) {
+                      setIsEditing(false);
+                      return;
+                    }
+                    requestEditProject();
+                  }}
+                  className={
+                    "inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm font-medium transition " +
+                    (isEditing
+                      ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                      : "bg-slate-900 text-white hover:bg-slate-800")
+                  }
+                >
+                  <SymbolIcon name={isEditing ? "close" : "edit"} className="text-[16px]" />
+                  {isEditing ? "Close editor" : "Edit"}
+                </button>
+              ) : null}
+            </div>
+            </>
+          ) : (
+            <>
+            <div className="px-5 py-4 sm:px-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h1 className="truncate text-xl font-semibold sm:text-2xl">{project?.title || `Project #${id}`}</h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
+                    {project?.category && (
+                      <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
+                        {project.category}
+                      </span>
+                    )}
+                    {project?.owner_username && (
+                      <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
+                        by {project.owner_username}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 text-white">
+                  <div className="flex items-center gap-1.5">
+                    <span className="min-w-[1ch] text-[18px] font-medium text-white/92">
+                      {Number.isFinite(likeCount) ? likeCount : 0}
+                    </span>
+                    {authed && project && !isOwnerUser ? (
+                      <button
+                        type="button"
+                        onClick={toggleLike}
+                        disabled={likeBusy}
+                        aria-label={isLiked ? "Unlike project" : "Like project"}
+                        title={isLiked ? "Unlike project" : "Like project"}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+                      >
+                        <LikeCircleIcon active={isLiked} className="text-[9px]" />
+                      </button>
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
+                      >
+                        <LikeCircleIcon className="text-[9px]" />
+                      </span>
+                    )}
+                  </div>
+
+                  {authed && project && !isOwnerUser ? (
+                    <button
+                      type="button"
+                      onClick={toggleSave}
+                      disabled={saveBusy}
+                      aria-label={isSaved ? "Unsave project" : "Save project"}
+                      title={isSaved ? "Unsave project" : "Save project"}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+                    >
+                      <SaveCircleIcon active={isSaved} className="text-[9px]" />
+                    </button>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
+                    >
+                      <SaveCircleIcon className="text-[9px]" />
+                    </span>
+                  )}
+                </div>
+              </div>
+              {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
+            </div>
+
+            {/* Action buttons row - below dark header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-2">
+                {project?.id ? (
+                  <Link
+                    to={`/projects/${project.id}/print`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="print" className="text-[16px]" />
+                    Print
+                  </Link>
+                ) : null}
+
+                {project?.owner_username ? (
+                  <Link
+                    to={`/profiles/${project.owner_username}`}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="person" className="text-[16px]" />
+                    Profile
+                  </Link>
+                ) : null}
+
+                {project?.owner_username && authed && !isOwnerUser ? (
+                  <button
+                    type="button"
+                    onClick={() => setMsgOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="chat_bubble" className="text-[16px]" />
+                    Message
+                  </button>
+                ) : null}
+
+                {!isOwnerUser ? (
+                  <ReportContentButton
+                    targetType="project"
+                    targetId={project?.id}
+                    subject={project?.title || `Project #${id}`}
+                    label="Report"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  />
+                ) : null}
+              </div>
+
+              {isOwnerUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditing) {
+                      setIsEditing(false);
+                      return;
+                    }
+                    requestEditProject();
+                  }}
+                  className={
+                    "inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm font-medium transition " +
+                    (isEditing
+                      ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                      : "bg-slate-900 text-white hover:bg-slate-800")
+                  }
+                >
+                  <SymbolIcon name={isEditing ? "close" : "edit"} className="text-[16px]" />
+                  {isEditing ? "Close editor" : "Edit"}
+                </button>
+              ) : null}
+            </div>
+            </>
           )}
         </div>
 
         <div className="space-y-6 p-4 sm:p-6">
           {project?.is_job_posting ? (
-            <div className="rounded-2xl border border-slate-200 bg-[#FCFBF8] p-5 shadow-sm">
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Job overview</div>
               <div className="mt-3 text-sm leading-7 text-slate-700 sm:text-[15px]">
                 {jobSummaryText || "Project requirements will appear here."}
@@ -2096,8 +2123,8 @@ export default function ProjectDetail() {
           {(project?.material_url ||
             project?.material_label ||
             (Array.isArray(project?.extra_links) && project.extra_links.length > 0)) && (
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Materials &amp; tools used
               </div>
 
@@ -2265,7 +2292,7 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+          <div className="space-y-3 rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Comments
@@ -2283,10 +2310,10 @@ export default function ProjectDetail() {
               )}
             </div>
 
-            <div className="border-t border-slate-200 pt-3">
+            <div className="border-t border-slate-200 pt-4">
               {authed ? (
-                <form onSubmit={submitComment} className="space-y-2">
-                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                <form onSubmit={submitComment} className="space-y-3">
+                  <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-600">
                     Public comments are text-only. No links or media. Emoji is okay.
                   </div>
 
@@ -2296,7 +2323,7 @@ export default function ProjectDetail() {
                   </div>
 
                   {replyingTo && (
-                    <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">
+                    <div className="flex items-start justify-between rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-600">
                       <div>
                         Replying to <span className="font-semibold">{replyingTo.author_username || "user"}</span>
                       </div>
@@ -2316,7 +2343,7 @@ export default function ProjectDetail() {
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="Add a public comment…"
-                    className="min-h-[88px] bg-white"
+                    className="min-h-[88px] rounded-xl border-slate-200 bg-white"
                   />
 
                   <div className="flex items-center justify-between gap-3">
@@ -2325,7 +2352,7 @@ export default function ProjectDetail() {
                     </div>
                     <div className="flex items-center gap-3">
                       {commentError && <p className="text-[11px] text-red-600">{commentError}</p>}
-                      <Button type="submit" disabled={commentBusy || !commentText.trim() || commentText.trim().length > COMMENT_CHAR_LIMIT}>
+                      <Button type="submit" className="h-10 rounded-xl bg-slate-900 px-5 text-sm font-medium text-white hover:bg-slate-800" disabled={commentBusy || !commentText.trim() || commentText.trim().length > COMMENT_CHAR_LIMIT}>
                         {commentBusy ? "Posting…" : "Post"}
                       </Button>
                     </div>

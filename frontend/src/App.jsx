@@ -347,7 +347,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FBF9F7]">
       {!hideShellNav ? (
-      <header className="relative z-30 border-b border-slate-200 bg-white">
+      <header className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur-md">
         <Container className="py-3">
           <nav className="flex items-center gap-2">
             {/* Left: Logo */}
@@ -389,7 +389,7 @@ export default function App() {
                 <Link
                   to={previewPath}
                   title="This toggle is only for viewing/previewing the other guide page."
-                  className="hidden h-9 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex"
+                  className="hidden h-10 items-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 lg:inline-flex"
                 >
                   {previewLabel}
                 </Link>
@@ -646,11 +646,11 @@ export default function App() {
         </div>
       ) : null}
 
-      <main className="w-full">
+      <main className="w-full overflow-x-clip">
         {isFullBleed ? (
           <Outlet />
         ) : (
-          <Container>
+          <Container className="overflow-visible">
             <Outlet />
           </Container>
         )}

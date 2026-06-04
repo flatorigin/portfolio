@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api";
-import { Button, Card, Container } from "../ui";
+import { Button, Container } from "../ui";
 
 const homeownerGuideCategories = [
   {
@@ -417,14 +417,14 @@ export default function ProjectGuides() {
   const copy = guideCopy[guideAudience];
 
   return (
-    <div className="bg-[#FBF9F7] pb-20 text-slate-900">
-      <section className="border-b border-[#ECE7DF] bg-[radial-gradient(circle_at_top_left,#EEF3FF,transparent_34%),linear-gradient(180deg,#FBF9F7_0%,#F7F3EC_100%)]">
+    <div className="pb-20 text-slate-900">
+      <section className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-transparent">
         <Container className="py-14 sm:py-18">
           <div className="max-w-4xl">
-            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">
+            <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
               {copy.eyebrow}
             </div>
-            <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
+            <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
               {copy.title}
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
@@ -432,13 +432,13 @@ export default function ProjectGuides() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link to="/dashboard">
-                <Button className="rounded-full bg-[#4F5D83] px-7 py-3 text-base font-semibold hover:bg-[#445273]">
+                <Button className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold hover:bg-slate-800">
                   {copy.primaryCta}
                 </Button>
               </Link>
               <Link
                 to={copy.secondaryTo}
-                className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-7 py-3 text-base font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 {copy.secondaryCta}
               </Link>
@@ -450,14 +450,14 @@ export default function ProjectGuides() {
       <Container className="py-12 sm:py-16">
         <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-24 lg:self-start">
-            <Card className="rounded-[1.75rem] border-[#E9E5DC] bg-white/85 p-5">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+              <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
                 Categories
               </div>
-              <nav className="mt-4 space-y-2">
+              <nav className="mt-4 space-y-1">
                 <a
                   href="#why-this-matters"
-                  className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-[#F3EFE8] hover:text-slate-950"
+                  className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                 >
                   Why this matters
                 </a>
@@ -465,24 +465,24 @@ export default function ProjectGuides() {
                   <a
                     key={category.id}
                     href={`#${category.id}`}
-                    className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-[#F3EFE8] hover:text-slate-950"
+                    className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
                   >
                     {category.title}
                   </a>
                 ))}
               </nav>
-            </Card>
+            </div>
           </aside>
 
           <div className="space-y-10">
             <section
               id="why-this-matters"
-              className="rounded-[2rem] border border-[#E9E5DC] bg-white/85 p-6 shadow-sm sm:p-8"
+              className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md sm:p-8"
             >
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">
+              <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
                 Why this matters
               </div>
-              <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+              <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
                 {copy.whyTitle}
               </h2>
               <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
@@ -490,8 +490,8 @@ export default function ProjectGuides() {
               </p>
               <div className="mt-6 grid gap-4 md:grid-cols-3">
                 {copy.whyCards.map(([title, text]) => (
-                  <div key={title} className="rounded-2xl border border-[#E9E5DC] bg-[#FBF9F7] p-5">
-                    <h3 className="text-base font-semibold text-slate-950">
+                  <div key={title} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
+                    <h3 className="text-base font-semibold text-slate-900">
                       {title}
                     </h3>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -502,13 +502,13 @@ export default function ProjectGuides() {
               </div>
             </section>
 
-            <section className="rounded-[2rem] border border-[#E9E5DC] bg-white/85 p-6 sm:p-8">
+            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md sm:p-8">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
                     Quick checklist
                   </div>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
                     {copy.checklistTitle}
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
@@ -518,7 +518,7 @@ export default function ProjectGuides() {
               </div>
               <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {quickChecklists.map((item) => (
-                  <div key={item} className="rounded-2xl border border-slate-200 bg-[#FBF9F7] px-4 py-3 text-sm font-medium text-slate-700">
+                  <div key={item} className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm font-medium text-slate-700">
                     {item}
                   </div>
                 ))}
@@ -528,34 +528,34 @@ export default function ProjectGuides() {
             {categories.map((category) => (
               <section key={category.id} id={category.id} className="scroll-mt-28">
                 <div className="mb-5">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4F5D83]">
+                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
                     {category.title}
                   </div>
-                  <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
                     {category.intro}
                   </h2>
                 </div>
 
-                <div className="grid gap-5">
+                <div className="grid gap-4">
                   {category.guides.map((guide) => (
-                    <Card key={guide.title} className="rounded-[1.75rem] border-[#E9E5DC] bg-white p-6">
-                      <h3 className="text-xl font-semibold text-slate-950">{guide.title}</h3>
+                    <div key={guide.title} className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md">
+                      <h3 className="text-lg font-semibold text-slate-900">{guide.title}</h3>
                       <ul className="mt-4 grid gap-3 text-sm leading-6 text-slate-600">
                         {guide.points.map((point) => (
                           <li key={point} className="flex gap-3">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#4F5D83]" />
+                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
                             <span>{point}</span>
                           </li>
                         ))}
                       </ul>
-                    </Card>
+                    </div>
                   ))}
                 </div>
               </section>
             ))}
 
-            <section className="rounded-[2rem] border border-[#E2DDD4] bg-[#F1ECE4] px-6 py-10 text-center sm:px-12">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-950">
+            <section className="rounded-2xl border border-slate-200 bg-slate-100 px-6 py-10 text-center sm:px-12">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                 {copy.finalTitle}
               </h2>
               <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
@@ -563,13 +563,13 @@ export default function ProjectGuides() {
               </p>
               <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link to="/dashboard">
-                  <Button className="min-w-[180px] rounded-full bg-[#4F5D83] px-8 py-3 text-base font-semibold hover:bg-[#445273]">
+                  <Button className="min-w-[180px] rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold hover:bg-slate-800">
                     {copy.primaryCta}
                   </Button>
                 </Link>
                 <Link
                   to={copy.finalLinkTo}
-                  className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-950"
+                  className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
                 >
                   {copy.finalLink}
                 </Link>

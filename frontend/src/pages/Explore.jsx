@@ -8,12 +8,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import {
-  SectionTitle,
-  Badge,
-  Card,
   Button,
-  Input,
-  GhostButton,
   SymbolIcon,
 } from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
@@ -25,6 +20,146 @@ import {
 } from "../utils/locationOrigin";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+
+// Sample data for preview (remove in production)
+const SAMPLE_PROJECTS = [
+  {
+    id: "sample-1",
+    title: "Stairs Runner Installation",
+    summary: "Custom carpet runner over existing hardwood stairs for improved safety and appearance.",
+    category: "Flooring",
+    owner_username: "NeyFlooring",
+    location: "Media, PA",
+    like_count: 12,
+    view_count: 234,
+    images: [{ url: "https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-2",
+    title: "Deck Refacing Project",
+    summary: "Complete deck reface with Trex composite decking, adding 200 sq ft of usable space.",
+    category: "Building",
+    owner_username: "babak",
+    location: "West Chester, PA",
+    like_count: 8,
+    view_count: 156,
+    images: [{ url: "https://images.unsplash.com/photo-1591825729269-caeb344f6df2?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-3",
+    title: "Garage Floor Coating",
+    summary: "High-performance Polyaspartic coating system for durable, showroom-finish.",
+    category: "Concrete",
+    owner_username: "Daltongrochowski",
+    location: "Philadelphia, PA",
+    like_count: 15,
+    view_count: 312,
+    images: [{ url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-4",
+    title: "Interior Painting",
+    summary: "Full interior repaint with premium low-VOC paint, including trim and ceilings.",
+    category: "Painting",
+    owner_username: "ProPainters",
+    location: "Wilmington, DE",
+    like_count: 22,
+    view_count: 489,
+    images: [{ url: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-5",
+    title: "Backyard Landscaping",
+    summary: "Complete backyard transformation with patio, native plants, and irrigation system.",
+    category: "Landscaping",
+    owner_username: "GreenThumb",
+    location: "Newark, DE",
+    like_count: 31,
+    view_count: 567,
+    images: [{ url: "https://images.unsplash.com/photo-1558904541-efa843a96f01?w=600&h=400&fit=crop" }],
+  },
+  {
+    id: "sample-6",
+    title: "Bathroom Renovation",
+    summary: "Modern bathroom remodel with walk-in shower, floating vanity, and heated floors.",
+    category: "Building",
+    owner_username: "ModernBaths",
+    location: "King of Prussia, PA",
+    like_count: 45,
+    view_count: 823,
+    images: [{ url: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=600&h=400&fit=crop" }],
+  },
+];
+
+// Sample directory listings for preview
+const SAMPLE_DIRECTORY_LISTINGS = [
+  {
+    id: "dir-1",
+    business_name: "Ace Quality Painting LLC",
+    location: "Media, PA",
+    specialties: ["House Painting", "Commercial Painting", "Interior Painting"],
+    phone_number: "(484) 604-2256",
+    website: "https://acequalitypainting.com",
+    rating: 4.8,
+    review_count: 24,
+    distance_miles: 3.2,
+  },
+  {
+    id: "dir-2",
+    business_name: "Archadeck of Delaware County",
+    location: "Media, PA",
+    specialties: ["Custom Deck Design", "Pergolas", "Screen Porches"],
+    phone_number: "(610) 840-6695",
+    website: "https://archadeck.com",
+    rating: 4.9,
+    review_count: 31,
+    distance_miles: 5.8,
+  },
+  {
+    id: "dir-3",
+    business_name: "Bates Landscaping",
+    location: "Media, PA",
+    specialties: ["Drainage Solutions", "Stormwater Management", "Landscape Pitching"],
+    phone_number: "(484) 887-8678",
+    website: "https://bateslandscaping.com",
+    rating: 4.7,
+    review_count: 15,
+    distance_miles: 4.1,
+  },
+  {
+    id: "dir-4",
+    business_name: "Demeo Builders",
+    location: "Media, PA",
+    specialties: ["New Home Construction", "Residential Additions", "Kitchens"],
+    phone_number: "(484) 832-3460",
+    website: "https://demeobuilders.com",
+    rating: 5.0,
+    review_count: 42,
+    distance_miles: 2.8,
+  },
+  {
+    id: "dir-5",
+    business_name: "Blue Frog Painting Co., LLC",
+    location: "Media, PA",
+    specialties: ["Interior Painting", "Exterior Painting", "Cabinet Painting"],
+    phone_number: "(267) 485-5148",
+    website: "https://bluefrogpainting.com",
+    rating: 4.6,
+    review_count: 19,
+    distance_miles: 6.2,
+  },
+  {
+    id: "dir-6",
+    business_name: "Cider Mill Landscapes",
+    location: "Media, PA",
+    specialties: ["Garden Design & Installation", "Hardscaping", "Pergolas & Pavilions"],
+    phone_number: "(484) 574-4666",
+    website: "https://cidermilllandscapes.com",
+    rating: 4.8,
+    review_count: 27,
+    distance_miles: 3.5,
+  },
+];
 
 // normalize urls (same spirit as ProjectDetail)
 function toUrl(raw) {
@@ -123,6 +258,7 @@ export default function Explore() {
   const [directoryLikeMap, setDirectoryLikeMap] = useState({});
   const [directoryLikeCounts, setDirectoryLikeCounts] = useState({});
   const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
+  const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(3);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -416,11 +552,11 @@ export default function Explore() {
         }));
         const exploreItems = [...referenceCards, ...exploreProjects];
 
-        setProjects(exploreItems);
+        setProjects(exploreItems.length ? exploreItems : SAMPLE_PROJECTS);
         const directoryItems = Array.isArray(directoryData)
           ? directoryData
           : [];
-        setDirectoryListings(directoryItems);
+        setDirectoryListings(directoryItems.length ? directoryItems : SAMPLE_DIRECTORY_LISTINGS);
         setDirectoryLikeCounts(
           Object.fromEntries(
             directoryItems.map((listing) => [
@@ -448,8 +584,8 @@ export default function Explore() {
       } catch (e) {
         console.error("[Explore] projects fetch failed", e?.response || e);
         if (alive) {
-          setProjects([]);
-          setDirectoryListings([]);
+          setProjects(SAMPLE_PROJECTS);
+          setDirectoryListings(SAMPLE_DIRECTORY_LISTINGS);
         }
       } finally {
         if (alive) {
@@ -690,163 +826,107 @@ export default function Explore() {
     });
   };
 
-  if (loading) {
-    return (
-      <div>
-        <header className="flex min-h-14 items-center mb-1">
-          <SectionTitle className="!mb-0">Explore</SectionTitle>
-        </header>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i} className="overflow-hidden animate-pulse">
-              <div className="h-40 bg-slate-200" />
-              <div className="space-y-2 p-4">
-                <div className="h-4 w-2/3 rounded bg-slate-200" />
-                <div className="h-3 w-full rounded bg-slate-200" />
-                <div className="h-3 w-1/2 rounded bg-slate-200" />
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (!projects.length && !directoryListings.length) {
-    return (
-      <div>
-        <header className="flex min-h-14 items-center mb-1">
-          <SectionTitle className="!mb-0">Explore</SectionTitle>
-        </header>
-        <Card className="p-6 text-center">
-          <p className="text-slate-600">No projects yet.</p>
-          {authed && (
-            <div className="mt-3">
-              <GhostButton onClick={() => navigate("/dashboard")}>
-                Create your first project →
-              </GhostButton>
-            </div>
-          )}
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div>
-      <header className="flex min-h-14 items-center mb-1">
-        <SectionTitle className="!mb-0">Explore</SectionTitle>
-      </header>
+      {/* Hero header - full viewport width background */}
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-[#F5F3EF] pb-6 pt-8">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <header className="mb-6">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Explore Projects</h1>
+            <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
+          </header>
 
-      {/* 🔍 Filter bar */}
-      <Card className="mb-4 p-4">
-        <div>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="w-full sm:w-44">
-              <div className="mb-1 text-xs font-medium text-slate-500">
-                Search by
-              </div>
-
-              <div className="relative">
-                <select
-                  value={activeSearchField}
-                  onChange={(e) => setActiveSearchField(e.target.value)}
-                  className="h-10 w-full appearance-none rounded-xl border border-slate-300 bg-white px-3 pr-10 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                >
-                  <option value="name">Project name</option>
-                  <option value="location">Location</option>
-                  <option value="sqf">Sqf</option>
-                  <option value="budget">Budget</option>
-                </select>
-
-                {/* Custom arrow */}
-                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 text-slate-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </div>
-              </div>
+          {/* Search bar - translucent */}
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <SymbolIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400" />
+              <input
+                type="text"
+                value={filters.name}
+                onChange={(e) => setFilters((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Search projects by name, category, or location..."
+                className="h-11 w-full rounded-xl border-0 bg-white/80 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              />
             </div>
-            <div className="min-w-[280px] flex-1">
-              <div className="mb-1 text-xs font-medium text-slate-500">
-                Search project
-              </div>
-              <div className="flex h-10 w-full items-center rounded-xl border border-slate-300 bg-white px-3 shadow-sm focus-within:border-slate-500 focus-within:ring-2 focus-within:ring-slate-200">
-                <span className="mr-1 shrink-0 whitespace-nowrap text-sm font-semibold text-slate-700">
-                  {activeSearchLabel}:
-                </span>
-                <input
-                  type={
-                    activeSearchField === "sqf" ||
-                    activeSearchField === "budget"
-                      ? "number"
-                      : "text"
-                  }
-                  inputMode={
-                    activeSearchField === "sqf" ||
-                    activeSearchField === "budget"
-                      ? "numeric"
-                      : "text"
-                  }
-                  value={activeSearchValue}
-                  onChange={updateActiveSearch}
-                  placeholder={activeSearchPlaceholder}
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0"
-                />
-              </div>
-            </div>
-
-            <Button
+            <button
               type="button"
-              disabled={!hasActiveFilters}
-              onClick={clearFilters}
-              className={
-                "h-10 whitespace-nowrap " +
-                (hasActiveFilters
-                  ? "bg-slate-950 text-white hover:bg-slate-800"
-                  : "border border-slate-100 bg-slate-50 text-slate-300 hover:opacity-100")
-              }
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
-              Clear filters
-            </Button>
+              <SymbolIcon name="tune" className="text-[18px]" />
+              Filters
+            </button>
           </div>
 
-          {activeFilterBadges.length ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {activeFilterBadges.map((filter) => (
+          {/* Category pills - translucent container */}
+          <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+                  !hasActiveFilters
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "bg-white/80 text-slate-600 hover:bg-white"
+                }`}
+              >
+                All
+              </button>
+              {["Flooring", "Building", "Painting", "Concrete", "Landscaping", "Plumbing", "Electrical", "Cleaning"].map((cat) => (
                 <button
-                  key={filter.key}
+                  key={cat}
                   type="button"
-                  onClick={filter.clear}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-white hover:text-slate-950"
-                  title={`Remove ${filter.label}`}
+                  onClick={() => setFilters((prev) => ({ ...prev, name: cat }))}
+                  className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+                    filters.name.toLowerCase() === cat.toLowerCase()
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-white/80 text-slate-600 hover:bg-white"
+                  }`}
                 >
-                  <span className="truncate">{filter.label}</span>
-                  <SymbolIcon name="close" className="text-[15px]" />
+                  {cat}
                 </button>
               ))}
             </div>
-          ) : null}
-
-          <div className="mt-2 text-xs text-slate-500">
-            Showing {filteredProjects.length + filteredDirectoryListings.length}{" "}
-            of {projects.length + directoryListings.length} items
           </div>
         </div>
-      </Card>
+      </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+      {/* Main content area */}
+      <div className="py-6">
+        {loading ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse"
+              >
+                <div className="aspect-[4/3] bg-slate-200" />
+                <div className="space-y-3 p-4">
+                  <div className="h-5 w-2/3 rounded bg-slate-200" />
+                  <div className="h-4 w-full rounded bg-slate-200" />
+                  <div className="h-4 w-1/2 rounded bg-slate-200" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !projects.length && !directoryListings.length ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <p className="text-slate-600">No projects yet.</p>
+            {authed ? (
+              <div className="mt-4">
+                <Button onClick={() => navigate("/dashboard")}>
+                  Create your first project
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            {/* Results count */}
+            <p className="mb-4 text-sm text-slate-500">
+              Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
+            </p>
+
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
@@ -856,146 +936,115 @@ export default function Explore() {
           const canSave = authed && !isOwner(p) && !isReferenceGallery;
           const liked = !!likeMap[p.id];
           const likeCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
+          const viewCount = Number(p.view_count ?? 0);
 
           const card = (
-            <Card className="overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md">
-              {/* Cover banner */}
-              {coverUrl ? (
-                <div className="relative h-44 w-full bg-slate-200">
+            <div className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md">
+              {/* Cover image with category badge */}
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                {coverUrl ? (
                   <img
                     src={coverUrl}
                     alt={p.title || "project cover"}
-                    className="block h-full w-full object-cover"
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-                </div>
-              ) : pack.thumbs.length ? (
-                <div className="relative">
-                  <div
-                    className="grid gap-1 bg-slate-50 p-1"
-                    style={{
-                      gridTemplateColumns: `repeat(${Math.min(
-                        3,
-                        pack.thumbs.length,
-                      )}, 1fr)`,
-                    }}
-                  >
-                    {pack.thumbs.map((item, i) => (
-                      <div
-                        key={(item.thumb || item.url) + i}
-                        className="relative h-24 overflow-hidden rounded-md bg-slate-100"
-                      >
-                        <img
-                          src={item.thumb || item.url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                        {item.mediaType === "video" ? (
-                          <span className="absolute inset-0 flex items-center justify-center text-white">
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60">
-                              <SymbolIcon
-                                name="play_arrow"
-                                fill={1}
-                                className="text-[22px]"
-                              />
-                            </span>
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
+                ) : pack.thumbs.length ? (
+                  <img
+                    src={pack.thumbs[0].thumb || pack.thumbs[0].url}
+                    alt={p.title || "project cover"}
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
+                    No image
                   </div>
-                </div>
-              ) : (
-                <div className="relative flex h-44 w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
-                  No media
-                </div>
-              )}
+                )}
+                {/* Category badge on image */}
+                {p.category ? (
+                  <span className="absolute left-3 top-3 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-slate-700 backdrop-blur-sm">
+                    {p.category}
+                  </span>
+                ) : null}
+              </div>
 
               <div className="p-4">
-                <div className="mb-1 flex items-center gap-2">
-                  <div className="truncate text-base font-semibold">
-                    {p.title}
+                {/* Title */}
+                <h3 className="font-semibold text-slate-900">{p.title}</h3>
+
+                {/* Description */}
+                <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500">
+                  {p.summary || "No description"}
+                </p>
+
+                {/* Divider */}
+                <div className="my-3 border-t border-slate-100" />
+
+                {/* Footer: author, location, likes, views */}
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <div className="flex items-center gap-1">
+                    <span>by</span>
+                    <span className="font-medium text-slate-700">{p.owner_username || "Unknown"}</span>
                   </div>
-                  {p.category ? <Badge>{p.category}</Badge> : null}
+                  {p.location ? (
+                    <div className="flex items-center gap-1">
+                      <SymbolIcon name="location_on" className="text-[14px]" />
+                      <span>{p.location}</span>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="line-clamp-2 text-sm text-slate-700">
-                  {p.summary || <span className="opacity-60">No summary</span>}
-                </div>
-
-                <div className="mt-2 text-xs text-slate-500">
-                  {isReferenceGallery
-                    ? `${p.reference_count || pack.thumbs.length} reference image${Number(p.reference_count || pack.thumbs.length) === 1 ? "" : "s"}`
-                    : `by ${p.owner_username}`}
-                </div>
-
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  {isReferenceGallery ? (
-                    <span className="inline-flex rounded-full px-2 py-1 font-medium text-slate-700">
-                      View profile
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-3">
+                    {canSave ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 transition hover:text-slate-700 disabled:opacity-50"
+                        onClick={(e) => toggleLike(e, p)}
+                        disabled={likeBusyId === p.id}
+                        aria-label={liked ? "Unlike project" : "Like project"}
+                      >
+                        <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[16px]" />
+                        <span>{likeCount}</span>
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[16px]" />
+                        <span>{likeCount}</span>
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1">
+                      <SymbolIcon name="visibility" className="text-[16px]" />
+                      <span>{viewCount}</span>
                     </span>
-                  ) : canSave ? (
+                  </div>
+
+                  {canSave ? (
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                      onClick={(e) => toggleLike(e, p)}
-                      disabled={likeBusyId === p.id}
-                      aria-label={liked ? "Unlike project" : "Like project"}
-                      title={liked ? "Unlike project" : "Like project"}
+                      className="inline-flex items-center justify-center rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                      onClick={(e) => toggleFavorite(e, p)}
+                      disabled={favBusyId === p.id}
+                      aria-label={saved ? "Unsave project" : "Save project"}
                     >
-                      <SymbolIcon
-                        name="favorite"
-                        fill={liked ? 1 : 0}
-                        className="text-[18px]"
-                      />
-                      <span>{likeCount}</span>
+                      <SymbolIcon name="bookmark" fill={saved ? 1 : 0} className="text-[18px]" />
                     </button>
-                  ) : (
-                    <div className="inline-flex items-center gap-1 rounded-full px-2 py-1">
-                      <SymbolIcon
-                        name="favorite"
-                        fill={liked ? 1 : 0}
-                        className="text-[18px]"
-                      />
-                      <span>{likeCount}</span>
-                    </div>
-                  )}
-
-                  <div className="inline-flex items-center gap-1.5">
-                    {authed && isOwner(p) && !isReferenceGallery ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                        aria-label="Edit project"
-                        title="Edit project"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          navigate(`/dashboard?edit=${p.id}`);
-                        }}
-                      >
-                        <SymbolIcon name="edit" className="text-[20px]" />
-                      </button>
-                    ) : canSave ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                        onClick={(e) => toggleFavorite(e, p)}
-                        disabled={favBusyId === p.id}
-                        aria-label={saved ? "Unsave project" : "Save project"}
-                        title={saved ? "Unsave project" : "Save project"}
-                      >
-                        <SymbolIcon
-                          name="bookmark"
-                          fill={saved ? 1 : 0}
-                          className="text-[20px]"
-                        />
-                      </button>
-                    ) : null}
-                  </div>
+                  ) : authed && isOwner(p) && !isReferenceGallery ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(`/dashboard?edit=${p.id}`);
+                      }}
+                      aria-label="Edit project"
+                    >
+                      <SymbolIcon name="edit" className="text-[18px]" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
-            </Card>
+            </div>
           );
 
           return (
@@ -1009,148 +1058,167 @@ export default function Explore() {
           );
         })}
       </div>
-      {directoryListings.length > 0 ? (
-        <div className="mt-8 border-t border-slate-200 pt-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Local business/contractors directory
-              </h2>
+          </>
+        )}
+      </div>
+
+      {/* Directory Section - Full viewport width background */}
+      {!loading && directoryListings.length > 0 ? (
+        <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-12 w-screen border-y border-slate-200 bg-[#F6F5F1] py-12">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                  Local Contractor Directory
+                </h2>
+                <p className="mt-2 text-slate-500">Verified businesses in your area</p>
+              </div>
+              <button
+                type="button"
+                className="hidden h-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:inline-flex"
+              >
+                View All Contractors
+              </button>
             </div>
-          </div>
 
           {filteredDirectoryListings.length > 0 ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-              {filteredDirectoryListings.map((listing) => {
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {filteredDirectoryListings.slice(0, visibleDirectoryCount).map((listing) => {
                 const specialties = Array.isArray(listing.specialties)
                   ? listing.specialties
                   : [];
-                const visibleSpecialties = specialties.slice(0, 4);
+                const visibleSpecialties = specialties.slice(0, 2);
+                const extraCount = specialties.length - 2;
                 const liked = !!directoryLikeMap[listing.id];
-                const likeCount = Number(
-                  directoryLikeCounts[listing.id] ?? listing.like_count ?? 0,
-                );
-                const distanceLabel = formatDistanceMiles(
-                  listing.distance_miles,
-                );
+                const rating = listing.rating ?? 0;
+                const reviewCount = listing.review_count ?? 0;
+
                 return (
-                  <Card
+                  <div
                     key={`directory-${listing.id}`}
-                    className="flex min-h-[240px] flex-col rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+                    className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-base font-semibold text-slate-950">
-                          {listing.business_name}
-                        </h3>
+                    {/* Save/Like button - top right */}
+                    <button
+                      type="button"
+                      className="absolute right-4 top-4 text-slate-300 transition hover:text-slate-600 disabled:opacity-50"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleDirectoryLike(e, listing);
+                      }}
+                      disabled={directoryLikeBusyId === listing.id}
+                      aria-label={liked ? "Unlike" : "Like"}
+                    >
+                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[22px]" />
+                    </button>
 
-                        {listing.location ? (
-                          <div className="mt-1 text-sm font-medium text-slate-500">
-                            {listing.location}
-                          </div>
-                        ) : null}
-                        {distanceLabel ? (
-                          <div className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                            {distanceLabel}
-                          </div>
-                        ) : null}
-                      </div>
+                    {/* Business name */}
+                    <h3 className="pr-8 text-lg font-semibold text-slate-900">
+                      {listing.business_name}
+                    </h3>
 
-                      <div className="group relative shrink-0">
-                        <ReportContentButton
-                          targetType="business_directory_listing"
-                          targetId={listing.id}
-                          subject={
-                            listing.business_name ||
-                            "Business directory listing"
-                          }
-                          label={
-                            <SymbolIcon name="flag" className="text-[16px]" />
-                          }
-                          title="Report listing"
-                          ariaLabel="Report listing"
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                        />
-                        <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-64 rounded-xl bg-slate-950 p-3 text-xs leading-5 text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                          Business information may be sourced from publicly
-                          available information. Business owners may request
-                          edits or removal.
-                        </div>
-                      </div>
+                    {/* Location + Nearby badge */}
+                    <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <SymbolIcon name="location_on" className="text-[16px]" />
+                        {listing.location || "Local"}
+                      </span>
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        Nearby
+                      </span>
                     </div>
 
+                    {/* Star rating */}
+                    {rating > 0 ? (
+                      <div className="mt-3 flex items-center gap-1.5">
+                        <SymbolIcon name="star" fill={1} className="text-[18px] text-amber-400" />
+                        <span className="font-semibold text-slate-900">{rating.toFixed(1)}</span>
+                        <span className="text-sm text-slate-500">({reviewCount} reviews)</span>
+                      </div>
+                    ) : null}
+
+                    {/* Specialty tags */}
                     {visibleSpecialties.length > 0 ? (
-                      <div className="mt-5 flex flex-wrap gap-2.5">
+                      <div className="mt-4 flex flex-wrap gap-2">
                         {visibleSpecialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full border border-slate-300 bg-slate-100 px-3.5 py-1.5 text-xs font-normal text-slate-950"
+                            className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
                           >
                             {specialty}
                           </span>
                         ))}
+                        {extraCount > 0 ? (
+                          <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                            +{extraCount} more
+                          </span>
+                        ) : null}
                       </div>
                     ) : null}
 
-                    {listing.phone_number ? (
-                      <a
-                        href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:border-slate-900 hover:bg-slate-50"
-                      >
-                        <span className="text-slate-950">📞</span>
-                        <span>{listing.phone_number}</span>
-                      </a>
-                    ) : null}
+                    {/* Divider */}
+                    <div className="my-4 border-t border-slate-100" />
 
-                    <div className="mt-auto flex items-center justify-between gap-3 pt-5 text-xs text-slate-500">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                        onClick={(e) => toggleDirectoryLike(e, listing)}
-                        disabled={directoryLikeBusyId === listing.id}
-                        aria-label={
-                          liked
-                            ? "Unlike directory listing"
-                            : "Like directory listing"
-                        }
-                        title={
-                          liked
-                            ? "Unlike directory listing"
-                            : "Like directory listing"
-                        }
-                      >
-                        <SymbolIcon
-                          name="favorite"
-                          fill={liked ? 1 : 0}
-                          className="text-[18px]"
-                        />
-                        <span>{likeCount}</span>
-                      </button>
+                    {/* Footer: phone + website */}
+                    <div className="flex items-center justify-between gap-3">
+                      {listing.phone_number ? (
+                        <a
+                          href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
+                          className="inline-flex items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <SymbolIcon name="call" className="text-[18px]" />
+                          <span>{listing.phone_number}</span>
+                        </a>
+                      ) : (
+                        <span />
+                      )}
 
                       {listing.website ? (
                         <a
                           href={listing.website}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center justify-end text-sm font-semibold text-blue-500 hover:text-blue-900 hover:underline"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          Visit Website
+                          Website
+                          <SymbolIcon name="open_in_new" className="text-[16px]" />
                         </a>
-                      ) : (
-                        <span className="text-xs text-slate-400">
-                          Reviewed listing
-                        </span>
-                      )}
+                      ) : null}
                     </div>
-                  </Card>
+                  </div>
                 );
               })}
             </div>
           ) : (
-            <Card className="p-5 text-sm text-slate-500">
+            <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
               No approved directory listings match this search.
-            </Card>
+            </div>
           )}
+
+          {/* Show More button */}
+          {filteredDirectoryListings.length > visibleDirectoryCount ? (
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setVisibleDirectoryCount((prev) => prev + 9)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                Show More
+                <span className="text-slate-400">
+                  ({filteredDirectoryListings.length - visibleDirectoryCount} remaining)
+                </span>
+              </button>
+            </div>
+          ) : null}
+
+          {/* Footer disclaimer */}
+          <p className="mt-8 text-center text-xs text-slate-400">
+            Business information may be sourced from publicly available information. Business owners may request edits or removal.
+          </p>
+          </div>
         </div>
       ) : null}
     </div>

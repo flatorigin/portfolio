@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
-import { Card, Button, GhostButton, Badge } from "../ui";
 
 function toUrl(raw) {
   if (!raw) return "";
@@ -118,7 +117,7 @@ export default function SavedLikesCard() {
   }
 
   return (
-    <Card className="border border-slate-200 p-5">
+    <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-900">Saved &amp; Likes</div>
@@ -126,10 +125,10 @@ export default function SavedLikesCard() {
             Keep projects and profiles separated by intent.
           </div>
         </div>
-        <Badge className="text-[11px] text-slate-500">{totalCount} items</Badge>
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">{totalCount} items</span>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-5 border-b border-slate-200">
+      <div className="mb-4 flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
         {TABS.map((tab) => {
           const active = tab.key === activeTab;
           return (
@@ -138,10 +137,10 @@ export default function SavedLikesCard() {
               type="button"
               onClick={() => setActiveTab(tab.key)}
               className={
-                "relative -mb-px border-b-2 px-1 pb-3 text-sm font-medium transition " +
+                "rounded-lg px-3 py-2 text-xs font-medium transition " +
                 (active
-                  ? "border-indigo-600 text-slate-900"
-                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800")
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700")
               }
             >
               {tab.label}
@@ -153,7 +152,7 @@ export default function SavedLikesCard() {
       {loading ? (
         <div className="text-sm text-slate-500">Loading…</div>
       ) : activeItems.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-500">
           {activeMeta.empty}
         </div>
       ) : (
@@ -166,7 +165,7 @@ export default function SavedLikesCard() {
               return (
                 <div
                   key={`${activeTab}-${item.id}`}
-                  className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center"
+                  className="flex flex-col gap-4 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:flex-row md:items-center"
                 >
                   <div className="h-20 w-full shrink-0 overflow-hidden rounded-xl bg-slate-100 md:w-32">
                     {coverSrc ? (
@@ -179,31 +178,32 @@ export default function SavedLikesCard() {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-base font-semibold text-slate-900">
+                    <div className="truncate text-sm font-semibold text-slate-900">
                       {item.project_title || "Project"}
                     </div>
-                    <div className="mt-1 text-sm text-slate-600">
+                    <div className="mt-1 text-xs text-slate-600">
                       by {item.project_owner_username || "Unknown owner"}
                     </div>
-                    <div className="mt-1 text-sm text-slate-500">
+                    <div className="mt-1 text-xs text-slate-500">
                       {item.project_location || "No location"}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2 md:justify-end">
-                    <GhostButton type="button" onClick={() => navigate(`/projects/${item.project_id}`)}>
+                    <button type="button" onClick={() => navigate(`/projects/${item.project_id}`)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
                       View Project
-                    </GhostButton>
-                    <GhostButton
+                    </button>
+                    <button
                       type="button"
                       onClick={() => navigate(`/profiles/${item.project_owner_username}`)}
                       disabled={!item.project_owner_username}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                     >
                       Visit Profile
-                    </GhostButton>
-                    <Button type="button" variant="outline" onClick={() => removeItem(item)}>
+                    </button>
+                    <button type="button" onClick={() => removeItem(item)} className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800">
                       Remove
-                    </Button>
+                    </button>
                   </div>
                 </div>
               );
@@ -214,17 +214,17 @@ export default function SavedLikesCard() {
               return (
                 <div
                   key={`${activeTab}-directory-${item.id}`}
-                  className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center"
+                  className="flex flex-col gap-4 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:flex-row md:items-center"
                 >
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
                     {(item.business_name || "B").slice(0, 1).toUpperCase()}
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-base font-semibold text-slate-900">
+                    <div className="truncate text-sm font-semibold text-slate-900">
                       {item.business_name || "Business listing"}
                     </div>
-                    <div className="mt-1 text-sm text-slate-500">
+                    <div className="mt-1 text-xs text-slate-500">
                       {item.location || "Local business/contractor directory"}
                     </div>
                     {specialties.length > 0 ? (
@@ -232,7 +232,7 @@ export default function SavedLikesCard() {
                         {specialties.map((specialty) => (
                           <span
                             key={specialty}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600"
+                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600"
                           >
                             {specialty}
                           </span>
@@ -243,26 +243,28 @@ export default function SavedLikesCard() {
 
                   <div className="flex flex-wrap gap-2 md:justify-end">
                     {item.website ? (
-                      <GhostButton
+                      <button
                         type="button"
                         onClick={() => window.open(item.website, "_blank", "noopener,noreferrer")}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                       >
                         Visit Website
-                      </GhostButton>
+                      </button>
                     ) : null}
                     {item.phone_number ? (
-                      <GhostButton
+                      <button
                         type="button"
                         onClick={() => {
                           window.location.href = `tel:${String(item.phone_number).replace(/[^\d+]/g, "")}`;
                         }}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                       >
                         Call
-                      </GhostButton>
+                      </button>
                     ) : null}
-                    <Button type="button" variant="outline" onClick={() => removeItem(item)}>
+                    <button type="button" onClick={() => removeItem(item)} className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800">
                       Remove
-                    </Button>
+                    </button>
                   </div>
                 </div>
               );
@@ -272,9 +274,9 @@ export default function SavedLikesCard() {
             return (
               <div
                 key={`${activeTab}-${item.id || item.username}`}
-                className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center"
+                className="flex flex-col gap-4 rounded-xl border border-slate-100 bg-white p-4 shadow-sm md:flex-row md:items-center"
               >
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-slate-100">
                   {avatarSrc ? (
                     <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
                   ) : (
@@ -285,25 +287,25 @@ export default function SavedLikesCard() {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-base font-semibold text-slate-900">
+                  <div className="truncate text-sm font-semibold text-slate-900">
                     {item.display_name || item.username}
                   </div>
-                  <div className="mt-1 text-sm text-slate-500">{item.tag || "No location"}</div>
+                  <div className="mt-1 text-xs text-slate-500">{item.tag || "No location"}</div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 md:justify-end">
-                  <GhostButton type="button" onClick={() => navigate(`/profiles/${item.username}`)}>
+                  <button type="button" onClick={() => navigate(`/profiles/${item.username}`)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
                     View Profile
-                  </GhostButton>
-                  <Button type="button" variant="outline" onClick={() => removeItem(item)}>
+                  </button>
+                  <button type="button" onClick={() => removeItem(item)} className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800">
                     Remove
-                  </Button>
+                  </button>
                 </div>
               </div>
             );
           })}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
