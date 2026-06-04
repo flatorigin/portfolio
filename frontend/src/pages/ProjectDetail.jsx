@@ -1675,8 +1675,8 @@ export default function ProjectDetail() {
 
         <div
           className={
-            "border-b border-slate-100 text-white " +
-            (project?.is_job_posting ? "bg-slate-800" : "bg-slate-900/95")
+            "border-b border-slate-100 text-white backdrop-blur-md " +
+            (project?.is_job_posting ? "bg-slate-800/90" : "bg-slate-900/90")
           }
         >
           {project?.is_job_posting ? (
