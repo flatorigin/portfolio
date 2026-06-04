@@ -1676,7 +1676,7 @@ export default function ProjectDetail() {
         <div
           className={
             "border-b border-slate-100 text-white " +
-            (project?.is_job_posting ? "bg-[#CB633A]" : "bg-slate-900/95")
+            (project?.is_job_posting ? "bg-slate-800" : "bg-slate-900/95")
           }
         >
           {project?.is_job_posting ? (
@@ -1699,7 +1699,7 @@ export default function ProjectDetail() {
                     ) : null}
                   </div>
                   <div className="mt-2">
-                    <span className="inline-flex items-center rounded-full bg-[#5C7EA3] px-4 py-1 text-[10px] font-semibold tracking-wide text-white">
+                    <span className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-1 text-[10px] font-semibold tracking-wide text-white">
                       JOB POSTING
                     </span>
                   </div>
@@ -1718,14 +1718,14 @@ export default function ProjectDetail() {
                           disabled={likeBusy}
                           aria-label={isLiked ? "Unlike project" : "Like project"}
                           title={isLiked ? "Unlike project" : "Like project"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white transition hover:bg-[#DE8964] disabled:opacity-60"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
                         >
                           <LikeCircleIcon active={isLiked} className="text-[9px]" />
                         </button>
                       ) : (
                         <span
                           aria-hidden="true"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white/90"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
                         >
                           <LikeCircleIcon className="text-[9px]" />
                         </span>
@@ -1739,14 +1739,14 @@ export default function ProjectDetail() {
                         disabled={saveBusy}
                         aria-label={isSaved ? "Unsave project" : "Save project"}
                         title={isSaved ? "Unsave project" : "Save project"}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white transition hover:bg-[#DE8964] disabled:opacity-60"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
                       >
                         <SaveCircleIcon active={isSaved} className="text-[9px]" />
                       </button>
                     ) : (
                       <span
                         aria-hidden="true"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#BA5B35] bg-[#D87E57] text-white/90"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
                       >
                         <SaveCircleIcon className="text-[9px]" />
                       </span>
@@ -1759,7 +1759,7 @@ export default function ProjectDetail() {
                         to={`/projects/${project.id}/print`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
+                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
                       >
                         Printable job post
                       </Link>
@@ -1769,7 +1769,7 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={shareProject}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
+                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
                       >
                         Share job
                       </button>
@@ -1778,7 +1778,7 @@ export default function ProjectDetail() {
                     {project?.owner_username ? (
                       <Link
                         to={`/profiles/${project.owner_username}`}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
+                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
                       >
                         Public Profile
                       </Link>
@@ -1788,7 +1788,7 @@ export default function ProjectDetail() {
                       <button
                         type="button"
                         onClick={() => setMsgOpen(true)}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
+                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
                       >
                         Message
                       </button>
@@ -1800,7 +1800,7 @@ export default function ProjectDetail() {
                         targetId={project?.id}
                         subject={project?.title || `Project #${id}`}
                         label="Report"
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
+                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
                       />
                     ) : null}
 
@@ -1814,7 +1814,7 @@ export default function ProjectDetail() {
                           }
                           requestEditProject();
                         }}
-                        className="inline-flex min-h-[42px] items-center rounded-full border-[3px] border-[#C7643A] bg-[#D78663] px-5 text-sm font-semibold text-white transition hover:bg-[#DD9170]"
+                        className="inline-flex min-h-[38px] items-center rounded-xl bg-white px-4 text-sm font-medium text-slate-800 transition hover:bg-slate-100"
                       >
                         {isEditing ? "Close editor" : "Edit job post"}
                       </button>
@@ -1957,7 +1957,7 @@ export default function ProjectDetail() {
 
         <div className="space-y-6 p-4 sm:p-6">
           {project?.is_job_posting ? (
-            <div className="rounded-2xl border border-slate-200 bg-[#FCFBF8] p-5 shadow-sm">
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Job overview</div>
               <div className="mt-3 text-sm leading-7 text-slate-700 sm:text-[15px]">
                 {jobSummaryText || "Project requirements will appear here."}
@@ -2096,8 +2096,8 @@ export default function ProjectDetail() {
           {(project?.material_url ||
             project?.material_label ||
             (Array.isArray(project?.extra_links) && project.extra_links.length > 0)) && (
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Materials &amp; tools used
               </div>
 
@@ -2265,7 +2265,7 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+          <div className="space-y-3 rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Comments
@@ -2283,10 +2283,10 @@ export default function ProjectDetail() {
               )}
             </div>
 
-            <div className="border-t border-slate-200 pt-3">
+            <div className="border-t border-slate-200 pt-4">
               {authed ? (
-                <form onSubmit={submitComment} className="space-y-2">
-                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                <form onSubmit={submitComment} className="space-y-3">
+                  <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-600">
                     Public comments are text-only. No links or media. Emoji is okay.
                   </div>
 
@@ -2296,7 +2296,7 @@ export default function ProjectDetail() {
                   </div>
 
                   {replyingTo && (
-                    <div className="flex items-start justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">
+                    <div className="flex items-start justify-between rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-600">
                       <div>
                         Replying to <span className="font-semibold">{replyingTo.author_username || "user"}</span>
                       </div>
@@ -2316,7 +2316,7 @@ export default function ProjectDetail() {
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="Add a public comment…"
-                    className="min-h-[88px] bg-white"
+                    className="min-h-[88px] rounded-xl border-slate-200 bg-white"
                   />
 
                   <div className="flex items-center justify-between gap-3">
@@ -2325,7 +2325,7 @@ export default function ProjectDetail() {
                     </div>
                     <div className="flex items-center gap-3">
                       {commentError && <p className="text-[11px] text-red-600">{commentError}</p>}
-                      <Button type="submit" disabled={commentBusy || !commentText.trim() || commentText.trim().length > COMMENT_CHAR_LIMIT}>
+                      <Button type="submit" className="h-10 rounded-xl bg-slate-900 px-5 text-sm font-medium text-white hover:bg-slate-800" disabled={commentBusy || !commentText.trim() || commentText.trim().length > COMMENT_CHAR_LIMIT}>
                         {commentBusy ? "Posting…" : "Post"}
                       </Button>
                     </div>
