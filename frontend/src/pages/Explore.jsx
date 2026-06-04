@@ -258,7 +258,7 @@ export default function Explore() {
   const [directoryLikeMap, setDirectoryLikeMap] = useState({});
   const [directoryLikeCounts, setDirectoryLikeCounts] = useState({});
   const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
-  const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(9);
+  const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(3);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
