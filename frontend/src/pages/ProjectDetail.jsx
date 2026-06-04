@@ -1680,6 +1680,7 @@ export default function ProjectDetail() {
           }
         >
           {project?.is_job_posting ? (
+            <>
             <div className="px-5 py-4 sm:px-6 sm:py-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
@@ -1752,79 +1753,94 @@ export default function ProjectDetail() {
                       </span>
                     )}
                   </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-1">
-                    {project?.id ? (
-                      <Link
-                        to={`/projects/${project.id}/print`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
-                      >
-                        Printable job post
-                      </Link>
-                    ) : null}
-
-                    {canSharePublicJob ? (
-                      <button
-                        type="button"
-                        onClick={shareProject}
-                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
-                      >
-                        Share job
-                      </button>
-                    ) : null}
-
-                    {project?.owner_username ? (
-                      <Link
-                        to={`/profiles/${project.owner_username}`}
-                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
-                      >
-                        Public Profile
-                      </Link>
-                    ) : null}
-
-                    {project?.owner_username && authed && !isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => setMsgOpen(true)}
-                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
-                      >
-                        Message
-                      </button>
-                    ) : null}
-
-                    {!isOwnerUser ? (
-                      <ReportContentButton
-                        targetType="project"
-                        targetId={project?.id}
-                        subject={project?.title || `Project #${id}`}
-                        label="Report"
-                        className="inline-flex min-h-[38px] items-center rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-medium text-white transition hover:bg-white/20"
-                      />
-                    ) : null}
-
-                    {isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isEditing) {
-                            setIsEditing(false);
-                            return;
-                          }
-                          requestEditProject();
-                        }}
-                        className="inline-flex min-h-[38px] items-center rounded-xl bg-white px-4 text-sm font-medium text-slate-800 transition hover:bg-slate-100"
-                      >
-                        {isEditing ? "Close editor" : "Edit job post"}
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
               </div>
               {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
             </div>
+
+            {/* Action buttons row - below dark header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-2">
+                {project?.id ? (
+                  <Link
+                    to={`/projects/${project.id}/print`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="print" className="text-[16px]" />
+                    Print
+                  </Link>
+                ) : null}
+
+                {canSharePublicJob ? (
+                  <button
+                    type="button"
+                    onClick={shareProject}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="share" className="text-[16px]" />
+                    Share
+                  </button>
+                ) : null}
+
+                {project?.owner_username ? (
+                  <Link
+                    to={`/profiles/${project.owner_username}`}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="person" className="text-[16px]" />
+                    Profile
+                  </Link>
+                ) : null}
+
+                {project?.owner_username && authed && !isOwnerUser ? (
+                  <button
+                    type="button"
+                    onClick={() => setMsgOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="chat_bubble" className="text-[16px]" />
+                    Message
+                  </button>
+                ) : null}
+
+                {!isOwnerUser ? (
+                  <ReportContentButton
+                    targetType="project"
+                    targetId={project?.id}
+                    subject={project?.title || `Project #${id}`}
+                    label="Report"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  />
+                ) : null}
+              </div>
+
+              {isOwnerUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditing) {
+                      setIsEditing(false);
+                      return;
+                    }
+                    requestEditProject();
+                  }}
+                  className={
+                    "inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm font-medium transition " +
+                    (isEditing
+                      ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                      : "bg-slate-900 text-white hover:bg-slate-800")
+                  }
+                >
+                  <SymbolIcon name={isEditing ? "close" : "edit"} className="text-[16px]" />
+                  {isEditing ? "Close editor" : "Edit"}
+                </button>
+              ) : null}
+            </div>
+            </>
           ) : (
+            <>
             <div className="px-5 py-4 sm:px-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
@@ -1843,115 +1859,126 @@ export default function ProjectDetail() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-4 sm:items-end">
-                  <div className="flex items-center justify-end gap-3 text-white">
-                    <div className="flex items-center gap-1.5">
-                      <span className="min-w-[1ch] text-[18px] font-medium text-white/92">
-                        {Number.isFinite(likeCount) ? likeCount : 0}
-                      </span>
-                      {authed && project && !isOwnerUser ? (
-                        <button
-                          type="button"
-                          onClick={toggleLike}
-                          disabled={likeBusy}
-                          aria-label={isLiked ? "Unlike project" : "Like project"}
-                          title={isLiked ? "Unlike project" : "Like project"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/18 disabled:opacity-60"
-                        >
-                          <LikeCircleIcon active={isLiked} className="text-[9px]" />
-                        </button>
-                      ) : (
-                        <span
-                          aria-hidden="true"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
-                        >
-                          <LikeCircleIcon className="text-[9px]" />
-                        </span>
-                      )}
-                    </div>
-
+                <div className="flex items-center justify-end gap-3 text-white">
+                  <div className="flex items-center gap-1.5">
+                    <span className="min-w-[1ch] text-[18px] font-medium text-white/92">
+                      {Number.isFinite(likeCount) ? likeCount : 0}
+                    </span>
                     {authed && project && !isOwnerUser ? (
                       <button
                         type="button"
-                        onClick={toggleSave}
-                        disabled={saveBusy}
-                        aria-label={isSaved ? "Unsave project" : "Save project"}
-                        title={isSaved ? "Unsave project" : "Save project"}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/18 disabled:opacity-60"
+                        onClick={toggleLike}
+                        disabled={likeBusy}
+                        aria-label={isLiked ? "Unlike project" : "Like project"}
+                        title={isLiked ? "Unlike project" : "Like project"}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
                       >
-                        <SaveCircleIcon active={isSaved} className="text-[9px]" />
+                        <LikeCircleIcon active={isLiked} className="text-[9px]" />
                       </button>
                     ) : (
                       <span
                         aria-hidden="true"
                         className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
                       >
-                        <SaveCircleIcon className="text-[9px]" />
+                        <LikeCircleIcon className="text-[9px]" />
                       </span>
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-end gap-1">
-                    {project?.id ? (
-                      <Link
-                        to={`/projects/${project.id}/print`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        Printable project
-                      </Link>
-                    ) : null}
-
-                    {isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isEditing) {
-                            setIsEditing(false);
-                            return;
-                          }
-                          requestEditProject();
-                        }}
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        {isEditing ? "Close editor" : "Edit project"}
-                      </button>
-                    ) : null}
-
-                    {project?.owner_username ? (
-                      <Link
-                        to={`/profiles/${project.owner_username}`}
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        Public Profile
-                      </Link>
-                    ) : null}
-
-                    {project?.owner_username && authed && !isOwnerUser ? (
-                      <button
-                        type="button"
-                        onClick={() => setMsgOpen(true)}
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      >
-                        Message
-                      </button>
-                    ) : null}
-
-                    {!isOwnerUser ? (
-                      <ReportContentButton
-                        targetType="project"
-                        targetId={project?.id}
-                        subject={project?.title || `Project #${id}`}
-                        label="Report"
-                        className="inline-flex min-h-[42px] items-center rounded-full border border-white/30 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/18"
-                      />
-                    ) : null}
-                  </div>
+                  {authed && project && !isOwnerUser ? (
+                    <button
+                      type="button"
+                      onClick={toggleSave}
+                      disabled={saveBusy}
+                      aria-label={isSaved ? "Unsave project" : "Save project"}
+                      title={isSaved ? "Unsave project" : "Save project"}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+                    >
+                      <SaveCircleIcon active={isSaved} className="text-[9px]" />
+                    </button>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
+                    >
+                      <SaveCircleIcon className="text-[9px]" />
+                    </span>
+                  )}
                 </div>
               </div>
               {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
             </div>
+
+            {/* Action buttons row - below dark header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-2">
+                {project?.id ? (
+                  <Link
+                    to={`/projects/${project.id}/print`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="print" className="text-[16px]" />
+                    Print
+                  </Link>
+                ) : null}
+
+                {project?.owner_username ? (
+                  <Link
+                    to={`/profiles/${project.owner_username}`}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="person" className="text-[16px]" />
+                    Profile
+                  </Link>
+                ) : null}
+
+                {project?.owner_username && authed && !isOwnerUser ? (
+                  <button
+                    type="button"
+                    onClick={() => setMsgOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="chat_bubble" className="text-[16px]" />
+                    Message
+                  </button>
+                ) : null}
+
+                {!isOwnerUser ? (
+                  <ReportContentButton
+                    targetType="project"
+                    targetId={project?.id}
+                    subject={project?.title || `Project #${id}`}
+                    label="Report"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  />
+                ) : null}
+              </div>
+
+              {isOwnerUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditing) {
+                      setIsEditing(false);
+                      return;
+                    }
+                    requestEditProject();
+                  }}
+                  className={
+                    "inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm font-medium transition " +
+                    (isEditing
+                      ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                      : "bg-slate-900 text-white hover:bg-slate-800")
+                  }
+                >
+                  <SymbolIcon name={isEditing ? "close" : "edit"} className="text-[16px]" />
+                  {isEditing ? "Close editor" : "Edit"}
+                </button>
+              ) : null}
+            </div>
+            </>
           )}
         </div>
 
