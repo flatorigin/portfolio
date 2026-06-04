@@ -871,8 +871,8 @@ export default function Explore() {
   }
 
   return (
-    <div className="-mx-4 sm:-mx-6 lg:-mx-8">
-      {/* Hero header with translucent search */}
+    <div>
+      {/* Hero header with translucent search - full width */}
       <div className="relative bg-gradient-to-b from-slate-100 to-slate-50 px-4 pb-6 pt-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <header className="mb-6">
