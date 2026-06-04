@@ -1349,7 +1349,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 );
-              })}
+            })}
           </div>
         )}
       </div>
@@ -1946,76 +1946,6 @@ export default function Dashboard() {
         )}
       </div>
       )}
-
-                  <div className="p-4">
-                    <div className="mb-1 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold">{p.title}</div>
-                      </div>
-
-                      {p.category ? <Badge className="shrink-0">{p.category}</Badge> : null}
-                    </div>
-
-                    <div className="line-clamp-2 text-sm text-slate-700">
-                      {p.summary || <span className="opacity-60">No summary</span>}
-                    </div>
-
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                      {p.location ? (
-                        <div>
-                          <span className="opacity-60">Location:</span> {p.location}
-                        </div>
-                      ) : null}
-
-                      {p.budget ? (
-                        <div>
-                          <span className="opacity-60">Budget:</span> {p.budget}
-                        </div>
-                      ) : null}
-
-                      {p.sqf ? (
-                        <div>
-                          <span className="opacity-60">Sq Ft:</span> {p.sqf}
-                        </div>
-                      ) : null}
-
-                      {p.highlights ? (
-                        <div className="col-span-2 truncate">
-                          <span className="opacity-60">Highlights:</span> {p.highlights}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-3 flex w-full flex-nowrap gap-2">
-                      <button
-                        type="button"
-                        className="flex h-9 w-1/2 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(`/projects/${p.id}`, "_self");
-                        }}
-                      >
-                        Open
-                      </button>
-
-                      <button
-                        type="button"
-                        className="flex h-9 w-1/2 items-center justify-center rounded-xl bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditProject(p);
-                        }}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {!isHomeownerAccount ? (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
