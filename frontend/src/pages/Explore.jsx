@@ -872,9 +872,9 @@ export default function Explore() {
 
   return (
     <div>
-      {/* Hero header with translucent search - full width */}
-      <div className="relative bg-gradient-to-b from-slate-100 to-slate-50 px-4 pb-6 pt-8 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
+      {/* Hero header with translucent search - full width background */}
+      <div className="relative pb-6 pt-8 before:absolute before:inset-0 before:-left-[50vw] before:-right-[50vw] before:ml-[calc(50%-50vw)] before:mr-[calc(50%-50vw)] before:w-screen before:bg-gradient-to-b before:from-slate-100 before:to-slate-50">
+        <div className="relative">
           <header className="mb-6">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Explore Projects</h1>
             <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
@@ -935,14 +935,13 @@ export default function Explore() {
       </div>
 
       {/* Main content area */}
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          {/* Results count */}
-          <p className="mb-4 text-sm text-slate-500">
-            Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
-          </p>
+      <div className="py-6">
+        {/* Results count */}
+        <p className="mb-4 text-sm text-slate-500">
+          Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
+        </p>
 
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
@@ -1074,13 +1073,12 @@ export default function Explore() {
           );
         })}
       </div>
-        </div>
       </div>
 
-      {/* Directory Section - Full width immersive background */}
+      {/* Directory Section - Full width background using pseudo-element */}
       {directoryListings.length > 0 ? (
-        <div className="mt-12 border-y border-slate-200 bg-[#F6F5F1] px-4 py-12 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+        <div className="relative mt-12 py-12 before:absolute before:inset-0 before:-left-[50vw] before:-right-[50vw] before:ml-[calc(50%-50vw)] before:mr-[calc(50%-50vw)] before:w-screen before:border-y before:border-slate-200 before:bg-[#F6F5F1]">
+          <div className="relative">
             <div className="mb-8 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">

@@ -41,7 +41,6 @@ export default function App() {
     pathname === "/" ||
     pathname === "/homeowner" ||
     pathname === "/contractor" ||
-    pathname === "/explore" ||
     pathname.startsWith("/guides") ||
     pathname.startsWith("/onboarding/") ||
     pathname === "/terms" ||
