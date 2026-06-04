@@ -859,19 +859,21 @@ export default function PublicProfile() {
             </div>
 
             {!isHomeownerProfile && categoryBadges.length ? (
-              <div className="mt-6 border-t border-slate-200 pt-4">
-                <div className="flex flex-wrap gap-2 overflow-hidden" style={{ maxHeight: '76px' }}>
-                  {categoryBadges.slice(0, 6).map((category) => (
-                    <span
-                      key={category}
-                      className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
-                    >
-                      {category}
-                    </span>
-                  ))}
-                  {categoryBadges.length > 6 && (
-                    <span className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-500">
-                      +{categoryBadges.length - 6} more
+              <div className="mt-5 border-t border-slate-200 pt-4">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                    {categoryBadges.slice(0, 4).map((category) => (
+                      <span
+                        key={category}
+                        className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
+                      >
+                        {category}
+                      </span>
+                    ))}
+                  </div>
+                  {categoryBadges.length > 4 && (
+                    <span className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-500">
+                      +{categoryBadges.length - 4} more
                     </span>
                   )}
                 </div>
