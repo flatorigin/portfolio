@@ -646,11 +646,11 @@ export default function App() {
         </div>
       ) : null}
 
-      <main className="w-full">
+      <main className="w-full overflow-x-clip">
         {isFullBleed ? (
           <Outlet />
         ) : (
-          <Container>
+          <Container className="overflow-visible">
             <Outlet />
           </Container>
         )}
