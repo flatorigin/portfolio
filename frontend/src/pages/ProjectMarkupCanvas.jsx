@@ -30,6 +30,14 @@ function normalizeError(err, fallback) {
   return data?.detail || data?.message || (data ? JSON.stringify(data) : "") || err?.message || fallback;
 }
 
+function safeMarkupData(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function isPersistableUrl(value) {
+  return !!value && !String(value).startsWith("blob:");
+}
+
 function pointFromEvent(event, svg) {
   const rect = svg.getBoundingClientRect();
   const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
@@ -159,6 +167,7 @@ export default function ProjectMarkupCanvas() {
   const [draft, setDraft] = useState(null);
   const [drag, setDrag] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [savingEditable, setSavingEditable] = useState(false);
   const [message, setMessage] = useState("");
 
   const storageKey = `${STORAGE_PREFIX}:${planId || "standalone"}`;
@@ -187,7 +196,15 @@ export default function ProjectMarkupCanvas() {
     api
       .get(`/project-plans/${planId}/`)
       .then(({ data }) => {
-        if (alive) setPlan(data);
+        if (!alive) return;
+        setPlan(data);
+        const markup = safeMarkupData(data?.markup_data);
+        if (Array.isArray(markup.annotations)) setAnnotations(markup.annotations);
+        if (markup.background_url) setBackgroundUrl(markup.background_url);
+        if (markup.visible_layers && typeof markup.visible_layers === "object") {
+          setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
+        }
+        if (markup.active_layer) setActiveLayer(markup.active_layer);
       })
       .catch((err) => {
         if (alive) setMessage(normalizeError(err, "Could not load this project plan."));
@@ -206,6 +223,38 @@ export default function ProjectMarkupCanvas() {
   );
 
   const color = LAYERS.find((item) => item.key === activeLayer)?.color || "#0f172a";
+
+  const savedVersions = useMemo(() => {
+    const markup = safeMarkupData(plan?.markup_data);
+    return Array.isArray(markup.versions) ? markup.versions : [];
+  }, [plan]);
+
+  function makeMarkupPayload(previousMarkup = {}) {
+    const now = new Date().toISOString();
+    const background_url = isPersistableUrl(backgroundUrl) ? backgroundUrl : "";
+    const existingVersions = Array.isArray(previousMarkup.versions)
+      ? previousMarkup.versions
+      : [];
+    const version = {
+      id: `version-${Date.now()}`,
+      created_at: now,
+      background_url,
+      annotations,
+      visible_layers: visibleLayers,
+      annotation_count: annotations.length,
+    };
+
+    return {
+      schema_version: 1,
+      canvas: { width: CANVAS_W, height: CANVAS_H },
+      active_layer: activeLayer,
+      background_url,
+      annotations,
+      visible_layers: visibleLayers,
+      updated_at: now,
+      versions: [version, ...existingVersions].slice(0, 8),
+    };
+  }
 
   function updateSelected(patch) {
     if (!selectedId) return;
@@ -365,6 +414,7 @@ export default function ProjectMarkupCanvas() {
     setSaving(true);
     setMessage("");
     try {
+      await saveEditableCanvas({ quiet: true });
       const blob = await svgToPngBlob();
       const formData = new FormData();
       formData.append("images", new File([blob], `markup-${Date.now()}.png`, { type: "image/png" }));
@@ -372,12 +422,53 @@ export default function ProjectMarkupCanvas() {
       await api.post(`/project-plans/${planId}/images/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setMessage("Markup saved to this project planner.");
+      setMessage("Editable markup and image snapshot saved to this project planner.");
     } catch (err) {
       setMessage(normalizeError(err, "Could not save this markup. Try downloading SVG instead."));
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveEditableCanvas({ quiet = false } = {}) {
+    if (!planId) {
+      setMessage("Open this canvas from a project planner to save editable layer data.");
+      return null;
+    }
+    setSavingEditable(true);
+    if (!quiet) setMessage("");
+    try {
+      const previousMarkup = safeMarkupData(plan?.markup_data);
+      const markupData = makeMarkupPayload(previousMarkup);
+      const { data } = await api.patch(`/project-plans/${planId}/`, {
+        markup_data: markupData,
+      });
+      setPlan(data);
+      if (!quiet) {
+        setMessage(
+          backgroundUrl?.startsWith("blob:")
+            ? "Editable markup saved. The uploaded background itself is temporary until you also save an image snapshot."
+            : "Editable markup saved.",
+        );
+      }
+      return data;
+    } catch (err) {
+      if (!quiet) setMessage(normalizeError(err, "Could not save editable markup."));
+      throw err;
+    } finally {
+      setSavingEditable(false);
+    }
+  }
+
+  function restoreVersion(version) {
+    if (!version) return;
+    if (Array.isArray(version.annotations)) setAnnotations(version.annotations);
+    if (version.background_url) setBackgroundUrl(version.background_url);
+    if (version.visible_layers && typeof version.visible_layers === "object") {
+      setVisibleLayers((prev) => ({ ...prev, ...version.visible_layers }));
+    }
+    setSelectedId("");
+    setMessage("Version restored locally. Save editable canvas to keep it as the current version.");
   }
 
   const visibleAnnotations = annotations.filter((item) => visibleLayers[item.layer]);
@@ -399,8 +490,11 @@ export default function ProjectMarkupCanvas() {
         </div>
         <div className="flex flex-wrap gap-2">
           <GhostButton type="button" onClick={downloadSvg}>Download SVG</GhostButton>
+          <GhostButton type="button" onClick={() => saveEditableCanvas()} disabled={savingEditable}>
+            {savingEditable ? "Saving..." : "Save editable canvas"}
+          </GhostButton>
           <Button type="button" onClick={saveToPlanner} disabled={saving}>
-            {saving ? "Saving..." : "Save to project"}
+            {saving ? "Saving..." : "Save image snapshot"}
           </Button>
         </div>
       </div>
@@ -499,6 +593,28 @@ export default function ProjectMarkupCanvas() {
               ))}
             </div>
           </div>
+
+          {savedVersions.length ? (
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Versions</div>
+              <div className="mt-2 max-h-40 space-y-2 overflow-y-auto pr-1">
+                {savedVersions.map((version, index) => (
+                  <button
+                    key={version.id || `version-${index}`}
+                    type="button"
+                    onClick={() => restoreVersion(version)}
+                    className="w-full rounded-lg border border-slate-200 p-2 text-left text-xs text-slate-600 hover:bg-slate-50"
+                  >
+                    <div className="font-medium text-slate-800">
+                      Version {savedVersions.length - index}
+                    </div>
+                    <div>{version.annotation_count ?? 0} markups</div>
+                    <div>{version.created_at ? new Date(version.created_at).toLocaleString() : "Saved version"}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {selected ? (
             <div>

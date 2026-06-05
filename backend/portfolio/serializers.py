@@ -124,6 +124,7 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             "contractor_types",
             "links",
             "options",
+            "markup_data",
             "selected_option_key",
             "ai_generated_issue_summary",
             "ai_suggested_contractor_types",
@@ -156,6 +157,13 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             "ai_daily_limit",
             "can_generate_draft",
         ]
+
+    def validate_markup_data(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Markup data must be an object.")
+        return value
 
     def _normalize_string_list(self, value):
         if value in (None, ""):
