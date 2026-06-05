@@ -93,7 +93,6 @@ export default function FindLocalWork() {
     maxBudget: "",
   });
   const [activeSearchField, setActiveSearchField] = useState("name");
-  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -340,15 +339,6 @@ export default function FindLocalWork() {
             </div>
             <button
               type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              aria-expanded={showFilters}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <SymbolIcon name="tune" className="text-[18px]" />
-              Filters
-            </button>
-            <button
-              type="button"
               disabled={!hasActiveFilters}
               onClick={clearFilters}
               className={
@@ -361,91 +351,6 @@ export default function FindLocalWork() {
               Clear filters
             </button>
           </div>
-
-          {showFilters ? (
-            <div className="mb-6 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
-              <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-end">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Search by
-                  </span>
-                  <select
-                    value={activeSearchField}
-                    onChange={(e) => setActiveSearchField(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                  >
-                    <option value="name">Project name</option>
-                    <option value="location">Location</option>
-                    <option value="sqf">Sqf</option>
-                    <option value="budget">Budget</option>
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    {activeSearchLabel}
-                  </span>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      type={activeSearchField === "sqf" || activeSearchField === "budget" ? "number" : "text"}
-                      value={activeSearchValue}
-                      onChange={updateActiveSearch}
-                      placeholder={activeSearchPlaceholder}
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                    {activeSearchField === "sqf" ? (
-                      <input
-                        type="number"
-                        value={filters.maxSqf}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, maxSqf: e.target.value }))}
-                        placeholder="Maximum sqf"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                      />
-                    ) : null}
-                    {activeSearchField === "budget" ? (
-                      <input
-                        type="number"
-                        value={filters.maxBudget}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, maxBudget: e.target.value }))}
-                        placeholder="Maximum budget"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                      />
-                    ) : null}
-                  </div>
-                </label>
-
-                <button
-                  type="button"
-                  disabled={!hasActiveFilters}
-                  onClick={clearFilters}
-                  className={
-                    "inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-medium transition " +
-                    (hasActiveFilters
-                      ? "bg-slate-900 text-white hover:bg-slate-800"
-                      : "border border-slate-200 bg-white text-slate-400 cursor-not-allowed")
-                  }
-                >
-                  Clear filters
-                </button>
-              </div>
-
-              {activeFilterBadges.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {activeFilterBadges.map((badge) => (
-                    <button
-                      key={badge.key}
-                      type="button"
-                      onClick={badge.clear}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-                    >
-                      {badge.label}
-                      <SymbolIcon name="close" className="text-[14px]" />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           {/* Category pills - translucent container */}
           <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">

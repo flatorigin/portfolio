@@ -2403,116 +2403,146 @@ export default function ProjectDetail() {
       ) : null}
 
       {imageLightboxOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 p-2 sm:p-4">
-          <div className="flex h-full w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-[#f4f4f1] shadow-2xl md:h-[92vh]">
-            <div className="flex items-center justify-between border-b border-black/5 px-5 py-3">
-              <div className="min-w-0 pr-4">
-                <div className="truncate text-sm font-medium text-slate-900">
+        <div 
+          className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-sm"
+          onClick={() => setImageLightboxOpen(false)}
+        >
+          {/* Top bar - glass morphism */}
+          <div 
+            className="relative z-10 flex shrink-0 items-center justify-between px-4 py-3 sm:px-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() => setImageLightboxOpen(false)}
+                className="group inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/90 backdrop-blur-md transition hover:bg-white/20"
+                aria-label="Close gallery"
+              >
+                <SymbolIcon name="close" className="text-[22px] transition group-hover:scale-110" />
+              </button>
+              <div className="hidden min-w-0 sm:block">
+                <div className="truncate text-sm font-medium text-white">
                   {project?.title || `Project #${id}`}
                 </div>
-                <div className="truncate text-xs text-slate-500">
-                  {currentImage?.caption || "Project gallery"}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                {images.length > 0 ? (
-                  <div className="rounded-full bg-slate-500 px-3 py-1 text-xs font-semibold text-white">
-                    {activeImageIdx + 1}/{images.length}
+                {currentImage?.caption && (
+                  <div className="truncate text-xs text-white/60">
+                    {currentImage.caption}
                   </div>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setImageLightboxOpen(false)}
-                  className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-3 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
-                  aria-label="Close image gallery"
-                >
-                  <SymbolIcon name="close" className="text-[20px]" />
-                </button>
+                )}
               </div>
             </div>
-
-            <div className="relative flex min-h-0 flex-1 flex-col bg-[#f4f4f1]">
-              {currentImage ? (
-                <>
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#f4f4f1] px-4 py-4 md:px-14 md:py-5">
-                      <div className="flex h-full w-full items-center justify-center overflow-hidden">
-                        {mediaTypeFor(currentImage) === "video" ? (
-                          <MediaVideoPlayer
-                            src={currentImage.url}
-                            poster={currentImage.thumbnail || undefined}
-                            className="block h-full w-full object-contain"
-                          />
-                        ) : (
-                          <img
-                            src={currentImage.url}
-                            alt={currentImage.caption || ""}
-                            className="block h-full w-full object-contain"
-                          />
-                        )}
-                      </div>
-
-                      {images.length > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={prevImage}
-                            className="absolute left-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
-                          >
-                            <SymbolIcon name="chevron_left" className="text-[36px]" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={nextImage}
-                            className="absolute right-4 top-1/2 z-10 inline-flex -translate-y-1/2 items-center justify-center rounded-full bg-white/95 p-3 text-slate-700 shadow-md hover:bg-white"
-                          >
-                            <SymbolIcon name="chevron_right" className="text-[36px]" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-
-                    {images.length > 1 && (
-                      <div className="flex shrink-0 items-center justify-center gap-1 border-t border-black/5 bg-[#efefeb] px-3 py-3 text-[11px] text-slate-600">
-                        <button
-                          type="button"
-                          onClick={prevImage}
-                          className="mr-1 inline-flex items-center justify-center rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
-                        >
-                          <SymbolIcon name="chevron_left" className="text-[18px]" />
-                        </button>
-                        {images.map((img, i) => (
-                          <button
-                            key={img.url + i}
-                            type="button"
-                            onClick={() => setActiveImageIdx(i)}
-                            className={
-                              "mx-[2px] rounded-full px-2 py-0.5 " +
-                              (i === activeImageIdx
-                                ? "bg-slate-700 text-white"
-                                : "bg-white text-slate-600 shadow-sm hover:bg-slate-50")
-                            }
-                          >
-                            {i + 1}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={nextImage}
-                          className="ml-1 inline-flex items-center justify-center rounded-full bg-white px-2 py-0.5 text-slate-700 shadow-sm hover:bg-slate-50"
-                        >
-                          <SymbolIcon name="chevron_right" className="text-[18px]" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-slate-500">No media</div>
-              )}
-            </div>
-
+            
+            {images.length > 1 && (
+              <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 backdrop-blur-md">
+                <span className="text-sm font-medium text-white">
+                  {activeImageIdx + 1}
+                </span>
+                <span className="text-white/40">/</span>
+                <span className="text-sm text-white/60">
+                  {images.length}
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Main image area */}
+          <div 
+            className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-4 sm:px-16 sm:py-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {currentImage ? (
+              <>
+                {/* Image container with subtle shadow */}
+                <div className="relative flex h-full max-h-[calc(100vh-220px)] w-full max-w-6xl items-center justify-center">
+                  {mediaTypeFor(currentImage) === "video" ? (
+                    <MediaVideoPlayer
+                      src={currentImage.url}
+                      poster={currentImage.thumbnail || undefined}
+                      className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+                    />
+                  ) : (
+                    <img
+                      src={currentImage.url}
+                      alt={currentImage.caption || ""}
+                      className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+                    />
+                  )}
+                  
+                  {/* Caption overlay on mobile */}
+                  {currentImage?.caption && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 sm:hidden">
+                      <p className="text-sm text-white/90">{currentImage.caption}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Navigation arrows - larger, more elegant */}
+                {images.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                      className="group absolute left-2 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20 sm:left-4 sm:h-14 sm:w-14"
+                      aria-label="Previous image"
+                    >
+                      <SymbolIcon name="chevron_left" className="text-[28px] transition group-hover:-translate-x-0.5 sm:text-[32px]" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                      className="group absolute right-2 top-1/2 z-10 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20 sm:right-4 sm:h-14 sm:w-14"
+                      aria-label="Next image"
+                    >
+                      <SymbolIcon name="chevron_right" className="text-[28px] transition group-hover:translate-x-0.5 sm:text-[32px]" />
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="text-sm text-white/50">No media</div>
+            )}
+          </div>
+
+          {/* Thumbnail strip */}
+          {images.length > 1 && (
+            <div 
+              className="shrink-0 border-t border-white/10 bg-black/50 px-4 py-3 backdrop-blur-md sm:py-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto flex max-w-4xl items-center justify-center gap-2 overflow-x-auto scrollbar-hide sm:gap-3">
+                {images.map((img, i) => {
+                  const thumbSrc = img.thumbnail || img.url;
+                  const isVideo = mediaTypeFor(img) === "video";
+                  return (
+                    <button
+                      key={img.url + i}
+                      type="button"
+                      onClick={() => setActiveImageIdx(i)}
+                      className={
+                        "group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg transition-all sm:h-16 sm:w-16 " +
+                        (i === activeImageIdx
+                          ? "ring-2 ring-white ring-offset-2 ring-offset-black/50"
+                          : "opacity-50 hover:opacity-80")
+                      }
+                    >
+                      <img
+                        src={thumbSrc}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+                      />
+                      {isVideo && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                          <SymbolIcon name="play_arrow" fill={1} className="text-[20px] text-white" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
