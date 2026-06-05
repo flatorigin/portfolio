@@ -123,12 +123,14 @@ function LandingNav() {
             >
               {authed ? "Dashboard" : "Sign in"}
             </Link>
-            <Link
-              to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Get Started
-            </Link>
+            {!authed ? (
+              <Link
+                to="/register?role=contractor"
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                Get Started
+              </Link>
+            ) : null}
           </div>
         </nav>
       </Container>
