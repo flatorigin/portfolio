@@ -9,11 +9,11 @@ const STORAGE_PREFIX = "flatorigin_project_markup";
 
 const TOOLS = [
   { key: "select", label: "Select", icon: "near_me" },
-  { key: "rect", label: "Box", icon: "crop_square" },
-  { key: "circle", label: "Circle", icon: "radio_button_unchecked" },
-  { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   { key: "measure", label: "Measure", icon: "straighten" },
-  { key: "text", label: "Note", icon: "title" },
+  { key: "rect", label: "Box", icon: "crop_square" },
+  { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
+  { key: "text", label: "Text", icon: "title" },
+  { key: "circle", label: "Circle", icon: "radio_button_unchecked" },
 ];
 
 const LAYERS = [
@@ -649,27 +649,6 @@ export default function ProjectMarkupCanvas() {
           ) : null}
 
           <div>
-            <div className="text-sm font-semibold text-slate-900">Tools</div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {TOOLS.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setTool(item.key)}
-                  className={`inline-flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-xs font-medium transition ${
-                    tool === item.key
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <SymbolIcon name={item.icon} className="text-[17px]" />
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
             <div className="text-sm font-semibold text-slate-900">Layer</div>
             <div className="mt-2 space-y-2">
               {LAYERS.map((layer) => (
@@ -753,7 +732,27 @@ export default function ProjectMarkupCanvas() {
             <span>{plan?.title ? `Planner: ${plan.title}` : "Layer-ready project markup"}</span>
             <span>{annotations.length} annotation{annotations.length === 1 ? "" : "s"}</span>
           </div>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+            <div className="absolute left-1/2 top-4 z-20 flex -translate-x-1/2 items-center rounded-2xl bg-neutral-900/95 p-2 shadow-2xl ring-1 ring-white/10 backdrop-blur">
+              <div className="flex items-center gap-2">
+                {TOOLS.map((item, index) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setTool(item.key)}
+                    title={item.label}
+                    aria-label={item.label}
+                    className={`inline-flex h-12 w-12 items-center justify-center rounded-xl text-white transition ${
+                      tool === item.key
+                        ? "bg-blue-600 shadow-sm"
+                        : "bg-transparent text-white/85 hover:bg-white/10 hover:text-white"
+                    } ${index === 0 ? "" : ""}`}
+                  >
+                    <SymbolIcon name={item.icon} className="text-[28px]" />
+                  </button>
+                ))}
+              </div>
+            </div>
             <svg
               ref={svgRef}
               viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
