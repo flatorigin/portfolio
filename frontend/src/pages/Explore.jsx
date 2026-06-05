@@ -269,8 +269,8 @@ export default function Explore() {
     minBudget: "",
     maxBudget: "",
   });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeSearchField, setActiveSearchField] = useState("name");
-  const [showFilters, setShowFilters] = useState(false);
 
   // ✅ reactive auth snapshot
   const [{ authed, username: me }, setAuthSnap] = useState(readAuthSnapshot);
@@ -851,97 +851,134 @@ export default function Explore() {
             </div>
             <button
               type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              aria-expanded={showFilters}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              onClick={() => setFiltersOpen((open) => !open)}
+              aria-expanded={filtersOpen}
+              className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium shadow-sm transition ${
+                filtersOpen || hasActiveFilters
+                  ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
             >
               <SymbolIcon name="tune" className="text-[18px]" />
               Filters
             </button>
           </div>
 
-          {showFilters ? (
+          {filtersOpen ? (
             <div className="mb-6 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
-              <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-end">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Search by
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Location
                   </span>
-                  <select
-                    value={activeSearchField}
-                    onChange={(e) => setActiveSearchField(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                  >
-                    <option value="name">Project name</option>
-                    <option value="location">Location</option>
-                    <option value="sqf">Sqf</option>
-                    <option value="budget">Budget</option>
-                  </select>
+                  <input
+                    type="text"
+                    value={filters.location}
+                    onChange={(e) =>
+                      setFilters((prev) => ({ ...prev, location: e.target.value }))
+                    }
+                    placeholder="City, area, ZIP"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
                 </label>
 
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    {activeSearchLabel}
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Sqf min
                   </span>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      type={activeSearchField === "sqf" || activeSearchField === "budget" ? "number" : "text"}
-                      value={activeSearchValue}
-                      onChange={updateActiveSearch}
-                      placeholder={activeSearchPlaceholder}
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                    {activeSearchField === "sqf" ? (
-                      <input
-                        type="number"
-                        value={filters.maxSqf}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, maxSqf: e.target.value }))}
-                        placeholder="Maximum sqf"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                      />
-                    ) : null}
-                    {activeSearchField === "budget" ? (
-                      <input
-                        type="number"
-                        value={filters.maxBudget}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, maxBudget: e.target.value }))}
-                        placeholder="Maximum budget"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                      />
-                    ) : null}
-                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.minSqf}
+                    onChange={(e) =>
+                      setFilters((prev) => ({ ...prev, minSqf: e.target.value }))
+                    }
+                    placeholder="Min"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
                 </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Sqf max
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.maxSqf}
+                    onChange={(e) =>
+                      setFilters((prev) => ({ ...prev, maxSqf: e.target.value }))
+                    }
+                    placeholder="Max"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Budget min
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={filters.minBudget}
+                      onChange={(e) =>
+                        setFilters((prev) => ({ ...prev, minBudget: e.target.value }))
+                      }
+                      placeholder="Min"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Budget max
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={filters.maxBudget}
+                      onChange={(e) =>
+                        setFilters((prev) => ({ ...prev, maxBudget: e.target.value }))
+                      }
+                      placeholder="Max"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {activeFilterBadges.length > 0 ? (
+                  activeFilterBadges.map((badge) => (
+                    <button
+                      key={badge.key}
+                      type="button"
+                      onClick={badge.clear}
+                      className="inline-flex h-8 items-center gap-2 rounded-full bg-slate-900 px-3 text-xs font-medium text-white transition hover:bg-slate-700"
+                    >
+                      {badge.label}
+                      <SymbolIcon name="close" className="text-[14px]" />
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-sm text-slate-500">No filters selected.</span>
+                )}
 
                 <button
                   type="button"
                   disabled={!hasActiveFilters}
                   onClick={clearFilters}
-                  className={
-                    "inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-medium transition " +
-                    (hasActiveFilters
+                  className={`ml-auto inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium transition ${
+                    hasActiveFilters
                       ? "bg-slate-900 text-white hover:bg-slate-800"
-                      : "border border-slate-200 bg-white text-slate-400 cursor-not-allowed")
-                  }
+                      : "cursor-not-allowed bg-white/70 text-slate-400"
+                  }`}
                 >
                   Clear filters
                 </button>
               </div>
-
-              {activeFilterBadges.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {activeFilterBadges.map((badge) => (
-                    <button
-                      key={badge.key}
-                      type="button"
-                      onClick={badge.clear}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-                    >
-                      {badge.label}
-                      <SymbolIcon name="close" className="text-[14px]" />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
           ) : null}
 
@@ -983,10 +1020,7 @@ export default function Explore() {
         {loading ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
             {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse"
-              >
+              <div key={i} className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="aspect-[4/3] bg-slate-200" />
                 <div className="space-y-3 p-4">
                   <div className="h-5 w-2/3 rounded bg-slate-200" />
@@ -1145,7 +1179,7 @@ export default function Explore() {
             </Link>
           );
         })}
-      </div>
+            </div>
           </>
         )}
       </div>
@@ -1180,12 +1214,11 @@ export default function Explore() {
                 const liked = !!directoryLikeMap[listing.id];
                 const rating = listing.rating ?? 0;
                 const reviewCount = listing.review_count ?? 0;
-                const distanceLabel = formatDistanceMiles(listing.distance_miles);
 
                 return (
                   <div
                     key={`directory-${listing.id}`}
-                    className="relative flex h-full min-h-[280px] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                    className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                   >
                     {/* Save/Like button - top right */}
                     <button
@@ -1207,17 +1240,15 @@ export default function Explore() {
                       {listing.business_name}
                     </h3>
 
-                    {/* Location + distance badge */}
+                    {/* Location + Nearby badge */}
                     <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
                       <span className="flex items-center gap-1">
                         <SymbolIcon name="location_on" className="text-[16px]" />
                         {listing.location || "Local"}
                       </span>
-                      {distanceLabel ? (
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                          {distanceLabel}
-                        </span>
-                      ) : null}
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        Nearby
+                      </span>
                     </div>
 
                     {/* Star rating */}
@@ -1248,38 +1279,36 @@ export default function Explore() {
                       </div>
                     ) : null}
 
-                    <div className="mt-auto pt-4">
-                      {/* Divider */}
-                      <div className="border-t border-slate-100 pt-4" />
+                    {/* Divider */}
+                    <div className="my-4 border-t border-slate-100" />
 
-                      {/* Footer: phone + website */}
-                      <div className="flex items-center justify-between gap-3">
-                        {listing.phone_number ? (
-                          <a
-                            href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                            className="inline-flex min-w-0 items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <SymbolIcon name="call" className="shrink-0 text-[18px]" />
-                            <span className="truncate">{listing.phone_number}</span>
-                          </a>
-                        ) : (
-                          <span />
-                        )}
+                    {/* Footer: phone + website */}
+                    <div className="flex items-center justify-between gap-3">
+                      {listing.phone_number ? (
+                        <a
+                          href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
+                          className="inline-flex items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <SymbolIcon name="call" className="text-[18px]" />
+                          <span>{listing.phone_number}</span>
+                        </a>
+                      ) : (
+                        <span />
+                      )}
 
-                        {listing.website ? (
-                          <a
-                            href={listing.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Website
-                            <SymbolIcon name="open_in_new" className="text-[16px]" />
-                          </a>
-                        ) : null}
-                      </div>
+                      {listing.website ? (
+                        <a
+                          href={listing.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Website
+                          <SymbolIcon name="open_in_new" className="text-[16px]" />
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                 );

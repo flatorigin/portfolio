@@ -71,14 +71,12 @@ function GatewayNav() {
             >
               {authed ? "Dashboard" : "Sign in"}
             </Link>
-            {!authed ? (
-              <Link
-                to="/register"
-                className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                Get Started
-              </Link>
-            ) : null}
+            <Link
+              to="/register"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              Get Started
+            </Link>
           </div>
         </nav>
       </Container>
