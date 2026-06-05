@@ -31,6 +31,7 @@ const FindLocalWork = lazy(() => import("./pages/FindLocalWork.jsx"));
 const DashboardProjectsPage = lazy(() => import("./pages/DashboardProjectsPage.jsx"));
 const ProjectEditPage = lazy(() => import("./pages/ProjectEditPage.jsx"));
 const ProjectPlanDetail = lazy(() => import("./pages/ProjectPlanDetail.jsx"));
+const ProjectMarkupCanvas = lazy(() => import("./pages/ProjectMarkupCanvas.jsx"));
 const ProjectCheckGateway = lazy(() => import("./pages/ProjectCheckGateway.jsx"));
 const HomeownerProjectCheck = lazy(() => import("./pages/HomeownerProjectCheck.jsx"));
 const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx"));
@@ -100,6 +101,14 @@ createRoot(document.getElementById("root")).render(
             element={
               <RequireAuth>
                 <ProjectPlanDetail />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="dashboard/planner/:planId/markup"
+            element={
+              <RequireAuth>
+                <ProjectMarkupCanvas />
               </RequireAuth>
             }
           />

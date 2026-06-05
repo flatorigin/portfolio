@@ -464,11 +464,17 @@ export default function ProjectPlanDetail() {
             <div className="font-semibold text-slate-900">Photos</div>
             <div className="text-sm text-slate-500">Upload issue photos, add captions, and set one as the cover image.</div>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-            <SymbolIcon name="add_a_photo" className="text-[18px]" />
-            {uploading ? "Uploading..." : "Upload images"}
-            <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)}>
+              <SymbolIcon name="edit_note" className="mr-1 text-[18px]" />
+              Open markup canvas
+            </GhostButton>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+              <SymbolIcon name="add_a_photo" className="text-[18px]" />
+              {uploading ? "Uploading..." : "Upload images"}
+              <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
+            </label>
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
