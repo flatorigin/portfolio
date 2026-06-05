@@ -366,6 +366,7 @@ export default function MessagesThread() {
     () => threads.find((t) => String(t.id) === String(activeThreadId)) || null,
     [threads, activeThreadId]
   );
+  const selectedThreadId = activeThread?.id || activeThreadId;
 
   const threadIsRequest = !!activeThread?.is_request;
   const canReply =
@@ -466,7 +467,7 @@ export default function MessagesThread() {
 
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
-      if (!activeThread?.id) {
+      if (!selectedThreadId) {
         if (isMountedRef.current) setMessages([]);
         return;
       }
@@ -475,7 +476,7 @@ export default function MessagesThread() {
 
       try {
         const { data } = await api.get(
-          `/messages/threads/${activeThread.id}/messages/`
+          `/messages/threads/${selectedThreadId}/messages/`
         );
         const arr = Array.isArray(data) ? data : [];
         if (!isMountedRef.current) return;
@@ -490,11 +491,11 @@ export default function MessagesThread() {
         if (!silent && isMountedRef.current) setLoadingMessages(false);
       }
     },
-    [activeThread?.id]
+    [selectedThreadId]
   );
 
   useEffect(() => {
-    if (!activeThread?.id) {
+    if (!selectedThreadId) {
       setMessages([]);
       return;
     }
@@ -503,7 +504,7 @@ export default function MessagesThread() {
 
     const timer = setInterval(() => fetchMessages({ silent: true }), 8000);
     return () => clearInterval(timer);
-  }, [activeThread?.id, fetchMessages]);
+  }, [selectedThreadId, fetchMessages]);
 
   async function threadAction(action) {
     if (!activeThread?.id) return;
@@ -774,7 +775,7 @@ export default function MessagesThread() {
           activeThreadId ? "hidden md:block" : "block",
         ].join(" ")}
       >
-        <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
+        <Card className="h-[calc(100dvh-140px)] min-h-[320px] overflow-hidden p-0">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Conversations
           </div>
@@ -856,7 +857,7 @@ export default function MessagesThread() {
           activeThreadId ? "block" : "hidden md:block",
         ].join(" ")}
       >
-        <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
+        <Card className="flex h-[calc(100dvh-140px)] min-h-[320px] flex-col p-4">
           {!activeThread ? (
             <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
               Select a conversation from the left.
@@ -1005,7 +1006,14 @@ export default function MessagesThread() {
                             <ReplySnippet message={replyPreview} mine={fromMe} />
 
                             {m.text ? (
-                              <p className="whitespace-pre-wrap">{m.text}</p>
+                              <p
+                                className={
+                                  "whitespace-pre-wrap break-words leading-relaxed " +
+                                  (fromMe ? "text-white" : "text-slate-900")
+                                }
+                              >
+                                {m.text}
+                              </p>
                             ) : null}
 
                             <MessageAttachments
