@@ -269,6 +269,7 @@ export default function Explore() {
     minBudget: "",
     maxBudget: "",
   });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeSearchField, setActiveSearchField] = useState("name");
 
   // ✅ reactive auth snapshot
@@ -826,50 +827,6 @@ export default function Explore() {
     });
   };
 
-  if (loading) {
-    return (
-      <div>
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
-          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
-        </header>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse">
-              <div className="aspect-[4/3] bg-slate-200" />
-              <div className="space-y-3 p-4">
-                <div className="h-5 w-2/3 rounded bg-slate-200" />
-                <div className="h-4 w-full rounded bg-slate-200" />
-                <div className="h-4 w-1/2 rounded bg-slate-200" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (!projects.length && !directoryListings.length) {
-    return (
-      <div>
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
-          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
-        </header>
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-          <p className="text-slate-600">No projects yet.</p>
-          {authed && (
-            <div className="mt-4">
-              <Button onClick={() => navigate("/dashboard")}>
-                Create your first project
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       {/* Hero header - full viewport width background */}
@@ -894,12 +851,136 @@ export default function Explore() {
             </div>
             <button
               type="button"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              onClick={() => setFiltersOpen((open) => !open)}
+              aria-expanded={filtersOpen}
+              className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium shadow-sm transition ${
+                filtersOpen || hasActiveFilters
+                  ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
             >
               <SymbolIcon name="tune" className="text-[18px]" />
               Filters
             </button>
           </div>
+
+          {filtersOpen ? (
+            <div className="mb-6 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Location
+                  </span>
+                  <input
+                    type="text"
+                    value={filters.location}
+                    onChange={(e) =>
+                      setFilters((prev) => ({ ...prev, location: e.target.value }))
+                    }
+                    placeholder="City, area, ZIP"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Sqf min
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.minSqf}
+                    onChange={(e) =>
+                      setFilters((prev) => ({ ...prev, minSqf: e.target.value }))
+                    }
+                    placeholder="Min"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    Sqf max
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.maxSqf}
+                    onChange={(e) =>
+                      setFilters((prev) => ({ ...prev, maxSqf: e.target.value }))
+                    }
+                    placeholder="Max"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                  />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Budget min
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={filters.minBudget}
+                      onChange={(e) =>
+                        setFilters((prev) => ({ ...prev, minBudget: e.target.value }))
+                      }
+                      placeholder="Min"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Budget max
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={filters.maxBudget}
+                      onChange={(e) =>
+                        setFilters((prev) => ({ ...prev, maxBudget: e.target.value }))
+                      }
+                      placeholder="Max"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {activeFilterBadges.length > 0 ? (
+                  activeFilterBadges.map((badge) => (
+                    <button
+                      key={badge.key}
+                      type="button"
+                      onClick={badge.clear}
+                      className="inline-flex h-8 items-center gap-2 rounded-full bg-slate-900 px-3 text-xs font-medium text-white transition hover:bg-slate-700"
+                    >
+                      {badge.label}
+                      <SymbolIcon name="close" className="text-[14px]" />
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-sm text-slate-500">No filters selected.</span>
+                )}
+
+                <button
+                  type="button"
+                  disabled={!hasActiveFilters}
+                  onClick={clearFilters}
+                  className={`ml-auto inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium transition ${
+                    hasActiveFilters
+                      ? "bg-slate-900 text-white hover:bg-slate-800"
+                      : "cursor-not-allowed bg-white/70 text-slate-400"
+                  }`}
+                >
+                  Clear filters
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {/* Category pills - translucent container */}
           <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">
@@ -936,12 +1017,38 @@ export default function Explore() {
 
       {/* Main content area */}
       <div className="py-6">
-        {/* Results count */}
-        <p className="mb-4 text-sm text-slate-500">
-          Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
-        </p>
+        {loading ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="aspect-[4/3] bg-slate-200" />
+                <div className="space-y-3 p-4">
+                  <div className="h-5 w-2/3 rounded bg-slate-200" />
+                  <div className="h-4 w-full rounded bg-slate-200" />
+                  <div className="h-4 w-1/2 rounded bg-slate-200" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !projects.length && !directoryListings.length ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <p className="text-slate-600">No projects yet.</p>
+            {authed ? (
+              <div className="mt-4">
+                <Button onClick={() => navigate("/dashboard")}>
+                  Create your first project
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            {/* Results count */}
+            <p className="mb-4 text-sm text-slate-500">
+              Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
+            </p>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
@@ -1072,11 +1179,13 @@ export default function Explore() {
             </Link>
           );
         })}
-      </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Directory Section - Full viewport width background */}
-      {directoryListings.length > 0 ? (
+      {!loading && directoryListings.length > 0 ? (
         <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-12 w-screen border-y border-slate-200 bg-[#F6F5F1] py-12">
           <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
             <div className="mb-8 flex items-start justify-between gap-4">
