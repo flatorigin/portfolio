@@ -270,7 +270,6 @@ export default function Explore() {
     maxBudget: "",
   });
   const [activeSearchField, setActiveSearchField] = useState("name");
-  const [showFilters, setShowFilters] = useState(false);
 
   // ✅ reactive auth snapshot
   const [{ authed, username: me }, setAuthSnap] = useState(readAuthSnapshot);
@@ -827,6 +826,50 @@ export default function Explore() {
     });
   };
 
+  if (loading) {
+    return (
+      <div>
+        <header className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
+          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
+        </header>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse">
+              <div className="aspect-[4/3] bg-slate-200" />
+              <div className="space-y-3 p-4">
+                <div className="h-5 w-2/3 rounded bg-slate-200" />
+                <div className="h-4 w-full rounded bg-slate-200" />
+                <div className="h-4 w-1/2 rounded bg-slate-200" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!projects.length && !directoryListings.length) {
+    return (
+      <div>
+        <header className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Explore Projects</h1>
+          <p className="mt-2 text-slate-500">Browse real projects from homeowners and contractors in your area</p>
+        </header>
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <p className="text-slate-600">No projects yet.</p>
+          {authed && (
+            <div className="mt-4">
+              <Button onClick={() => navigate("/dashboard")}>
+                Create your first project
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Hero header - full viewport width background */}
@@ -851,99 +894,12 @@ export default function Explore() {
             </div>
             <button
               type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              aria-expanded={showFilters}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               <SymbolIcon name="tune" className="text-[18px]" />
               Filters
             </button>
           </div>
-
-          {showFilters ? (
-            <div className="mb-6 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
-              <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)_auto] md:items-end">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Search by
-                  </span>
-                  <select
-                    value={activeSearchField}
-                    onChange={(e) => setActiveSearchField(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                  >
-                    <option value="name">Project name</option>
-                    <option value="location">Location</option>
-                    <option value="sqf">Sqf</option>
-                    <option value="budget">Budget</option>
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    {activeSearchLabel}
-                  </span>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      type={activeSearchField === "sqf" || activeSearchField === "budget" ? "number" : "text"}
-                      value={activeSearchValue}
-                      onChange={updateActiveSearch}
-                      placeholder={activeSearchPlaceholder}
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    />
-                    {activeSearchField === "sqf" ? (
-                      <input
-                        type="number"
-                        value={filters.maxSqf}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, maxSqf: e.target.value }))}
-                        placeholder="Maximum sqf"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                      />
-                    ) : null}
-                    {activeSearchField === "budget" ? (
-                      <input
-                        type="number"
-                        value={filters.maxBudget}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, maxBudget: e.target.value }))}
-                        placeholder="Maximum budget"
-                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                      />
-                    ) : null}
-                  </div>
-                </label>
-
-                <button
-                  type="button"
-                  disabled={!hasActiveFilters}
-                  onClick={clearFilters}
-                  className={
-                    "inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-medium transition " +
-                    (hasActiveFilters
-                      ? "bg-slate-900 text-white hover:bg-slate-800"
-                      : "border border-slate-200 bg-white text-slate-400 cursor-not-allowed")
-                  }
-                >
-                  Clear filters
-                </button>
-              </div>
-
-              {activeFilterBadges.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {activeFilterBadges.map((badge) => (
-                    <button
-                      key={badge.key}
-                      type="button"
-                      onClick={badge.clear}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-                    >
-                      {badge.label}
-                      <SymbolIcon name="close" className="text-[14px]" />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           {/* Category pills - translucent container */}
           <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">
@@ -980,41 +936,12 @@ export default function Explore() {
 
       {/* Main content area */}
       <div className="py-6">
-        {loading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="overflow-hidden rounded-xl border border-slate-200 bg-white animate-pulse"
-              >
-                <div className="aspect-[4/3] bg-slate-200" />
-                <div className="space-y-3 p-4">
-                  <div className="h-5 w-2/3 rounded bg-slate-200" />
-                  <div className="h-4 w-full rounded bg-slate-200" />
-                  <div className="h-4 w-1/2 rounded bg-slate-200" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : !projects.length && !directoryListings.length ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-            <p className="text-slate-600">No projects yet.</p>
-            {authed ? (
-              <div className="mt-4">
-                <Button onClick={() => navigate("/dashboard")}>
-                  Create your first project
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            {/* Results count */}
-            <p className="mb-4 text-sm text-slate-500">
-              Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
-            </p>
+        {/* Results count */}
+        <p className="mb-4 text-sm text-slate-500">
+          Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
+        </p>
 
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;
@@ -1146,12 +1073,10 @@ export default function Explore() {
           );
         })}
       </div>
-          </>
-        )}
       </div>
 
       {/* Directory Section - Full viewport width background */}
-      {!loading && directoryListings.length > 0 ? (
+      {directoryListings.length > 0 ? (
         <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-12 w-screen border-y border-slate-200 bg-[#F6F5F1] py-12">
           <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
             <div className="mb-8 flex items-start justify-between gap-4">
@@ -1180,12 +1105,11 @@ export default function Explore() {
                 const liked = !!directoryLikeMap[listing.id];
                 const rating = listing.rating ?? 0;
                 const reviewCount = listing.review_count ?? 0;
-                const distanceLabel = formatDistanceMiles(listing.distance_miles);
 
                 return (
                   <div
                     key={`directory-${listing.id}`}
-                    className="relative flex h-full min-h-[280px] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                    className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                   >
                     {/* Save/Like button - top right */}
                     <button
@@ -1207,17 +1131,15 @@ export default function Explore() {
                       {listing.business_name}
                     </h3>
 
-                    {/* Location + distance badge */}
+                    {/* Location + Nearby badge */}
                     <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
                       <span className="flex items-center gap-1">
                         <SymbolIcon name="location_on" className="text-[16px]" />
                         {listing.location || "Local"}
                       </span>
-                      {distanceLabel ? (
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                          {distanceLabel}
-                        </span>
-                      ) : null}
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        Nearby
+                      </span>
                     </div>
 
                     {/* Star rating */}
@@ -1248,38 +1170,36 @@ export default function Explore() {
                       </div>
                     ) : null}
 
-                    <div className="mt-auto pt-4">
-                      {/* Divider */}
-                      <div className="border-t border-slate-100 pt-4" />
+                    {/* Divider */}
+                    <div className="my-4 border-t border-slate-100" />
 
-                      {/* Footer: phone + website */}
-                      <div className="flex items-center justify-between gap-3">
-                        {listing.phone_number ? (
-                          <a
-                            href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                            className="inline-flex min-w-0 items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <SymbolIcon name="call" className="shrink-0 text-[18px]" />
-                            <span className="truncate">{listing.phone_number}</span>
-                          </a>
-                        ) : (
-                          <span />
-                        )}
+                    {/* Footer: phone + website */}
+                    <div className="flex items-center justify-between gap-3">
+                      {listing.phone_number ? (
+                        <a
+                          href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
+                          className="inline-flex items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <SymbolIcon name="call" className="text-[18px]" />
+                          <span>{listing.phone_number}</span>
+                        </a>
+                      ) : (
+                        <span />
+                      )}
 
-                        {listing.website ? (
-                          <a
-                            href={listing.website}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Website
-                            <SymbolIcon name="open_in_new" className="text-[16px]" />
-                          </a>
-                        ) : null}
-                      </div>
+                      {listing.website ? (
+                        <a
+                          href={listing.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Website
+                          <SymbolIcon name="open_in_new" className="text-[16px]" />
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                 );

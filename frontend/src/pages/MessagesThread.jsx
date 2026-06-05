@@ -278,7 +278,6 @@ export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
   const navigate = useNavigate();
   const isMountedRef = useRef(false);
-  const routeThreadId = threadIdParam ? Number(threadIdParam) : null;
 
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
@@ -367,7 +366,6 @@ export default function MessagesThread() {
     () => threads.find((t) => String(t.id) === String(activeThreadId)) || null,
     [threads, activeThreadId]
   );
-  const selectedThreadId = activeThread?.id || activeThreadId || routeThreadId;
 
   const threadIsRequest = !!activeThread?.is_request;
   const canReply =
@@ -468,7 +466,7 @@ export default function MessagesThread() {
 
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
-      if (!selectedThreadId) {
+      if (!activeThread?.id) {
         if (isMountedRef.current) setMessages([]);
         return;
       }
@@ -477,7 +475,7 @@ export default function MessagesThread() {
 
       try {
         const { data } = await api.get(
-          `/messages/threads/${selectedThreadId}/messages/`
+          `/messages/threads/${activeThread.id}/messages/`
         );
         const arr = Array.isArray(data) ? data : [];
         if (!isMountedRef.current) return;
@@ -492,11 +490,11 @@ export default function MessagesThread() {
         if (!silent && isMountedRef.current) setLoadingMessages(false);
       }
     },
-    [selectedThreadId]
+    [activeThread?.id]
   );
 
   useEffect(() => {
-    if (!selectedThreadId) {
+    if (!activeThread?.id) {
       setMessages([]);
       return;
     }
@@ -505,7 +503,7 @@ export default function MessagesThread() {
 
     const timer = setInterval(() => fetchMessages({ silent: true }), 8000);
     return () => clearInterval(timer);
-  }, [selectedThreadId, fetchMessages]);
+  }, [activeThread?.id, fetchMessages]);
 
   async function threadAction(action) {
     if (!activeThread?.id) return;
@@ -776,7 +774,7 @@ export default function MessagesThread() {
           activeThreadId ? "hidden md:block" : "block",
         ].join(" ")}
       >
-        <Card className="h-[calc(100dvh-140px)] min-h-[320px] overflow-hidden p-0">
+        <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
           <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Conversations
           </div>
@@ -858,7 +856,7 @@ export default function MessagesThread() {
           activeThreadId ? "block" : "hidden md:block",
         ].join(" ")}
       >
-        <Card className="flex h-[calc(100dvh-140px)] min-h-[320px] flex-col p-4">
+        <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
           {!activeThread ? (
             <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
               Select a conversation from the left.
@@ -1007,14 +1005,7 @@ export default function MessagesThread() {
                             <ReplySnippet message={replyPreview} mine={fromMe} />
 
                             {m.text ? (
-                              <p
-                                className={
-                                  "whitespace-pre-wrap break-words leading-relaxed " +
-                                  (fromMe ? "text-white" : "text-slate-900")
-                                }
-                              >
-                                {m.text}
-                              </p>
+                              <p className="whitespace-pre-wrap">{m.text}</p>
                             ) : null}
 
                             <MessageAttachments

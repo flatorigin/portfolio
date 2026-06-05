@@ -4,7 +4,6 @@ import api from "../api";
 import { roleLandingPath } from "../landingRole";
 import { Badge, Container, SymbolIcon } from "../ui";
 import {
-  formatDistanceMiles,
   getCachedLocationOrigin,
   locationParams,
   requestLocationOrigin,
@@ -118,29 +117,18 @@ function LandingNav() {
             </Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            {authed ? (
-              <Link
-                to="/homeowner"
-                title="This toggle is only for viewing/previewing the homeowner landing page."
-                className="hidden h-9 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:inline-flex"
-              >
-                View Homeowner Side
-              </Link>
-            ) : null}
             <Link
               to={authed ? "/dashboard" : "/login"}
               className="text-sm text-slate-600 transition hover:text-slate-900"
             >
               {authed ? "Dashboard" : "Sign in"}
             </Link>
-            {!authed ? (
-              <Link
-                to="/register?role=contractor"
-                className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                Get Started
-              </Link>
-            ) : null}
+            <Link
+              to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+            >
+              Get Started
+            </Link>
           </div>
         </nav>
       </Container>
@@ -299,7 +287,6 @@ function ProjectFeedPreview() {
           ? `$${Number(job.budget).toLocaleString()}`
           : "";
         const summary = job.job_summary || job.summary || job.highlights || "";
-        const distanceLabel = formatDistanceMiles(job.distance_miles);
 
         return (
           <Link
@@ -324,14 +311,8 @@ function ProjectFeedPreview() {
               <div className="text-[15px] font-semibold text-slate-900">
                 {loading && !jobs.length ? "Loading local work..." : job.title}
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
-                <span>{job.location || "Local project"}</span>
-                {distanceLabel ? (
-                  <>
-                    <span className="text-slate-300">•</span>
-                    <span className="font-medium text-slate-500">{distanceLabel}</span>
-                  </>
-                ) : null}
+              <div className="mt-0.5 text-xs text-slate-400">
+                {job.location || "Local project"}
               </div>
               {budget ? (
                 <div className="mt-2 inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
