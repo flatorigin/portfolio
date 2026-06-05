@@ -1180,11 +1180,12 @@ export default function Explore() {
                 const liked = !!directoryLikeMap[listing.id];
                 const rating = listing.rating ?? 0;
                 const reviewCount = listing.review_count ?? 0;
+                const distanceLabel = formatDistanceMiles(listing.distance_miles);
 
                 return (
                   <div
                     key={`directory-${listing.id}`}
-                    className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                    className="relative flex h-full min-h-[280px] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                   >
                     {/* Save/Like button - top right */}
                     <button
@@ -1206,15 +1207,17 @@ export default function Explore() {
                       {listing.business_name}
                     </h3>
 
-                    {/* Location + Nearby badge */}
+                    {/* Location + distance badge */}
                     <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
                       <span className="flex items-center gap-1">
                         <SymbolIcon name="location_on" className="text-[16px]" />
                         {listing.location || "Local"}
                       </span>
-                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        Nearby
-                      </span>
+                      {distanceLabel ? (
+                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          {distanceLabel}
+                        </span>
+                      ) : null}
                     </div>
 
                     {/* Star rating */}
@@ -1245,36 +1248,38 @@ export default function Explore() {
                       </div>
                     ) : null}
 
-                    {/* Divider */}
-                    <div className="my-4 border-t border-slate-100" />
+                    <div className="mt-auto pt-4">
+                      {/* Divider */}
+                      <div className="border-t border-slate-100 pt-4" />
 
-                    {/* Footer: phone + website */}
-                    <div className="flex items-center justify-between gap-3">
-                      {listing.phone_number ? (
-                        <a
-                          href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
-                          className="inline-flex items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <SymbolIcon name="call" className="text-[18px]" />
-                          <span>{listing.phone_number}</span>
-                        </a>
-                      ) : (
-                        <span />
-                      )}
+                      {/* Footer: phone + website */}
+                      <div className="flex items-center justify-between gap-3">
+                        {listing.phone_number ? (
+                          <a
+                            href={`tel:${String(listing.phone_number).replace(/[^\d+]/g, "")}`}
+                            className="inline-flex min-w-0 items-center gap-2 text-sm text-slate-600 transition hover:text-slate-900"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <SymbolIcon name="call" className="shrink-0 text-[18px]" />
+                            <span className="truncate">{listing.phone_number}</span>
+                          </a>
+                        ) : (
+                          <span />
+                        )}
 
-                      {listing.website ? (
-                        <a
-                          href={listing.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Website
-                          <SymbolIcon name="open_in_new" className="text-[16px]" />
-                        </a>
-                      ) : null}
+                        {listing.website ? (
+                          <a
+                            href={listing.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-slate-900 transition hover:text-slate-600"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Website
+                            <SymbolIcon name="open_in_new" className="text-[16px]" />
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 );
