@@ -4,6 +4,7 @@ import api from "../api";
 import { roleLandingPath } from "../landingRole";
 import { Badge, Container, SymbolIcon } from "../ui";
 import {
+  formatDistanceMiles,
   getCachedLocationOrigin,
   locationParams,
   requestLocationOrigin,
