@@ -278,6 +278,7 @@ export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
   const navigate = useNavigate();
   const isMountedRef = useRef(false);
+  const routeThreadId = threadIdParam ? Number(threadIdParam) : null;
 
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
@@ -366,7 +367,7 @@ export default function MessagesThread() {
     () => threads.find((t) => String(t.id) === String(activeThreadId)) || null,
     [threads, activeThreadId]
   );
-  const selectedThreadId = activeThread?.id || activeThreadId;
+  const selectedThreadId = activeThread?.id || activeThreadId || routeThreadId;
 
   const threadIsRequest = !!activeThread?.is_request;
   const canReply =
