@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { Button, Card, GhostButton, Input, SymbolIcon } from "../ui";
 
@@ -56,6 +56,14 @@ function annotationBounds(item) {
   return { x1, y1, x2, y2 };
 }
 
+function labelBox(text, fontSize = 22) {
+  const value = String(text || "");
+  return {
+    width: Math.max(58, value.length * fontSize * 0.58 + 22),
+    height: fontSize + 16,
+  };
+}
+
 function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
   const stroke = item.color || "#0f172a";
   const common = {
@@ -104,6 +112,13 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
     const marker = item.type === "arrow" ? `url(#arrow-${item.layer})` : undefined;
     const midX = ((item.x || 0) + (item.x2 || 0)) / 2;
     const midY = ((item.y || 0) + (item.y2 || 0)) / 2;
+    const dx = (item.x2 || 0) - (item.x || 0);
+    const dy = (item.y2 || 0) - (item.y || 0);
+    const length = Math.hypot(dx, dy) || 1;
+    const capX = (-dy / length) * 22;
+    const capY = (dx / length) * 22;
+    const label = item.text || "measurement";
+    const box = labelBox(label, 22);
     return (
       <g {...common}>
         <line
@@ -117,43 +132,81 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
           markerEnd={marker}
         />
         {item.type === "measure" ? (
-          <text
-            x={midX}
-            y={midY - 10}
-            textAnchor="middle"
-            paintOrder="stroke"
-            stroke="white"
-            strokeWidth="8"
-            fill={stroke}
-            fontSize="30"
-            fontWeight="700"
-          >
-            {item.text || "measurement"}
-          </text>
+          <>
+            <line
+              x1={(item.x || 0) - capX}
+              y1={(item.y || 0) - capY}
+              x2={(item.x || 0) + capX}
+              y2={(item.y || 0) + capY}
+              stroke={stroke}
+              strokeWidth={selected ? 5 : 3}
+              strokeLinecap="square"
+            />
+            <line
+              x1={(item.x2 || 0) - capX}
+              y1={(item.y2 || 0) - capY}
+              x2={(item.x2 || 0) + capX}
+              y2={(item.y2 || 0) + capY}
+              stroke={stroke}
+              strokeWidth={selected ? 5 : 3}
+              strokeLinecap="square"
+            />
+          </>
+        ) : null}
+        {item.type === "measure" ? (
+          <g>
+            <rect
+              x={midX - box.width / 2}
+              y={midY - box.height - 10}
+              width={box.width}
+              height={box.height}
+              rx="8"
+              fill="rgba(15, 23, 42, 0.9)"
+            />
+            <text
+              x={midX}
+              y={midY - 22}
+              textAnchor="middle"
+              fill="white"
+              fontSize="22"
+              fontWeight="700"
+            >
+              {label}
+            </text>
+          </g>
         ) : null}
       </g>
     );
   }
 
+  const label = item.text || "Note";
+  const box = labelBox(label, 22);
   return (
-    <text
-      {...common}
-      x={item.x}
-      y={item.y}
-      paintOrder="stroke"
-      stroke="white"
-      strokeWidth="8"
-      fill={stroke}
-      fontSize="32"
-      fontWeight="700"
-    >
-      {item.text || "Note"}
-    </text>
+    <g {...common}>
+      <rect
+        x={item.x - 10}
+        y={item.y - box.height + 7}
+        width={box.width}
+        height={box.height}
+        rx="8"
+        fill="rgba(15, 23, 42, 0.9)"
+      />
+      <text
+        x={item.x}
+        y={item.y}
+        fill="white"
+        fontSize="22"
+        fontWeight="700"
+      >
+        {label}
+      </text>
+    </g>
   );
 }
 
 export default function ProjectMarkupCanvas() {
   const { planId } = useParams();
+  const navigate = useNavigate();
   const svgRef = useRef(null);
   const fileRef = useRef(null);
   const [plan, setPlan] = useState(null);
@@ -169,6 +222,7 @@ export default function ProjectMarkupCanvas() {
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
   const [message, setMessage] = useState("");
+  const [history, setHistory] = useState({ past: [], future: [] });
 
   const storageKey = `${STORAGE_PREFIX}:${planId || "standalone"}`;
 
@@ -263,6 +317,37 @@ export default function ProjectMarkupCanvas() {
     );
   }
 
+  function commitAnnotations(nextAnnotations) {
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+    setAnnotations(nextAnnotations);
+  }
+
+  function undo() {
+    setHistory((prev) => {
+      if (!prev.past.length) return prev;
+      const previous = prev.past[prev.past.length - 1];
+      setAnnotations(previous);
+      setSelectedId("");
+      return {
+        past: prev.past.slice(0, -1),
+        future: [annotations, ...prev.future].slice(0, 30),
+      };
+    });
+  }
+
+  function redo() {
+    setHistory((prev) => {
+      if (!prev.future.length) return prev;
+      const next = prev.future[0];
+      setAnnotations(next);
+      setSelectedId("");
+      return {
+        past: [...prev.past, annotations].slice(-30),
+        future: prev.future.slice(1),
+      };
+    });
+  }
+
   function handleFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -297,7 +382,7 @@ export default function ProjectMarkupCanvas() {
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
     };
 
-    setAnnotations((prev) => [...prev, base]);
+    commitAnnotations([...annotations, base]);
     setSelectedId(id);
     if (tool === "text") return;
     setDraft(id);
@@ -344,18 +429,19 @@ export default function ProjectMarkupCanvas() {
     const point = pointFromEvent(event, svgRef.current);
     setTool("select");
     setSelectedId(item.id);
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
     setDrag({ id: item.id, startX: point.x, startY: point.y, item });
   }
 
   function deleteSelected() {
     if (!selectedId) return;
-    setAnnotations((prev) => prev.filter((item) => item.id !== selectedId));
+    commitAnnotations(annotations.filter((item) => item.id !== selectedId));
     setSelectedId("");
   }
 
   function clearCanvas() {
     if (!window.confirm("Clear all annotations on this canvas?")) return;
-    setAnnotations([]);
+    commitAnnotations([]);
     setSelectedId("");
   }
 
@@ -423,11 +509,18 @@ export default function ProjectMarkupCanvas() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setMessage("Editable markup and image snapshot saved to this project planner.");
+      return true;
     } catch (err) {
       setMessage(normalizeError(err, "Could not save this markup. Try downloading SVG instead."));
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveAndBack() {
+    const saved = await saveToPlanner();
+    if (saved && planId) navigate(`/dashboard/planner/${planId}`);
   }
 
   async function saveEditableCanvas({ quiet = false } = {}) {
@@ -462,7 +555,7 @@ export default function ProjectMarkupCanvas() {
 
   function restoreVersion(version) {
     if (!version) return;
-    if (Array.isArray(version.annotations)) setAnnotations(version.annotations);
+    if (Array.isArray(version.annotations)) commitAnnotations(version.annotations);
     if (version.background_url) setBackgroundUrl(version.background_url);
     if (version.visible_layers && typeof version.visible_layers === "object") {
       setVisibleLayers((prev) => ({ ...prev, ...version.visible_layers }));
@@ -489,12 +582,23 @@ export default function ProjectMarkupCanvas() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <GhostButton type="button" onClick={undo} disabled={!history.past.length}>
+            <SymbolIcon name="arrow_back" className="mr-1 text-[18px]" />
+            Back
+          </GhostButton>
+          <GhostButton type="button" onClick={redo} disabled={!history.future.length}>
+            Forward
+            <SymbolIcon name="arrow_forward" className="ml-1 text-[18px]" />
+          </GhostButton>
           <GhostButton type="button" onClick={downloadSvg}>Download SVG</GhostButton>
           <GhostButton type="button" onClick={() => saveEditableCanvas()} disabled={savingEditable}>
             {savingEditable ? "Saving..." : "Save editable canvas"}
           </GhostButton>
           <Button type="button" onClick={saveToPlanner} disabled={saving}>
             {saving ? "Saving..." : "Save image snapshot"}
+          </Button>
+          <Button type="button" onClick={saveAndBack} disabled={saving}>
+            Save & back
           </Button>
         </div>
       </div>
@@ -620,12 +724,16 @@ export default function ProjectMarkupCanvas() {
             <div>
               <div className="text-sm font-semibold text-slate-900">Selected markup</div>
               {(selected.type === "text" || selected.type === "measure") ? (
-                <Input
-                  className="mt-2"
-                  value={selected.text || ""}
-                  onChange={(event) => updateSelected({ text: event.target.value })}
-                  placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
-                />
+                <label className="mt-2 block">
+                  <span className="mb-1 block text-xs text-slate-500">
+                    {selected.type === "measure" ? "Measurement label" : "Note text"}
+                  </span>
+                  <Input
+                    value={selected.text || ""}
+                    onChange={(event) => updateSelected({ text: event.target.value })}
+                    placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
+                  />
+                </label>
               ) : null}
               <div className="mt-2 flex gap-2">
                 <GhostButton type="button" className="flex-1" onClick={deleteSelected}>
