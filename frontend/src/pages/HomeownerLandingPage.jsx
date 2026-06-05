@@ -86,6 +86,15 @@ function LandingNav() {
             </Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            {authed ? (
+              <Link
+                to="/contractor"
+                title="This toggle is only for viewing/previewing the contractor landing page."
+                className="hidden h-9 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:inline-flex"
+              >
+                View Contractor Side
+              </Link>
+            ) : null}
             <Link
               to={authed ? "/dashboard" : "/login"}
               className="text-sm text-slate-600 transition hover:text-slate-900"
