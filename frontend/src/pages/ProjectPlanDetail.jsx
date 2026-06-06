@@ -18,18 +18,6 @@ function emptyLink() {
   return { url: "", label: "", notes: "" };
 }
 
-function emptyOption(index) {
-  return {
-    key: `option-${Date.now()}-${index}`,
-    title: "",
-    notes: "",
-    pros: "",
-    cons: "",
-    estimated_cost_note: "",
-    is_selected: false,
-  };
-}
-
 function normalizeError(err, fallback) {
   const data = err?.response?.data;
   return (
@@ -83,6 +71,7 @@ export default function ProjectPlanDetail() {
   const [customContractor, setCustomContractor] = useState("");
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiOptions, setAiOptions] = useState([]);
+  const [researchOpen, setResearchOpen] = useState(false);
   const [error, setError] = useState("");
 
   async function loadPlan() {
@@ -93,10 +82,7 @@ export default function ProjectPlanDetail() {
       setPlan({
         ...data,
         links: Array.isArray(data?.links) && data.links.length ? data.links : [emptyLink()],
-        options:
-          Array.isArray(data?.options) && data.options.length
-            ? data.options
-            : [emptyOption(1)],
+        options: Array.isArray(data?.options) ? data.options : [],
       });
     } catch (err) {
       setError(normalizeError(err, "Could not load this project plan."));
@@ -136,34 +122,6 @@ export default function ProjectPlanDetail() {
     });
   }
 
-  function updateOption(index, field, value) {
-    setPlan((prev) => ({
-      ...prev,
-      options: (prev.options || []).map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item
-      ),
-    }));
-  }
-
-  function addOption() {
-    setPlan((prev) => ({
-      ...prev,
-      options: [...(prev.options || []), emptyOption((prev.options || []).length + 1)],
-    }));
-  }
-
-  function removeOption(index) {
-    setPlan((prev) => {
-      const next = (prev.options || []).filter((_, itemIndex) => itemIndex !== index);
-      const selected = prev.selected_option_key;
-      return {
-        ...prev,
-        selected_option_key: next.some((item) => item.key === selected) ? selected : "",
-        options: next.length ? next : [emptyOption(1)],
-      };
-    });
-  }
-
   function toggleContractorType(value) {
     const current = Array.isArray(plan?.contractor_types) ? plan.contractor_types : [];
     const exists = current.includes(value);
@@ -190,10 +148,7 @@ export default function ProjectPlanDetail() {
       setPlan({
         ...data,
         links: Array.isArray(data?.links) && data.links.length ? data.links : [emptyLink()],
-        options:
-          Array.isArray(data?.options) && data.options.length
-            ? data.options
-            : [emptyOption(1)],
+        options: Array.isArray(data?.options) ? data.options : [],
       });
     } catch (err) {
       window.alert(normalizeError(err, "Could not save this project plan."));
@@ -337,13 +292,13 @@ export default function ProjectPlanDetail() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <Link to="/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
             Dashboard
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
             {plan.title || "Untitled issue"}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -376,18 +331,24 @@ export default function ProjectPlanDetail() {
         </Card>
       ) : null}
 
-      <Card className="rounded-lg border border-slate-200 p-5 shadow-none">
+      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5">
+          <div className="text-lg font-semibold text-slate-950">Project Details</div>
+          <div className="mt-1 text-sm text-slate-500">
+            Define the project clearly before turning it into a job post.
+          </div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Project title</label>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Project Title</label>
             <Input
               value={plan.title || ""}
               onChange={(event) => updateField("title", event.target.value)}
               placeholder="Untitled issue"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">House location</label>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Project Area</label>
             <Input
               value={plan.house_location || ""}
               onChange={(event) => updateField("house_location", event.target.value)}
@@ -395,7 +356,7 @@ export default function ProjectPlanDetail() {
             />
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Issue summary</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Issue Overview</label>
             <Textarea
               rows={4}
               value={plan.issue_summary || ""}
@@ -416,7 +377,7 @@ export default function ProjectPlanDetail() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Planner status</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Planner Status</label>
             <select
               value={plan.status || "planning"}
               onChange={(event) => updateField("status", event.target.value)}
@@ -428,41 +389,42 @@ export default function ProjectPlanDetail() {
               <option value="archived">Archived</option>
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Budget min</label>
-            <Input
-              value={plan.budget_min ?? ""}
-              onChange={(event) => updateField("budget_min", event.target.value)}
-              inputMode="decimal"
-              placeholder="Optional"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Budget max</label>
-            <Input
-              value={plan.budget_max ?? ""}
-              onChange={(event) => updateField("budget_max", event.target.value)}
-              inputMode="decimal"
-              placeholder="Optional"
-            />
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:col-span-2">
+            <label className="mb-3 block text-sm font-medium text-slate-700">Budget Range</label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                value={plan.budget_min ?? ""}
+                onChange={(event) => updateField("budget_min", event.target.value)}
+                inputMode="decimal"
+                placeholder="Min"
+              />
+              <Input
+                value={plan.budget_max ?? ""}
+                onChange={(event) => updateField("budget_max", event.target.value)}
+                inputMode="decimal"
+                placeholder="Max"
+              />
+            </div>
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Notes</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Project Requirements</label>
             <Textarea
               rows={8}
               value={plan.notes || ""}
               onChange={(event) => updateField("notes", event.target.value)}
-              placeholder="Symptoms, concerns, measurements, timing, and what you already know."
+              placeholder="Required work, measurements, timing, materials, access details, concerns, and what you already know."
             />
           </div>
         </div>
       </Card>
 
-      <Card className="rounded-lg border border-slate-200 p-5 shadow-none">
+      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="font-semibold text-slate-900">Photos</div>
-            <div className="text-sm text-slate-500">Upload issue photos, add captions, and set one as the cover image.</div>
+            <div className="font-semibold text-slate-950">Image Markup Canvas</div>
+            <div className="mt-1 max-w-2xl text-sm text-slate-500">
+              Upload images, mark problem areas, add visual notes, and communicate project details more clearly before sharing the project.
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)}>
@@ -508,88 +470,43 @@ export default function ProjectPlanDetail() {
         </div>
       </Card>
 
-      <Card className="rounded-lg border border-slate-200 p-5 shadow-none">
-        <div className="font-semibold text-slate-900">Research links</div>
-        <div className="mt-1 text-sm text-slate-500">Save product links, inspiration, manufacturer references, or notes from research.</div>
-        <div className="mt-4 space-y-3">
-          {(plan.links || []).map((item, index) => (
-            <div key={`link-${index}`} className="grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-[1.4fr,1fr,1fr,auto]">
-              <Input value={item.url || ""} onChange={(event) => updateLink(index, "url", event.target.value)} placeholder="https://..." />
-              <Input value={item.label || ""} onChange={(event) => updateLink(index, "label", event.target.value)} placeholder="Label" />
-              <Input value={item.notes || ""} onChange={(event) => updateLink(index, "notes", event.target.value)} placeholder="Notes" />
-              <GhostButton type="button" onClick={() => removeLink(index)}>Remove</GhostButton>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3">
-          <GhostButton type="button" onClick={addLink}>Add link</GhostButton>
-        </div>
-      </Card>
-
-      <Card className="rounded-lg border border-slate-200 p-5 shadow-none">
-        <div className="font-semibold text-slate-900">Solution options</div>
-        <div className="mt-1 text-sm text-slate-500">Save likely repair or replacement paths, compare tradeoffs, and mark one as preferred.</div>
-        <div className="mt-4 space-y-4">
-          {(plan.options || []).map((option, index) => (
-            <div key={option.key || index} className="rounded-lg border border-slate-200 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <input
-                    type="radio"
-                    name="selected-option"
-                    checked={plan.selected_option_key === option.key}
-                    onChange={() => updateField("selected_option_key", option.key)}
-                  />
-                  Preferred option
-                </label>
-                <GhostButton type="button" onClick={() => removeOption(index)}>Remove</GhostButton>
-              </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <Input value={option.title || ""} onChange={(event) => updateOption(index, "title", event.target.value)} placeholder="Option title" />
-                <Input value={option.estimated_cost_note || ""} onChange={(event) => updateOption(index, "estimated_cost_note", event.target.value)} placeholder="Estimated cost note" />
-                <Textarea rows={3} value={option.notes || ""} onChange={(event) => updateOption(index, "notes", event.target.value)} placeholder="Short note" />
-                <Textarea rows={3} value={option.pros || ""} onChange={(event) => updateOption(index, "pros", event.target.value)} placeholder="Pros" />
-                <Textarea rows={3} value={option.cons || ""} onChange={(event) => updateOption(index, "cons", event.target.value)} placeholder="Cons" />
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <GhostButton type="button" onClick={addOption}>Add option</GhostButton>
-          <Button type="button" disabled={aiDisabled || aiBusy === "suggest_solution_paths"} onClick={() => runAi("suggest_solution_paths")}>
-            {aiBusy === "suggest_solution_paths" ? "Thinking..." : "Suggest solution paths"}
-          </Button>
-        </div>
-        {aiDisabled ? (
-          <div className="mt-3 text-sm text-slate-500">You’ve used all 10 AI assists. You can still fill this out manually.</div>
-        ) : null}
-        {aiOptions.length ? (
-          <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 p-4">
-            <div className="font-semibold text-sky-950">AI suggested options ready for review</div>
-            <div className="mt-2 space-y-2 text-sm text-slate-700">
-              {aiOptions.map((item, index) => (
-                <div key={`ai-option-preview-${index}`}>
-                  <span className="font-medium">{item.title || `Option ${index + 1}`}</span>
-                  {item.notes ? `: ${item.notes}` : ""}
+      <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setResearchOpen((value) => !value)}
+          className="flex w-full items-center justify-between gap-4 p-5 text-left"
+        >
+          <div>
+            <div className="font-semibold text-slate-950">Research Links</div>
+            <div className="mt-1 text-sm text-slate-500">Save product links, inspiration, manufacturer references, videos, products, or notes from research.</div>
+          </div>
+          <SymbolIcon name={researchOpen ? "expand_less" : "expand_more"} className="text-[22px] text-slate-500" />
+        </button>
+        {researchOpen ? (
+          <div className="border-t border-slate-200 p-5">
+            <div className="space-y-3">
+              {(plan.links || []).map((item, index) => (
+                <div key={`link-${index}`} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[1.4fr,1fr,1fr,auto]">
+                  <Input value={item.url || ""} onChange={(event) => updateLink(index, "url", event.target.value)} placeholder="https://..." />
+                  <Input value={item.label || ""} onChange={(event) => updateLink(index, "label", event.target.value)} placeholder="Label" />
+                  <Input value={item.notes || ""} onChange={(event) => updateLink(index, "notes", event.target.value)} placeholder="Notes" />
+                  <GhostButton type="button" onClick={() => removeLink(index)}>Remove</GhostButton>
                 </div>
               ))}
             </div>
             <div className="mt-3">
-              <Button type="button" onClick={applyAiOptions}>Apply options to this plan</Button>
+              <GhostButton type="button" onClick={addLink}>Add link</GhostButton>
             </div>
           </div>
         ) : null}
       </Card>
 
-      <Card className="rounded-lg border border-slate-200 p-5 shadow-none">
+      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="font-semibold text-slate-900">Contractor types</div>
+            <div className="font-semibold text-slate-950">Contractor Type</div>
             <div className="text-sm text-slate-500">Choose the trades that seem most likely. You can edit them later.</div>
           </div>
-          <Button type="button" disabled={aiDisabled || aiBusy === "analyze_issue"} onClick={() => runAi("analyze_issue")}>
-            {aiBusy === "analyze_issue" ? "Analyzing..." : "Analyze this issue"}
-          </Button>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -644,8 +561,8 @@ export default function ProjectPlanDetail() {
         ) : null}
       </Card>
 
-      <Card className="rounded-lg border border-slate-200 p-5 shadow-none">
-        <div className="font-semibold text-slate-900">Draft generation</div>
+      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="font-semibold text-slate-950">Create Job Post Draft</div>
         <div className="mt-1 text-sm text-slate-500">
           Turn this private planner into a private editable job posting draft. You can review it before publishing anything publicly.
         </div>
