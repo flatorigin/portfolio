@@ -273,7 +273,11 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
         if not instance and request and request.user.is_authenticated:
             active_count = ProjectPlan.objects.filter(
                 owner=request.user,
-                status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT],
+                status__in=[
+                    ProjectPlan.STATUS_PLANNING,
+                    ProjectPlan.STATUS_READY_TO_DRAFT,
+                    ProjectPlan.STATUS_ARCHIVED,
+                ],
             ).count()
             if active_count >= 3:
                 raise serializers.ValidationError(

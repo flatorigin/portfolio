@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
-import { Button, Card, GhostButton, Input, SymbolIcon } from "../ui";
+import { SymbolIcon } from "../ui";
 
 const CANVAS_W = 1200;
 const CANVAS_H = 760;
@@ -19,6 +19,15 @@ const TOOLS = [
 const LAYERS = [
   { key: "homeowner", label: "Homeowner", color: "#0f172a" },
   { key: "contractor", label: "Contractor", color: "#2563eb" },
+];
+
+const MARKUP_COLORS = [
+  "#0f172a",
+  "#2563eb",
+  "#dc2626",
+  "#16a34a",
+  "#eab308",
+  "#9333ea",
 ];
 
 function clamp(value, min, max) {
@@ -59,8 +68,7 @@ function annotationBounds(item) {
 function wrappedTextLines(text) {
   const paragraphs = String(text || "")
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line) => line.trimEnd());
 
   const lines = [];
   (paragraphs.length ? paragraphs : [""]).forEach((paragraph) => {
@@ -80,8 +88,8 @@ function labelBox(text, fontSize = 18) {
   const lines = wrappedTextLines(text);
   const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
   return {
-    width: Math.max(58, longest * fontSize * 0.58 + 22),
-    height: lines.length * (fontSize + 5) + 13,
+    width: Math.max(44, longest * fontSize * 0.52 + 18),
+    height: lines.length * (fontSize + 4) + 10,
     lines,
   };
 }
@@ -111,14 +119,6 @@ function displayBounds(item) {
   return annotationBounds(item);
 }
 
-function labelBoxLegacy(text, fontSize = 22) {
-  const value = String(text || "");
-  return {
-    width: Math.max(58, value.length * fontSize * 0.58 + 22),
-    height: fontSize + 16,
-  };
-}
-
 function labelPosition(item) {
   if (!item) return null;
   if (item.type === "measure") {
@@ -133,7 +133,7 @@ function labelPosition(item) {
   return null;
 }
 
-function renderAnnotation(item, { selected = false, onPointerDown, onDoubleClick } = {}) {
+function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onDoubleClick } = {}) {
   const stroke = item.color || "#0f172a";
   const common = {
     key: item.id,
@@ -223,7 +223,7 @@ function renderAnnotation(item, { selected = false, onPointerDown, onDoubleClick
             />
           </>
         ) : null}
-        {item.type === "measure" ? (
+        {item.type === "measure" && !editing ? (
           <g>
             <rect
               x={midX - box.width / 2}
@@ -255,6 +255,16 @@ function renderAnnotation(item, { selected = false, onPointerDown, onDoubleClick
 
   const label = item.text || "Note";
   const box = labelBox(label, 18);
+  if (editing) {
+    return (
+      <g
+        key={item.id}
+        onPointerDown={onPointerDown}
+        onDoubleClick={onDoubleClick}
+        className={selected ? "cursor-move" : "cursor-pointer"}
+      />
+    );
+  }
   return (
     <g {...common}>
       <rect
@@ -299,8 +309,10 @@ export default function ProjectMarkupCanvas() {
   const [drag, setDrag] = useState(null);
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
+  const [editingTextId, setEditingTextId] = useState("");
 
   const storageKey = `${STORAGE_PREFIX}:${planId || "standalone"}`;
 
@@ -439,11 +451,13 @@ export default function ProjectMarkupCanvas() {
 
   function startDrawing(event) {
     if (!svgRef.current) return;
+    svgRef.current.setPointerCapture?.(event.pointerId);
     const point = pointFromEvent(event, svgRef.current);
     setMessage("");
 
     if (tool === "select") {
       setSelectedId("");
+      setEditingTextId("");
       return;
     }
 
@@ -462,6 +476,7 @@ export default function ProjectMarkupCanvas() {
 
     commitAnnotations([...annotations, base]);
     setSelectedId(id);
+    setEditingTextId(tool === "text" ? id : "");
     if (tool === "text") return;
     setDraft(id);
   }
@@ -496,7 +511,14 @@ export default function ProjectMarkupCanvas() {
     }
   }
 
-  function stopPointer() {
+  function stopPointer(event) {
+    if (svgRef.current && event?.pointerId != null) {
+      try {
+        svgRef.current.releasePointerCapture?.(event.pointerId);
+      } catch {
+        // Pointer may already be released by the browser.
+      }
+    }
     setDraft(null);
     setDrag(null);
   }
@@ -504,9 +526,11 @@ export default function ProjectMarkupCanvas() {
   function startMove(event, item) {
     event.stopPropagation();
     if (!svgRef.current) return;
+    svgRef.current.setPointerCapture?.(event.pointerId);
     const point = pointFromEvent(event, svgRef.current);
     setTool("select");
     setSelectedId(item.id);
+    if (item.id !== editingTextId) setEditingTextId("");
     setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
     setDrag({ id: item.id, startX: point.x, startY: point.y, item });
   }
@@ -515,12 +539,14 @@ export default function ProjectMarkupCanvas() {
     if (!selectedId) return;
     commitAnnotations(annotations.filter((item) => item.id !== selectedId));
     setSelectedId("");
+    setEditingTextId("");
   }
 
   function clearCanvas() {
     if (!window.confirm("Clear all annotations on this canvas?")) return;
     commitAnnotations([]);
     setSelectedId("");
+    setEditingTextId("");
   }
 
   function makeSvgString() {
@@ -541,6 +567,20 @@ export default function ProjectMarkupCanvas() {
     link.download = `flatorigin-markup-${planId || "canvas"}.svg`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function downloadPng() {
+    try {
+      const blob = await svgToPngBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `flatorigin-markup-${planId || "canvas"}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setMessage(normalizeError(err, "Could not export PNG. Try SVG instead."));
+    }
   }
 
   async function svgToPngBlob() {
@@ -601,6 +641,30 @@ export default function ProjectMarkupCanvas() {
     if (saved && planId) navigate(`/dashboard/planner/${planId}`);
   }
 
+  async function deletePlanner() {
+    if (!planId) {
+      setMessage("Open this canvas from a saved project planner before deleting.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Delete this project planner? This removes the planner, saved canvas versions, and planner images.",
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setMessage("");
+    try {
+      await api.delete(`/project-plans/${planId}/`);
+      navigate("/dashboard");
+    } catch (err) {
+      setMessage(normalizeError(err, "Could not delete this project planner."));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function saveEditableCanvas({ quiet = false } = {}) {
     if (!planId) {
       setMessage("Open this canvas from a project planner to save editable layer data.");
@@ -625,7 +689,8 @@ export default function ProjectMarkupCanvas() {
       return data;
     } catch (err) {
       if (!quiet) setMessage(normalizeError(err, "Could not save editable markup."));
-      throw err;
+      if (quiet) throw err;
+      return null;
     } finally {
       setSavingEditable(false);
     }
@@ -639,208 +704,320 @@ export default function ProjectMarkupCanvas() {
       setVisibleLayers((prev) => ({ ...prev, ...version.visible_layers }));
     }
     setSelectedId("");
+    setEditingTextId("");
     setMessage("Version restored locally. Save editable canvas to keep it as the current version.");
   }
 
   const visibleAnnotations = annotations.filter((item) => visibleLayers[item.layer]);
   const selectedLabelPosition = labelPosition(selected);
+  const selectedDisplayBounds = selected ? displayBounds(selected) : null;
+  const selectedDeletePosition = selectedDisplayBounds
+    ? {
+        left: `${(clamp(selectedDisplayBounds.x2 + 18, 18, CANVAS_W - 18) / CANVAS_W) * 100}%`,
+        top: `${(clamp(selectedDisplayBounds.y1 - 18, 18, CANVAS_H - 18) / CANVAS_H) * 100}%`,
+      }
+    : null;
+  const editingSelectedText =
+    selectedLabelPosition &&
+    selected &&
+    editingTextId === selected.id &&
+    (selected.type === "text" || selected.type === "measure");
+  const selectedTextBox = selected ? labelBox(selected.text || (selected.type === "measure" ? "measurement" : "Note"), 18) : null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <Link
-            to={planId ? `/dashboard/planner/${planId}` : "/dashboard"}
-            className="text-sm text-slate-500 hover:text-slate-900"
-          >
-            {planId ? "Back to planner" : "Dashboard"}
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Project markup canvas</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Upload a photo or plan, mark the area that needs work, and save the annotated image with the project.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <GhostButton type="button" onClick={undo} disabled={!history.past.length}>
-            <SymbolIcon name="arrow_back" className="mr-1 text-[18px]" />
-            Back
-          </GhostButton>
-          <GhostButton type="button" onClick={redo} disabled={!history.future.length}>
-            Forward
-            <SymbolIcon name="arrow_forward" className="ml-1 text-[18px]" />
-          </GhostButton>
-          <GhostButton type="button" onClick={downloadSvg}>Download SVG</GhostButton>
-          <GhostButton type="button" onClick={() => saveEditableCanvas()} disabled={savingEditable}>
-            {savingEditable ? "Saving..." : "Save editable canvas"}
-          </GhostButton>
-          <Button type="button" onClick={saveToPlanner} disabled={saving}>
-            {saving ? "Saving..." : "Save image snapshot"}
-          </Button>
-          <Button type="button" onClick={saveAndBack} disabled={saving}>
-            Save & back
-          </Button>
+    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50">
+      <div className="border-b border-slate-200 bg-white/95">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
+          <div className="flex items-center gap-4">
+            <Link
+              to={planId ? `/dashboard/planner/${planId}` : "/dashboard"}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Back to planner"
+            >
+              <SymbolIcon name="arrow_back" className="text-[22px]" />
+            </Link>
+            <div>
+              <h1 className="text-base font-semibold text-slate-950">Markup canvas</h1>
+              <p className="text-xs text-slate-500">Mark the area that needs work</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={!history.past.length}
+                className="inline-flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-50 disabled:opacity-40"
+                aria-label="Undo"
+              >
+                <SymbolIcon name="undo" className="text-[18px]" />
+              </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!history.future.length}
+                className="inline-flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-50 disabled:opacity-40"
+                aria-label="Redo"
+              >
+                <SymbolIcon name="redo" className="text-[18px]" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={downloadSvg}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <SymbolIcon name="download" className="text-[18px]" />
+              SVG
+            </button>
+            <button
+              type="button"
+              onClick={downloadPng}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <SymbolIcon name="image" className="text-[18px]" />
+              PNG
+            </button>
+            <button
+              type="button"
+              onClick={() => saveEditableCanvas()}
+              disabled={savingEditable}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              <SymbolIcon name="save" className="text-[18px]" />
+              {savingEditable ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={saveAndBack}
+              disabled={saving}
+              className="inline-flex h-9 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+            >
+              <SymbolIcon name="check" className="text-[18px]" />
+              {saving ? "Saving..." : "Save & back"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {loadingPlan ? (
-        <Card className="p-4 text-sm text-slate-500 shadow-none">Loading planner...</Card>
-      ) : null}
+      <div className="mx-auto max-w-5xl px-6 py-4">
+        {loadingPlan ? (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+            Loading planner...
+          </div>
+        ) : null}
 
-      {message ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-          {message}
-        </div>
-      ) : null}
+        {message ? (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+            {message}
+          </div>
+        ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[260px,1fr]">
-        <Card className="space-y-5 p-4 shadow-none">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">Background</div>
-            <p className="mt-1 text-xs text-slate-500">Use a room photo, floor plan, sketch, or screenshot.</p>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-            <Button type="button" className="mt-3 w-full" onClick={() => fileRef.current?.click()}>
-              Upload background
-            </Button>
-            {backgroundUrl ? (
-              <GhostButton type="button" className="mt-2 w-full" onClick={() => setBackgroundUrl("")}>
-                Remove background
-              </GhostButton>
+        <div className="grid items-start gap-4 lg:grid-cols-[288px_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-sm font-semibold text-slate-950">Background</div>
+              <p className="mt-1 text-xs text-slate-500">Use a room photo, floor plan, or sketch.</p>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+              <button
+                type="button"
+                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800"
+                onClick={() => fileRef.current?.click()}
+              >
+                <SymbolIcon name="upload" className="text-[18px]" />
+                Upload background
+              </button>
+              {backgroundUrl ? (
+                <button
+                  type="button"
+                  className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50"
+                  onClick={() => setBackgroundUrl("")}
+                >
+                  Remove background
+                </button>
+              ) : null}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-sm font-semibold text-slate-950">Layers</div>
+              <div className="mt-3 space-y-2">
+                {LAYERS.map((layer) => {
+                  const active = activeLayer === layer.key;
+                  return (
+                    <div
+                      key={layer.key}
+                      className={`flex h-12 items-center justify-between rounded-xl border px-3 ${
+                        active ? "border-slate-950 bg-slate-50" : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setActiveLayer(layer.key)}
+                        className="flex min-w-0 items-center gap-2 text-sm text-slate-700"
+                      >
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: layer.color }} />
+                        <span>{layer.label}</span>
+                        {active ? (
+                          <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                            Editing
+                          </span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVisibleLayers((prev) => ({ ...prev, [layer.key]: !prev[layer.key] }))
+                        }
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                        aria-label={`${visibleLayers[layer.key] ? "Hide" : "Show"} ${layer.label} layer`}
+                      >
+                        <SymbolIcon name={visibleLayers[layer.key] ? "visibility" : "visibility_off"} className="text-[18px]" />
+                      </button>
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={clearCanvas}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50"
+                >
+                  <SymbolIcon name="ink_eraser" className="text-[18px]" />
+                  Clear annotations
+                </button>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-slate-500">Annotations</div>
+                <div className="text-sm font-semibold text-slate-950">{annotations.length}</div>
+              </div>
+              {selected ? (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className="mb-2 text-xs text-slate-500">Color</div>
+                  <div className="flex flex-wrap gap-2">
+                    {MARKUP_COLORS.map((itemColor) => (
+                      <button
+                        key={itemColor}
+                        type="button"
+                        onClick={() => updateSelected({ color: itemColor })}
+                        aria-label={`Set color ${itemColor}`}
+                        className={`h-7 w-7 rounded-full border transition ${
+                          (selected.color || "#0f172a") === itemColor
+                            ? "border-slate-950 ring-2 ring-slate-900/20"
+                            : "border-white ring-1 ring-slate-300 hover:scale-105"
+                        }`}
+                        style={{ backgroundColor: itemColor }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            {savedVersions.length ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-950">Versions</div>
+                  <div className="text-sm font-semibold text-slate-950">{savedVersions.length}</div>
+                </div>
+                <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                  {savedVersions.map((version, index) => (
+                    <button
+                      key={version.id || `version-${index}`}
+                      type="button"
+                      onClick={() => restoreVersion(version)}
+                      className="w-full rounded-xl border border-slate-200 p-3 text-left text-xs text-slate-600 hover:bg-slate-50"
+                    >
+                      <div className="font-semibold text-slate-900">
+                        Version {savedVersions.length - index}
+                      </div>
+                      <div className="mt-1">
+                        {version.annotation_count ?? 0} markups
+                      </div>
+                      <div className="mt-1 text-slate-400">
+                        {version.created_at ? new Date(version.created_at).toLocaleString() : "Saved version"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {plan?.images?.length ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="text-sm font-semibold text-slate-950">Planner images</div>
+                <div className="mt-2 max-h-44 space-y-2 overflow-y-auto pr-1">
+                  {plan.images.map((image) => (
+                    <button
+                      key={image.id}
+                      type="button"
+                      onClick={() => setBackgroundUrl(image.image_url)}
+                      className="flex w-full items-center gap-2 rounded-lg border border-slate-200 p-2 text-left text-xs text-slate-600 hover:bg-slate-50"
+                    >
+                      <img src={image.image_url} alt="" className="h-10 w-12 rounded object-cover" />
+                      <span className="line-clamp-2">{image.caption || "Use this image"}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {planId ? (
+              <section className="rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
+                <div className="text-sm font-semibold text-slate-950">Project planner</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Delete this planner and every image, canvas layer, and saved version attached to it.
+                </p>
+                <button
+                  type="button"
+                  onClick={deletePlanner}
+                  disabled={deleting}
+                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                >
+                  <SymbolIcon name="delete" className="text-[18px]" />
+                  {deleting ? "Deleting..." : "Delete project planner"}
+                </button>
+              </section>
             ) : null}
           </div>
 
-          {plan?.images?.length ? (
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Planner images</div>
-              <div className="mt-2 max-h-44 space-y-2 overflow-y-auto pr-1">
-                {plan.images.map((image) => (
-                  <button
-                    key={image.id}
-                    type="button"
-                    onClick={() => setBackgroundUrl(image.image_url)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-slate-200 p-2 text-left text-xs text-slate-600 hover:bg-slate-50"
-                  >
-                    <img src={image.image_url} alt="" className="h-10 w-12 rounded object-cover" />
-                    <span className="line-clamp-2">{image.caption || "Use this image"}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div>
-            <div className="text-sm font-semibold text-slate-900">Layer</div>
-            <div className="mt-2 space-y-2">
-              {LAYERS.map((layer) => (
-                <div key={layer.key} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveLayer(layer.key)}
-                    className={`rounded-lg px-2 py-1 text-xs font-medium ${
-                      activeLayer === layer.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {layer.label}
-                  </button>
-                  <label className="flex items-center gap-2 text-xs text-slate-500">
-                    <input
-                      type="checkbox"
-                      checked={!!visibleLayers[layer.key]}
-                      onChange={() =>
-                        setVisibleLayers((prev) => ({ ...prev, [layer.key]: !prev[layer.key] }))
-                      }
-                    />
-                    show
-                  </label>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-sm text-slate-500">
+              <span>Planner: <span className="text-slate-700">{plan?.title || "Untitled issue"}</span></span>
+              <div className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center rounded-xl bg-slate-950 p-1 shadow-xl">
+                <div className="flex items-center gap-1">
+                  {TOOLS.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setTool(item.key)}
+                      title={item.label}
+                      aria-label={item.label}
+                      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
+                        tool === item.key
+                          ? "bg-blue-600 shadow-sm"
+                          : "bg-transparent text-white/80 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      <SymbolIcon name={item.icon} className="text-[21px]" />
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {savedVersions.length ? (
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Versions</div>
-              <div className="mt-2 max-h-40 space-y-2 overflow-y-auto pr-1">
-                {savedVersions.map((version, index) => (
-                  <button
-                    key={version.id || `version-${index}`}
-                    type="button"
-                    onClick={() => restoreVersion(version)}
-                    className="w-full rounded-lg border border-slate-200 p-2 text-left text-xs text-slate-600 hover:bg-slate-50"
-                  >
-                    <div className="font-medium text-slate-800">
-                      Version {savedVersions.length - index}
-                    </div>
-                    <div>{version.annotation_count ?? 0} markups</div>
-                    <div>{version.created_at ? new Date(version.created_at).toLocaleString() : "Saved version"}</div>
-                  </button>
-                ))}
               </div>
+              <span className="text-xs text-slate-400">{annotations.length} annotations</span>
             </div>
-          ) : null}
-
-          {selected ? (
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Selected markup</div>
-              {(selected.type === "text" || selected.type === "measure") ? (
-                <label className="mt-2 block">
-                  <span className="mb-1 block text-xs text-slate-500">
-                    {selected.type === "measure" ? "Measurement label" : "Note text"}
-                  </span>
-                  <Input
-                    value={selected.text || ""}
-                    onChange={(event) => updateSelected({ text: event.target.value })}
-                    placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
-                  />
-                </label>
-              ) : null}
-              <div className="mt-2 flex gap-2">
-                <GhostButton type="button" className="flex-1" onClick={deleteSelected}>
-                  Delete
-                </GhostButton>
-              </div>
-            </div>
-          ) : null}
-
-          <GhostButton type="button" onClick={clearCanvas} className="w-full">
-            Clear annotations
-          </GhostButton>
-        </Card>
-
-        <Card className="overflow-hidden p-3 shadow-none">
-          <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-xs text-slate-500">
-            <span>{plan?.title ? `Planner: ${plan.title}` : "Layer-ready project markup"}</span>
-            <div className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center rounded-xl bg-neutral-900/95 p-1.5 shadow-xl ring-1 ring-white/10 backdrop-blur">
-              <div className="flex items-center gap-1">
-                {TOOLS.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setTool(item.key)}
-                    title={item.label}
-                    aria-label={item.label}
-                    className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
-                      tool === item.key
-                        ? "bg-blue-600 shadow-sm"
-                        : "bg-transparent text-white/85 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <SymbolIcon name={item.icon} className="text-[22px]" />
-                  </button>
-                ))}
-              </div>
-            </div>
-            <span>{annotations.length} annotation{annotations.length === 1 ? "" : "s"}</span>
-          </div>
-          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-            <svg
-              ref={svgRef}
-              viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-              className="block h-auto w-full touch-none select-none bg-white"
-              onPointerDown={startDrawing}
-              onPointerMove={moveDrawing}
-              onPointerUp={stopPointer}
-              onPointerLeave={stopPointer}
-            >
+            <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+              <svg
+                ref={svgRef}
+                viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
+                className="block h-auto min-h-[420px] w-full touch-none select-none bg-white"
+                onPointerDown={startDrawing}
+                onPointerMove={moveDrawing}
+                onPointerUp={stopPointer}
+                onPointerLeave={stopPointer}
+              >
               <defs>
                 {LAYERS.map((layer) => (
                   <marker
@@ -879,45 +1056,78 @@ export default function ProjectMarkupCanvas() {
               {visibleAnnotations.map((item) =>
                 renderAnnotation(item, {
                   selected: item.id === selectedId,
+                  editing: item.id === editingTextId,
                   onPointerDown: (event) => startMove(event, item),
+                  onDoubleClick: (event) => {
+                    event.stopPropagation();
+                    if (item.type === "text" || item.type === "measure") {
+                      setSelectedId(item.id);
+                      setEditingTextId(item.id);
+                    }
+                  },
                 }),
               )}
 
               {selected ? (() => {
-                const { x1, y1, x2, y2 } = annotationBounds(selected);
+                const { x1, y1, x2, y2 } = displayBounds(selected);
                 return (
-                  <rect
-                    className="editing-only pointer-events-none"
-                    x={x1 - 8}
-                    y={y1 - 8}
-                    width={Math.max(16, x2 - x1 + 16)}
-                    height={Math.max(16, y2 - y1 + 16)}
-                    fill="none"
-                    stroke="#38bdf8"
-                    strokeDasharray="10 8"
-                    strokeWidth="2"
-                  />
+                  <g className="editing-only">
+                    <rect
+                      className="pointer-events-none"
+                      x={x1 - 8}
+                      y={y1 - 8}
+                      width={Math.max(16, x2 - x1 + 16)}
+                      height={Math.max(16, y2 - y1 + 16)}
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeDasharray="10 8"
+                      strokeWidth="2"
+                    />
+                  </g>
                 );
               })() : null}
-            </svg>
-            {selectedLabelPosition && (selected.type === "text" || selected.type === "measure") ? (
-              <input
-                type="text"
-                value={selected.text || ""}
-                onChange={(event) => updateSelected({ text: event.target.value })}
-                className="absolute z-30 min-w-28 max-w-64 rounded-lg border border-white/20 bg-slate-950/80 px-2 py-1 text-center text-sm font-extralight text-white shadow-xl outline-none ring-2 ring-sky-300/70 placeholder:text-white/60"
-                placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
-                style={{
-                  left: `${(selectedLabelPosition.x / CANVAS_W) * 100}%`,
-                  top: `${(selectedLabelPosition.y / CANVAS_H) * 100}%`,
-                  transform: "translate(-50%, -50%)",
-                }}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-              />
-            ) : null}
-          </div>
-        </Card>
+              </svg>
+              {selectedDeletePosition ? (
+                <button
+                  type="button"
+                  aria-label="Delete selected element"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    deleteSelected();
+                  }}
+                  className="absolute z-30 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/85 text-white shadow-xl ring-1 ring-white/20 transition hover:bg-red-600"
+                  style={selectedDeletePosition}
+                >
+                  <SymbolIcon name="delete" className="text-[18px]" />
+                </button>
+              ) : null}
+              {editingSelectedText ? (
+                <textarea
+                  value={selected.text || ""}
+                  onChange={(event) => updateSelected({ text: event.target.value })}
+                  rows={selected.type === "text" ? 3 : 1}
+                  className="absolute z-30 min-h-9 w-48 resize rounded-lg border border-white/20 bg-slate-950/80 px-2 py-1 text-center text-sm font-extralight leading-snug text-white shadow-xl outline-none placeholder:text-white/60"
+                  placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
+                  style={{
+                    left: `${(selectedLabelPosition.x / CANVAS_W) * 100}%`,
+                    top: `${(selectedLabelPosition.y / CANVAS_H) * 100}%`,
+                    transform: "translate(-50%, -50%)",
+                    width: selectedTextBox ? `${Math.max(160, selectedTextBox.width + 22)}px` : undefined,
+                    minHeight: selectedTextBox ? `${Math.max(38, selectedTextBox.height + 12)}px` : undefined,
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                  onBlur={() => setEditingTextId("")}
+                />
+              ) : null}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );

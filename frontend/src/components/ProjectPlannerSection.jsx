@@ -29,7 +29,7 @@ function LimitNotice({ meta }) {
   if (!meta || meta.can_create) return null;
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      You can keep up to 3 project plans at a time. Remove one to add another.
+      You can keep up to 3 project plans at a time. Delete one to add another.
     </div>
   );
 }
@@ -67,6 +67,7 @@ export default function ProjectPlannerSection({ isVisible = false }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
@@ -117,7 +118,7 @@ export default function ProjectPlannerSection({ isVisible = false }) {
 
   async function archivePlan(planId) {
     if (!planId || busyId) return;
-    if (!window.confirm("Archive this plan? It will leave the active list and free up a slot.")) {
+    if (!window.confirm("Archive this plan? It will stay on this panel as an inactive card and still count toward your 3 project plan slots.")) {
       return;
     }
     setBusyId(planId);
@@ -126,6 +127,41 @@ export default function ProjectPlannerSection({ isVisible = false }) {
       await refresh();
     } catch (err) {
       window.alert(normalizeError(err, "Could not archive this plan."));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function unarchivePlan(planId) {
+    if (!planId || busyId) return;
+    setBusyId(planId);
+    try {
+      await api.post(`/project-plans/${planId}/unarchive/`);
+      await refresh();
+    } catch (err) {
+      window.alert(normalizeError(err, "Could not unarchive this plan."));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteSelectedPlan() {
+    if (!selectedPlanId || busyId) return;
+    const plan = plans.find((item) => item.id === selectedPlanId);
+    if (
+      !window.confirm(
+        `Delete "${plan?.title || "this project plan"}"? This permanently removes the plan and all associated planning data.`,
+      )
+    ) {
+      return;
+    }
+    setBusyId(selectedPlanId);
+    try {
+      await api.delete(`/project-plans/${selectedPlanId}/`);
+      setSelectedPlanId(null);
+      await refresh();
+    } catch (err) {
+      window.alert(normalizeError(err, "Could not delete this project plan."));
     } finally {
       setBusyId(null);
     }
@@ -143,7 +179,7 @@ export default function ProjectPlannerSection({ isVisible = false }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <Badge>{meta?.active_count ?? plans.length}/3 active</Badge>
+          <Badge>{meta?.active_count ?? plans.length}/3 plans</Badge>
           {meta ? <Badge>{meta.ai_remaining_today} AI assists left today</Badge> : null}
         </div>
       </div>
@@ -171,25 +207,48 @@ export default function ProjectPlannerSection({ isVisible = false }) {
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {sortedPlans.map((plan) => (
+            (() => {
+              const isArchived = plan.status === "archived";
+              const isSelected = selectedPlanId === plan.id;
+              return (
             <Card
               key={plan.id}
-              className="overflow-hidden rounded-lg border border-slate-200 shadow-none"
+              className={
+                "overflow-hidden rounded-lg border shadow-none transition " +
+                (isSelected ? "border-rose-300 ring-2 ring-rose-100" : "border-slate-200") +
+                (isArchived ? " bg-slate-50/70" : "")
+              }
             >
-              {plan.cover_image_url ? (
-                <img
-                  src={plan.cover_image_url}
-                  alt=""
-                  className="h-40 w-full object-cover"
-                  onError={(event) => {
-                    event.currentTarget.style.display = "none";
-                  }}
-                />
-              ) : (
-                <div className="flex h-40 items-center justify-center bg-slate-100 text-slate-400">
-                  <SymbolIcon name="home_repair_service" className="text-[36px]" />
-                </div>
-              )}
-              <div className="space-y-3 p-4">
+              <div className="relative">
+                {plan.cover_image_url ? (
+                  <img
+                    src={plan.cover_image_url}
+                    alt=""
+                    className={"h-40 w-full object-cover" + (isArchived ? " opacity-60 grayscale" : "")}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-40 items-center justify-center bg-slate-100 text-slate-400">
+                    <SymbolIcon name="home_repair_service" className="text-[36px]" />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlanId((current) => (current === plan.id ? null : plan.id))}
+                  className={
+                    "absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border bg-white/90 shadow-sm transition " +
+                    (isSelected
+                      ? "border-rose-400 text-rose-600"
+                      : "border-slate-200 text-slate-500 hover:text-slate-900")
+                  }
+                  aria-label={isSelected ? "Deselect project plan" : "Select project plan"}
+                >
+                  <SymbolIcon name={isSelected ? "check_circle" : "radio_button_unchecked"} className="text-[20px]" />
+                </button>
+              </div>
+              <div className={"space-y-3 p-4" + (isArchived ? " opacity-80" : "")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-slate-900">
@@ -217,34 +276,63 @@ export default function ProjectPlannerSection({ isVisible = false }) {
                 <div className="text-xs text-slate-400">Updated {formatDate(plan.updated_at) || "recently"}</div>
 
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    className="flex-1"
-                    onClick={() => navigate(`/dashboard/planner/${plan.id}`)}
-                  >
-                    Open
-                  </Button>
-                  <GhostButton
-                    type="button"
-                    disabled={busyId === plan.id}
-                    onClick={() => archivePlan(plan.id)}
-                  >
-                    Archive
-                  </GhostButton>
+                  {isArchived ? (
+                    <Button
+                      type="button"
+                      className="flex-1"
+                      disabled={busyId === plan.id}
+                      onClick={() => unarchivePlan(plan.id)}
+                    >
+                      {busyId === plan.id ? "Updating..." : "Unarchive"}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        className="flex-1"
+                        onClick={() => navigate(`/dashboard/planner/${plan.id}`)}
+                      >
+                        Edit
+                      </Button>
+                      <GhostButton
+                        type="button"
+                        disabled={busyId === plan.id}
+                        onClick={() => archivePlan(plan.id)}
+                      >
+                        Archive
+                      </GhostButton>
+                    </>
+                  )}
                 </div>
               </div>
             </Card>
+              );
+            })()
           ))}
 
           {meta?.can_create ? (
             <AddPlanCard disabled={creating} onClick={createPlan} />
           ) : (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-              You can keep up to 3 project plans at a time. Remove one to add another.
+              You can keep up to 3 project plans at a time. Delete one to add another.
             </div>
           )}
         </div>
       )}
+
+      {selectedPlanId ? (
+        <div className="mt-5 border-t border-slate-200 pt-4">
+          <button
+            type="button"
+            onClick={deleteSelectedPlan}
+            disabled={busyId === selectedPlanId}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60 sm:w-auto"
+          >
+            <SymbolIcon name="delete" className="text-[18px]" />
+            {busyId === selectedPlanId ? "Deleting..." : "Delete Project Plan"}
+          </button>
+        </div>
+      ) : null}
     </Card>
   );
 }

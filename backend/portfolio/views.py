@@ -618,11 +618,15 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         scope = (self.request.query_params.get("scope") or "").strip().lower()
         if scope == "active":
             qs = qs.filter(
-                status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT]
+                status__in=[
+                    ProjectPlan.STATUS_PLANNING,
+                    ProjectPlan.STATUS_READY_TO_DRAFT,
+                    ProjectPlan.STATUS_ARCHIVED,
+                ]
             )
         elif scope == "inactive":
             qs = qs.filter(
-                status__in=[ProjectPlan.STATUS_CONVERTED, ProjectPlan.STATUS_ARCHIVED]
+                status__in=[ProjectPlan.STATUS_CONVERTED]
             )
         return qs.order_by("-updated_at", "-id")
 
@@ -630,7 +634,11 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         remaining, daily_limit = get_ai_remaining_today(self.request.user)
         active_plan_count = ProjectPlan.objects.filter(
             owner=self.request.user,
-            status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT],
+            status__in=[
+                ProjectPlan.STATUS_PLANNING,
+                ProjectPlan.STATUS_READY_TO_DRAFT,
+                ProjectPlan.STATUS_ARCHIVED,
+            ],
         ).count()
         return {
             "request": self.request,
@@ -662,7 +670,11 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         remaining, daily_limit = get_ai_remaining_today(request.user)
         active_count = ProjectPlan.objects.filter(
             owner=request.user,
-            status__in=[ProjectPlan.STATUS_PLANNING, ProjectPlan.STATUS_READY_TO_DRAFT],
+            status__in=[
+                ProjectPlan.STATUS_PLANNING,
+                ProjectPlan.STATUS_READY_TO_DRAFT,
+                ProjectPlan.STATUS_ARCHIVED,
+            ],
         ).count()
         return Response(
             {
@@ -678,6 +690,16 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
     def archive(self, request, pk=None):
         plan = self.get_object()
         plan.status = ProjectPlan.STATUS_ARCHIVED
+        plan.save(update_fields=["status", "updated_at"])
+        return Response(
+            ProjectPlanSerializer(plan, context=self.get_serializer_context()).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="unarchive")
+    def unarchive(self, request, pk=None):
+        plan = self.get_object()
+        plan.status = ProjectPlan.STATUS_PLANNING
         plan.save(update_fields=["status", "updated_at"])
         return Response(
             ProjectPlanSerializer(plan, context=self.get_serializer_context()).data,

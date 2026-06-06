@@ -534,7 +534,7 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("up to 3 project plans", str(response.data).lower())
 
-    def test_archived_plan_frees_capacity(self):
+    def test_archived_plan_keeps_capacity_until_deleted(self):
         self.client.force_authenticate(user=self.homeowner)
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Window", status=ProjectPlan.STATUS_PLANNING)
         ProjectPlan.objects.create(owner=self.homeowner, title="Porch", status=ProjectPlan.STATUS_PLANNING)
@@ -548,7 +548,26 @@ class ProjectPlannerTests(APITestCase):
             {"title": "New opening", "status": "planning"},
             format="json",
         )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        response = self.client.delete(f"/api/project-plans/{plan.id}/")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        response = self.client.post(
+            "/api/project-plans/",
+            {"title": "New opening", "status": "planning"},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_archived_plan_can_be_unarchived(self):
+        self.client.force_authenticate(user=self.homeowner)
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Window", status=ProjectPlan.STATUS_ARCHIVED)
+
+        response = self.client.post(f"/api/project-plans/{plan.id}/unarchive/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, ProjectPlan.STATUS_PLANNING)
 
     def test_contractor_cannot_access_project_planner(self):
         self.client.force_authenticate(user=self.contractor)

@@ -203,7 +203,7 @@ export default function ProjectPlanDetail() {
   }
 
   async function archivePlan() {
-    if (!window.confirm("Archive this plan? It will leave the active planner list.")) return;
+    if (!window.confirm("Archive this plan? It will stay saved as an inactive project plan and still count toward your 3 project plan slots.")) return;
     try {
       await api.post(`/project-plans/${planId}/archive/`);
       navigate("/dashboard");
