@@ -56,7 +56,62 @@ function annotationBounds(item) {
   return { x1, y1, x2, y2 };
 }
 
-function labelBox(text, fontSize = 22) {
+function wrappedTextLines(text) {
+  const paragraphs = String(text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const lines = [];
+  (paragraphs.length ? paragraphs : [""]).forEach((paragraph) => {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push("");
+      return;
+    }
+    for (let index = 0; index < words.length; index += 6) {
+      lines.push(words.slice(index, index + 6).join(" "));
+    }
+  });
+  return lines.length ? lines : ["Note"];
+}
+
+function labelBox(text, fontSize = 18) {
+  const lines = wrappedTextLines(text);
+  const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  return {
+    width: Math.max(58, longest * fontSize * 0.58 + 22),
+    height: lines.length * (fontSize + 5) + 13,
+    lines,
+  };
+}
+
+function displayBounds(item) {
+  if (!item) return { x1: 0, y1: 0, x2: 0, y2: 0 };
+  if (item.type === "text") {
+    const box = labelBox(item.text || "Note", 18);
+    return {
+      x1: (item.x || 0) - 10,
+      y1: (item.y || 0) - box.height + 7,
+      x2: (item.x || 0) - 10 + box.width,
+      y2: (item.y || 0) + 7,
+    };
+  }
+  if (item.type === "measure") {
+    const base = annotationBounds(item);
+    const label = labelPosition(item);
+    const box = labelBox(item.text || "measurement", 18);
+    return {
+      x1: Math.min(base.x1, label.x - box.width / 2),
+      y1: Math.min(base.y1, label.y - box.height / 2),
+      x2: Math.max(base.x2, label.x + box.width / 2),
+      y2: Math.max(base.y2, label.y + box.height / 2),
+    };
+  }
+  return annotationBounds(item);
+}
+
+function labelBoxLegacy(text, fontSize = 22) {
   const value = String(text || "");
   return {
     width: Math.max(58, value.length * fontSize * 0.58 + 22),
@@ -64,12 +119,27 @@ function labelBox(text, fontSize = 22) {
   };
 }
 
-function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
+function labelPosition(item) {
+  if (!item) return null;
+  if (item.type === "measure") {
+    return {
+      x: ((item.x || 0) + (item.x2 || 0)) / 2,
+      y: ((item.y || 0) + (item.y2 || 0)) / 2 - 40,
+    };
+  }
+  if (item.type === "text") {
+    return { x: item.x || 0, y: (item.y || 0) - 18 };
+  }
+  return null;
+}
+
+function renderAnnotation(item, { selected = false, onPointerDown, onDoubleClick } = {}) {
   const stroke = item.color || "#0f172a";
   const common = {
     key: item.id,
     onPointerDown,
-    className: onPointerDown ? "cursor-move" : "",
+    onDoubleClick,
+    className: selected ? "cursor-move" : "cursor-pointer",
   };
 
   if (item.type === "rect") {
@@ -84,7 +154,7 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
           rx="10"
           fill="rgba(255,255,255,0.08)"
           stroke={stroke}
-          strokeWidth={selected ? 6 : 4}
+          strokeWidth="2"
         />
       </g>
     );
@@ -103,7 +173,7 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
         ry={Math.max(10, Math.abs(y2 - y1) / 2)}
         fill="rgba(255,255,255,0.08)"
         stroke={stroke}
-        strokeWidth={selected ? 6 : 4}
+        strokeWidth="2"
       />
     );
   }
@@ -118,7 +188,7 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
     const capX = (-dy / length) * 22;
     const capY = (dx / length) * 22;
     const label = item.text || "measurement";
-    const box = labelBox(label, 22);
+    const box = labelBox(label, 18);
     return (
       <g {...common}>
         <line
@@ -127,7 +197,7 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
           x2={item.x2}
           y2={item.y2}
           stroke={stroke}
-          strokeWidth={selected ? 6 : 4}
+          strokeWidth="2"
           strokeLinecap="round"
           markerEnd={marker}
         />
@@ -139,7 +209,7 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
               x2={(item.x || 0) + capX}
               y2={(item.y || 0) + capY}
               stroke={stroke}
-              strokeWidth={selected ? 5 : 3}
+              strokeWidth="2"
               strokeLinecap="square"
             />
             <line
@@ -148,7 +218,7 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
               x2={(item.x2 || 0) + capX}
               y2={(item.y2 || 0) + capY}
               stroke={stroke}
-              strokeWidth={selected ? 5 : 3}
+              strokeWidth="2"
               strokeLinecap="square"
             />
           </>
@@ -161,17 +231,21 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
               width={box.width}
               height={box.height}
               rx="8"
-              fill="rgba(15, 23, 42, 0.9)"
+              fill="rgba(15, 23, 42, 0.8)"
             />
             <text
               x={midX}
-              y={midY - 22}
+              y={midY - box.height + 16}
               textAnchor="middle"
               fill="white"
-              fontSize="22"
-              fontWeight="700"
+              fontSize="18"
+              fontWeight="200"
             >
-              {label}
+              {box.lines.map((line, index) => (
+                <tspan key={`${item.id}-line-${index}`} x={midX} dy={index === 0 ? 0 : 23}>
+                  {line}
+                </tspan>
+              ))}
             </text>
           </g>
         ) : null}
@@ -180,7 +254,7 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
   }
 
   const label = item.text || "Note";
-  const box = labelBox(label, 22);
+  const box = labelBox(label, 18);
   return (
     <g {...common}>
       <rect
@@ -189,16 +263,20 @@ function renderAnnotation(item, { selected = false, onPointerDown } = {}) {
         width={box.width}
         height={box.height}
         rx="8"
-        fill="rgba(15, 23, 42, 0.9)"
+        fill="rgba(15, 23, 42, 0.8)"
       />
       <text
         x={item.x}
-        y={item.y}
+        y={item.y - box.height + 25}
         fill="white"
-        fontSize="22"
-        fontWeight="700"
+        fontSize="18"
+        fontWeight="200"
       >
-        {label}
+        {box.lines.map((line, index) => (
+          <tspan key={`${item.id}-line-${index}`} x={item.x} dy={index === 0 ? 0 : 23}>
+            {line}
+          </tspan>
+        ))}
       </text>
     </g>
   );
@@ -565,6 +643,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   const visibleAnnotations = annotations.filter((item) => visibleLayers[item.layer]);
+  const selectedLabelPosition = labelPosition(selected);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6">
@@ -728,31 +807,31 @@ export default function ProjectMarkupCanvas() {
         </Card>
 
         <Card className="overflow-hidden p-3 shadow-none">
-          <div className="mb-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-xs text-slate-500">
             <span>{plan?.title ? `Planner: ${plan.title}` : "Layer-ready project markup"}</span>
-            <span>{annotations.length} annotation{annotations.length === 1 ? "" : "s"}</span>
-          </div>
-          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-            <div className="absolute left-1/2 top-4 z-20 flex -translate-x-1/2 items-center rounded-2xl bg-neutral-900/95 p-2 shadow-2xl ring-1 ring-white/10 backdrop-blur">
-              <div className="flex items-center gap-2">
-                {TOOLS.map((item, index) => (
+            <div className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center rounded-xl bg-neutral-900/95 p-1.5 shadow-xl ring-1 ring-white/10 backdrop-blur">
+              <div className="flex items-center gap-1">
+                {TOOLS.map((item) => (
                   <button
                     key={item.key}
                     type="button"
                     onClick={() => setTool(item.key)}
                     title={item.label}
                     aria-label={item.label}
-                    className={`inline-flex h-12 w-12 items-center justify-center rounded-xl text-white transition ${
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
                       tool === item.key
                         ? "bg-blue-600 shadow-sm"
                         : "bg-transparent text-white/85 hover:bg-white/10 hover:text-white"
-                    } ${index === 0 ? "" : ""}`}
+                    }`}
                   >
-                    <SymbolIcon name={item.icon} className="text-[28px]" />
+                    <SymbolIcon name={item.icon} className="text-[22px]" />
                   </button>
                 ))}
               </div>
             </div>
+            <span>{annotations.length} annotation{annotations.length === 1 ? "" : "s"}</span>
+          </div>
+          <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
             <svg
               ref={svgRef}
               viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
@@ -816,11 +895,27 @@ export default function ProjectMarkupCanvas() {
                     fill="none"
                     stroke="#38bdf8"
                     strokeDasharray="10 8"
-                    strokeWidth="3"
+                    strokeWidth="2"
                   />
                 );
               })() : null}
             </svg>
+            {selectedLabelPosition && (selected.type === "text" || selected.type === "measure") ? (
+              <input
+                type="text"
+                value={selected.text || ""}
+                onChange={(event) => updateSelected({ text: event.target.value })}
+                className="absolute z-30 min-w-28 max-w-64 rounded-lg border border-white/20 bg-slate-950/80 px-2 py-1 text-center text-sm font-extralight text-white shadow-xl outline-none ring-2 ring-sky-300/70 placeholder:text-white/60"
+                placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
+                style={{
+                  left: `${(selectedLabelPosition.x / CANVAS_W) * 100}%`,
+                  top: `${(selectedLabelPosition.y / CANVAS_H) * 100}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              />
+            ) : null}
           </div>
         </Card>
       </div>
