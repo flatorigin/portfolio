@@ -47,6 +47,10 @@ function isPersistableUrl(value) {
   return !!value && !String(value).startsWith("blob:");
 }
 
+function normalizeMarkupText(value) {
+  return String(value || "").replace(/[ \t]+$/gm, "").replace(/\s+$/g, "");
+}
+
 function pointFromEvent(event, svg) {
   const rect = svg.getBoundingClientRect();
   const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
@@ -66,7 +70,7 @@ function annotationBounds(item) {
 }
 
 function wrappedTextLines(text) {
-  const paragraphs = String(text || "")
+  const paragraphs = normalizeMarkupText(text)
     .split("\n")
     .map((line) => line.trimEnd());
 
@@ -234,15 +238,14 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               fill="rgba(15, 23, 42, 0.8)"
             />
             <text
-              x={midX}
+              x={midX - box.width / 2 + 10}
               y={midY - box.height + 16}
-              textAnchor="middle"
               fill="white"
               fontSize="18"
               fontWeight="200"
             >
               {box.lines.map((line, index) => (
-                <tspan key={`${item.id}-line-${index}`} x={midX} dy={index === 0 ? 0 : 23}>
+                <tspan key={`${item.id}-line-${index}`} x={midX - box.width / 2 + 10} dy={index === 0 ? 0 : 23}>
                   {line}
                 </tspan>
               ))}
@@ -373,19 +376,28 @@ export default function ProjectMarkupCanvas() {
     return Array.isArray(markup.versions) ? markup.versions : [];
   }, [plan]);
 
-  function makeMarkupPayload(previousMarkup = {}) {
+  function makeMarkupPayload(previousMarkup = {}, versionOverrides = {}) {
     const now = new Date().toISOString();
     const background_url = isPersistableUrl(backgroundUrl) ? backgroundUrl : "";
     const existingVersions = Array.isArray(previousMarkup.versions)
       ? previousMarkup.versions
       : [];
+    const nextVersionNumber = existingVersions.length + 1;
+    const normalizedAnnotations = annotations.map((item) =>
+      item.type === "text" || item.type === "measure"
+        ? { ...item, text: normalizeMarkupText(item.text) }
+        : item,
+    );
     const version = {
       id: `version-${Date.now()}`,
+      name: versionOverrides.name || `Markup version ${nextVersionNumber}`,
       created_at: now,
       background_url,
-      annotations,
+      snapshot_url: versionOverrides.snapshot_url || "",
+      snapshot_image_id: versionOverrides.snapshot_image_id || null,
+      annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
-      annotation_count: annotations.length,
+      annotation_count: normalizedAnnotations.length,
     };
 
     return {
@@ -393,7 +405,7 @@ export default function ProjectMarkupCanvas() {
       canvas: { width: CANVAS_W, height: CANVAS_H },
       active_layer: activeLayer,
       background_url,
-      annotations,
+      annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
@@ -405,6 +417,16 @@ export default function ProjectMarkupCanvas() {
     setAnnotations((prev) =>
       prev.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)),
     );
+  }
+
+  async function patchMarkupData(nextMarkup, successMessage = "") {
+    if (!planId) return null;
+    const { data } = await api.patch(`/project-plans/${planId}/`, {
+      markup_data: nextMarkup,
+    });
+    setPlan(data);
+    if (successMessage) setMessage(successMessage);
+    return data;
   }
 
   function commitAnnotations(nextAnnotations) {
@@ -618,14 +640,16 @@ export default function ProjectMarkupCanvas() {
     setSaving(true);
     setMessage("");
     try {
-      await saveEditableCanvas({ quiet: true });
       const blob = await svgToPngBlob();
       const formData = new FormData();
       formData.append("images", new File([blob], `markup-${Date.now()}.png`, { type: "image/png" }));
       formData.append("captions", "Project markup canvas");
-      await api.post(`/project-plans/${planId}/images/`, formData, {
+      const { data: uploadedImages } = await api.post(`/project-plans/${planId}/images/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      const snapshotUrl = Array.isArray(uploadedImages) ? uploadedImages[0]?.image_url : "";
+      const snapshotImageId = Array.isArray(uploadedImages) ? uploadedImages[0]?.id : null;
+      await saveEditableCanvas({ quiet: true, versionSnapshotUrl: snapshotUrl, versionSnapshotImageId: snapshotImageId });
       setMessage("Editable markup and image snapshot saved to this project planner.");
       return true;
     } catch (err) {
@@ -665,7 +689,7 @@ export default function ProjectMarkupCanvas() {
     }
   }
 
-  async function saveEditableCanvas({ quiet = false } = {}) {
+  async function saveEditableCanvas({ quiet = false, versionSnapshotUrl = "", versionSnapshotImageId = null } = {}) {
     if (!planId) {
       setMessage("Open this canvas from a project planner to save editable layer data.");
       return null;
@@ -674,11 +698,11 @@ export default function ProjectMarkupCanvas() {
     if (!quiet) setMessage("");
     try {
       const previousMarkup = safeMarkupData(plan?.markup_data);
-      const markupData = makeMarkupPayload(previousMarkup);
-      const { data } = await api.patch(`/project-plans/${planId}/`, {
-        markup_data: markupData,
+      const markupData = makeMarkupPayload(previousMarkup, {
+        snapshot_url: versionSnapshotUrl,
+        snapshot_image_id: versionSnapshotImageId,
       });
-      setPlan(data);
+      const data = await patchMarkupData(markupData);
       if (!quiet) {
         setMessage(
           backgroundUrl?.startsWith("blob:")
@@ -708,7 +732,53 @@ export default function ProjectMarkupCanvas() {
     setMessage("Version restored locally. Save editable canvas to keep it as the current version.");
   }
 
+  async function renameVersion(versionId, name) {
+    if (!planId || !versionId) return;
+    const markup = safeMarkupData(plan?.markup_data);
+    const versions = Array.isArray(markup.versions) ? markup.versions : [];
+    const nextMarkup = {
+      ...markup,
+      versions: versions.map((version) =>
+        version.id === versionId
+          ? { ...version, name: normalizeMarkupText(name) || "Untitled markup" }
+          : version,
+      ),
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      await patchMarkupData(nextMarkup);
+    } catch (err) {
+      setMessage(normalizeError(err, "Could not rename this version."));
+    }
+  }
+
+  async function deleteVersion(versionId) {
+    if (!planId || !versionId) return;
+    if (!window.confirm("Delete this saved markup version?")) return;
+    const markup = safeMarkupData(plan?.markup_data);
+    const versions = Array.isArray(markup.versions) ? markup.versions : [];
+    const versionToDelete = versions.find((version) => version.id === versionId);
+    const nextMarkup = {
+      ...markup,
+      versions: versions.filter((version) => version.id !== versionId),
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      if (versionToDelete?.snapshot_image_id) {
+        await api.delete(`/project-plans/${planId}/images/${versionToDelete.snapshot_image_id}/`);
+      }
+      await patchMarkupData(nextMarkup, "Saved markup version deleted.");
+    } catch (err) {
+      setMessage(normalizeError(err, "Could not delete this version."));
+    }
+  }
+
   const visibleAnnotations = annotations.filter((item) => visibleLayers[item.layer]);
+  const layeredAnnotations = [
+    ...visibleAnnotations.filter((item) => item.type !== "text" && item.type !== "measure"),
+    ...visibleAnnotations.filter((item) => item.type === "measure"),
+    ...visibleAnnotations.filter((item) => item.type === "text"),
+  ];
   const selectedLabelPosition = labelPosition(selected);
   const selectedDisplayBounds = selected ? displayBounds(selected) : null;
   const selectedDeletePosition = selectedDisplayBounds
@@ -922,25 +992,61 @@ export default function ProjectMarkupCanvas() {
                   <div className="text-sm font-semibold text-slate-950">Versions</div>
                   <div className="text-sm font-semibold text-slate-950">{savedVersions.length}</div>
                 </div>
-                <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
-                  {savedVersions.map((version, index) => (
-                    <button
-                      key={version.id || `version-${index}`}
-                      type="button"
-                      onClick={() => restoreVersion(version)}
-                      className="w-full rounded-xl border border-slate-200 p-3 text-left text-xs text-slate-600 hover:bg-slate-50"
-                    >
-                      <div className="font-semibold text-slate-900">
-                        Version {savedVersions.length - index}
+                <div className="mt-3 max-h-96 space-y-3 overflow-y-auto pr-1">
+                  {savedVersions.map((version, index) => {
+                    const previewUrl = version.snapshot_url || version.background_url || "";
+                    const versionName = version.name || `Markup version ${savedVersions.length - index}`;
+                    return (
+                      <div
+                        key={version.id || `version-${index}`}
+                        className="rounded-xl border border-slate-200 p-3 text-xs text-slate-600"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => restoreVersion(version)}
+                          className="group relative block w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left hover:border-slate-300"
+                        >
+                          {previewUrl ? (
+                            <img
+                              src={previewUrl}
+                              alt=""
+                              className="h-24 w-full object-cover"
+                              onError={(event) => {
+                                event.currentTarget.style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-16 items-center px-3 text-xs text-slate-500">
+                              Save with image snapshot to create a preview.
+                            </div>
+                          )}
+                          <span className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/85 text-white shadow-sm">
+                            <SymbolIcon name="edit_note" className="text-[16px]" />
+                          </span>
+                        </button>
+                        <input
+                          defaultValue={versionName}
+                          onBlur={(event) => renameVersion(version.id, event.target.value)}
+                          className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 outline-none focus:border-slate-400"
+                          aria-label="Version name"
+                        />
+                        <div className="mt-1">
+                          {version.annotation_count ?? 0} markups
+                        </div>
+                        <div className="mt-1 text-slate-400">
+                          {version.created_at ? new Date(version.created_at).toLocaleString() : "Saved version"}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteVersion(version.id)}
+                          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white text-xs font-medium text-rose-700 hover:bg-rose-50"
+                        >
+                          <SymbolIcon name="delete" className="text-[16px]" />
+                          Delete version
+                        </button>
                       </div>
-                      <div className="mt-1">
-                        {version.annotation_count ?? 0} markups
-                      </div>
-                      <div className="mt-1 text-slate-400">
-                        {version.created_at ? new Date(version.created_at).toLocaleString() : "Saved version"}
-                      </div>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             ) : null}
@@ -1053,7 +1159,7 @@ export default function ProjectMarkupCanvas() {
               )}
               <rect width={CANVAS_W} height={CANVAS_H} fill="url(#grid)" opacity="0.22" />
 
-              {visibleAnnotations.map((item) =>
+              {layeredAnnotations.map((item) =>
                 renderAnnotation(item, {
                   selected: item.id === selectedId,
                   editing: item.id === editingTextId,
@@ -1111,7 +1217,7 @@ export default function ProjectMarkupCanvas() {
                   value={selected.text || ""}
                   onChange={(event) => updateSelected({ text: event.target.value })}
                   rows={selected.type === "text" ? 3 : 1}
-                  className="absolute z-30 min-h-9 w-48 resize rounded-lg border border-white/20 bg-slate-950/80 px-2 py-1 text-center text-sm font-extralight leading-snug text-white shadow-xl outline-none placeholder:text-white/60"
+                  className="absolute z-30 min-h-9 w-48 resize rounded-lg border border-white/20 bg-slate-950/80 px-2 py-1 text-left text-sm font-extralight leading-snug text-white shadow-xl outline-none placeholder:text-white/60"
                   placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
                   style={{
                     left: `${(selectedLabelPosition.x / CANVAS_W) * 100}%`,
@@ -1122,7 +1228,10 @@ export default function ProjectMarkupCanvas() {
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
-                  onBlur={() => setEditingTextId("")}
+                  onBlur={(event) => {
+                    updateSelected({ text: normalizeMarkupText(event.target.value) });
+                    setEditingTextId("");
+                  }}
                 />
               ) : null}
             </div>
