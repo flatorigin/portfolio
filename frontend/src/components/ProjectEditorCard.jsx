@@ -777,16 +777,12 @@ export default function ProjectEditorCard({
             )}
           </div>
 
-          <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-slate-800">Add Media</div>
-            <div className="mb-2 text-xs text-slate-600">Drag & drop or click; add captions; upload.</div>
-            <ImageUploader
-              projectId={projectId}
-              onUploaded={async () => {
-                if (onAfterUpload) await onAfterUpload();
-              }}
-            />
-          </div>
+          <ImageUploader
+            projectId={projectId}
+            onUploaded={async () => {
+              if (onAfterUpload) await onAfterUpload();
+            }}
+          />
         </>
       )}
 

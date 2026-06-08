@@ -586,9 +586,6 @@ export default function Dashboard() {
 
   // ---- Job posts for current user (job postings only) ----
   const [myJobPosts, setMyJobPosts] = useState([]);
-  const [referenceGallery, setReferenceGallery] = useState([]);
-  const [referenceGalleryBusy, setReferenceGalleryBusy] = useState(false);
-  const referenceUploadRef = useRef(null);
 
   const refreshMyBids = useCallback(async () => {
     try {
@@ -674,23 +671,6 @@ export default function Dashboard() {
   useEffect(() => {
     refreshMyBids();
   }, [refreshMyBids]);
-
-  const refreshReferenceGallery = useCallback(async () => {
-    try {
-      const { data } = await api.get("/users/me/reference-gallery/");
-      if (isMountedRef.current) {
-        setReferenceGallery(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.warn("[Dashboard] failed to load reference gallery", err?.response || err);
-      if (isMountedRef.current) setReferenceGallery([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (meUser?.profile_type !== "homeowner") return;
-    refreshReferenceGallery();
-  }, [meUser?.profile_type, refreshReferenceGallery]);
 
   const list = projects;
 
@@ -1068,92 +1048,6 @@ export default function Dashboard() {
     : "Add Project";
   const primaryProjectIcon = isHomeownerAccount ? "post_add" : "add_home_work";
   const primaryProjectButtonIcon = isHomeownerAccount ? "add" : "add_home_work";
-
-  async function handleReferenceUpload(files) {
-    const list = Array.from(files || []).filter(Boolean);
-    if (!list.length) return;
-    setReferenceGalleryBusy(true);
-    try {
-      for (const file of list) {
-        const fd = new FormData();
-        fd.append("image", file);
-        fd.append("caption", "");
-        await api.post("/users/me/reference-gallery/", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-      }
-      await refreshReferenceGallery();
-    } catch (err) {
-      const data = err?.response?.data;
-      alert(
-        data?.detail ||
-          data?.message ||
-          (data ? JSON.stringify(data) : "") ||
-          err?.message ||
-          "Failed to upload reference images."
-      );
-    } finally {
-      if (referenceUploadRef.current) referenceUploadRef.current.value = "";
-      if (isMountedRef.current) setReferenceGalleryBusy(false);
-    }
-  }
-
-  async function saveReferenceCaption(item) {
-    if (!item?.id) return;
-    try {
-      await api.patch(`/users/me/reference-gallery/${item.id}/`, {
-        caption: item._localCaption ?? item.caption ?? "",
-      });
-      await refreshReferenceGallery();
-    } catch (err) {
-      const data = err?.response?.data;
-      alert(
-        data?.detail ||
-          data?.message ||
-          (data ? JSON.stringify(data) : "") ||
-          err?.message ||
-          "Failed to save caption."
-      );
-    }
-  }
-
-  async function deleteReferenceItem(itemId) {
-    if (!itemId) return;
-    if (!window.confirm("Delete this reference image?")) return;
-    try {
-      await api.delete(`/users/me/reference-gallery/${itemId}/`);
-      await refreshReferenceGallery();
-    } catch (err) {
-      const data = err?.response?.data;
-      alert(
-        data?.detail ||
-          data?.message ||
-          (data ? JSON.stringify(data) : "") ||
-          err?.message ||
-          "Failed to delete reference image."
-      );
-    }
-  }
-
-  async function toggleHomeownerPublicProfile() {
-    try {
-      const { data } = await api.patch("/users/me/", {
-        public_profile_enabled: !meUser?.public_profile_enabled,
-      });
-      if (isMountedRef.current) {
-        setMeUser((prev) => ({ ...prev, ...data }));
-      }
-    } catch (err) {
-      const data = err?.response?.data;
-      alert(
-        data?.detail ||
-          data?.message ||
-          (data ? JSON.stringify(data) : "") ||
-          err?.message ||
-          "Failed to update public profile setting."
-      );
-    }
-  }
 
   return (
     <div className="space-y-5">
@@ -1679,159 +1573,6 @@ export default function Dashboard() {
         })()
       ) : null}
 
-      {isHomeownerAccount ? (
-      <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">Your Reference Gallery</div>
-            <div className="text-xs text-slate-500">
-              Upload sample inspiration to show the style and quality you want. These images can appear on your public profile when you choose to make it visible.
-            </div>
-          </div>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">{referenceGallery.length} images</span>
-        </div>
-
-        <div
-          className={
-            "mb-4 rounded-xl border px-4 py-4 transition " +
-            (meUser?.public_profile_enabled
-              ? "border-emerald-200 bg-emerald-50/60"
-              : "border-slate-100 bg-slate-50/60")
-          }
-        >
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            
-            {/* Left content */}
-            <div>
-              <div className="text-sm font-semibold text-slate-900">
-                Homeowner public profile
-              </div>
-              <div className="mt-1 text-xs text-slate-600">
-                Keep this off to stay private unless a public job post is live. Turn it on when you want your reference gallery and contact page discoverable from your own profile link.
-              </div>
-            </div>
-
-            {/* Right toggle */}
-            <div className="flex items-center gap-3">
-              
-              <button
-                type="button"
-                onClick={toggleHomeownerPublicProfile}
-                aria-pressed={!!meUser?.public_profile_enabled}
-                aria-label="Toggle public profile"
-                className={
-                  "relative inline-flex h-5 w-10 items-center rounded-full border transition focus:outline-none focus:ring-1 focus:ring-slate-300 focus:ring-offset-1 " +
-                  (meUser?.public_profile_enabled
-                    ? "border-emerald-500 bg-emerald-500 justify-end"
-                    : "border-slate-300 bg-slate-300 justify-start")
-                }
-              >
-                <span
-                  className={
-                    "mx-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[8px] font-semibold transition " +
-                    (meUser?.public_profile_enabled ? "text-emerald-600" : "text-slate-500")
-                  }
-                >
-                  {meUser?.public_profile_enabled ? "ON" : "OFF"}
-                </span>
-              </button>
-
-              <div className="text-xs font-semibold text-slate-900">
-                Public
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        <input
-          ref={referenceUploadRef}
-          type="file"
-          multiple
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => handleReferenceUpload(e.target.files)}
-        />
-
-        {referenceGallery.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => referenceUploadRef.current?.click()}
-            className="flex min-h-[240px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-slate-400 hover:bg-white"
-          >
-            <SymbolIcon name="add_photo_alternate" className="mb-4 text-[42px] text-slate-400" />
-            <div className="text-base font-semibold text-slate-900">Add sample images</div>
-            <div className="mt-2 max-w-lg text-sm text-slate-600">
-              Show examples of the style and quality you’re looking for. These are reference images, not completed contractor projects.
-            </div>
-            <div className="mt-5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-              {referenceGalleryBusy ? "Uploading..." : "Upload references"}
-            </div>
-          </button>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => referenceUploadRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-              >
-                <SymbolIcon name="add_photo_alternate" className="text-[18px]" />
-                {referenceGalleryBusy ? "Uploading..." : "Add photos"}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {referenceGallery.map((item) => {
-                const imageSrc = toUrl(item.image_url || item.image || "");
-                return (
-                  <div key={item.id} className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
-                    <div className="h-36 bg-slate-100">
-                      {imageSrc ? (
-                        <img src={imageSrc} alt={item.caption || "Reference image"} className="h-full w-full object-cover" />
-                      ) : null}
-                    </div>
-                    <div className="space-y-3 p-4">
-                      <input
-                        type="text"
-                        value={item._localCaption ?? item.caption ?? ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setReferenceGallery((prev) =>
-                            prev.map((entry) =>
-                              entry.id === item.id ? { ...entry, _localCaption: value } : entry
-                            )
-                          );
-                        }}
-                        onBlur={() => saveReferenceCaption(item)}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-300 focus:outline-none"
-                        placeholder="Short caption or style note (optional)"
-                      />
-                      <div className="flex justify-between gap-2">
-                        <button
-                          type="button"
-                          className="flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                          onClick={() => window.open(`/profiles/${meUser.username}`, "_self")}
-                        >
-                          View profile
-                        </button>
-                        <button
-                          type="button"
-                          className="flex h-9 w-full items-center justify-center rounded-xl bg-rose-600 text-sm font-medium text-white transition hover:bg-rose-700"
-                          onClick={() => deleteReferenceItem(item.id)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-      ) : (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-900">Your Projects</div>
@@ -1945,7 +1686,6 @@ export default function Dashboard() {
           </div>
         )}
       </div>
-      )}
 
       {!isHomeownerAccount ? (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
