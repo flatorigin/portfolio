@@ -12,8 +12,10 @@ const TOOLS = [
   { key: "measure", label: "Measure", icon: "straighten" },
   { key: "rect", label: "Box", icon: "crop_square" },
   { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
+  { key: "freehand", label: "Freehand", icon: "draw" },
   { key: "text", label: "Text", icon: "title" },
   { key: "circle", label: "Circle", icon: "radio_button_unchecked" },
+  { key: "priority", label: "Priority", icon: "looks_one" },
 ];
 
 const LAYERS = [
@@ -51,6 +53,41 @@ function normalizeMarkupText(value) {
   return String(value || "").replace(/[ \t]+$/gm, "").replace(/\s+$/g, "");
 }
 
+function hexToRgba(hex, alpha = 1) {
+  const normalized = String(hex || "#0f172a").replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return `rgba(15, 23, 42, ${alpha})`;
+  const value = parseInt(normalized, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function styleFor(item) {
+  const strokeColor = item.strokeColor || item.color || "#0f172a";
+  const fillColor = item.fillColor || item.color || strokeColor;
+  const strokeStyle = item.strokeStyle === "dashed" ? "dashed" : "solid";
+  return {
+    strokeColor,
+    fillColor,
+    fill: hexToRgba(fillColor, 0.3),
+    strokeDasharray: strokeStyle === "dashed" ? "12 8" : undefined,
+  };
+}
+
+function markerIdForColor(color) {
+  return `arrow-${String(color || "#0f172a").replace(/[^a-z0-9]/gi, "")}`;
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("Could not read image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function pointFromEvent(event, svg) {
   const rect = svg.getBoundingClientRect();
   const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
@@ -62,6 +99,25 @@ function pointFromEvent(event, svg) {
 }
 
 function annotationBounds(item) {
+  if (item.type === "freehand" && Array.isArray(item.points) && item.points.length) {
+    const xs = item.points.map((point) => point.x);
+    const ys = item.points.map((point) => point.y);
+    return {
+      x1: Math.min(...xs),
+      y1: Math.min(...ys),
+      x2: Math.max(...xs),
+      y2: Math.max(...ys),
+    };
+  }
+  if (item.type === "priority") {
+    const radius = 26;
+    return {
+      x1: (item.x || 0) - radius,
+      y1: (item.y || 0) - radius,
+      x2: (item.x || 0) + radius,
+      y2: (item.y || 0) + radius,
+    };
+  }
   const x1 = Math.min(item.x, item.x2 ?? item.x);
   const y1 = Math.min(item.y, item.y2 ?? item.y);
   const x2 = Math.max(item.x, item.x2 ?? item.x);
@@ -138,7 +194,8 @@ function labelPosition(item) {
 }
 
 function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onDoubleClick } = {}) {
-  const stroke = item.color || "#0f172a";
+  const style = styleFor(item);
+  const stroke = style.strokeColor;
   const common = {
     key: item.id,
     onPointerDown,
@@ -156,9 +213,10 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           width={Math.max(1, x2 - x1)}
           height={Math.max(1, y2 - y1)}
           rx="10"
-          fill="rgba(255,255,255,0.08)"
+          fill={style.fill}
           stroke={stroke}
           strokeWidth="2"
+          strokeDasharray={style.strokeDasharray}
         />
       </g>
     );
@@ -175,15 +233,62 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         cy={cy}
         rx={Math.max(10, Math.abs(x2 - x1) / 2)}
         ry={Math.max(10, Math.abs(y2 - y1) / 2)}
-        fill="rgba(255,255,255,0.08)"
+        fill={style.fill}
         stroke={stroke}
         strokeWidth="2"
+        strokeDasharray={style.strokeDasharray}
       />
     );
   }
 
+  if (item.type === "freehand") {
+    const points = Array.isArray(item.points) ? item.points : [];
+    const d = points
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+      .join(" ");
+    return (
+      <path
+        {...common}
+        d={d}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray={style.strokeDasharray}
+      />
+    );
+  }
+
+  if (item.type === "priority") {
+    const radius = 26;
+    return (
+      <g {...common}>
+        <circle
+          cx={item.x}
+          cy={item.y}
+          r={radius}
+          fill={style.fill}
+          stroke={stroke}
+          strokeWidth="2"
+          strokeDasharray={style.strokeDasharray}
+        />
+        <text
+          x={item.x}
+          y={item.y + 7}
+          textAnchor="middle"
+          fill={stroke}
+          fontSize="24"
+          fontWeight="700"
+        >
+          {item.priorityNumber || 1}
+        </text>
+      </g>
+    );
+  }
+
   if (item.type === "arrow" || item.type === "measure") {
-    const marker = item.type === "arrow" ? `url(#arrow-${item.layer})` : undefined;
+    const marker = item.type === "arrow" ? `url(#${markerIdForColor(stroke)})` : undefined;
     const midX = ((item.x || 0) + (item.x2 || 0)) / 2;
     const midY = ((item.y || 0) + (item.y2 || 0)) / 2;
     const dx = (item.x2 || 0) - (item.x || 0);
@@ -204,6 +309,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           strokeWidth="2"
           strokeLinecap="round"
           markerEnd={marker}
+          strokeDasharray={style.strokeDasharray}
         />
         {item.type === "measure" ? (
           <>
@@ -215,6 +321,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               stroke={stroke}
               strokeWidth="2"
               strokeLinecap="square"
+              strokeDasharray={style.strokeDasharray}
             />
             <line
               x1={(item.x2 || 0) - capX}
@@ -224,6 +331,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               stroke={stroke}
               strokeWidth="2"
               strokeLinecap="square"
+              strokeDasharray={style.strokeDasharray}
             />
           </>
         ) : null}
@@ -235,12 +343,14 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               width={box.width}
               height={box.height}
               rx="8"
-              fill="rgba(15, 23, 42, 0.8)"
+              fill={style.fill}
+              stroke={stroke}
+              strokeWidth="2"
             />
             <text
               x={midX - box.width / 2 + 10}
               y={midY - box.height + 16}
-              fill="white"
+              fill={stroke}
               fontSize="18"
               fontWeight="200"
             >
@@ -276,12 +386,15 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         width={box.width}
         height={box.height}
         rx="8"
-        fill="rgba(15, 23, 42, 0.8)"
+        fill={style.fill}
+        stroke={stroke}
+        strokeWidth="2"
+        strokeDasharray={style.strokeDasharray}
       />
       <text
         x={item.x}
         y={item.y - box.height + 25}
-        fill="white"
+        fill={stroke}
         fontSize="18"
         fontWeight="200"
       >
@@ -500,6 +613,8 @@ export default function ProjectMarkupCanvas() {
     }
 
     const id = `mark-${Date.now()}`;
+    const nextPriorityNumber =
+      annotations.filter((item) => item.type === "priority").length + 1;
     const base = {
       id,
       layer: activeLayer,
@@ -509,13 +624,18 @@ export default function ProjectMarkupCanvas() {
       x2: point.x,
       y2: point.y,
       color,
+      strokeColor: color,
+      fillColor: color,
+      strokeStyle: "solid",
+      points: tool === "freehand" ? [point] : undefined,
+      priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
     };
 
     commitAnnotations([...annotations, base]);
     setSelectedId(id);
     setEditingTextId(tool === "text" ? id : "");
-    if (tool === "text") return;
+    if (tool === "text" || tool === "priority") return;
     setDraft(id);
   }
 
@@ -525,7 +645,13 @@ export default function ProjectMarkupCanvas() {
 
     if (draft) {
       setAnnotations((prev) =>
-        prev.map((item) => (item.id === draft ? { ...item, x2: point.x, y2: point.y } : item)),
+        prev.map((item) =>
+          item.id === draft
+            ? item.type === "freehand"
+              ? { ...item, points: [...(item.points || []), point], x2: point.x, y2: point.y }
+              : { ...item, x2: point.x, y2: point.y }
+            : item,
+        ),
       );
       return;
     }
@@ -542,6 +668,12 @@ export default function ProjectMarkupCanvas() {
                 y: drag.item.y + dy,
                 x2: item.x2 == null ? item.x2 : drag.item.x2 + dx,
                 y2: item.y2 == null ? item.y2 : drag.item.y2 + dy,
+                points: Array.isArray(drag.item.points)
+                  ? drag.item.points.map((pointItem) => ({
+                      x: pointItem.x + dx,
+                      y: pointItem.y + dy,
+                    }))
+                  : item.points,
               }
             : item,
         ),
@@ -595,6 +727,36 @@ export default function ProjectMarkupCanvas() {
     return new XMLSerializer().serializeToString(clone);
   }
 
+  async function makeSvgStringForPng() {
+    const clone = svgRef.current?.cloneNode(true);
+    if (!clone) return "";
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    clone.querySelectorAll(".editing-only").forEach((node) => node.remove());
+
+    const imageNodes = Array.from(clone.querySelectorAll("image"));
+    await Promise.all(
+      imageNodes.map(async (node) => {
+        const href =
+          node.getAttribute("href") ||
+          node.getAttribute("xlink:href") ||
+          node.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+        if (!href || href.startsWith("data:")) return;
+        try {
+          const response = await fetch(href, { credentials: "include" });
+          if (!response.ok) return;
+          const dataUrl = await blobToDataUrl(await response.blob());
+          node.setAttribute("href", dataUrl);
+          node.setAttributeNS("http://www.w3.org/1999/xlink", "href", dataUrl);
+        } catch {
+          // If inlining fails, keep the original href so SVG export still behaves normally.
+        }
+      }),
+    );
+
+    return new XMLSerializer().serializeToString(clone);
+  }
+
   function downloadSvg() {
     const svg = makeSvgString();
     if (!svg) return;
@@ -622,7 +784,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   async function svgToPngBlob() {
-    const svg = makeSvgString();
+    const svg = await makeSvgStringForPng();
     if (!svg) throw new Error("Canvas is not ready.");
     const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
     try {
@@ -811,6 +973,7 @@ export default function ProjectMarkupCanvas() {
   const sidebarTextEditorActive =
     !!selected && (editingTextId === selected.id || focusedSidebarInputId === selected.id);
   const selectedTextBox = selected ? labelBox(selected.text || (selected.type === "measure" ? "measurement" : "Note"), 18) : null;
+  const selectedStyle = selected ? styleFor(selected) : null;
 
   return (
     <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50">
@@ -1016,21 +1179,82 @@ export default function ProjectMarkupCanvas() {
                       </span>
                     </label>
                   ) : null}
-                  <div className="mb-2 text-xs text-slate-500">Color</div>
-                  <div className="flex flex-wrap gap-2">
+                  {selected.type === "priority" ? (
+                    <label className="mb-4 block">
+                      <span className="mb-2 block text-xs font-medium text-slate-500">
+                        Priority number
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={selected.priorityNumber || 1}
+                        onChange={(event) =>
+                          updateSelected({
+                            priorityNumber: Math.max(1, Number(event.target.value) || 1),
+                          })
+                        }
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                      />
+                    </label>
+                  ) : null}
+
+                  <div className="mb-2 text-xs font-medium text-slate-500">Stroke color</div>
+                  <div className="mb-4 flex flex-wrap gap-2">
                     {MARKUP_COLORS.map((itemColor) => (
                       <button
-                        key={itemColor}
+                        key={`stroke-${itemColor}`}
                         type="button"
-                        onClick={() => updateSelected({ color: itemColor })}
-                        aria-label={`Set color ${itemColor}`}
+                        onClick={() =>
+                          updateSelected({
+                            color: itemColor,
+                            strokeColor: itemColor,
+                          })
+                        }
+                        aria-label={`Set stroke color ${itemColor}`}
                         className={`h-7 w-7 rounded-full border transition ${
-                          (selected.color || "#0f172a") === itemColor
-                            ? "border-slate-950 ring-2 ring-slate-900/20"
+                          selectedStyle?.strokeColor === itemColor
+                            ? "border-slate-950 ring-2 ring-slate-900/25"
                             : "border-white ring-1 ring-slate-300 hover:scale-105"
                         }`}
                         style={{ backgroundColor: itemColor }}
                       />
+                    ))}
+                  </div>
+
+                  <div className="mb-2 text-xs font-medium text-slate-500">Fill color</div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {MARKUP_COLORS.map((itemColor) => (
+                      <button
+                        key={`fill-${itemColor}`}
+                        type="button"
+                        onClick={() => updateSelected({ fillColor: itemColor })}
+                        aria-label={`Set fill color ${itemColor}`}
+                        className={`h-7 w-7 rounded-full border transition ${
+                          selectedStyle?.fillColor === itemColor
+                            ? "border-slate-950 ring-2 ring-slate-900/25"
+                            : "border-white ring-1 ring-slate-300 hover:scale-105"
+                        }`}
+                        style={{ backgroundColor: hexToRgba(itemColor, 0.3) }}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="mb-2 text-xs font-medium text-slate-500">Stroke format</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["solid", "dashed"].map((itemStyle) => (
+                      <button
+                        key={itemStyle}
+                        type="button"
+                        onClick={() => updateSelected({ strokeStyle: itemStyle })}
+                        className={
+                          "h-9 rounded-xl border px-3 text-sm capitalize transition " +
+                          ((selected.strokeStyle || "solid") === itemStyle
+                            ? "border-slate-950 bg-slate-950 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
+                        }
+                      >
+                        {itemStyle}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1176,10 +1400,10 @@ export default function ProjectMarkupCanvas() {
                 onPointerLeave={stopPointer}
               >
               <defs>
-                {LAYERS.map((layer) => (
+                {MARKUP_COLORS.map((itemColor) => (
                   <marker
-                    key={layer.key}
-                    id={`arrow-${layer.key}`}
+                    key={itemColor}
+                    id={markerIdForColor(itemColor)}
                     markerWidth="12"
                     markerHeight="12"
                     refX="10"
@@ -1187,7 +1411,7 @@ export default function ProjectMarkupCanvas() {
                     orient="auto"
                     markerUnits="strokeWidth"
                   >
-                    <path d="M2,2 L10,6 L2,10 Z" fill={layer.color} />
+                    <path d="M2,2 L10,6 L2,10 Z" fill={itemColor} />
                   </marker>
                 ))}
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
