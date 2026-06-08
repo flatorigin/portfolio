@@ -97,6 +97,11 @@ export default function ProjectPlanDetail() {
   }, [planId]);
 
   const aiDisabled = useMemo(() => Number(plan?.ai_remaining_today ?? 0) <= 0, [plan]);
+  const contractorTypeOptions = useMemo(() => {
+    const selectedTypes = Array.isArray(plan?.contractor_types) ? plan.contractor_types : [];
+    const customTypes = selectedTypes.filter((item) => !CONTRACTOR_SUGGESTIONS.includes(item));
+    return [...customTypes, ...CONTRACTOR_SUGGESTIONS];
+  }, [plan?.contractor_types]);
 
   function updateField(name, value) {
     setPlan((prev) => ({ ...prev, [name]: value }));
@@ -134,9 +139,8 @@ export default function ProjectPlanDetail() {
   function addCustomContractorType() {
     const value = customContractor.trim().toLowerCase();
     if (!value) return;
-    if (!(plan?.contractor_types || []).includes(value)) {
-      updateField("contractor_types", [...(plan?.contractor_types || []), value]);
-    }
+    const current = Array.isArray(plan?.contractor_types) ? plan.contractor_types : [];
+    updateField("contractor_types", [value, ...current.filter((item) => item !== value)]);
     setCustomContractor("");
   }
 
@@ -510,7 +514,7 @@ export default function ProjectPlanDetail() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {CONTRACTOR_SUGGESTIONS.map((item) => {
+          {contractorTypeOptions.map((item) => {
             const active = (plan.contractor_types || []).includes(item);
             return (
               <button

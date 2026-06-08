@@ -606,7 +606,16 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(draft.owner_id, self.homeowner.id)
         self.assertEqual(plan.status, ProjectPlan.STATUS_CONVERTED)
         self.assertEqual(plan.converted_job_post_id, draft.id)
+        self.assertEqual(draft.title, "Rotten porch board")
+        self.assertEqual(draft.category, "Front porch")
+        self.assertEqual(draft.location, "Front porch")
+        self.assertEqual(draft.job_summary, "Board near the front steps is soft.")
+        self.assertIn("Need someone to inspect", draft.summary)
         self.assertEqual(draft.service_categories, ["carpenter"])
+        copied_image = draft.images.get()
+        self.assertEqual(copied_image.caption, "Close up")
+        self.assertEqual(copied_image.extra_data["source"], "project_planner")
+        self.assertEqual(copied_image.extra_data["source_plan_id"], plan.id)
 
     @patch("portfolio.views.generate_text")
     def test_planner_ai_action_uses_shared_quota(self, mock_generate_text):

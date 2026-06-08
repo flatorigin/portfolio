@@ -879,6 +879,17 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             }
         )
 
+    def _clean_string_list(self, values):
+        cleaned = []
+        seen = set()
+        for value in values or []:
+            text = str(value or "").strip()
+            key = text.lower()
+            if text and key not in seen:
+                cleaned.append(text)
+                seen.add(key)
+        return cleaned
+
     def _build_draft_payload(self, plan, ai_payload=None):
         selected_option = None
         for option in plan.options or []:
@@ -889,14 +900,20 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         title = (ai_payload or {}).get("title") or plan.title or "Project draft"
         summary = (ai_payload or {}).get("summary") or plan.issue_summary or plan.notes[:400]
         scope_of_work = (ai_payload or {}).get("scope_of_work") or plan.notes
-        preferred_types = (ai_payload or {}).get("preferred_contractor_types") or plan.contractor_types or plan.ai_suggested_contractor_types
+        preferred_types = self._clean_string_list(
+            (ai_payload or {}).get("preferred_contractor_types")
+            or plan.contractor_types
+            or plan.ai_suggested_contractor_types
+        )
         material_preference = (ai_payload or {}).get("material_preference") or ""
         urgency = (ai_payload or {}).get("urgency_timing") or ""
         location_context = (ai_payload or {}).get("location_context") or plan.house_location
         link_urls = [item.get("url") for item in (plan.links or []) if isinstance(item, dict) and item.get("url")]
         budget_value = plan.budget_max or plan.budget_min
+        project_area = str(plan.house_location or "").strip()
+        project_summary = str(summary or "").strip()
 
-        summary_parts = [summary.strip()]
+        summary_parts = [project_summary]
         if scope_of_work:
             summary_parts.append(f"Scope of work: {scope_of_work.strip()}")
         if selected_option and selected_option.get("title"):
@@ -911,10 +928,11 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         return {
             "title": str(title).strip() or "Project draft",
             "summary": "\n\n".join([part for part in summary_parts if part]),
-            "job_summary": str(summary).strip(),
-            "location": (plan.house_location or "")[:140],
+            "job_summary": project_summary,
+            "category": project_area[:100],
+            "location": project_area[:140],
             "budget": budget_value,
-            "service_categories": [str(item).strip() for item in (preferred_types or []) if str(item).strip()],
+            "service_categories": preferred_types,
             "extra_links": link_urls,
             "highlights": ", ".join(
                 [
@@ -1008,6 +1026,14 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                         project=draft,
                         caption=image.caption,
                         order=image.order,
+                        media_type=ProjectImage.MEDIA_TYPE_IMAGE,
+                        processing_status=ProjectImage.STATUS_READY,
+                        extra_data={
+                            "source": "project_planner",
+                            "source_plan_id": plan.id,
+                            "source_plan_image_id": image.id,
+                            "is_markup_snapshot": image.caption == "Project markup canvas",
+                        },
                     )
                 )
                 copied_images[-1].image.save(
