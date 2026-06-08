@@ -97,6 +97,9 @@ export default function ProjectPrintView() {
   const serviceCategoryList = Array.isArray(project?.service_categories)
     ? project.service_categories.filter((item) => String(item || "").trim())
     : [];
+  const jobSummaryText = (project?.job_summary || project?.summary || "").trim();
+  const projectRequirementsText =
+    project?.summary && project.summary.trim() !== jobSummaryText ? project.summary.trim() : "";
 
   if (loading) {
     return <div className="min-h-screen bg-[#FBF9F7] px-4 py-10 text-sm text-slate-500">Loading…</div>;
@@ -174,6 +177,7 @@ export default function ProjectPrintView() {
             {(serviceCategoryList.length > 0 ||
               project.required_expertise ||
               project.highlights ||
+              projectRequirementsText ||
               project.larger_project_details) && (
               <section className="space-y-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Requirements</div>
@@ -200,6 +204,14 @@ export default function ProjectPrintView() {
                   {project.highlights ? (
                     <div>
                       <span className="font-semibold text-slate-900">Highlights:</span> {project.highlights}
+                    </div>
+                  ) : null}
+                  {projectRequirementsText ? (
+                    <div>
+                      <div className="font-semibold text-slate-900">Project requirements:</div>
+                      <p className="mt-1 whitespace-pre-line leading-6 text-slate-700">
+                        {projectRequirementsText}
+                      </p>
                     </div>
                   ) : null}
                   {project.larger_project_details ? (

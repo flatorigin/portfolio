@@ -290,6 +290,8 @@ export default function ProjectDetail() {
       ? `${window.location.origin}/projects/${project.id}`
       : "";
   const jobSummaryText = (project?.job_summary || project?.summary || "").trim();
+  const projectRequirementsText =
+    project?.summary && project.summary.trim() !== jobSummaryText ? project.summary.trim() : "";
   const serviceCategoryList = Array.isArray(project?.service_categories)
     ? project.service_categories.filter((item) => String(item || "").trim())
     : [];
@@ -2029,6 +2031,7 @@ export default function ProjectDetail() {
               {(serviceCategoryList.length > 0 ||
                 project?.required_expertise ||
                 project?.highlights ||
+                projectRequirementsText ||
                 project?.larger_project_details) ? (
                 <div className="mt-6 border-t border-slate-200 pt-5">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -2058,6 +2061,18 @@ export default function ProjectDetail() {
                     {project?.highlights ? (
                       <div>
                         <span className="font-semibold text-slate-900">Highlights:</span> {project.highlights}
+                      </div>
+                    ) : null}
+
+                    {projectRequirementsText ? (
+                      <div className="lg:col-span-2">
+                        <div className="font-semibold text-slate-900">Project requirements:</div>
+                        <p className="mt-1 whitespace-pre-line leading-6 text-slate-700">
+                          {projectRequirementsText}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">
+                          These notes help contractors understand the expected work, known issues, and any planning details already collected before they respond.
+                        </p>
                       </div>
                     ) : null}
 

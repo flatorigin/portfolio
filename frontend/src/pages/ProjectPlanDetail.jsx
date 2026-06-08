@@ -14,6 +14,8 @@ const CONTRACTOR_SUGGESTIONS = [
   "general contractor",
 ];
 
+const VISIBLE_CONTRACTOR_TYPE_LIMIT = 6;
+
 function emptyLink() {
   return { url: "", label: "", notes: "" };
 }
@@ -99,8 +101,11 @@ export default function ProjectPlanDetail() {
   const aiDisabled = useMemo(() => Number(plan?.ai_remaining_today ?? 0) <= 0, [plan]);
   const contractorTypeOptions = useMemo(() => {
     const selectedTypes = Array.isArray(plan?.contractor_types) ? plan.contractor_types : [];
-    const customTypes = selectedTypes.filter((item) => !CONTRACTOR_SUGGESTIONS.includes(item));
-    return [...customTypes, ...CONTRACTOR_SUGGESTIONS];
+    const visibleTypes = [
+      ...selectedTypes,
+      ...CONTRACTOR_SUGGESTIONS.filter((item) => !selectedTypes.includes(item)),
+    ];
+    return visibleTypes.slice(0, VISIBLE_CONTRACTOR_TYPE_LIMIT);
   }, [plan?.contractor_types]);
 
   function updateField(name, value) {
@@ -513,7 +518,7 @@ export default function ProjectPlanDetail() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-nowrap gap-2 overflow-hidden">
           {contractorTypeOptions.map((item) => {
             const active = (plan.contractor_types || []).includes(item);
             return (

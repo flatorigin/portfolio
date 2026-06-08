@@ -106,9 +106,21 @@ export default function ProjectEditorCard({
   onSendPrivate, // OPTIONAL: (username, payload) => void (later)
 }) {
   const isJobPosting = !!form.is_job_posting;
+  const [customServiceCategory, setCustomServiceCategory] = useState("");
 
   // ✅ Fix for your crash: submitLabel is used in JSX, so define it.
   const submitLabel = mode === "edit" ? "Save Changes" : "Create Project";
+
+  const addCustomServiceCategory = () => {
+    const next = customServiceCategory.trim();
+    if (!next) return;
+    const current = Array.isArray(form.service_categories) ? form.service_categories : [];
+    const exists = current.some((item) => String(item).toLowerCase() === next.toLowerCase());
+    if (!exists) {
+      setForm((p) => ({ ...p, service_categories: [...current, next] }));
+    }
+    setCustomServiceCategory("");
+  };
 
   const privateHelpText = useMemo(
     () =>
@@ -440,6 +452,37 @@ export default function ProjectEditorCard({
                     {c}
                   </label>
                 ))}
+              </div>
+              {Array.isArray(form.service_categories) &&
+              form.service_categories.some((item) => !["Plumbing", "Carpentry", "Electrical", "General", "Masonry"].includes(item)) ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {form.service_categories
+                    .filter((item) => !["Plumbing", "Carpentry", "Electrical", "General", "Masonry"].includes(item))
+                    .map((item) => (
+                      <span
+                        key={item}
+                        className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                </div>
+              ) : null}
+              <div className="mt-3 flex gap-2">
+                <Input
+                  value={customServiceCategory}
+                  onChange={(event) => setCustomServiceCategory(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addCustomServiceCategory();
+                    }
+                  }}
+                  placeholder="Add another service category"
+                />
+                <GhostButton type="button" onClick={addCustomServiceCategory}>
+                  Add
+                </GhostButton>
               </div>
             </div>
 

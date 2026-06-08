@@ -100,8 +100,16 @@ function ComplianceNotice({ checked, onChange, publishLabel = "publish" }) {
 
 function ServiceCategoryDropdown({ value = [], onChange }) {
   const [open, setOpen] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
   const options = ["Plumbing", "Carpentry", "Electrical", "General", "Masonry"];
   const selected = Array.isArray(value) ? value : [];
+  const addCustomCategory = () => {
+    const next = customCategory.trim();
+    if (!next) return;
+    const exists = selected.some((item) => String(item).toLowerCase() === next.toLowerCase());
+    if (!exists) onChange?.([...selected, next]);
+    setCustomCategory("");
+  };
 
   return (
     <div className="relative">
@@ -133,6 +141,22 @@ function ServiceCategoryDropdown({ value = [], onChange }) {
                 <span>{option}</span>
               </label>
             ))}
+          </div>
+          <div className="mt-3 flex gap-2 border-t border-slate-100 pt-3">
+            <Input
+              value={customCategory}
+              onChange={(event) => setCustomCategory(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addCustomCategory();
+                }
+              }}
+              placeholder="Add another category"
+            />
+            <Button type="button" onClick={addCustomCategory}>
+              Add
+            </Button>
           </div>
         </div>
       ) : null}
