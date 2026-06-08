@@ -300,6 +300,7 @@ export default function ProjectMarkupCanvas() {
   const navigate = useNavigate();
   const svgRef = useRef(null);
   const fileRef = useRef(null);
+  const sidebarTextRef = useRef(null);
   const [plan, setPlan] = useState(null);
   const [loadingPlan, setLoadingPlan] = useState(Boolean(planId));
   const [backgroundUrl, setBackgroundUrl] = useState("");
@@ -316,6 +317,7 @@ export default function ProjectMarkupCanvas() {
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
   const [editingTextId, setEditingTextId] = useState("");
+  const [focusedSidebarInputId, setFocusedSidebarInputId] = useState("");
 
   const storageKey = `${STORAGE_PREFIX}:${planId || "standalone"}`;
 
@@ -368,6 +370,20 @@ export default function ProjectMarkupCanvas() {
     () => annotations.find((item) => item.id === selectedId) || null,
     [annotations, selectedId],
   );
+
+  useEffect(() => {
+    if (selected?.type === "text" || selected?.type === "measure") {
+      const frame = requestAnimationFrame(() => {
+        sidebarTextRef.current?.focus();
+        const length = sidebarTextRef.current?.value?.length ?? 0;
+        sidebarTextRef.current?.setSelectionRange(length, length);
+        setFocusedSidebarInputId(selected.id);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    setFocusedSidebarInputId("");
+    return undefined;
+  }, [selected?.id, selected?.type]);
 
   const color = LAYERS.find((item) => item.key === activeLayer)?.color || "#0f172a";
 
@@ -792,6 +808,8 @@ export default function ProjectMarkupCanvas() {
     selected &&
     editingTextId === selected.id &&
     (selected.type === "text" || selected.type === "measure");
+  const sidebarTextEditorActive =
+    !!selected && (editingTextId === selected.id || focusedSidebarInputId === selected.id);
   const selectedTextBox = selected ? labelBox(selected.text || (selected.type === "measure" ? "measurement" : "Note"), 18) : null;
 
   return (
@@ -965,6 +983,39 @@ export default function ProjectMarkupCanvas() {
               </div>
               {selected ? (
                 <div className="mt-4 border-t border-slate-100 pt-4">
+                  {selected.type === "text" || selected.type === "measure" ? (
+                    <label className="mb-4 block">
+                      <span className="mb-2 flex items-center justify-between gap-2 text-xs font-medium text-slate-500">
+                        <span>{selected.type === "measure" ? "Measurement text" : "Note text"}</span>
+                        {sidebarTextEditorActive ? (
+                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            Editing
+                          </span>
+                        ) : null}
+                      </span>
+                      <textarea
+                        ref={sidebarTextRef}
+                        value={selected.text || ""}
+                        onChange={(event) => updateSelected({ text: event.target.value })}
+                        onFocus={() => setFocusedSidebarInputId(selected.id)}
+                        onBlur={(event) => {
+                          updateSelected({ text: normalizeMarkupText(event.target.value) });
+                          setFocusedSidebarInputId("");
+                        }}
+                        rows={selected.type === "text" ? 4 : 2}
+                        className={
+                          "w-full resize-y rounded-xl border bg-white px-3 py-2 text-left text-sm leading-5 text-slate-900 outline-none transition " +
+                          (sidebarTextEditorActive
+                            ? "border-blue-500 ring-4 ring-blue-500/20"
+                            : "border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15")
+                        }
+                        placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
+                      />
+                      <span className="mt-1 block text-[11px] leading-4 text-slate-400">
+                        You can also double-click the label on the image to edit it in place.
+                      </span>
+                    </label>
+                  ) : null}
                   <div className="mb-2 text-xs text-slate-500">Color</div>
                   <div className="flex flex-wrap gap-2">
                     {MARKUP_COLORS.map((itemColor) => (
@@ -1227,7 +1278,10 @@ export default function ProjectMarkupCanvas() {
                     minHeight: selectedTextBox ? `${Math.max(38, selectedTextBox.height + 12)}px` : undefined,
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
+                  onPointerMove={(event) => event.stopPropagation()}
+                  onPointerUp={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
                   onBlur={(event) => {
                     updateSelected({ text: normalizeMarkupText(event.target.value) });
                     setEditingTextId("");
