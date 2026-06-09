@@ -437,75 +437,10 @@ export default function PublicProfile() {
   }
 
   if (isHomeownerProfile) {
-    const referenceGallery = Array.isArray(profile?.reference_gallery)
-      ? profile.reference_gallery
-      : [];
     return (
       <div className="min-h-screen bg-[#FBF9F7]">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="grid gap-6 md:grid-cols-[1.25fr_0.75fr]">
-            <Card className="rounded-2xl border border-slate-200 shadow-sm">
-              <div className="p-6">
-                <div className="mb-4 flex items-end justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-semibold text-slate-900">
-                      Reference Gallery
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      Style and quality references shared by the homeowner.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  {referenceGallery.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500 sm:col-span-2">
-                      No reference images shared yet.
-                    </div>
-                  ) : referenceGallery.map((item) => {
-                    const coverSrc = toUrl(item.image_url || item.image || "");
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-                      >
-                        <div className="relative h-44 bg-slate-100">
-                          {coverSrc ? (
-                            <img
-                              src={coverSrc}
-                              alt={item.caption || "Reference image"}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                          {!isMine ? (
-                            <div className="absolute right-2 top-2">
-                              <ReportContentButton
-                                targetType="reference_image"
-                                targetId={item.id}
-                                subject={item.caption || "Reference image"}
-                                label="Report image"
-                                className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-700 shadow hover:bg-white"
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="p-4">
-                          <div className="truncate text-sm font-semibold text-slate-900">
-                            {item.caption || "Reference image"}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            Shared as inspiration only, not as completed work.
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </Card>
-
+        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+          <div className="max-w-md">
             <Card className="border border-slate-200 shadow-sm">
               <div className="p-6">
                 <div className="flex items-start justify-between gap-4">

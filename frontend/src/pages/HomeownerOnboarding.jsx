@@ -7,22 +7,26 @@ const steps = [
   {
     id: "name",
     title: "What should we call you?",
-    helper: "Use your name or the name you want contractors to see when you reach out.",
+    helper:
+      "Use your name or the name you want contractors to see when you reach out.",
   },
   {
     id: "area",
     title: "Where is your project area?",
-    helper: "A city, neighborhood, or ZIP/postal code is enough. You can update it later.",
+    helper:
+      "A city, neighborhood, or ZIP/postal code is enough. You can update it later.",
   },
   {
     id: "contact",
     title: "Add your contact details",
-    helper: "These stay protected unless you choose to share them through the platform.",
+    helper:
+      "These stay protected unless you choose to share them through the platform.",
   },
   {
     id: "about",
     title: "Add a short note about your goals",
-    helper: "Optional. A few words about what you plan to work on helps shape the rest of setup.",
+    helper:
+      "Optional. A few words about what you plan to work on helps shape the rest of setup.",
   },
   {
     id: "finish",
@@ -98,7 +102,8 @@ export default function HomeownerOnboarding() {
   const payloadForStep = () => {
     const base = { profile_type: "homeowner" };
     if (step.id === "name") return { ...base, display_name: form.display_name };
-    if (step.id === "area") return { ...base, service_location: form.service_location };
+    if (step.id === "area")
+      return { ...base, service_location: form.service_location };
     if (step.id === "contact") {
       return {
         ...base,
@@ -128,7 +133,10 @@ export default function HomeownerOnboarding() {
       return true;
     } catch (err) {
       console.error("[HomeownerOnboarding] save error", err?.response || err);
-      const detail = err?.response?.data?.detail || err?.response?.data || "Could not save this step.";
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data ||
+        "Could not save this step.";
       setError(typeof detail === "string" ? detail : JSON.stringify(detail));
       return false;
     } finally {
@@ -152,8 +160,14 @@ export default function HomeownerOnboarding() {
       window.dispatchEvent(new CustomEvent("profile:changed"));
       navigate("/profile/edit");
     } catch (err) {
-      console.error("[HomeownerOnboarding] complete error", err?.response || err);
-      setError(err?.response?.data?.detail || "Finish the required steps before completing setup.");
+      console.error(
+        "[HomeownerOnboarding] complete error",
+        err?.response || err,
+      );
+      setError(
+        err?.response?.data?.detail ||
+          "Finish the required steps before completing setup.",
+      );
     } finally {
       setSaving(false);
     }
@@ -232,16 +246,6 @@ export default function HomeownerOnboarding() {
             onChange={updateField("bio")}
             placeholder="Example: I am planning a deck repair and a few exterior updates this year."
           />
-          <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <span className="text-sm font-medium text-slate-800">
-              Let my shared reference gallery appear on Explore later
-            </span>
-            <input
-              type="checkbox"
-              checked={!!form.public_profile_enabled}
-              onChange={updateToggle("public_profile_enabled")}
-            />
-          </label>
         </div>
       );
     }
@@ -254,9 +258,16 @@ export default function HomeownerOnboarding() {
           ["Email", form.contact_email || "Not added"],
           ["Phone", form.contact_phone || "Not added"],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+          <div
+            key={label}
+            className="rounded-2xl border border-slate-200 bg-white p-4"
+          >
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {label}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-slate-900">
+              {value}
+            </div>
           </div>
         ))}
       </div>
@@ -275,7 +286,10 @@ export default function HomeownerOnboarding() {
     <div className="min-h-screen bg-[#FBF9F7] text-slate-900">
       <Container className="py-8">
         <div className="mb-6 flex items-center justify-between gap-4">
-          <Link to="/homeowner" className="text-base font-bold tracking-tight text-slate-900">
+          <Link
+            to="/homeowner"
+            className="text-base font-bold tracking-tight text-slate-900"
+          >
             FlatOrigin
           </Link>
           <button
@@ -291,10 +305,15 @@ export default function HomeownerOnboarding() {
           <div className="mb-5">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               <span>Homeowner setup</span>
-              <span>Step {stepIndex + 1} of {steps.length}</span>
+              <span>
+                Step {stepIndex + 1} of {steps.length}
+              </span>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-slate-900" style={{ width: `${progress}%` }} />
+              <div
+                className="h-full rounded-full bg-slate-900"
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </div>
 
@@ -320,7 +339,9 @@ export default function HomeownerOnboarding() {
                 {error}
               </div>
             ) : null}
-            {message ? <div className="mt-5 text-xs text-emerald-600">{message}</div> : null}
+            {message ? (
+              <div className="mt-5 text-xs text-emerald-600">{message}</div>
+            ) : null}
 
             <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
@@ -341,7 +362,11 @@ export default function HomeownerOnboarding() {
                   Save
                 </button>
                 {step.id === "finish" ? (
-                  <Button type="button" disabled={saving} onClick={completeOnboarding}>
+                  <Button
+                    type="button"
+                    disabled={saving}
+                    onClick={completeOnboarding}
+                  >
                     Complete your profile
                   </Button>
                 ) : (
@@ -355,7 +380,10 @@ export default function HomeownerOnboarding() {
 
           <div className="mt-5 text-center text-xs text-slate-500">
             Need the full editor?{" "}
-            <Link to="/profile/edit" className="font-semibold text-slate-700 hover:text-slate-950">
+            <Link
+              to="/profile/edit"
+              className="font-semibold text-slate-700 hover:text-slate-950"
+            >
               Open edit profile
             </Link>
           </div>
