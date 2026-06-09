@@ -65,7 +65,11 @@ function pickCover(project) {
 
 function LandingNav() {
   const authed = !!localStorage.getItem("access");
-  const [profileType, setProfileType] = useState("");
+  const [profile, setProfile] = useState(null);
+  const profileType = profile?.profile_type || "";
+  const displayName = profile?.display_name || profile?.username || "Account";
+  const avatarSrc = toUrl(profile?.avatar_url || profile?.logo_url || profile?.logo || "");
+  const avatarInitial = displayName.trim().charAt(0).toUpperCase() || "U";
 
   useEffect(() => {
     if (!authed) return;
@@ -75,9 +79,9 @@ function LandingNav() {
     (async () => {
       try {
         const { data } = await api.get("/users/me/");
-        if (!cancelled) setProfileType(data?.profile_type || "");
+        if (!cancelled) setProfile(data || null);
       } catch {
-        if (!cancelled) setProfileType("");
+        if (!cancelled) setProfile(null);
       }
     })();
 
@@ -117,18 +121,44 @@ function LandingNav() {
             </Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <Link
-              to={authed ? "/dashboard" : "/login"}
-              className="text-sm text-slate-600 transition hover:text-slate-900"
-            >
-              {authed ? "Dashboard" : "Sign in"}
-            </Link>
-            <Link
-              to={authed ? "/onboarding/contractor" : "/register?role=contractor"}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Get Started
-            </Link>
+            {authed ? (
+              <>
+                <Link
+                  to="/homeowner"
+                  title="This toggle is only for viewing/previewing the other landing page."
+                  className="hidden h-9 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:inline-flex"
+                >
+                  View Homeowner Side
+                </Link>
+                <Link
+                  to="/dashboard"
+                  aria-label="Open dashboard"
+                  title={displayName}
+                  className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  {avatarSrc ? (
+                    <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    avatarInitial
+                  )}
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="text-sm text-slate-600 transition hover:text-slate-900"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/register?role=contractor"
+                  className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         </nav>
       </Container>
