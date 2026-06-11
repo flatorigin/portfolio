@@ -189,7 +189,7 @@ export default function HomeownerOnboarding() {
           autoFocus
           value={form.display_name}
           onChange={updateField("display_name")}
-          placeholder="e.g. Babak Pouradam"
+          placeholder="e.g. John Wakwins"
         />
       );
     }
@@ -200,7 +200,7 @@ export default function HomeownerOnboarding() {
           autoFocus
           value={form.service_location}
           onChange={updateField("service_location")}
-          placeholder="e.g. Media, PA or 19063"
+          placeholder="e.g. Philadelphia, PA or 19106"
         />
       );
     }
