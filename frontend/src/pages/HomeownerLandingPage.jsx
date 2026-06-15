@@ -38,10 +38,26 @@ const projectCards = [
 ];
 
 const guides = [
-  ["balance", "How to compare bids", "Understand proposals and make confident decisions."],
-  ["forum", "What to ask contractors", "Use the right questions before hiring anyone."],
-  ["payments", "Budget planning basics", "Plan your budget and avoid hidden costs."],
-  ["checklist", "What to include in a proposal", "Make sure nothing important is missed."],
+  [
+    "balance",
+    "How to compare bids",
+    "Understand proposals and make confident decisions.",
+  ],
+  [
+    "forum",
+    "What to ask contractors",
+    "Use the right questions before hiring anyone.",
+  ],
+  [
+    "payments",
+    "Budget planning basics",
+    "Plan your budget and avoid hidden costs.",
+  ],
+  [
+    "checklist",
+    "What to include in a proposal",
+    "Make sure nothing important is missed.",
+  ],
 ];
 
 function toUrl(raw) {
@@ -60,7 +76,9 @@ function LandingNav() {
   const [profile, setProfile] = useState(null);
   const profileType = profile?.profile_type || "";
   const displayName = profile?.display_name || profile?.username || "Account";
-  const avatarSrc = toUrl(profile?.avatar_url || profile?.logo_url || profile?.logo || "");
+  const avatarSrc = toUrl(
+    profile?.avatar_url || profile?.logo_url || profile?.logo || "",
+  );
   const avatarInitial = displayName.trim().charAt(0).toUpperCase() || "U";
 
   useEffect(() => {
@@ -86,17 +104,29 @@ function LandingNav() {
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
       <Container className="py-3">
         <nav className="flex items-center gap-6">
-          <Link to={authed ? roleLandingPath(profileType) : "/"} className="text-lg font-bold tracking-tight text-slate-900">
+          <Link
+            to={authed ? roleLandingPath(profileType) : "/"}
+            className="text-lg font-bold tracking-tight text-slate-900"
+          >
             FlatOrigin
           </Link>
           <div className="hidden items-center gap-1 md:flex">
-            <Link to="/explore" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
+            <Link
+              to="/explore"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
+            >
               Browse Projects
             </Link>
-            <a href="#how-it-works" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
+            <a
+              href="#how-it-works"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
+            >
               How It Works
             </a>
-            <Link to="/guides" className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900">
+            <Link
+              to="/guides"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
+            >
               Guides
             </Link>
           </div>
@@ -117,7 +147,11 @@ function LandingNav() {
                   className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
                 >
                   {avatarSrc ? (
-                    <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={avatarSrc}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     avatarInitial
                   )}
@@ -148,10 +182,22 @@ function LandingNav() {
 
 function FeatureStrip() {
   const features = [
-    ["edit_square", "Organize Ideas", "Upload photos, add notes and measurements."],
+    [
+      "edit_square",
+      "Organize Ideas",
+      "Upload photos, add notes and measurements.",
+    ],
     ["lock", "Private or Public", "Control who can see your project."],
-    ["fact_check", "Compare Bids", "Review proposals side by side with clarity."],
-    ["chat_bubble", "Message Easily", "Chat with contractors all in one place."],
+    [
+      "fact_check",
+      "Compare Bids",
+      "Review proposals side by side with clarity.",
+    ],
+    [
+      "chat_bubble",
+      "Message Easily",
+      "Chat with contractors all in one place.",
+    ],
   ];
 
   return (
@@ -161,7 +207,9 @@ function FeatureStrip() {
           <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
             <SymbolIcon name={icon} className="text-[24px]" />
           </span>
-          <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
+          <h3 className="mt-4 text-base font-semibold text-slate-900">
+            {title}
+          </h3>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">{copy}</p>
         </div>
       ))}
@@ -223,7 +271,7 @@ export default function HomeownerLandingPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-amber-50/80 via-transparent to-rose-50/50" />
           <div className="absolute -right-40 -top-40 h-[500px] w-[500px] rounded-full bg-gradient-to-br from-amber-100/40 to-orange-100/30 blur-3xl" />
           <div className="absolute -bottom-20 -left-20 h-[400px] w-[400px] rounded-full bg-gradient-to-tr from-slate-100/60 to-amber-50/40 blur-3xl" />
-          
+
           <Container className="relative py-16 sm:py-20 lg:py-24">
             <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
               {/* Left: Content */}
@@ -235,7 +283,8 @@ export default function HomeownerLandingPage() {
                   Plan your home project with clarity
                 </h1>
                 <p className="mt-6 text-pretty text-lg leading-relaxed text-slate-600">
-                  Save ideas, organize project details, compare bids, and communicate with contractors - all in one place.
+                  Save ideas, organize project details, compare bids, and
+                  communicate with contractors - all in one place.
                 </p>
                 <div className="mt-8 flex flex-wrap items-center gap-4">
                   <Link
@@ -254,19 +303,28 @@ export default function HomeownerLandingPage() {
                 <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-slate-500">
                   <div className="flex items-center gap-2">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
-                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                      <SymbolIcon
+                        name="check"
+                        className="text-[14px] text-emerald-600"
+                      />
                     </span>
                     Free to start
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
-                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                      <SymbolIcon
+                        name="check"
+                        className="text-[14px] text-emerald-600"
+                      />
                     </span>
                     No credit card
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
-                      <SymbolIcon name="check" className="text-[14px] text-emerald-600" />
+                      <SymbolIcon
+                        name="check"
+                        className="text-[14px] text-emerald-600"
+                      />
                     </span>
                     Cancel anytime
                   </div>
@@ -283,10 +341,18 @@ export default function HomeownerLandingPage() {
                         key={project.title}
                         className="flex-shrink-0 w-[200px] overflow-hidden rounded-2xl border border-white/60 bg-white/80 shadow-lg backdrop-blur-sm"
                       >
-                        <img src={project.image} alt="" className="h-32 w-full object-cover" />
+                        <img
+                          src={project.image}
+                          alt=""
+                          className="h-32 w-full object-cover"
+                        />
                         <div className="p-3">
-                          <div className="text-sm font-semibold text-slate-900">{project.title}</div>
-                          <div className="text-xs text-slate-500">{project.location}</div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {project.title}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {project.location}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -300,23 +366,48 @@ export default function HomeownerLandingPage() {
                     <div className="mb-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900">
-                          <SymbolIcon name="home" className="text-[18px] text-white" />
+                          <SymbolIcon
+                            name="home"
+                            className="text-[18px] text-white"
+                          />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-slate-900">Kitchen Remodel</div>
-                          <div className="text-xs text-slate-500">Media, PA</div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            Kitchen Remodel
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            Media, PA
+                          </div>
                         </div>
                       </div>
-                      <Badge className="bg-emerald-50 text-emerald-700">3 bids</Badge>
+                      <Badge className="bg-emerald-50 text-emerald-700">
+                        3 bids
+                      </Badge>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <img src={kitchenImage} alt="" className="aspect-square rounded-xl object-cover" />
-                      <img src={interiorImage} alt="" className="aspect-square rounded-xl object-cover" />
-                      <img src={deckImage} alt="" className="aspect-square rounded-xl object-cover" />
+                      <img
+                        src={kitchenImage}
+                        alt=""
+                        className="aspect-square rounded-xl object-cover"
+                      />
+                      <img
+                        src={interiorImage}
+                        alt=""
+                        className="aspect-square rounded-xl object-cover"
+                      />
+                      <img
+                        src={deckImage}
+                        alt=""
+                        className="aspect-square rounded-xl object-cover"
+                      />
                     </div>
                     <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                      <div className="text-sm text-slate-600">Budget estimate</div>
-                      <div className="text-sm font-semibold text-slate-900">$15,000 - $25,000</div>
+                      <div className="text-sm text-slate-600">
+                        Budget estimate
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        $15,000 - $25,000
+                      </div>
                     </div>
                   </div>
 
@@ -324,11 +415,18 @@ export default function HomeownerLandingPage() {
                   <div className="absolute -bottom-3 -left-6 z-20 rounded-xl border border-white/70 bg-white px-4 py-3 shadow-lg">
                     <div className="flex items-center gap-3">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
-                        <SymbolIcon name="check" className="text-[18px] text-emerald-600" />
+                        <SymbolIcon
+                          name="check"
+                          className="text-[18px] text-emerald-600"
+                        />
                       </span>
                       <div>
-                        <div className="text-xs font-semibold text-slate-900">New bid received</div>
-                        <div className="text-[11px] text-slate-500">From ABC Contractors</div>
+                        <div className="text-xs font-semibold text-slate-900">
+                          New bid received
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          From ABC Contractors
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -337,11 +435,18 @@ export default function HomeownerLandingPage() {
                   <div className="absolute -right-4 top-8 z-20 rounded-xl border border-white/70 bg-white px-4 py-3 shadow-lg">
                     <div className="flex items-center gap-3">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100">
-                        <SymbolIcon name="trending_up" className="text-[18px] text-amber-600" />
+                        <SymbolIcon
+                          name="trending_up"
+                          className="text-[18px] text-amber-600"
+                        />
                       </span>
                       <div>
-                        <div className="text-xs font-semibold text-slate-900">$2.4M+ projects</div>
-                        <div className="text-[11px] text-slate-500">Posted this month</div>
+                        <div className="text-xs font-semibold text-slate-900">
+                          $2.4M+ projects
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Posted this month
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -354,10 +459,17 @@ export default function HomeownerLandingPage() {
           </Container>
         </section>
 
-        <section id="how-it-works" className="border-y border-slate-200 bg-[#F6F5F1] py-16">
+        <section
+          id="how-it-works"
+          className="border-y border-slate-200 bg-[#F6F5F1] py-16"
+        >
           <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
-            <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              Why Choose FlatOrigin
+            </h2>
+            <p className="mx-auto mt-3 max-w-lg text-slate-500">
+              Built different from traditional contractor marketplaces
+            </p>
           </div>
           <div className="mx-auto mt-12 max-w-5xl px-4">
             <FeatureStrip />
@@ -377,15 +489,19 @@ export default function HomeownerLandingPage() {
                   className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md"
                 >
                   <div className="aspect-[4/3] overflow-hidden">
-                    <img 
-                      src={project.image} 
-                      alt="" 
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105" 
+                    <img
+                      src={project.image}
+                      alt=""
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                     />
                   </div>
                   <div className="p-4">
-                    <div className="font-semibold text-slate-900">{project.title}</div>
-                    <div className="mt-1 text-sm text-slate-500">{project.location}</div>
+                    <div className="font-semibold text-slate-900">
+                      {project.title}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {project.location}
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -393,7 +509,9 @@ export default function HomeownerLandingPage() {
           </section>
 
           <section className="pb-16">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Helpful before you hire</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+              Helpful before you hire
+            </h2>
             <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {guides.map(([icon, title, copy]) => (
                 <Link
@@ -405,7 +523,9 @@ export default function HomeownerLandingPage() {
                     <SymbolIcon name={icon} className="text-[18px]" />
                   </span>
                   <h3 className="mt-3 font-semibold text-slate-900">{title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{copy}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                    {copy}
+                  </p>
                 </Link>
               ))}
             </div>
@@ -416,9 +536,12 @@ export default function HomeownerLandingPage() {
       <section className="bg-slate-900 py-16">
         <Container>
           <div className="flex flex-col items-center text-center">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl">Ready to get started?</h2>
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">
+              Ready to get started?
+            </h2>
             <p className="mt-3 max-w-md text-slate-400">
-              Join thousands of homeowners and contractors already using FlatOrigin.
+              Join thousands of homeowners and contractors already using
+              FlatOrigin.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link
@@ -452,31 +575,52 @@ export default function HomeownerLandingPage() {
             <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
               <div className="flex flex-col gap-3">
                 <span className="font-semibold text-slate-900">Product</span>
-                <Link to="/homeowner" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/homeowner"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   For Homeowners
                 </Link>
-                <Link to="/contractor" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/contractor"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   For Contractors
                 </Link>
-                <Link to="/explore" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/explore"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Browse Projects
                 </Link>
               </div>
               <div className="flex flex-col gap-3">
                 <span className="font-semibold text-slate-900">Resources</span>
-                <Link to="/guides" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/guides"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Guides
                 </Link>
-                <Link to="/project-check" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/project-check"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Project Check
                 </Link>
               </div>
               <div className="flex flex-col gap-3">
                 <span className="font-semibold text-slate-900">Account</span>
-                <Link to="/login" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/login"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Sign in
                 </Link>
-                <Link to="/register" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/register"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Create account
                 </Link>
               </div>
