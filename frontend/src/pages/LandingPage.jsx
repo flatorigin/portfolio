@@ -33,10 +33,26 @@ const roleCards = [
 ];
 
 const whyFeatures = [
-  ["shield", "No Middlemen", "Connect directly with homeowners or contractors without paying referral fees or commissions."],
-  ["payments", "Free to Use", "FlatOrigin is completely free for homeowners. Contractors pay no listing fees."],
-  ["schedule", "Save Time", "Streamlined process helps you find the right match faster than traditional methods."],
-  ["star", "Quality Focus", "Detailed project descriptions and portfolios ensure better matches and outcomes."],
+  [
+    "shield",
+    "No Middlemen",
+    "Connect directly with homeowners or contractors without paying referral fees or commissions.",
+  ],
+  [
+    "payments",
+    "Free to Use",
+    "FlatOrigin is completely free for homeowners. Contractors pay no listing fees.",
+  ],
+  [
+    "schedule",
+    "Save Time",
+    "Streamlined process helps you find the right match faster than traditional methods.",
+  ],
+  [
+    "star",
+    "Quality Focus",
+    "Detailed project descriptions and portfolios ensure better matches and outcomes.",
+  ],
 ];
 
 function GatewayNav() {
@@ -100,13 +116,18 @@ function RoleCard({ card }) {
           <h2 className="text-xl font-bold tracking-tight text-slate-900">
             {card.title}
           </h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">{card.intro}</p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">
+            {card.intro}
+          </p>
 
           <div className="mt-4 flex-1 space-y-2">
             {card.features.map((feature) => (
               <div key={feature} className="flex items-start gap-2">
                 <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-50">
-                  <SymbolIcon name="check" className="text-[12px] text-red-400" />
+                  <SymbolIcon
+                    name="check"
+                    className="text-[12px] text-red-400"
+                  />
                 </span>
                 <span className="text-sm text-slate-600">{feature}</span>
               </div>
@@ -173,7 +194,8 @@ export default function LandingPage() {
               Find the right contractor for your next project
             </h1>
             <p className="mx-auto mt-5 max-w-lg text-lg leading-relaxed text-slate-500">
-              FlatOrigin connects homeowners and contractors around real projects - no middlemen, no hassle.
+              FlatOrigin connects homeowners and contractors around real
+              projects - no middlemen, no hassle.
             </p>
           </div>
 
@@ -192,8 +214,12 @@ export default function LandingPage() {
 
       <section className="border-y border-slate-200 bg-[#F6F5F1] py-16">
         <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Why Choose FlatOrigin</h2>
-          <p className="mx-auto mt-3 max-w-lg text-slate-500">Built different from traditional contractor marketplaces</p>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            Why Choose FlatOrigin
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-slate-500">
+            Built different from traditional contractor marketplaces
+          </p>
         </div>
         <div className="mx-auto mt-12 grid max-w-5xl gap-8 px-4 sm:grid-cols-2 lg:grid-cols-4">
           {whyFeatures.map(([icon, title, copy]) => (
@@ -201,8 +227,12 @@ export default function LandingPage() {
               <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
                 <SymbolIcon name={icon} className="text-[24px]" />
               </span>
-              <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">{copy}</p>
+              <h3 className="mt-4 text-base font-semibold text-slate-900">
+                {title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                {copy}
+              </p>
             </div>
           ))}
         </div>
@@ -211,13 +241,16 @@ export default function LandingPage() {
       <section className="bg-slate-900 py-16">
         <Container>
           <div className="flex flex-col items-center text-center">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl">Ready to get started?</h2>
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">
+              Ready to get started?
+            </h2>
             <p className="mt-3 max-w-md text-slate-400">
-              Join thousands of homeowners and contractors already using FlatOrigin.
+              Join thousands of homeowners and contractors already using
+              FlatOrigin.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link to="/homeowner">
-                <Button className="h-11 bg-white px-6 text-slate-900 hover:bg-slate-100">
+                <Button className="h-11 bg-white px-6 !text-slate-900 hover:bg-slate-100">
                   Post Your Project
                 </Button>
               </Link>
@@ -246,31 +279,52 @@ export default function LandingPage() {
             <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
               <div className="flex flex-col gap-3">
                 <span className="font-semibold text-slate-900">Product</span>
-                <Link to="/homeowner" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/homeowner"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   For Homeowners
                 </Link>
-                <Link to="/contractor" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/contractor"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   For Contractors
                 </Link>
-                <Link to="/explore" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/explore"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Browse Projects
                 </Link>
               </div>
               <div className="flex flex-col gap-3">
                 <span className="font-semibold text-slate-900">Resources</span>
-                <Link to="/guides" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/guides"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Guides
                 </Link>
-                <Link to="/project-check" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/project-check"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Project Check
                 </Link>
               </div>
               <div className="flex flex-col gap-3">
                 <span className="font-semibold text-slate-900">Account</span>
-                <Link to="/login" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/login"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Sign in
                 </Link>
-                <Link to="/register" className="text-slate-600 hover:text-slate-900">
+                <Link
+                  to="/register"
+                  className="text-slate-600 hover:text-slate-900"
+                >
                   Create account
                 </Link>
               </div>
