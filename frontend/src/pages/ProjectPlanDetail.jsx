@@ -530,7 +530,7 @@ export default function ProjectPlanDetail() {
             <div className="font-semibold text-slate-950">
               Image Markup Canvas
             </div>
-            <div className="mt-1 max-w-2xl text-sm text-slate-500">
+            <div className="mt-1 max-w-[400px] text-sm text-slate-500">
               Upload images, mark problem areas, add visual notes, and
               communicate project details more clearly before sharing the
               project.
