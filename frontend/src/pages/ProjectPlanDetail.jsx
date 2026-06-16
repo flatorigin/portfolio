@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
-import { Badge, Button, Card, GhostButton, Input, SymbolIcon, Textarea } from "../ui";
+import {
+  Badge,
+  Button,
+  Card,
+  GhostButton,
+  Input,
+  SymbolIcon,
+  Textarea,
+} from "../ui";
 
 const CONTRACTOR_SUGGESTIONS = [
   "carpenter",
@@ -32,8 +40,12 @@ function normalizeError(err, fallback) {
 }
 
 function canGenerateDraft(plan) {
-  const hasTitleOrSummary = !!((plan?.title || "").trim() || (plan?.issue_summary || "").trim());
-  const hasNoteOrImage = !!((plan?.notes || "").trim() || (plan?.images || []).length);
+  const hasTitleOrSummary = !!(
+    (plan?.title || "").trim() || (plan?.issue_summary || "").trim()
+  );
+  const hasNoteOrImage = !!(
+    (plan?.notes || "").trim() || (plan?.images || []).length
+  );
   return hasTitleOrSummary && hasNoteOrImage;
 }
 
@@ -47,8 +59,12 @@ function toDraftPayload(plan) {
     budget_max: plan.budget_max || null,
     notes: plan.notes || "",
     status: plan.status || "planning",
-    contractor_types: Array.isArray(plan.contractor_types) ? plan.contractor_types : [],
-    links: Array.isArray(plan.links) ? plan.links.filter((item) => item?.url) : [],
+    contractor_types: Array.isArray(plan.contractor_types)
+      ? plan.contractor_types
+      : [],
+    links: Array.isArray(plan.links)
+      ? plan.links.filter((item) => item?.url)
+      : [],
     options: Array.isArray(plan.options)
       ? plan.options
           .filter((item) => item?.title)
@@ -83,7 +99,10 @@ export default function ProjectPlanDetail() {
       const { data } = await api.get(`/project-plans/${planId}/`);
       setPlan({
         ...data,
-        links: Array.isArray(data?.links) && data.links.length ? data.links : [emptyLink()],
+        links:
+          Array.isArray(data?.links) && data.links.length
+            ? data.links
+            : [emptyLink()],
         options: Array.isArray(data?.options) ? data.options : [],
       });
     } catch (err) {
@@ -98,9 +117,14 @@ export default function ProjectPlanDetail() {
     loadPlan();
   }, [planId]);
 
-  const aiDisabled = useMemo(() => Number(plan?.ai_remaining_today ?? 0) <= 0, [plan]);
+  const aiDisabled = useMemo(
+    () => Number(plan?.ai_remaining_today ?? 0) <= 0,
+    [plan],
+  );
   const contractorTypeOptions = useMemo(() => {
-    const selectedTypes = Array.isArray(plan?.contractor_types) ? plan.contractor_types : [];
+    const selectedTypes = Array.isArray(plan?.contractor_types)
+      ? plan.contractor_types
+      : [];
     const visibleTypes = [
       ...selectedTypes,
       ...CONTRACTOR_SUGGESTIONS.filter((item) => !selectedTypes.includes(item)),
@@ -116,36 +140,48 @@ export default function ProjectPlanDetail() {
     setPlan((prev) => ({
       ...prev,
       links: (prev.links || []).map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item
+        itemIndex === index ? { ...item, [field]: value } : item,
       ),
     }));
   }
 
   function addLink() {
-    setPlan((prev) => ({ ...prev, links: [...(prev.links || []), emptyLink()] }));
+    setPlan((prev) => ({
+      ...prev,
+      links: [...(prev.links || []), emptyLink()],
+    }));
   }
 
   function removeLink(index) {
     setPlan((prev) => {
-      const next = (prev.links || []).filter((_, itemIndex) => itemIndex !== index);
+      const next = (prev.links || []).filter(
+        (_, itemIndex) => itemIndex !== index,
+      );
       return { ...prev, links: next.length ? next : [emptyLink()] };
     });
   }
 
   function toggleContractorType(value) {
-    const current = Array.isArray(plan?.contractor_types) ? plan.contractor_types : [];
+    const current = Array.isArray(plan?.contractor_types)
+      ? plan.contractor_types
+      : [];
     const exists = current.includes(value);
     updateField(
       "contractor_types",
-      exists ? current.filter((item) => item !== value) : [...current, value]
+      exists ? current.filter((item) => item !== value) : [...current, value],
     );
   }
 
   function addCustomContractorType() {
     const value = customContractor.trim().toLowerCase();
     if (!value) return;
-    const current = Array.isArray(plan?.contractor_types) ? plan.contractor_types : [];
-    updateField("contractor_types", [value, ...current.filter((item) => item !== value)]);
+    const current = Array.isArray(plan?.contractor_types)
+      ? plan.contractor_types
+      : [];
+    updateField("contractor_types", [
+      value,
+      ...current.filter((item) => item !== value),
+    ]);
     setCustomContractor("");
   }
 
@@ -153,10 +189,16 @@ export default function ProjectPlanDetail() {
     if (!plan) return;
     setSaving(true);
     try {
-      const { data } = await api.patch(`/project-plans/${planId}/`, toDraftPayload(plan));
+      const { data } = await api.patch(
+        `/project-plans/${planId}/`,
+        toDraftPayload(plan),
+      );
       setPlan({
         ...data,
-        links: Array.isArray(data?.links) && data.links.length ? data.links : [emptyLink()],
+        links:
+          Array.isArray(data?.links) && data.links.length
+            ? data.links
+            : [emptyLink()],
         options: Array.isArray(data?.options) ? data.options : [],
       });
     } catch (err) {
@@ -167,7 +209,12 @@ export default function ProjectPlanDetail() {
   }
 
   async function archivePlan() {
-    if (!window.confirm("Archive this plan? It will stay saved as an inactive project plan and still count toward your 3 project plan slots.")) return;
+    if (
+      !window.confirm(
+        "Archive this plan? It will stay saved as an inactive project plan and still count toward your 3 project plan slots.",
+      )
+    )
+      return;
     try {
       await api.post(`/project-plans/${planId}/archive/`);
       navigate("/dashboard");
@@ -214,7 +261,9 @@ export default function ProjectPlanDetail() {
   async function runAi(action) {
     setAiBusy(action);
     try {
-      const { data } = await api.post(`/project-plans/${planId}/ai/`, { action });
+      const { data } = await api.post(`/project-plans/${planId}/ai/`, {
+        action,
+      });
       if (action === "analyze_issue") {
         setAiAnalysis(data.analysis || null);
       } else {
@@ -233,11 +282,15 @@ export default function ProjectPlanDetail() {
     setPlan((prev) => ({
       ...prev,
       issue_summary:
-        [aiAnalysis.likely_issue_label, aiAnalysis.explanation].filter(Boolean).join(": ") ||
-        prev.issue_summary,
+        [aiAnalysis.likely_issue_label, aiAnalysis.explanation]
+          .filter(Boolean)
+          .join(": ") || prev.issue_summary,
       contractor_types:
-        Array.isArray(aiAnalysis.contractor_types) && aiAnalysis.contractor_types.length
-          ? aiAnalysis.contractor_types.map((item) => String(item).toLowerCase())
+        Array.isArray(aiAnalysis.contractor_types) &&
+        aiAnalysis.contractor_types.length
+          ? aiAnalysis.contractor_types.map((item) =>
+              String(item).toLowerCase(),
+            )
           : prev.contractor_types,
       notes:
         (prev.notes || "") +
@@ -270,9 +323,12 @@ export default function ProjectPlanDetail() {
     if (!canGenerateDraft(plan)) return;
     setDraftBusy(true);
     try {
-      const { data } = await api.post(`/project-plans/${planId}/convert-to-draft/`, {
-        use_ai: useAi,
-      });
+      const { data } = await api.post(
+        `/project-plans/${planId}/convert-to-draft/`,
+        {
+          use_ai: useAi,
+        },
+      );
       navigate(`/projects/${data.draft_id}`);
     } catch (err) {
       const data = err?.response?.data;
@@ -287,7 +343,11 @@ export default function ProjectPlanDetail() {
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500">Loading plan...</div>;
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500">
+        Loading plan...
+      </div>
+    );
   }
 
   if (!plan) {
@@ -301,17 +361,22 @@ export default function ProjectPlanDetail() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
+    <div className="mx-auto max-w-6xl space-y-6 py-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <Link to="/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
+          <Link
+            to="/dashboard"
+            className="text-sm text-slate-500 hover:text-slate-900"
+          >
             Dashboard
           </Link>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
             {plan.title || "Untitled issue"}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge className="capitalize">{String(plan.status || "planning").replaceAll("_", " ")}</Badge>
+            <Badge className="capitalize">
+              {String(plan.status || "planning").replaceAll("_", " ")}
+            </Badge>
             <Badge>Private</Badge>
             <Badge>{plan.ai_remaining_today} AI assists left today</Badge>
           </div>
@@ -330,10 +395,18 @@ export default function ProjectPlanDetail() {
         <Card className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 shadow-none">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="font-semibold text-emerald-900">This plan already generated a draft job post.</div>
-              <div className="text-sm text-emerald-800">Keep this planner for reference or open the draft to keep editing.</div>
+              <div className="font-semibold text-emerald-900">
+                This plan already generated a draft job post.
+              </div>
+              <div className="text-sm text-emerald-800">
+                Keep this planner for reference or open the draft to keep
+                editing.
+              </div>
             </div>
-            <Button type="button" onClick={() => navigate(`/projects/${plan.converted_job_post}`)}>
+            <Button
+              type="button"
+              onClick={() => navigate(`/projects/${plan.converted_job_post}`)}
+            >
               Open draft job post
             </Button>
           </div>
@@ -342,14 +415,18 @@ export default function ProjectPlanDetail() {
 
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5">
-          <div className="text-lg font-semibold text-slate-950">Project Details</div>
+          <div className="text-lg font-semibold text-slate-950">
+            Project Details
+          </div>
           <div className="mt-1 text-sm text-slate-500">
             Define the project clearly before turning it into a job post.
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Project Title</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Project Title
+            </label>
             <Input
               value={plan.title || ""}
               onChange={(event) => updateField("title", event.target.value)}
@@ -357,24 +434,34 @@ export default function ProjectPlanDetail() {
             />
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Project Area</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Project Area
+            </label>
             <Input
               value={plan.house_location || ""}
-              onChange={(event) => updateField("house_location", event.target.value)}
+              onChange={(event) =>
+                updateField("house_location", event.target.value)
+              }
               placeholder="Kitchen window, front porch, upstairs bathroom"
             />
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Issue Overview</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Issue Overview
+            </label>
             <Textarea
               rows={4}
               value={plan.issue_summary || ""}
-              onChange={(event) => updateField("issue_summary", event.target.value)}
+              onChange={(event) =>
+                updateField("issue_summary", event.target.value)
+              }
               placeholder="What seems wrong, what you have noticed, and what is worrying you."
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Priority</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Priority
+            </label>
             <select
               value={plan.priority || "medium"}
               onChange={(event) => updateField("priority", event.target.value)}
@@ -386,7 +473,9 @@ export default function ProjectPlanDetail() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Planner Status</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Planner Status
+            </label>
             <select
               value={plan.status || "planning"}
               onChange={(event) => updateField("status", event.target.value)}
@@ -399,24 +488,32 @@ export default function ProjectPlanDetail() {
             </select>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:col-span-2">
-            <label className="mb-3 block text-sm font-medium text-slate-700">Budget Range</label>
+            <label className="mb-3 block text-sm font-medium text-slate-700">
+              Budget Range
+            </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
                 value={plan.budget_min ?? ""}
-                onChange={(event) => updateField("budget_min", event.target.value)}
+                onChange={(event) =>
+                  updateField("budget_min", event.target.value)
+                }
                 inputMode="decimal"
                 placeholder="Min"
               />
               <Input
                 value={plan.budget_max ?? ""}
-                onChange={(event) => updateField("budget_max", event.target.value)}
+                onChange={(event) =>
+                  updateField("budget_max", event.target.value)
+                }
                 inputMode="decimal"
                 placeholder="Max"
               />
             </div>
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Project Requirements</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Project Requirements
+            </label>
             <Textarea
               rows={8}
               value={plan.notes || ""}
@@ -430,28 +527,48 @@ export default function ProjectPlanDetail() {
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="font-semibold text-slate-950">Image Markup Canvas</div>
+            <div className="font-semibold text-slate-950">
+              Image Markup Canvas
+            </div>
             <div className="mt-1 max-w-2xl text-sm text-slate-500">
-              Upload images, mark problem areas, add visual notes, and communicate project details more clearly before sharing the project.
+              Upload images, mark problem areas, add visual notes, and
+              communicate project details more clearly before sharing the
+              project.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)}>
+            <GhostButton
+              type="button"
+              onClick={() => navigate(`/dashboard/planner/${planId}/markup`)}
+            >
               <SymbolIcon name="edit_note" className="mr-1 text-[18px]" />
               Open markup canvas
             </GhostButton>
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
               <SymbolIcon name="add_a_photo" className="text-[18px]" />
               {uploading ? "Uploading..." : "Upload images"}
-              <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={uploadImages}
+              />
             </label>
           </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {(plan.images || []).map((image) => (
-            <div key={image.id} className="rounded-lg border border-slate-200 p-3">
-              <img src={image.image_url} alt="" className="h-44 w-full rounded-md object-cover" />
+            <div
+              key={image.id}
+              className="rounded-lg border border-slate-200 p-3"
+            >
+              <img
+                src={image.image_url}
+                alt=""
+                className="h-44 w-full rounded-md object-cover"
+              />
               <Input
                 className="mt-3"
                 value={image.caption || ""}
@@ -460,17 +577,27 @@ export default function ProjectPlanDetail() {
                   setPlan((prev) => ({
                     ...prev,
                     images: (prev.images || []).map((item) =>
-                      item.id === image.id ? { ...item, caption: event.target.value } : item
+                      item.id === image.id
+                        ? { ...item, caption: event.target.value }
+                        : item,
                     ),
                   }))
                 }
-                onBlur={(event) => updateImage(image.id, { caption: event.target.value })}
+                onBlur={(event) =>
+                  updateImage(image.id, { caption: event.target.value })
+                }
               />
               <div className="mt-3 flex flex-wrap gap-2">
-                <GhostButton type="button" onClick={() => updateImage(image.id, { is_cover: true })}>
+                <GhostButton
+                  type="button"
+                  onClick={() => updateImage(image.id, { is_cover: true })}
+                >
                   {image.is_cover ? "Cover image" : "Make cover"}
                 </GhostButton>
-                <GhostButton type="button" onClick={() => removeImage(image.id)}>
+                <GhostButton
+                  type="button"
+                  onClick={() => removeImage(image.id)}
+                >
                   Delete
                 </GhostButton>
               </div>
@@ -487,24 +614,55 @@ export default function ProjectPlanDetail() {
         >
           <div>
             <div className="font-semibold text-slate-950">Research Links</div>
-            <div className="mt-1 text-sm text-slate-500">Save product links, inspiration, manufacturer references, videos, products, or notes from research.</div>
+            <div className="mt-1 text-sm text-slate-500">
+              Save product links, inspiration, manufacturer references, videos,
+              products, or notes from research.
+            </div>
           </div>
-          <SymbolIcon name={researchOpen ? "expand_less" : "expand_more"} className="text-[22px] text-slate-500" />
+          <SymbolIcon
+            name={researchOpen ? "expand_less" : "expand_more"}
+            className="text-[22px] text-slate-500"
+          />
         </button>
         {researchOpen ? (
           <div className="border-t border-slate-200 p-5">
             <div className="space-y-3">
               {(plan.links || []).map((item, index) => (
-                <div key={`link-${index}`} className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[1.4fr,1fr,1fr,auto]">
-                  <Input value={item.url || ""} onChange={(event) => updateLink(index, "url", event.target.value)} placeholder="https://..." />
-                  <Input value={item.label || ""} onChange={(event) => updateLink(index, "label", event.target.value)} placeholder="Label" />
-                  <Input value={item.notes || ""} onChange={(event) => updateLink(index, "notes", event.target.value)} placeholder="Notes" />
-                  <GhostButton type="button" onClick={() => removeLink(index)}>Remove</GhostButton>
+                <div
+                  key={`link-${index}`}
+                  className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[1.4fr,1fr,1fr,auto]"
+                >
+                  <Input
+                    value={item.url || ""}
+                    onChange={(event) =>
+                      updateLink(index, "url", event.target.value)
+                    }
+                    placeholder="https://..."
+                  />
+                  <Input
+                    value={item.label || ""}
+                    onChange={(event) =>
+                      updateLink(index, "label", event.target.value)
+                    }
+                    placeholder="Label"
+                  />
+                  <Input
+                    value={item.notes || ""}
+                    onChange={(event) =>
+                      updateLink(index, "notes", event.target.value)
+                    }
+                    placeholder="Notes"
+                  />
+                  <GhostButton type="button" onClick={() => removeLink(index)}>
+                    Remove
+                  </GhostButton>
                 </div>
               ))}
             </div>
             <div className="mt-3">
-              <GhostButton type="button" onClick={addLink}>Add link</GhostButton>
+              <GhostButton type="button" onClick={addLink}>
+                Add link
+              </GhostButton>
             </div>
           </div>
         ) : null}
@@ -514,7 +672,9 @@ export default function ProjectPlanDetail() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-semibold text-slate-950">Contractor Type</div>
-            <div className="text-sm text-slate-500">Choose the trades that seem most likely. You can edit them later.</div>
+            <div className="text-sm text-slate-500">
+              Choose the trades that seem most likely. You can edit them later.
+            </div>
           </div>
         </div>
 
@@ -540,22 +700,34 @@ export default function ProjectPlanDetail() {
         </div>
 
         <div className="mt-4 flex gap-2">
-          <Input value={customContractor} onChange={(event) => setCustomContractor(event.target.value)} placeholder="Add another contractor type" />
-          <GhostButton type="button" onClick={addCustomContractorType}>Add</GhostButton>
+          <Input
+            value={customContractor}
+            onChange={(event) => setCustomContractor(event.target.value)}
+            placeholder="Add another contractor type"
+          />
+          <GhostButton type="button" onClick={addCustomContractorType}>
+            Add
+          </GhostButton>
         </div>
 
         {aiAnalysis ? (
           <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 p-4">
             <div className="font-semibold text-sky-950">AI issue review</div>
             <div className="mt-2 text-sm text-slate-700">
-              <div><span className="font-medium">Possible issue:</span> {aiAnalysis.likely_issue_label || "—"}</div>
+              <div>
+                <span className="font-medium">Possible issue:</span>{" "}
+                {aiAnalysis.likely_issue_label || "—"}
+              </div>
               <div className="mt-1">{aiAnalysis.explanation || ""}</div>
-              {Array.isArray(aiAnalysis.contractor_types) && aiAnalysis.contractor_types.length ? (
+              {Array.isArray(aiAnalysis.contractor_types) &&
+              aiAnalysis.contractor_types.length ? (
                 <div className="mt-2">
-                  <span className="font-medium">Likely contractor types:</span> {aiAnalysis.contractor_types.join(", ")}
+                  <span className="font-medium">Likely contractor types:</span>{" "}
+                  {aiAnalysis.contractor_types.join(", ")}
                 </div>
               ) : null}
-              {Array.isArray(aiAnalysis.next_steps) && aiAnalysis.next_steps.length ? (
+              {Array.isArray(aiAnalysis.next_steps) &&
+              aiAnalysis.next_steps.length ? (
                 <ul className="mt-2 list-disc pl-5">
                   {aiAnalysis.next_steps.map((item, index) => (
                     <li key={`step-${index}`}>{item}</li>
@@ -564,28 +736,42 @@ export default function ProjectPlanDetail() {
               ) : null}
             </div>
             <div className="mt-3">
-              <Button type="button" onClick={applyAnalysis}>Apply suggestions to this plan</Button>
+              <Button type="button" onClick={applyAnalysis}>
+                Apply suggestions to this plan
+              </Button>
             </div>
           </div>
         ) : null}
       </Card>
 
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="font-semibold text-slate-950">Create Job Post Draft</div>
+        <div className="font-semibold text-slate-950">
+          Create Job Post Draft
+        </div>
         <div className="mt-1 text-sm text-slate-500">
-          Turn this private planner into a private editable job posting draft. You can review it before publishing anything publicly.
+          Turn this private planner into a private editable job posting draft.
+          You can review it before publishing anything publicly.
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" disabled={!canGenerateDraft(plan) || draftBusy} onClick={() => createDraft(false)}>
+          <Button
+            type="button"
+            disabled={!canGenerateDraft(plan) || draftBusy}
+            onClick={() => createDraft(false)}
+          >
             {draftBusy ? "Working..." : "Turn into job post"}
           </Button>
-          <GhostButton type="button" disabled={aiDisabled || !canGenerateDraft(plan) || draftBusy} onClick={() => createDraft(true)}>
+          <GhostButton
+            type="button"
+            disabled={aiDisabled || !canGenerateDraft(plan) || draftBusy}
+            onClick={() => createDraft(true)}
+          >
             Generate draft with AI
           </GhostButton>
         </div>
         {!canGenerateDraft(plan) ? (
           <div className="mt-3 text-sm text-slate-500">
-            Add a title or issue summary plus at least one note or image before generating the draft.
+            Add a title or issue summary plus at least one note or image before
+            generating the draft.
           </div>
         ) : null}
       </Card>
