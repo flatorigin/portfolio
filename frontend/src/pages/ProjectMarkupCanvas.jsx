@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { SymbolIcon } from "../ui";
 
@@ -410,6 +410,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
 
 export default function ProjectMarkupCanvas() {
   const { planId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const svgRef = useRef(null);
   const fileRef = useRef(null);
@@ -433,6 +434,7 @@ export default function ProjectMarkupCanvas() {
   const [focusedSidebarInputId, setFocusedSidebarInputId] = useState("");
 
   const storageKey = `${STORAGE_PREFIX}:${planId || "standalone"}`;
+  const selectedImageId = useMemo(() => new URLSearchParams(location.search).get("image") || "", [location.search]);
 
   useEffect(() => {
     try {
@@ -461,10 +463,32 @@ export default function ProjectMarkupCanvas() {
         if (!alive) return;
         setPlan(data);
         const markup = safeMarkupData(data?.markup_data);
-        if (Array.isArray(markup.annotations)) setAnnotations(markup.annotations);
-        if (markup.background_url) setBackgroundUrl(markup.background_url);
-        if (markup.visible_layers && typeof markup.visible_layers === "object") {
-          setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
+        const selectedImage = selectedImageId
+          ? (data?.images || []).find((image) => String(image.id) === String(selectedImageId))
+          : null;
+        const selectedImageVersion =
+          selectedImage && Array.isArray(markup.versions)
+            ? markup.versions.find((version) => {
+                if (version.source_image_id && String(version.source_image_id) === String(selectedImage.id)) return true;
+                return version.background_url && version.background_url === selectedImage.image_url;
+              })
+            : null;
+
+        if (selectedImageVersion) {
+          setAnnotations(Array.isArray(selectedImageVersion.annotations) ? selectedImageVersion.annotations : []);
+          setBackgroundUrl(selectedImageVersion.background_url || selectedImage.image_url || "");
+          if (selectedImageVersion.visible_layers && typeof selectedImageVersion.visible_layers === "object") {
+            setVisibleLayers((prev) => ({ ...prev, ...selectedImageVersion.visible_layers }));
+          }
+        } else if (selectedImage) {
+          setAnnotations([]);
+          setBackgroundUrl(selectedImage.image_url || "");
+        } else {
+          if (Array.isArray(markup.annotations)) setAnnotations(markup.annotations);
+          if (markup.background_url) setBackgroundUrl(markup.background_url);
+          if (markup.visible_layers && typeof markup.visible_layers === "object") {
+            setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
+          }
         }
         if (markup.active_layer) setActiveLayer(markup.active_layer);
       })
@@ -477,7 +501,7 @@ export default function ProjectMarkupCanvas() {
     return () => {
       alive = false;
     };
-  }, [planId]);
+  }, [planId, selectedImageId]);
 
   const selected = useMemo(
     () => annotations.find((item) => item.id === selectedId) || null,
@@ -511,6 +535,7 @@ export default function ProjectMarkupCanvas() {
     const existingVersions = Array.isArray(previousMarkup.versions)
       ? previousMarkup.versions
       : [];
+    const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
     const normalizedAnnotations = annotations.map((item) =>
       item.type === "text" || item.type === "measure"
@@ -522,6 +547,7 @@ export default function ProjectMarkupCanvas() {
       name: versionOverrides.name || `Markup version ${nextVersionNumber}`,
       created_at: now,
       background_url,
+      source_image_id: sourceImage?.id || null,
       snapshot_url: versionOverrides.snapshot_url || "",
       snapshot_image_id: versionOverrides.snapshot_image_id || null,
       annotations: normalizedAnnotations,

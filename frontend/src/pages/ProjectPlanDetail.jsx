@@ -51,6 +51,67 @@ function photoSuggestionList(template, currentQuestion) {
   return Array.from(suggestions).filter(Boolean);
 }
 
+const FINAL_DETAIL_QUESTIONS = [
+  {
+    field: "title",
+    label: "Name this project",
+    help: "Use a short name that a contractor can recognize quickly.",
+    type: "input",
+    required: true,
+    placeholder: "Deck railing repair",
+  },
+  {
+    field: "house_location",
+    label: "Where is the work area?",
+    help: "Name the room, exterior area, floor, or part of the property.",
+    type: "input",
+    required: true,
+    placeholder: "Back deck, second-floor bathroom, front entry",
+  },
+  {
+    field: "issue_summary",
+    label: "Summarize what needs to happen",
+    help: "Write the plain-language scope you want contractors to understand first.",
+    type: "textarea",
+    required: true,
+    placeholder: "The railing is loose and a few boards need replacement before the deck can be used safely.",
+  },
+  {
+    field: "site_access",
+    label: "How should contractors access the area?",
+    help: "Mention gates, stairs, parking, tight paths, upper floors, or material delivery constraints.",
+    type: "input",
+    required: false,
+    placeholder: "Easy access from driveway through side gate",
+  },
+  {
+    field: "notes",
+    label: "Add any final details",
+    help: "Include timing, concerns, preferred materials, or anything the guided intake missed.",
+    type: "textarea",
+    required: false,
+    placeholder: "Prefer composite boards if the frame is usable. Flexible timing over the next month.",
+  },
+];
+
+function findMarkupForImage(image, versions) {
+  if (!image) return null;
+  return (versions || []).find((version) => {
+    if (version.source_image_id && Number(version.source_image_id) === Number(image.id)) return true;
+    return version.background_url && version.background_url === image.image_url;
+  });
+}
+
+function finalDetailsComplete(plan) {
+  if (!plan) return false;
+  return FINAL_DETAIL_QUESTIONS.every((question) => {
+    if (!question.required) return true;
+    const value = String(plan?.[question.field] ?? "").trim();
+    if (question.field === "title") return value && value !== "Untitled issue";
+    return Boolean(value);
+  });
+}
+
 export default function ProjectPlanDetail() {
   const { planId } = useParams();
   const navigate = useNavigate();
@@ -64,6 +125,7 @@ export default function ProjectPlanDetail() {
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [inviteUsernames, setInviteUsernames] = useState("");
+  const [finalQuestionIndex, setFinalQuestionIndex] = useState(0);
 
   async function loadPlan() {
     setLoading(true);
@@ -115,6 +177,8 @@ export default function ProjectPlanDetail() {
   const contractorReady = plan?.contractor_ready_summary_json || {};
   const markupVersions = getMarkupVersions(plan?.markup_data);
   const currentPhotoSuggestions = photoSuggestionList(activeTemplate, currentQuestion);
+  const finalQuestion = FINAL_DETAIL_QUESTIONS[finalQuestionIndex] || FINAL_DETAIL_QUESTIONS[0];
+  const finalReady = finalDetailsComplete(plan);
 
   async function patchPlan(patch, successMessage = "Saved.") {
     setSaving(true);
@@ -214,6 +278,24 @@ export default function ProjectPlanDetail() {
     if (!plan) return;
     setError("");
     await patchPlan({ [field]: plan[field] }, "Saved.");
+  }
+
+  async function saveFinalDetailAndMove(nextIndex) {
+    if (!finalQuestion) return;
+    const value = String(plan?.[finalQuestion.field] ?? "").trim();
+    if (finalQuestion.required && (!value || (finalQuestion.field === "title" && value === "Untitled issue"))) {
+      setError("Answer this question before continuing.");
+      return;
+    }
+    setError("");
+    await patchPlan({ [finalQuestion.field]: plan[finalQuestion.field] }, "Project detail saved.");
+    setFinalQuestionIndex(Math.min(Math.max(nextIndex, 0), FINAL_DETAIL_QUESTIONS.length - 1));
+  }
+
+  function openMarkupForImage(image) {
+    const params = new URLSearchParams();
+    if (image?.id) params.set("image", String(image.id));
+    navigate(`/dashboard/planner/${planId}/markup${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
   async function uploadImages(event) {
@@ -336,7 +418,7 @@ export default function ProjectPlanDetail() {
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-          Move through the intake one step at a time, upload photos, mark them up, and then generate a contractor-ready draft.
+          Move through the intake, add photos and markups, answer final project details, then generate a contractor-ready draft.
         </div>
       </div>
 
@@ -511,19 +593,14 @@ export default function ProjectPlanDetail() {
           <div>
             <div className="text-lg font-semibold text-slate-950">Project Photos & Markup</div>
             <div className="mt-1 text-sm text-slate-500">
-              Upload photos, then open the markup canvas to point out repair areas, additions, access constraints, or unclear details.
+              Upload photos, then mark up each image from its tile.
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-              <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
-              <SymbolIcon name="upload" className="text-[18px]" />
-              {uploading ? "Uploading..." : "Upload photos"}
-            </label>
-            <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)}>
-              Open markup canvas
-            </GhostButton>
-          </div>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
+            <SymbolIcon name="upload" className="text-[18px]" />
+            {uploading ? "Uploading..." : "Upload photos"}
+          </label>
         </div>
 
         {activeTemplate?.photo_suggestions?.length ? (
@@ -536,21 +613,45 @@ export default function ProjectPlanDetail() {
 
         {plan.images.length ? (
           <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {plan.images.map((image) => (
-              <div key={image.id} className="rounded-2xl border border-slate-200 p-3">
-                <img src={image.image_url} alt="" className="h-44 w-full rounded-xl object-cover" />
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <div className="text-xs text-slate-500">{image.caption || "Project photo"}</div>
-                  <button
-                    type="button"
-                    onClick={() => removeImage(image.id)}
-                    className="text-xs font-medium text-rose-700 hover:text-rose-800"
-                  >
-                    Delete
+            {plan.images.map((image) => {
+              const markedVersion = findMarkupForImage(image, markupVersions);
+              return (
+                <div key={image.id} className="rounded-2xl border border-slate-200 p-3">
+                  <button type="button" onClick={() => openMarkupForImage(image)} className="block w-full overflow-hidden rounded-xl bg-slate-100 text-left">
+                    <img src={image.image_url} alt="" className="h-44 w-full object-cover" />
                   </button>
+                  <div className="mt-3 flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-medium text-slate-700">{image.caption || "Project photo"}</div>
+                      {markedVersion ? (
+                        <div className="mt-1 text-xs text-emerald-700">
+                          {markedVersion.annotation_count ?? 0} markups saved
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-slate-500">No markup yet</div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeImage(image.id)}
+                      className="text-xs font-medium text-rose-700 hover:text-rose-800"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button type="button" onClick={() => openMarkupForImage(image)} className="h-9 px-3 text-xs">
+                      {markedVersion ? "Edit markup" : "Add markup"}
+                    </Button>
+                    {markedVersion?.snapshot_url ? (
+                      <GhostButton type="button" onClick={() => openMarkupForImage(image)} className="h-9 px-3 text-xs">
+                        View
+                      </GhostButton>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
@@ -592,43 +693,60 @@ export default function ProjectPlanDetail() {
         ) : null}
       </Card>
 
-      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="text-lg font-semibold text-slate-950">Manual project details</div>
-        <div className="mt-1 text-sm text-slate-500">
-          Manual editing remains available at all times. Use this to clarify anything the guided intake misses.
-        </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Project title</label>
-            <Input value={plan.title || ""} onChange={(event) => updateLocalField("title", event.target.value)} onBlur={() => saveManualField("title")} />
+      {isIntakeComplete ? (
+        <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold text-slate-950">Final Project Details</div>
+              <div className="mt-1 text-sm text-slate-500">
+                Question {finalQuestionIndex + 1} of {FINAL_DETAIL_QUESTIONS.length}
+              </div>
+            </div>
+            {finalReady ? <Badge>Ready to generate</Badge> : null}
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Affected area</label>
-            <Input value={plan.house_location || ""} onChange={(event) => updateLocalField("house_location", event.target.value)} onBlur={() => saveManualField("house_location")} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Site access</label>
-            <Input value={plan.site_access || ""} onChange={(event) => updateLocalField("site_access", event.target.value)} onBlur={() => saveManualField("site_access")} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Issue summary</label>
-            <Textarea rows={4} value={plan.issue_summary || ""} onChange={(event) => updateLocalField("issue_summary", event.target.value)} onBlur={() => saveManualField("issue_summary")} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Budget min</label>
-            <Input value={plan.budget_min ?? ""} inputMode="decimal" onChange={(event) => updateLocalField("budget_min", event.target.value)} onBlur={() => saveManualField("budget_min")} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Budget max</label>
-            <Input value={plan.budget_max ?? ""} inputMode="decimal" onChange={(event) => updateLocalField("budget_max", event.target.value)} onBlur={() => saveManualField("budget_max")} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Extra notes</label>
-            <Textarea rows={6} value={plan.notes || ""} onChange={(event) => updateLocalField("notes", event.target.value)} onBlur={() => saveManualField("notes")} />
-          </div>
-        </div>
-      </Card>
 
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+            <label className="block text-xl font-semibold text-slate-950">{finalQuestion.label}</label>
+            <div className="mt-2 text-sm leading-6 text-slate-600">{finalQuestion.help}</div>
+            <div className="mt-5">
+              {finalQuestion.type === "textarea" ? (
+                <Textarea
+                  rows={5}
+                  value={plan[finalQuestion.field] || ""}
+                  onChange={(event) => updateLocalField(finalQuestion.field, event.target.value)}
+                  onBlur={() => saveManualField(finalQuestion.field)}
+                  placeholder={finalQuestion.placeholder}
+                />
+              ) : (
+                <Input
+                  value={plan[finalQuestion.field] || ""}
+                  onChange={(event) => updateLocalField(finalQuestion.field, event.target.value)}
+                  onBlur={() => saveManualField(finalQuestion.field)}
+                  placeholder={finalQuestion.placeholder}
+                />
+              )}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <GhostButton
+                type="button"
+                onClick={() => setFinalQuestionIndex((index) => Math.max(index - 1, 0))}
+                disabled={saving || finalQuestionIndex === 0}
+              >
+                Back
+              </GhostButton>
+              <Button
+                type="button"
+                onClick={() => saveFinalDetailAndMove(finalQuestionIndex + 1)}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : finalQuestionIndex >= FINAL_DETAIL_QUESTIONS.length - 1 ? "Finish details" : "Next"}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {isIntakeComplete && finalReady ? (
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -736,6 +854,7 @@ export default function ProjectPlanDetail() {
           </div>
         ) : null}
       </Card>
+      ) : null}
     </div>
   );
 }
