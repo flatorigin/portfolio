@@ -112,6 +112,14 @@ function finalDetailsComplete(plan) {
   });
 }
 
+function guidedAnswerRows(template, answers) {
+  return (template?.questions || []).map((question) => ({
+    id: question.id,
+    question: question.question,
+    answer: getAnswerLabel((answers || {})[question.id]) || "Not answered",
+  }));
+}
+
 function xmlEscape(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -232,6 +240,7 @@ export default function ProjectPlanDetail() {
   const finalQuestion = FINAL_DETAIL_QUESTIONS[finalQuestionIndex] || FINAL_DETAIL_QUESTIONS[0];
   const finalReady = finalDetailsComplete(plan);
   const showProjectPreview = isIntakeComplete && finalReady && finalDetailsFinished;
+  const guidedRows = guidedAnswerRows(activeTemplate, plan?.guided_answers_json);
 
   async function patchPlan(patch, successMessage = "Saved.") {
     setSaving(true);
@@ -830,90 +839,116 @@ export default function ProjectPlanDetail() {
       ) : null}
 
       {showProjectPreview ? (
-        <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-lg font-semibold text-slate-950">Project Preview</div>
-              <div className="mt-1 text-sm text-slate-500">
-                This is the contractor-facing project structure before AI turns it into a polished draft.
-              </div>
-            </div>
-            <GhostButton type="button" onClick={() => setFinalDetailsFinished(false)}>
-              Edit details
-            </GhostButton>
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-              {projectTypeLabel(activeTemplate)}
-            </div>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-950">{plan.title || "Untitled issue"}</h2>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Work area</div>
-                <div className="mt-1 text-sm text-slate-800">{plan.house_location || "Not specified"}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Access</div>
-                <div className="mt-1 text-sm text-slate-800">{plan.site_access || "Not specified"}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Photos</div>
-                <div className="mt-1 text-sm text-slate-800">
-                  {plan.images.length} uploaded, {markupVersions.length} markup versions saved
+                <div className="text-lg font-semibold text-slate-950">Project Preview</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Review how this project will read before generating the contractor-ready draft.
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setFinalDetailsFinished(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Close preview"
+              >
+                <SymbolIcon name="close" className="text-[20px]" />
+              </button>
             </div>
-            <div className="mt-5">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Summary</div>
-              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-800">
-                {plan.issue_summary || "No summary yet."}
-              </p>
-            </div>
-            {plan.notes ? (
-              <div className="mt-5">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Additional details</div>
-                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{plan.notes}</p>
-              </div>
-            ) : null}
-          </div>
 
-          {markupVersions.length ? (
-            <div className="mt-5">
-              <div className="text-sm font-semibold text-slate-900">Markup files</div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                {markupVersions.map((version) => (
-                  <div key={version.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="font-semibold text-slate-900">{version.name || "Saved markup"}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {version.annotation_count ?? 0} markups
-                      {version.created_at ? ` · ${new Date(version.created_at).toLocaleString()}` : ""}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <GhostButton type="button" onClick={() => downloadMarkupSvg(version)} className="h-9 px-3 text-xs">
-                        SVG
-                      </GhostButton>
-                      <GhostButton
-                        type="button"
-                        onClick={() => downloadMarkupPng(version)}
-                        disabled={!version.snapshot_url}
-                        className="h-9 px-3 text-xs"
-                      >
-                        PNG
-                      </GhostButton>
-                      <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)} className="h-9 px-3 text-xs">
-                        Open markup
-                      </GhostButton>
+            <div className="max-h-[calc(90vh-76px)] overflow-y-auto px-5 py-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  {projectTypeLabel(activeTemplate)}
+                </div>
+                <h2 className="mt-2 text-2xl font-semibold text-slate-950">{plan.title || "Untitled issue"}</h2>
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Work area</div>
+                    <div className="mt-1 text-sm text-slate-800">{plan.house_location || "Not specified"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Access</div>
+                    <div className="mt-1 text-sm text-slate-800">{plan.site_access || "Not specified"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Photos</div>
+                    <div className="mt-1 text-sm text-slate-800">
+                      {plan.images.length} uploaded, {markupVersions.length} markup versions saved
                     </div>
                   </div>
-                ))}
+                </div>
+                <div className="mt-5">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Summary</div>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-800">
+                    {plan.issue_summary || "No summary yet."}
+                  </p>
+                </div>
+                {plan.notes ? (
+                  <div className="mt-5">
+                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Additional details</div>
+                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{plan.notes}</p>
+                  </div>
+                ) : null}
               </div>
+
+              {guidedRows.length ? (
+                <div className="mt-5">
+                  <div className="text-sm font-semibold text-slate-900">Guided intake answers</div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    {guidedRows.map((row, index) => (
+                      <div key={row.id || index} className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                          Question {index + 1}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-slate-900">{row.question}</div>
+                        <div className="mt-2 text-sm leading-6 text-slate-700">{row.answer}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {markupVersions.length ? (
+                <div className="mt-5">
+                  <div className="text-sm font-semibold text-slate-900">Markup files</div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    {markupVersions.map((version) => (
+                      <div key={version.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="font-semibold text-slate-900">{version.name || "Saved markup"}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {version.annotation_count ?? 0} markups
+                          {version.created_at ? ` · ${new Date(version.created_at).toLocaleString()}` : ""}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <GhostButton type="button" onClick={() => downloadMarkupSvg(version)} className="h-9 px-3 text-xs">
+                            SVG
+                          </GhostButton>
+                          <GhostButton
+                            type="button"
+                            onClick={() => downloadMarkupPng(version)}
+                            disabled={!version.snapshot_url}
+                            className="h-9 px-3 text-xs"
+                          >
+                            PNG
+                          </GhostButton>
+                          <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)} className="h-9 px-3 text-xs">
+                            Open markup
+                          </GhostButton>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </Card>
+          </div>
+        </div>
       ) : null}
 
-      {showProjectPreview ? (
+      {isIntakeComplete && finalReady ? (
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
