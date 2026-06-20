@@ -112,6 +112,57 @@ function finalDetailsComplete(plan) {
   });
 }
 
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function markupVersionSvg(version, planTitle) {
+  const annotations = Array.isArray(version?.annotations) ? version.annotations : [];
+  const shapes = annotations
+    .map((item) => {
+      const stroke = item.strokeColor || item.color || "#0f172a";
+      const fill = item.fillColor ? `${item.fillColor}33` : "transparent";
+      const dash = item.strokeStyle === "dashed" ? ' stroke-dasharray="10 8"' : "";
+      if (item.type === "rect") {
+        const x = Math.min(item.x || 0, item.x2 || 0);
+        const y = Math.min(item.y || 0, item.y2 || 0);
+        return `<rect x="${x}" y="${y}" width="${Math.abs((item.x2 || 0) - (item.x || 0))}" height="${Math.abs((item.y2 || 0) - (item.y || 0))}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="3"${dash}/>`;
+      }
+      if (item.type === "circle") {
+        const cx = ((item.x || 0) + (item.x2 || 0)) / 2;
+        const cy = ((item.y || 0) + (item.y2 || 0)) / 2;
+        return `<ellipse cx="${cx}" cy="${cy}" rx="${Math.max(10, Math.abs((item.x2 || 0) - (item.x || 0)) / 2)}" ry="${Math.max(10, Math.abs((item.y2 || 0) - (item.y || 0)) / 2)}" fill="${fill}" stroke="${stroke}" stroke-width="3"${dash}/>`;
+      }
+      if (item.type === "arrow" || item.type === "measure") {
+        return `<line x1="${item.x || 0}" y1="${item.y || 0}" x2="${item.x2 || 0}" y2="${item.y2 || 0}" stroke="${stroke}" stroke-width="4" stroke-linecap="round"${dash}/>`;
+      }
+      if (item.type === "freehand" && Array.isArray(item.points)) {
+        const d = item.points.map((point, index) => `${index ? "L" : "M"} ${point.x || 0} ${point.y || 0}`).join(" ");
+        return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"${dash}/>`;
+      }
+      if (item.type === "priority") {
+        return `<circle cx="${item.x || 0}" cy="${item.y || 0}" r="26" fill="${fill}" stroke="${stroke}" stroke-width="3"/><text x="${item.x || 0}" y="${(item.y || 0) + 8}" text-anchor="middle" fill="${stroke}" font-size="24" font-weight="700">${xmlEscape(item.priorityNumber || 1)}</text>`;
+      }
+      return `<text x="${item.x || 0}" y="${item.y || 0}" fill="${stroke}" font-size="22" font-weight="500">${xmlEscape(item.text || "Note")}</text>`;
+    })
+    .join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760"><title>${xmlEscape(version?.name || planTitle || "Project markup")}</title><rect width="1200" height="760" fill="#f8fafc"/><text x="32" y="44" fill="#334155" font-size="24" font-weight="700">${xmlEscape(version?.name || planTitle || "Project markup")}</text>${shapes}</svg>`;
+}
+
+function downloadBlob(content, filename, type) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ProjectPlanDetail() {
   const { planId } = useParams();
   const navigate = useNavigate();
@@ -126,6 +177,7 @@ export default function ProjectPlanDetail() {
   const [statusMessage, setStatusMessage] = useState("");
   const [inviteUsernames, setInviteUsernames] = useState("");
   const [finalQuestionIndex, setFinalQuestionIndex] = useState(0);
+  const [finalDetailsFinished, setFinalDetailsFinished] = useState(false);
 
   async function loadPlan() {
     setLoading(true);
@@ -179,6 +231,7 @@ export default function ProjectPlanDetail() {
   const currentPhotoSuggestions = photoSuggestionList(activeTemplate, currentQuestion);
   const finalQuestion = FINAL_DETAIL_QUESTIONS[finalQuestionIndex] || FINAL_DETAIL_QUESTIONS[0];
   const finalReady = finalDetailsComplete(plan);
+  const showProjectPreview = isIntakeComplete && finalReady && finalDetailsFinished;
 
   async function patchPlan(patch, successMessage = "Saved.") {
     setSaving(true);
@@ -199,6 +252,7 @@ export default function ProjectPlanDetail() {
 
   function updateLocalField(field, value) {
     setPlan((prev) => emptyPlan({ ...prev, [field]: value }));
+    setFinalDetailsFinished(false);
   }
 
   function updateGuidedAnswer(value) {
@@ -289,6 +343,12 @@ export default function ProjectPlanDetail() {
     }
     setError("");
     await patchPlan({ [finalQuestion.field]: plan[finalQuestion.field] }, "Project detail saved.");
+    if (finalQuestionIndex >= FINAL_DETAIL_QUESTIONS.length - 1) {
+      setFinalDetailsFinished(true);
+      setStatusMessage("Final details saved. Review the project preview below.");
+      return;
+    }
+    setFinalDetailsFinished(false);
     setFinalQuestionIndex(Math.min(Math.max(nextIndex, 0), FINAL_DETAIL_QUESTIONS.length - 1));
   }
 
@@ -296,6 +356,26 @@ export default function ProjectPlanDetail() {
     const params = new URLSearchParams();
     if (image?.id) params.set("image", String(image.id));
     navigate(`/dashboard/planner/${planId}/markup${params.toString() ? `?${params.toString()}` : ""}`);
+  }
+
+  function downloadMarkupSvg(version) {
+    downloadBlob(
+      markupVersionSvg(version, plan.title),
+      `${String(version?.name || plan.title || "project-markup").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.svg`,
+      "image/svg+xml;charset=utf-8",
+    );
+  }
+
+  async function downloadMarkupPng(version) {
+    if (!version?.snapshot_url) return;
+    const response = await fetch(version.snapshot_url, { credentials: "include" });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${String(version?.name || plan.title || "project-markup").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function uploadImages(event) {
@@ -729,7 +809,10 @@ export default function ProjectPlanDetail() {
             <div className="mt-6 flex flex-wrap gap-3">
               <GhostButton
                 type="button"
-                onClick={() => setFinalQuestionIndex((index) => Math.max(index - 1, 0))}
+                onClick={() => {
+                  setFinalDetailsFinished(false);
+                  setFinalQuestionIndex((index) => Math.max(index - 1, 0));
+                }}
                 disabled={saving || finalQuestionIndex === 0}
               >
                 Back
@@ -739,14 +822,98 @@ export default function ProjectPlanDetail() {
                 onClick={() => saveFinalDetailAndMove(finalQuestionIndex + 1)}
                 disabled={saving}
               >
-                {saving ? "Saving..." : finalQuestionIndex >= FINAL_DETAIL_QUESTIONS.length - 1 ? "Finish details" : "Next"}
+                {saving ? "Saving..." : finalQuestionIndex >= FINAL_DETAIL_QUESTIONS.length - 1 ? "Review project" : "Next"}
               </Button>
             </div>
           </div>
         </Card>
       ) : null}
 
-      {isIntakeComplete && finalReady ? (
+      {showProjectPreview ? (
+        <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-lg font-semibold text-slate-950">Project Preview</div>
+              <div className="mt-1 text-sm text-slate-500">
+                This is the contractor-facing project structure before AI turns it into a polished draft.
+              </div>
+            </div>
+            <GhostButton type="button" onClick={() => setFinalDetailsFinished(false)}>
+              Edit details
+            </GhostButton>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+              {projectTypeLabel(activeTemplate)}
+            </div>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-950">{plan.title || "Untitled issue"}</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Work area</div>
+                <div className="mt-1 text-sm text-slate-800">{plan.house_location || "Not specified"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Access</div>
+                <div className="mt-1 text-sm text-slate-800">{plan.site_access || "Not specified"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Photos</div>
+                <div className="mt-1 text-sm text-slate-800">
+                  {plan.images.length} uploaded, {markupVersions.length} markup versions saved
+                </div>
+              </div>
+            </div>
+            <div className="mt-5">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Summary</div>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-800">
+                {plan.issue_summary || "No summary yet."}
+              </p>
+            </div>
+            {plan.notes ? (
+              <div className="mt-5">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Additional details</div>
+                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{plan.notes}</p>
+              </div>
+            ) : null}
+          </div>
+
+          {markupVersions.length ? (
+            <div className="mt-5">
+              <div className="text-sm font-semibold text-slate-900">Markup files</div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {markupVersions.map((version) => (
+                  <div key={version.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="font-semibold text-slate-900">{version.name || "Saved markup"}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {version.annotation_count ?? 0} markups
+                      {version.created_at ? ` · ${new Date(version.created_at).toLocaleString()}` : ""}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <GhostButton type="button" onClick={() => downloadMarkupSvg(version)} className="h-9 px-3 text-xs">
+                        SVG
+                      </GhostButton>
+                      <GhostButton
+                        type="button"
+                        onClick={() => downloadMarkupPng(version)}
+                        disabled={!version.snapshot_url}
+                        className="h-9 px-3 text-xs"
+                      >
+                        PNG
+                      </GhostButton>
+                      <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)} className="h-9 px-3 text-xs">
+                        Open markup
+                      </GhostButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
+      {showProjectPreview ? (
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
