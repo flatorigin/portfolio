@@ -1,0 +1,337 @@
+{
+  "project_types": [
+    {
+      "key": "deck",
+      "label": "Deck",
+      "photo_suggestions": [
+        "Full deck from far away",
+        "Under the deck",
+        "Damaged boards",
+        "Stairs",
+        "Railing connection",
+        "Area for new deck or addition",
+        "Gate or access path"
+      ],
+      "questions": [
+        {
+          "id": "deck_project_goal",
+          "question": "What do you need for this deck?",
+          "type": "single_choice",
+          "options": ["Repair", "New build", "Replace existing deck", "Add onto existing deck", "Not sure"],
+          "required": true,
+          "allow_skip": false,
+          "help_text": "This helps contractors understand the basic scope.",
+          "maps_to_field": "project_goal"
+        },
+        {
+          "id": "deck_main_issue",
+          "question": "What is the main issue or goal?",
+          "type": "single_choice",
+          "options": ["Rotting boards", "Loose railing", "Unsafe stairs", "Larger outdoor space", "Better appearance", "Not sure"],
+          "required": true,
+          "allow_skip": false,
+          "help_text": "Pick the closest match so the project starts with a clear direction.",
+          "maps_to_field": "issue_summary"
+        },
+        {
+          "id": "deck_size",
+          "question": "About how large is the deck?",
+          "type": "single_choice",
+          "options": ["Under 100 sq ft", "100-200 sq ft", "200-400 sq ft", "400+ sq ft", "Not sure"],
+          "required": true,
+          "allow_skip": false,
+          "help_text": "An estimate is enough for now."
+        },
+        {
+          "id": "deck_material",
+          "question": "What material are you considering?",
+          "type": "single_choice",
+          "options": ["Pressure-treated wood", "Cedar", "Composite", "PVC", "Not sure"],
+          "required": true,
+          "allow_skip": false,
+          "help_text": "You can change this later if a contractor suggests a better fit."
+        },
+        {
+          "id": "deck_stairs",
+          "question": "Are stairs included?",
+          "type": "single_choice",
+          "options": ["Yes", "No", "Not sure"],
+          "required": true,
+          "allow_skip": false
+        },
+        {
+          "id": "deck_railings",
+          "question": "Are railings included?",
+          "type": "single_choice",
+          "options": ["Yes", "No", "Not sure"],
+          "required": true,
+          "allow_skip": false
+        },
+        {
+          "id": "deck_existing_frame",
+          "question": "Is the existing frame staying?",
+          "type": "single_choice",
+          "options": ["Yes", "No", "Not sure", "New build"],
+          "required": true,
+          "allow_skip": false
+        },
+        {
+          "id": "deck_attached_to_house",
+          "question": "Is the deck attached to the house?",
+          "type": "single_choice",
+          "options": ["Yes", "No", "Not sure"],
+          "required": true,
+          "allow_skip": false
+        },
+        {
+          "id": "deck_permit",
+          "question": "Do you know if a permit is needed?",
+          "type": "single_choice",
+          "options": ["Yes", "No", "Not sure"],
+          "required": true,
+          "allow_skip": false
+        },
+        {
+          "id": "deck_photo_prompt",
+          "question": "What photos can you add?",
+          "type": "multi_choice",
+          "options": ["Full deck from far away", "Close-up of damage", "Under the deck", "Stairs", "Railing", "Area where new deck will go"],
+          "required": false,
+          "allow_skip": true,
+          "help_text": "These are the most useful angles for a deck contractor.",
+          "maps_to_field": "photo_prompt"
+        },
+        {
+          "id": "site_access",
+          "question": "How easy is it to access the work area?",
+          "type": "single_choice",
+          "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"],
+          "required": true,
+          "allow_skip": false,
+          "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.",
+          "maps_to_field": "site_access",
+          "photo_prompt": {
+            "label": "Add photos that show access to the work area.",
+            "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]
+          }
+        }
+      ]
+    },
+    {
+      "key": "roof",
+      "label": "Roof",
+      "photo_suggestions": ["Full roof from ground", "Leak area inside", "Ceiling stain", "Missing shingles", "Gutter edge", "Driveway or dumpster access"],
+      "questions": [
+        {"id": "roof_goal", "question": "What do you need help with on the roof?", "type": "single_choice", "options": ["Repair a leak", "Replace the full roof", "Repair storm damage", "Fix flashing or vent issue", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "roof_problem_area", "question": "Where are you seeing the main problem?", "type": "single_choice", "options": ["Roof surface", "Around chimney or vent", "Gutter or edge", "Inside ceiling stain", "Multiple areas", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "roof_home_size", "question": "What best describes the roof size?", "type": "single_choice", "options": ["Small area", "One side of roof", "Most of the roof", "Entire roof replacement", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "roof_material", "question": "What roofing material do you have or want?", "type": "single_choice", "options": ["Asphalt shingles", "Metal", "Flat roofing", "Tile", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "roof_leak_active", "question": "Is water actively getting inside?", "type": "single_choice", "options": ["Yes", "No", "Only during heavy rain", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "roof_age", "question": "About how old is the roof?", "type": "single_choice", "options": ["Under 10 years", "10-20 years", "20+ years", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "roof_stories", "question": "How many stories is the home?", "type": "single_choice", "options": ["One story", "Two stories", "Three or more", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "roof_insurance", "question": "Is this related to insurance or storm damage?", "type": "single_choice", "options": ["Yes", "No", "Maybe"], "required": true, "allow_skip": false},
+        {"id": "roof_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "roof_photo_prompt", "question": "Which photos can you add now?", "type": "multi_choice", "options": ["Full roof from ground", "Leak area inside", "Ceiling stain", "Missing shingles", "Flashing or vent area", "Gutter edge"], "required": false, "allow_skip": true, "maps_to_field": "photo_prompt"},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "bathroom",
+      "label": "Bathroom",
+      "photo_suggestions": ["Full bathroom", "Shower or tub area", "Vanity", "Floor", "Plumbing issue", "Hallway or stair access"],
+      "questions": [
+        {"id": "bathroom_goal", "question": "What do you need done in the bathroom?", "type": "single_choice", "options": ["Full remodel", "Partial remodel", "Repair damage", "Fix plumbing issue", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "bathroom_priority", "question": "What is the main problem or goal?", "type": "single_choice", "options": ["Outdated layout", "Water damage", "Shower or tub issue", "Flooring issue", "Storage or vanity update", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "bathroom_size", "question": "How large is the bathroom?", "type": "single_choice", "options": ["Powder room", "Small full bathroom", "Medium bathroom", "Large primary bathroom", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "bathroom_keep_layout", "question": "Are you keeping the same layout?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "bathroom_shower", "question": "Is the shower or tub part of the work?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "bathroom_tile", "question": "Will tile work be needed?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "bathroom_plumbing", "question": "Is there an active plumbing problem?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "bathroom_floor_level", "question": "Which floor is the bathroom on?", "type": "single_choice", "options": ["First floor", "Second floor", "Basement", "Other", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "bathroom_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "bathroom_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full bathroom", "Shower or tub", "Vanity", "Floor", "Problem area", "Hallway or stairs"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "kitchen",
+      "label": "Kitchen",
+      "photo_suggestions": ["Full kitchen", "Cabinets", "Counters", "Appliance wall", "Flooring", "Hallway or entry access"],
+      "questions": [
+        {"id": "kitchen_goal", "question": "What kind of kitchen project is this?", "type": "single_choice", "options": ["Full remodel", "Cabinet update", "Countertop update", "Layout change", "Repair work", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "kitchen_main_goal", "question": "What is the main goal?", "type": "single_choice", "options": ["Better layout", "More storage", "New finishes", "Fix damage", "Prepare for resale", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "kitchen_size", "question": "How large is the kitchen?", "type": "single_choice", "options": ["Small galley", "Average kitchen", "Large open kitchen", "Part of bigger remodel", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "kitchen_layout", "question": "Are you changing the layout?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "kitchen_cabinets", "question": "Will cabinets be replaced or modified?", "type": "single_choice", "options": ["Replace", "Refinish", "Keep existing", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "kitchen_appliances", "question": "Are appliances moving or being replaced?", "type": "single_choice", "options": ["Yes", "No", "Some", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "kitchen_plumbing_electrical", "question": "Will plumbing or electrical work likely be needed?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "kitchen_flooring", "question": "Is flooring part of the project?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "kitchen_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "kitchen_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full kitchen", "Cabinets", "Counters", "Appliance area", "Flooring", "Entry or hallway"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "flooring",
+      "label": "Flooring",
+      "photo_suggestions": ["Full room", "Damaged area", "Transitions", "Subfloor if exposed", "Stairs", "Entry access"],
+      "questions": [
+        {"id": "flooring_goal", "question": "What kind of flooring project is this?", "type": "single_choice", "options": ["Replace old flooring", "Repair damage", "Install new flooring in addition", "Refinish wood floors", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "flooring_issue", "question": "What is the main issue or goal?", "type": "single_choice", "options": ["Water damage", "Worn or scratched", "Uneven floor", "Style update", "Different material", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "flooring_area", "question": "How much flooring is involved?", "type": "single_choice", "options": ["One small room", "Several rooms", "Whole floor of home", "Stairs included", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "flooring_material", "question": "What flooring material do you want?", "type": "single_choice", "options": ["Hardwood", "LVP or laminate", "Tile", "Carpet", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "flooring_existing", "question": "Will existing flooring be removed?", "type": "single_choice", "options": ["Yes", "No", "Partially", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "flooring_subfloor", "question": "Do you suspect subfloor damage?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "flooring_level", "question": "What floor of the home is this on?", "type": "single_choice", "options": ["First floor", "Second floor", "Basement", "Multiple levels", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "flooring_furniture", "question": "Will rooms need furniture moved?", "type": "single_choice", "options": ["Yes", "No", "Some rooms", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "flooring_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "flooring_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full room", "Damaged area", "Transitions", "Stairs", "Subfloor if visible", "Entry or hallway"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "hvac",
+      "label": "HVAC",
+      "photo_suggestions": ["Indoor unit", "Outdoor condenser", "Thermostat", "Damaged area", "Attic or utility space", "Access path"],
+      "questions": [
+        {"id": "hvac_goal", "question": "What kind of HVAC help do you need?", "type": "single_choice", "options": ["Repair system", "Replace system", "Add new system", "Improve airflow", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "hvac_problem", "question": "What is the main issue?", "type": "single_choice", "options": ["No heating", "No cooling", "Weak airflow", "Noise", "High humidity", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "hvac_area", "question": "How much of the home is affected?", "type": "single_choice", "options": ["One room", "One floor", "Whole house", "New addition", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "hvac_system_type", "question": "What system type do you have or want?", "type": "single_choice", "options": ["Central air", "Heat pump", "Mini-split", "Furnace", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "hvac_system_age", "question": "About how old is the system?", "type": "single_choice", "options": ["Under 5 years", "5-10 years", "10+ years", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "hvac_existing_ducts", "question": "Are existing ducts part of the issue?", "type": "single_choice", "options": ["Yes", "No", "There are no ducts", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "hvac_electrical_upgrade", "question": "Do you think an electrical upgrade may be needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "hvac_urgency", "question": "Is this urgent because the system is fully down?", "type": "single_choice", "options": ["Yes", "No", "Partially working", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "hvac_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "hvac_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Indoor unit", "Outdoor condenser", "Thermostat", "Attic or utility area", "Damaged area", "Access path"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "electrical",
+      "label": "Electrical",
+      "photo_suggestions": ["Panel", "Outlet or switch", "Fixture", "Damaged wire area", "Affected room", "Access path"],
+      "questions": [
+        {"id": "electrical_goal", "question": "What kind of electrical work do you need?", "type": "single_choice", "options": ["Repair issue", "Install new fixture", "Add outlets or circuits", "Panel upgrade", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "electrical_issue", "question": "What is the main problem or goal?", "type": "single_choice", "options": ["Power not working", "Breaker trips", "Need more outlets", "Lighting update", "Safety concern", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "electrical_area", "question": "How much of the home is affected?", "type": "single_choice", "options": ["Single outlet or fixture", "One room", "Several rooms", "Whole home or panel", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "electrical_home_age", "question": "Do you know if the home has older wiring?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "electrical_access_panel", "question": "Will the panel likely be involved?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "electrical_finish_walls", "question": "Will finished walls or ceilings need to be opened?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "electrical_urgency", "question": "Is this an urgent safety issue?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "electrical_location", "question": "Where is the main work area?", "type": "single_choice", "options": ["Kitchen", "Bathroom", "Living area", "Exterior", "Panel or utility area", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "electrical_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "electrical_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Panel", "Outlet or switch", "Fixture", "Problem area", "Affected room", "Access path"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "painting",
+      "label": "Painting",
+      "photo_suggestions": ["Full area", "Peeling or damaged spots", "Trim", "Ceiling", "Exterior elevation", "Access path"],
+      "questions": [
+        {"id": "painting_goal", "question": "What kind of painting project is this?", "type": "single_choice", "options": ["Interior repaint", "Exterior repaint", "Touch-up or repair", "Stain deck or fence", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "painting_main_goal", "question": "What is the main goal?", "type": "single_choice", "options": ["Fresh look", "Fix peeling or damage", "Prepare for sale", "Change colors", "Protect surfaces", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "painting_area", "question": "How much area is involved?", "type": "single_choice", "options": ["One room or wall", "Several rooms", "Whole interior", "One exterior side", "Whole exterior", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "painting_surface", "question": "What surfaces are being painted?", "type": "single_choice", "options": ["Walls only", "Walls and trim", "Ceilings included", "Exterior siding or trim", "Mixed surfaces", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "painting_repairs", "question": "Do surfaces need prep or patching first?", "type": "single_choice", "options": ["Yes", "No", "Some areas", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "painting_height", "question": "Are tall or hard-to-reach areas involved?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "painting_furniture", "question": "Will furniture or fixtures need protection or moving?", "type": "single_choice", "options": ["Yes", "No", "Some rooms", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "painting_weather", "question": "If exterior, is there urgent weather exposure?", "type": "single_choice", "options": ["Yes", "No", "Not exterior", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "painting_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "painting_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full area", "Peeling or damaged spots", "Trim", "Ceiling", "Exterior side", "Access path"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "landscaping",
+      "label": "Landscaping",
+      "photo_suggestions": ["Full yard", "Problem area", "Slope", "Drainage issue", "Plants or hardscape area", "Access gate or path"],
+      "questions": [
+        {"id": "landscaping_goal", "question": "What kind of landscaping project is this?", "type": "single_choice", "options": ["New design", "Fix drainage", "Planting refresh", "Hardscape work", "Yard cleanup", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "landscaping_issue", "question": "What is the main goal or problem?", "type": "single_choice", "options": ["Improve appearance", "Water pooling", "Erosion", "Need more usable space", "Replace old landscaping", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "landscaping_area", "question": "How much outdoor area is involved?", "type": "single_choice", "options": ["Small section", "Front yard", "Back yard", "Whole property", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "landscaping_hardscape", "question": "Are patios, retaining walls, or paths involved?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "landscaping_drainage", "question": "Is drainage or grading part of the issue?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "landscaping_plants", "question": "Do you already know the plants or materials you want?", "type": "single_choice", "options": ["Yes", "No", "Some ideas", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "landscaping_irrigation", "question": "Will irrigation or lighting be involved?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "landscaping_slope", "question": "Is the yard sloped or hard to access?", "type": "single_choice", "options": ["Yes", "No", "Some areas", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "landscaping_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "landscaping_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full yard", "Problem area", "Slope", "Drainage issue", "Patio or wall area", "Access gate or path"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "fence",
+      "label": "Fence",
+      "photo_suggestions": ["Full fence line", "Damaged post", "Gate", "Property line area", "Area for new fence", "Access path"],
+      "questions": [
+        {"id": "fence_goal", "question": "What do you need for this fence project?", "type": "single_choice", "options": ["Repair section", "Replace existing fence", "Install new fence", "Add gate", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "fence_issue", "question": "What is the main issue or goal?", "type": "single_choice", "options": ["Leaning or broken posts", "Missing panels", "Need privacy", "Need security", "Improve appearance", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "fence_length", "question": "How much fence work is involved?", "type": "single_choice", "options": ["Small section", "One side", "Several sides", "Entire perimeter", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "fence_material", "question": "What fence material do you want?", "type": "single_choice", "options": ["Wood", "Vinyl", "Metal", "Chain link", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "fence_gates", "question": "Are gates included?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "fence_property_line", "question": "Do you know the property line clearly?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "fence_existing_remove", "question": "Will an old fence need to be removed?", "type": "single_choice", "options": ["Yes", "No", "Partially", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "fence_slope", "question": "Is the ground sloped or uneven?", "type": "single_choice", "options": ["Yes", "No", "Some areas", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "fence_permit", "question": "Do you know if a permit or HOA approval is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "fence_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full fence line", "Damaged post", "Gate", "Property line area", "Area for new fence", "Access path"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "siding",
+      "label": "Siding",
+      "photo_suggestions": ["Full elevation", "Damaged section", "Corners or trim", "Water-damaged area", "Ground access", "Driveway"],
+      "questions": [
+        {"id": "siding_goal", "question": "What kind of siding project is this?", "type": "single_choice", "options": ["Repair damaged siding", "Replace one section", "Replace full exterior", "Update trim", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "siding_issue", "question": "What is the main issue or goal?", "type": "single_choice", "options": ["Cracks or holes", "Water damage", "Rotting trim", "Improve appearance", "Storm damage", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "siding_area", "question": "How much siding is involved?", "type": "single_choice", "options": ["Small area", "One wall", "Several walls", "Entire house", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "siding_material", "question": "What siding material do you have or want?", "type": "single_choice", "options": ["Vinyl", "Fiber cement", "Wood", "Metal", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "siding_height", "question": "Are upper stories involved?", "type": "single_choice", "options": ["Yes", "No", "Some areas", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "siding_trim", "question": "Will trim, soffit, or fascia be part of the work?", "type": "single_choice", "options": ["Yes", "No", "Maybe", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "siding_moisture", "question": "Do you suspect moisture behind the siding?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "siding_insurance", "question": "Is this related to storm or insurance damage?", "type": "single_choice", "options": ["Yes", "No", "Maybe"], "required": true, "allow_skip": false},
+        {"id": "siding_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "siding_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full exterior wall", "Damaged section", "Trim or corner", "Water-damaged area", "Ground access", "Driveway"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "drywall",
+      "label": "Drywall",
+      "photo_suggestions": ["Full wall or ceiling", "Crack or hole", "Water damage", "Corner bead area", "Room context", "Access path"],
+      "questions": [
+        {"id": "drywall_goal", "question": "What kind of drywall work do you need?", "type": "single_choice", "options": ["Patch repair", "Replace damaged section", "New drywall install", "Ceiling repair", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "drywall_issue", "question": "What is the main issue?", "type": "single_choice", "options": ["Hole or dent", "Crack", "Water damage", "Texture mismatch", "New wall or ceiling", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "drywall_area", "question": "How much drywall area is involved?", "type": "single_choice", "options": ["Small patch", "One wall", "One ceiling area", "Several rooms", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "drywall_cause", "question": "Do you know what caused the damage?", "type": "single_choice", "options": ["Impact", "Water leak", "Settlement", "Remodel work", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "drywall_paint", "question": "Will the repaired area need painting too?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "drywall_texture", "question": "Does the wall or ceiling have texture to match?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "drywall_active_moisture", "question": "Is there active moisture or a leak still happening?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "drywall_floor", "question": "Where is the work area located?", "type": "single_choice", "options": ["First floor", "Second floor", "Basement", "Ceiling overhead", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "drywall_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "drywall_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full wall or ceiling", "Crack or hole", "Water damage", "Corner or edge", "Room context", "Access path"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    },
+    {
+      "key": "general_repair",
+      "label": "General Repair",
+      "photo_suggestions": ["Full problem area", "Close-up damage", "Room context", "Related exterior area", "Access path", "Anything unusual"],
+      "questions": [
+        {"id": "general_repair_goal", "question": "What kind of repair do you need?", "type": "single_choice", "options": ["Fix damage", "Replace broken part", "Investigate unknown issue", "Finish incomplete work", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "project_goal"},
+        {"id": "general_repair_issue", "question": "What is the main issue or goal?", "type": "single_choice", "options": ["Water damage", "Something is loose", "Something is broken", "Appearance problem", "Safety concern", "Not sure"], "required": true, "allow_skip": false, "maps_to_field": "issue_summary"},
+        {"id": "general_repair_location", "question": "Where is the issue located?", "type": "single_choice", "options": ["Interior room", "Bathroom or kitchen", "Exterior wall", "Deck or fence", "Roof or attic", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "general_repair_scope", "question": "How much of the area seems affected?", "type": "single_choice", "options": ["Small spot", "One section", "One room or side", "Multiple areas", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "general_repair_cause", "question": "Do you know what caused it?", "type": "single_choice", "options": ["Yes", "No", "Partly", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "general_repair_urgent", "question": "Is this an urgent safety or active-damage issue?", "type": "single_choice", "options": ["Yes", "No", "Maybe"], "required": true, "allow_skip": false},
+        {"id": "general_repair_visibility", "question": "Is the issue easy to see or hidden behind another surface?", "type": "single_choice", "options": ["Easy to see", "Partially hidden", "Mostly hidden", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "general_repair_trade", "question": "Do you know what kind of contractor may be needed?", "type": "single_choice", "options": ["Yes", "No", "A few possibilities", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "general_repair_permit", "question": "Do you know if a permit is needed?", "type": "single_choice", "options": ["Yes", "No", "Not sure"], "required": true, "allow_skip": false},
+        {"id": "general_repair_photo_prompt", "question": "What photos can you add now?", "type": "multi_choice", "options": ["Full problem area", "Close-up damage", "Room or yard context", "Related exterior area", "Access path", "Anything unusual"], "required": false, "allow_skip": true},
+        {"id": "site_access", "question": "How easy is it to access the work area?", "type": "single_choice", "options": ["Easy access from driveway or street", "Materials must be carried a short distance", "Materials must be carried a long distance", "Access is through a narrow gate or passage", "Work is on an upper floor", "Heavy equipment cannot reach the area", "Not sure"], "required": true, "allow_skip": false, "help_text": "This helps contractors understand material delivery, equipment access, and labor planning.", "maps_to_field": "site_access", "photo_prompt": {"label": "Add photos that show access to the work area.", "suggested_photos": ["Driveway", "Gate", "Stairway", "Hallway", "Backyard path", "Parking area", "Work area entrance"]}}
+      ]
+    }
+  ]
+}

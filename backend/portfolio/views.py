@@ -60,6 +60,14 @@ from .serializers import (
     ProjectBidVersionSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
+from .project_intake import (
+    calculate_project_readiness_score,
+    get_project_intake_template,
+    get_project_type_choices,
+    iter_answer_lines,
+    load_project_intake_templates,
+    summarize_markup_notes,
+)
 
 logger = logging.getLogger(__name__)
 SUPPORTED_PROJECT_IMAGE_CONTENT_TYPES = {
@@ -652,17 +660,48 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         ctx.update(self._serializer_context())
         return ctx
 
+    def _sync_plan_derived_fields(self, plan, *, save=True):
+        template = get_project_intake_template(plan.project_type)
+        guided_answers = dict(plan.guided_answers_json or {})
+        if template:
+            for question in template.get("questions") or []:
+                if question.get("maps_to_field") == "site_access":
+                    value = guided_answers.get(question.get("id"))
+                    if isinstance(value, list):
+                        value = ", ".join([str(item or "").strip() for item in value if str(item or "").strip()])
+                    value = str(value or "").strip()
+                    if value:
+                        plan.site_access = value[:255]
+                    break
+            total_questions = len(template.get("questions") or [])
+            if total_questions:
+                plan.guided_question_index = min(max(int(plan.guided_question_index or 0), 0), total_questions)
+
+        plan.project_readiness_score = calculate_project_readiness_score(plan, template=template, guided_answers=guided_answers)
+        if save:
+            plan.save(
+                update_fields=[
+                    "site_access",
+                    "guided_question_index",
+                    "project_readiness_score",
+                    "updated_at",
+                ]
+            )
+        return plan
+
     def perform_create(self, serializer):
         require_homeowner_profile(self.request.user)
-        serializer.save(
+        plan = serializer.save(
             owner=self.request.user,
             title=(serializer.validated_data.get("title") or "Untitled issue").strip() or "Untitled issue",
             visibility="private",
             status=serializer.validated_data.get("status") or ProjectPlan.STATUS_PLANNING,
         )
+        self._sync_plan_derived_fields(plan)
 
     def perform_update(self, serializer):
-        serializer.save(owner=self.request.user, visibility="private")
+        plan = serializer.save(owner=self.request.user, visibility="private")
+        self._sync_plan_derived_fields(plan)
 
     @action(detail=False, methods=["get"], url_path="meta")
     def meta(self, request):
@@ -683,6 +722,8 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 "ai_remaining_today": remaining,
                 "ai_daily_limit": daily_limit,
                 "can_create": active_count < 3,
+                "project_type_choices": get_project_type_choices(),
+                "project_intake_templates": load_project_intake_templates().get("project_types", []),
             }
         )
 
@@ -728,6 +769,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                     is_cover=(base_order + idx == 0 and not plan.images.filter(is_cover=True).exists()),
                 )
             )
+        self._sync_plan_derived_fields(plan)
         return Response(
             ProjectPlanImageSerializer(created, many=True, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -749,6 +791,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                     replacement.is_cover = True
                     replacement.order = 0
                     replacement.save(update_fields=["is_cover", "order"])
+            self._sync_plan_derived_fields(plan)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         ser = ProjectPlanImageSerializer(
@@ -774,25 +817,33 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             else:
                 ser.save()
         image.refresh_from_db()
+        self._sync_plan_derived_fields(plan)
         return Response(ProjectPlanImageSerializer(image, context={"request": request}).data)
 
     def _build_plan_text(self, plan):
         image_bits = []
         for image in plan.images.order_by("order", "id")[:6]:
             image_bits.append(f"- Image {image.id}: caption={image.caption or 'none'}")
+        template = get_project_intake_template(plan.project_type)
+        guided_lines = list(iter_answer_lines(template, plan.guided_answers_json or {}))
+        markup_lines = summarize_markup_notes(plan.markup_data or {})
         return "\n".join(
             [
                 f"Title: {plan.title}",
+                f"Project type: {plan.project_type}",
                 f"Issue summary: {plan.issue_summary}",
                 f"House location: {plan.house_location}",
                 f"Priority: {plan.priority}",
                 f"Budget min: {plan.budget_min or ''}",
                 f"Budget max: {plan.budget_max or ''}",
+                f"Site access: {plan.site_access or ''}",
                 f"Notes: {plan.notes}",
+                f"Guided answers: {' | '.join(guided_lines) if guided_lines else 'none'}",
                 f"Contractor types: {', '.join(plan.contractor_types or [])}",
                 f"Links: {json.dumps(plan.links or [])}",
                 f"Options: {json.dumps(plan.options or [])}",
                 f"Selected option key: {plan.selected_option_key}",
+                f"Markup notes: {' | '.join(markup_lines) if markup_lines else 'none'}",
                 "Images:",
                 "\n".join(image_bits) or "- none",
             ]
@@ -812,14 +863,14 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
     def ai(self, request, pk=None):
         plan = self.get_object()
         action_name = str(request.data.get("action") or "").strip()
-        if action_name not in ("analyze_issue", "suggest_solution_paths"):
+        if action_name not in ("analyze_issue", "suggest_solution_paths", "generate_contractor_ready_project"):
             raise ValidationError({"action": "Unsupported planner AI action."})
 
-        feature = (
-            AIUsageEvent.Feature.PLANNER_ANALYZE
-            if action_name == "analyze_issue"
-            else AIUsageEvent.Feature.PLANNER_OPTIONS
-        )
+        feature = {
+            "analyze_issue": AIUsageEvent.Feature.PLANNER_ANALYZE,
+            "suggest_solution_paths": AIUsageEvent.Feature.PLANNER_OPTIONS,
+            "generate_contractor_ready_project": AIUsageEvent.Feature.PLANNER_DRAFT,
+        }[action_name]
         _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
 
         if action_name == "analyze_issue":
@@ -828,11 +879,20 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 "Return strict JSON with keys: likely_issue_label, explanation, contractor_types, next_steps. "
                 "Keep it practical, short, and non-alarmist. contractor_types and next_steps must be arrays of strings."
             )
-        else:
+        elif action_name == "suggest_solution_paths":
             system_prompt = (
                 "You are helping a homeowner compare lightweight repair directions before writing a job post. "
                 "Return strict JSON with one key named options. options must be an array of 2 to 4 objects with keys "
                 "title, notes, pros, cons, estimated_cost_note."
+            )
+        else:
+            system_prompt = (
+                "You are helping a homeowner turn an intake planner into a contractor-ready project summary. "
+                "Return strict JSON with keys: project_title, project_type, summary, known_details, "
+                "missing_information, photo_notes, markup_notes, site_access_notes, contractor_questions, "
+                "recommended_next_steps, contractor_ready_status. Arrays must contain short strings only. "
+                "contractor_ready_status must be one of not_ready, needs_more_info, ready_for_estimate. "
+                "Do not estimate labor cost. If mentioning material cost, keep it general and say prices vary by location, quality, and availability."
             )
 
         user_prompt = self._build_plan_text(plan)
@@ -871,6 +931,58 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                     "daily_limit": daily_limit,
                 }
             )
+        if action_name == "generate_contractor_ready_project":
+            normalized = {
+                "project_title": str(payload.get("project_title") or plan.title or "").strip(),
+                "project_type": str(payload.get("project_type") or plan.project_type or "").strip(),
+                "summary": str(payload.get("summary") or "").strip(),
+                "known_details": self._clean_string_list(payload.get("known_details") or []),
+                "missing_information": self._clean_string_list(payload.get("missing_information") or []),
+                "photo_notes": self._clean_string_list(payload.get("photo_notes") or []),
+                "markup_notes": self._clean_string_list(payload.get("markup_notes") or []),
+                "site_access_notes": self._clean_string_list(payload.get("site_access_notes") or []),
+                "contractor_questions": self._clean_string_list(payload.get("contractor_questions") or []),
+                "recommended_next_steps": self._clean_string_list(payload.get("recommended_next_steps") or []),
+                "contractor_ready_status": str(payload.get("contractor_ready_status") or ProjectPlan.CONTRACTOR_READY_NOT_READY).strip(),
+            }
+            if normalized["contractor_ready_status"] not in {
+                ProjectPlan.CONTRACTOR_READY_NOT_READY,
+                ProjectPlan.CONTRACTOR_READY_NEEDS_MORE,
+                ProjectPlan.CONTRACTOR_READY_READY,
+            }:
+                normalized["contractor_ready_status"] = ProjectPlan.CONTRACTOR_READY_NOT_READY
+
+            plan.contractor_ready_summary_json = normalized
+            plan.contractor_ready_status = normalized["contractor_ready_status"]
+            plan.ai_generated_at = timezone.now()
+            if normalized["project_title"] and (not plan.title or plan.title == "Untitled issue"):
+                plan.title = normalized["project_title"]
+            if normalized["summary"]:
+                plan.ai_generated_issue_summary = normalized["summary"]
+            plan.project_readiness_score = calculate_project_readiness_score(
+                plan,
+                template=get_project_intake_template(plan.project_type),
+                guided_answers=plan.guided_answers_json or {},
+                has_ai_summary=True,
+            )
+            plan.save(
+                update_fields=[
+                    "contractor_ready_summary_json",
+                    "contractor_ready_status",
+                    "ai_generated_at",
+                    "title",
+                    "ai_generated_issue_summary",
+                    "project_readiness_score",
+                    "updated_at",
+                ]
+            )
+            return Response(
+                {
+                    "contractor_ready_project": normalized,
+                    "remaining_today": remaining_after,
+                    "daily_limit": daily_limit,
+                }
+            )
         return Response(
             {
                 "options": payload.get("options") or [],
@@ -897,8 +1009,19 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 selected_option = option
                 break
 
-        title = (ai_payload or {}).get("title") or plan.title or "Project draft"
-        summary = (ai_payload or {}).get("summary") or plan.issue_summary or plan.notes[:400]
+        contractor_ready = plan.contractor_ready_summary_json or {}
+        title = (
+            (ai_payload or {}).get("title")
+            or contractor_ready.get("project_title")
+            or plan.title
+            or "Project draft"
+        )
+        summary = (
+            (ai_payload or {}).get("summary")
+            or contractor_ready.get("summary")
+            or plan.issue_summary
+            or plan.notes[:400]
+        )
         scope_of_work = (ai_payload or {}).get("scope_of_work") or plan.notes
         preferred_types = self._clean_string_list(
             (ai_payload or {}).get("preferred_contractor_types")
@@ -914,6 +1037,12 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         project_summary = str(summary or "").strip()
 
         summary_parts = [project_summary]
+        if contractor_ready.get("known_details"):
+            summary_parts.append(f"Known details: {', '.join(contractor_ready.get('known_details') or [])}")
+        if contractor_ready.get("missing_information"):
+            summary_parts.append(
+                f"Missing information to confirm: {', '.join(contractor_ready.get('missing_information') or [])}"
+            )
         if scope_of_work:
             summary_parts.append(f"Scope of work: {scope_of_work.strip()}")
         if selected_option and selected_option.get("title"):
@@ -924,12 +1053,14 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             summary_parts.append(f"Location context: {location_context}")
         if urgency:
             summary_parts.append(f"Timing: {urgency}")
+        if plan.site_access:
+            summary_parts.append(f"Site access: {plan.site_access}")
 
         return {
             "title": str(title).strip() or "Project draft",
             "summary": "\n\n".join([part for part in summary_parts if part]),
             "job_summary": project_summary,
-            "category": project_area[:100],
+            "category": str(plan.project_type or project_area)[:100],
             "location": project_area[:140],
             "budget": budget_value,
             "service_categories": preferred_types,
@@ -1013,9 +1144,33 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 )
                 return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
+        posting_mode = str(request.data.get("posting_mode") or "").strip()
+        invite_usernames = request.data.get("private_contractor_usernames") or []
+        if isinstance(invite_usernames, str):
+            invite_usernames = [item.strip() for item in invite_usernames.split(",") if item.strip()]
+
         payload = self._build_draft_payload(plan, ai_payload=ai_payload)
+        if posting_mode == ProjectPlan.VISIBILITY_LOCAL_PUBLIC:
+            payload.update({"is_public": True, "post_privacy": "public", "is_private": False})
+        elif posting_mode == ProjectPlan.VISIBILITY_INVITE_ONLY:
+            payload.update(
+                {
+                    "is_public": False,
+                    "post_privacy": "private",
+                    "is_private": False,
+                    "private_contractor_usernames": invite_usernames,
+                }
+            )
+        else:
+            posting_mode = ProjectPlan.VISIBILITY_DRAFT
+
         with transaction.atomic():
-            draft = Project.objects.create(owner=request.user, **payload)
+            serializer = ProjectSerializer(
+                data=payload,
+                context={"request": request},
+            )
+            serializer.is_valid(raise_exception=True)
+            draft = serializer.save(owner=request.user)
             copied_images = []
             for image in plan.images.order_by("order", "id"):
                 if not image.image:
@@ -1047,7 +1202,8 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
 
             plan.converted_job_post = draft
             plan.status = ProjectPlan.STATUS_CONVERTED
-            plan.save(update_fields=["converted_job_post", "status", "updated_at"])
+            plan.visibility_status = posting_mode
+            plan.save(update_fields=["converted_job_post", "status", "visibility_status", "updated_at"])
 
         remaining_after, daily_limit = get_ai_remaining_today(request.user)
         return Response(
