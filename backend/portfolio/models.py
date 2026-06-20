@@ -194,6 +194,26 @@ class ProjectPlan(models.Model):
         (PRIORITY_HIGH, "High"),
     ]
 
+    CONTRACTOR_READY_NOT_READY = "not_ready"
+    CONTRACTOR_READY_NEEDS_MORE = "needs_more_info"
+    CONTRACTOR_READY_READY = "ready_for_estimate"
+    CONTRACTOR_READY_STATUS_CHOICES = [
+        (CONTRACTOR_READY_NOT_READY, "Not ready"),
+        (CONTRACTOR_READY_NEEDS_MORE, "Needs more info"),
+        (CONTRACTOR_READY_READY, "Ready for estimate"),
+    ]
+
+    VISIBILITY_DRAFT = "draft"
+    VISIBILITY_LOCAL_PUBLIC = "local_public"
+    VISIBILITY_INVITE_ONLY = "invite_only"
+    VISIBILITY_PRIVATE = "private"
+    VISIBILITY_STATUS_CHOICES = [
+        (VISIBILITY_DRAFT, "Draft"),
+        (VISIBILITY_LOCAL_PUBLIC, "Local Public"),
+        (VISIBILITY_INVITE_ONLY, "Invite Only"),
+        (VISIBILITY_PRIVATE, "Private"),
+    ]
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -216,7 +236,16 @@ class ProjectPlan(models.Model):
         choices=STATUS_CHOICES,
         default=STATUS_PLANNING,
     )
+    project_type = models.CharField(max_length=40, blank=True, default="")
     visibility = models.CharField(max_length=20, default="private")
+    visibility_status = models.CharField(
+        max_length=20,
+        choices=VISIBILITY_STATUS_CHOICES,
+        default=VISIBILITY_DRAFT,
+    )
+    guided_answers_json = models.JSONField(blank=True, default=dict)
+    guided_question_index = models.PositiveSmallIntegerField(default=0)
+    site_access = models.CharField(max_length=255, blank=True, default="")
     contractor_types = models.JSONField(blank=True, default=list)
     links = models.JSONField(blank=True, default=list)
     options = models.JSONField(blank=True, default=list)
@@ -224,6 +253,14 @@ class ProjectPlan(models.Model):
     selected_option_key = models.CharField(max_length=80, blank=True, default="")
     ai_generated_issue_summary = models.TextField(blank=True, default="")
     ai_suggested_contractor_types = models.JSONField(blank=True, default=list)
+    contractor_ready_summary_json = models.JSONField(blank=True, default=dict)
+    contractor_ready_status = models.CharField(
+        max_length=24,
+        choices=CONTRACTOR_READY_STATUS_CHOICES,
+        default=CONTRACTOR_READY_NOT_READY,
+    )
+    project_readiness_score = models.PositiveSmallIntegerField(default=0)
+    ai_generated_at = models.DateTimeField(null=True, blank=True)
     converted_job_post = models.ForeignKey(
         "portfolio.Project",
         on_delete=models.SET_NULL,

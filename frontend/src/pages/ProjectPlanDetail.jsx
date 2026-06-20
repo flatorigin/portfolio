@@ -1,110 +1,80 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
-import {
-  Badge,
-  Button,
-  Card,
-  GhostButton,
-  Input,
-  SymbolIcon,
-  Textarea,
-} from "../ui";
+import { Badge, Button, Card, GhostButton, Input, SymbolIcon, Textarea } from "../ui";
 
-const CONTRACTOR_SUGGESTIONS = [
-  "carpenter",
-  "window installer",
-  "roofer",
-  "painter",
-  "electrician",
-  "plumber",
-  "tile installer",
-  "general contractor",
-];
-
-const VISIBLE_CONTRACTOR_TYPE_LIMIT = 6;
-
-function emptyLink() {
-  return { url: "", label: "", notes: "" };
+function emptyPlan(data = {}) {
+  return {
+    ...data,
+    guided_answers_json: typeof data?.guided_answers_json === "object" && data?.guided_answers_json ? data.guided_answers_json : {},
+    contractor_ready_summary_json:
+      typeof data?.contractor_ready_summary_json === "object" && data?.contractor_ready_summary_json
+        ? data.contractor_ready_summary_json
+        : {},
+    images: Array.isArray(data?.images) ? data.images : [],
+    markup_data: typeof data?.markup_data === "object" && data?.markup_data ? data.markup_data : {},
+  };
 }
 
 function normalizeError(err, fallback) {
   const data = err?.response?.data;
-  return (
-    data?.detail ||
-    data?.message ||
-    (data ? JSON.stringify(data) : "") ||
-    err?.message ||
-    fallback
-  );
+  return data?.detail || data?.message || (data ? JSON.stringify(data) : "") || err?.message || fallback;
 }
 
-function canGenerateDraft(plan) {
-  const hasTitleOrSummary = !!(
-    (plan?.title || "").trim() || (plan?.issue_summary || "").trim()
-  );
-  const hasNoteOrImage = !!(
-    (plan?.notes || "").trim() || (plan?.images || []).length
-  );
-  return hasTitleOrSummary && hasNoteOrImage;
+function getAnswerLabel(answer) {
+  if (Array.isArray(answer)) return answer.join(", ");
+  return String(answer || "").trim();
 }
 
-function toDraftPayload(plan) {
-  return {
-    title: plan.title || "Untitled issue",
-    issue_summary: plan.issue_summary || "",
-    house_location: plan.house_location || "",
-    priority: plan.priority || "medium",
-    budget_min: plan.budget_min || null,
-    budget_max: plan.budget_max || null,
-    notes: plan.notes || "",
-    status: plan.status || "planning",
-    contractor_types: Array.isArray(plan.contractor_types)
-      ? plan.contractor_types
-      : [],
-    links: Array.isArray(plan.links)
-      ? plan.links.filter((item) => item?.url)
-      : [],
-    options: Array.isArray(plan.options)
-      ? plan.options
-          .filter((item) => item?.title)
-          .map((item) => ({
-            ...item,
-            is_selected: item.key === plan.selected_option_key,
-          }))
-      : [],
-    selected_option_key: plan.selected_option_key || "",
-  };
+function answerIsComplete(question, answer) {
+  if (!question) return false;
+  if (Array.isArray(answer)) return answer.length > 0;
+  return String(answer || "").trim().length > 0;
+}
+
+function getMarkupVersions(markupData) {
+  return Array.isArray(markupData?.versions) ? markupData.versions : [];
+}
+
+function projectTypeLabel(template) {
+  return template?.label || "Project";
+}
+
+function photoSuggestionList(template, currentQuestion) {
+  const suggestions = new Set(template?.photo_suggestions || []);
+  const questionSuggestions = currentQuestion?.photo_prompt?.suggested_photos || [];
+  const answerSuggestions = currentQuestion?.options || [];
+  questionSuggestions.forEach((item) => suggestions.add(item));
+  if (currentQuestion?.type === "photo_prompt" || currentQuestion?.id?.includes("photo_prompt")) {
+    answerSuggestions.forEach((item) => suggestions.add(item));
+  }
+  return Array.from(suggestions).filter(Boolean);
 }
 
 export default function ProjectPlanDetail() {
   const { planId } = useParams();
   const navigate = useNavigate();
   const [plan, setPlan] = useState(null);
+  const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [draftBusy, setDraftBusy] = useState(false);
-  const [aiBusy, setAiBusy] = useState("");
-  const [customContractor, setCustomContractor] = useState("");
-  const [aiAnalysis, setAiAnalysis] = useState(null);
-  const [aiOptions, setAiOptions] = useState([]);
-  const [researchOpen, setResearchOpen] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [postingBusy, setPostingBusy] = useState("");
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [inviteUsernames, setInviteUsernames] = useState("");
 
   async function loadPlan() {
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.get(`/project-plans/${planId}/`);
-      setPlan({
-        ...data,
-        links:
-          Array.isArray(data?.links) && data.links.length
-            ? data.links
-            : [emptyLink()],
-        options: Array.isArray(data?.options) ? data.options : [],
-      });
+      const [{ data: planData }, { data: metaData }] = await Promise.all([
+        api.get(`/project-plans/${planId}/`),
+        api.get("/project-plans/meta/"),
+      ]);
+      setPlan(emptyPlan(planData));
+      setMeta(metaData || null);
     } catch (err) {
       setError(normalizeError(err, "Could not load this project plan."));
       setPlan(null);
@@ -117,116 +87,140 @@ export default function ProjectPlanDetail() {
     loadPlan();
   }, [planId]);
 
-  const aiDisabled = useMemo(
-    () => Number(plan?.ai_remaining_today ?? 0) <= 0,
-    [plan],
+  const projectTypes = useMemo(() => meta?.project_type_choices || [], [meta]);
+  const templates = useMemo(() => meta?.project_intake_templates || [], [meta]);
+  const activeTemplate = useMemo(
+    () => templates.find((item) => item.key === plan?.project_type) || null,
+    [templates, plan?.project_type],
   );
-  const contractorTypeOptions = useMemo(() => {
-    const selectedTypes = Array.isArray(plan?.contractor_types)
-      ? plan.contractor_types
-      : [];
-    const visibleTypes = [
-      ...selectedTypes,
-      ...CONTRACTOR_SUGGESTIONS.filter((item) => !selectedTypes.includes(item)),
-    ];
-    return visibleTypes.slice(0, VISIBLE_CONTRACTOR_TYPE_LIMIT);
-  }, [plan?.contractor_types]);
+  const questions = activeTemplate?.questions || [];
+  const guidedIndex = Math.max(Number(plan?.guided_question_index || 0), 0);
+  const isIntakeComplete = questions.length > 0 && guidedIndex >= questions.length;
+  const currentQuestionIndex = isIntakeComplete
+    ? questions.length - 1
+    : Math.min(guidedIndex, Math.max(questions.length - 1, 0));
+  const currentQuestion = isIntakeComplete ? null : questions[currentQuestionIndex] || null;
+  const currentAnswer = currentQuestion ? plan?.guided_answers_json?.[currentQuestion.id] : "";
+  const answeredCount = useMemo(
+    () =>
+      questions.reduce((count, question) => {
+        return count + (answerIsComplete(question, plan?.guided_answers_json?.[question.id]) ? 1 : 0);
+      }, 0),
+    [questions, plan?.guided_answers_json],
+  );
+  const progressPercent = questions.length
+    ? Math.round((((isIntakeComplete ? questions.length : currentQuestionIndex + 1)) / questions.length) * 100)
+    : 0;
+  const aiDisabled = Number(plan?.ai_remaining_today ?? 0) <= 0;
+  const contractorReady = plan?.contractor_ready_summary_json || {};
+  const markupVersions = getMarkupVersions(plan?.markup_data);
+  const currentPhotoSuggestions = photoSuggestionList(activeTemplate, currentQuestion);
 
-  function updateField(name, value) {
-    setPlan((prev) => ({ ...prev, [name]: value }));
-  }
-
-  function updateLink(index, field, value) {
-    setPlan((prev) => ({
-      ...prev,
-      links: (prev.links || []).map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item,
-      ),
-    }));
-  }
-
-  function addLink() {
-    setPlan((prev) => ({
-      ...prev,
-      links: [...(prev.links || []), emptyLink()],
-    }));
-  }
-
-  function removeLink(index) {
-    setPlan((prev) => {
-      const next = (prev.links || []).filter(
-        (_, itemIndex) => itemIndex !== index,
-      );
-      return { ...prev, links: next.length ? next : [emptyLink()] };
-    });
-  }
-
-  function toggleContractorType(value) {
-    const current = Array.isArray(plan?.contractor_types)
-      ? plan.contractor_types
-      : [];
-    const exists = current.includes(value);
-    updateField(
-      "contractor_types",
-      exists ? current.filter((item) => item !== value) : [...current, value],
-    );
-  }
-
-  function addCustomContractorType() {
-    const value = customContractor.trim().toLowerCase();
-    if (!value) return;
-    const current = Array.isArray(plan?.contractor_types)
-      ? plan.contractor_types
-      : [];
-    updateField("contractor_types", [
-      value,
-      ...current.filter((item) => item !== value),
-    ]);
-    setCustomContractor("");
-  }
-
-  async function savePlan() {
-    if (!plan) return;
+  async function patchPlan(patch, successMessage = "Saved.") {
     setSaving(true);
+    setStatusMessage("");
     try {
-      const { data } = await api.patch(
-        `/project-plans/${planId}/`,
-        toDraftPayload(plan),
-      );
-      setPlan({
-        ...data,
-        links:
-          Array.isArray(data?.links) && data.links.length
-            ? data.links
-            : [emptyLink()],
-        options: Array.isArray(data?.options) ? data.options : [],
-      });
+      const { data } = await api.patch(`/project-plans/${planId}/`, patch);
+      setPlan(emptyPlan(data));
+      setStatusMessage(successMessage);
+      return data;
     } catch (err) {
-      window.alert(normalizeError(err, "Could not save this project plan."));
+      const message = normalizeError(err, "Could not save this project plan.");
+      setError(message);
+      throw err;
     } finally {
       setSaving(false);
     }
   }
 
-  async function archivePlan() {
-    if (
-      !window.confirm(
-        "Archive this plan? It will stay saved as an inactive project plan and still count toward your 3 project plan slots.",
-      )
-    )
-      return;
-    try {
-      await api.post(`/project-plans/${planId}/archive/`);
-      navigate("/dashboard");
-    } catch (err) {
-      window.alert(normalizeError(err, "Could not archive this plan."));
+  function updateLocalField(field, value) {
+    setPlan((prev) => emptyPlan({ ...prev, [field]: value }));
+  }
+
+  function updateGuidedAnswer(value) {
+    if (!currentQuestion) return;
+    setPlan((prev) =>
+      emptyPlan({
+        ...prev,
+        guided_answers_json: {
+          ...(prev?.guided_answers_json || {}),
+          [currentQuestion.id]: value,
+        },
+      }),
+    );
+  }
+
+  async function selectProjectType(projectType) {
+    setError("");
+    await patchPlan(
+      {
+        project_type: projectType,
+        guided_answers_json: {},
+        guided_question_index: 0,
+        site_access: "",
+        contractor_ready_summary_json: {},
+        contractor_ready_status: "not_ready",
+      },
+      "Project type saved.",
+    );
+  }
+
+  async function goToQuestion(nextIndex) {
+    if (!activeTemplate || !currentQuestion) return;
+    const next = Math.min(Math.max(nextIndex, 0), questions.length - 1);
+    const patch = {
+      guided_answers_json: plan.guided_answers_json || {},
+      guided_question_index: next,
+    };
+    if (currentQuestion?.maps_to_field === "site_access") {
+      patch.site_access = getAnswerLabel(currentAnswer);
     }
+    await patchPlan(patch, "Progress saved.");
+  }
+
+  async function saveAndNext() {
+    if (!currentQuestion) return;
+    if (currentQuestion.required && !answerIsComplete(currentQuestion, currentAnswer)) {
+      setError("Answer this question before continuing.");
+      return;
+    }
+    setError("");
+    if (currentQuestionIndex >= questions.length - 1) {
+      await patchPlan(
+        {
+          guided_answers_json: plan.guided_answers_json || {},
+          guided_question_index: questions.length,
+          site_access:
+            currentQuestion.maps_to_field === "site_access" ? getAnswerLabel(currentAnswer) : plan.site_access || "",
+        },
+        "Intake questions saved.",
+      );
+      return;
+    }
+    await goToQuestion(currentQuestionIndex + 1);
+  }
+
+  async function skipQuestion() {
+    if (!currentQuestion?.allow_skip) return;
+    setError("");
+    if (currentQuestionIndex >= questions.length - 1) {
+      await patchPlan({ guided_question_index: questions.length }, "Skipped.");
+      return;
+    }
+    await goToQuestion(currentQuestionIndex + 1);
+  }
+
+  async function saveManualField(field) {
+    if (!plan) return;
+    setError("");
+    await patchPlan({ [field]: plan[field] }, "Saved.");
   }
 
   async function uploadImages(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
     setUploading(true);
+    setStatusMessage("");
     try {
       const formData = new FormData();
       files.forEach((file) => formData.append("images", file));
@@ -235,17 +229,13 @@ export default function ProjectPlanDetail() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       await loadPlan();
+      setStatusMessage("Photos uploaded.");
     } catch (err) {
-      window.alert(normalizeError(err, "Could not upload images."));
+      setError(normalizeError(err, "Could not upload images."));
     } finally {
       event.target.value = "";
       setUploading(false);
     }
-  }
-
-  async function updateImage(imageId, payload) {
-    await api.patch(`/project-plans/${planId}/images/${imageId}/`, payload);
-    await loadPlan();
   }
 
   async function removeImage(imageId) {
@@ -254,100 +244,69 @@ export default function ProjectPlanDetail() {
       await api.delete(`/project-plans/${planId}/images/${imageId}/`);
       await loadPlan();
     } catch (err) {
-      window.alert(normalizeError(err, "Could not delete this image."));
+      setError(normalizeError(err, "Could not delete this image."));
     }
   }
 
-  async function runAi(action) {
-    setAiBusy(action);
+  async function deleteMarkupVersion(versionId) {
+    if (!window.confirm("Delete this saved markup version?")) return;
+    const versions = markupVersions.filter((version) => version.id !== versionId);
+    const nextMarkup = { ...(plan?.markup_data || {}), versions };
+    try {
+      await patchPlan({ markup_data: nextMarkup }, "Markup version deleted.");
+    } catch {
+      return;
+    }
+  }
+
+  async function generateContractorReadyProject() {
+    setAiBusy(true);
+    setError("");
+    setStatusMessage("");
     try {
       const { data } = await api.post(`/project-plans/${planId}/ai/`, {
-        action,
+        action: "generate_contractor_ready_project",
       });
-      if (action === "analyze_issue") {
-        setAiAnalysis(data.analysis || null);
-      } else {
-        setAiOptions(Array.isArray(data.options) ? data.options : []);
-      }
+      setPlan((prev) =>
+        emptyPlan({
+          ...prev,
+          contractor_ready_summary_json: data.contractor_ready_project || {},
+          contractor_ready_status: data.contractor_ready_project?.contractor_ready_status || prev?.contractor_ready_status,
+          ai_remaining_today: data.remaining_today,
+          ai_daily_limit: data.daily_limit,
+        }),
+      );
       await loadPlan();
+      setStatusMessage("Contractor-ready summary generated.");
     } catch (err) {
-      window.alert(normalizeError(err, "AI assist is unavailable right now."));
+      setError(normalizeError(err, "AI project generation is unavailable right now."));
     } finally {
-      setAiBusy("");
+      setAiBusy(false);
     }
   }
 
-  function applyAnalysis() {
-    if (!aiAnalysis) return;
-    setPlan((prev) => ({
-      ...prev,
-      issue_summary:
-        [aiAnalysis.likely_issue_label, aiAnalysis.explanation]
-          .filter(Boolean)
-          .join(": ") || prev.issue_summary,
-      contractor_types:
-        Array.isArray(aiAnalysis.contractor_types) &&
-        aiAnalysis.contractor_types.length
-          ? aiAnalysis.contractor_types.map((item) =>
-              String(item).toLowerCase(),
-            )
-          : prev.contractor_types,
-      notes:
-        (prev.notes || "") +
-        ((prev.notes || "").trim() ? "\n\n" : "") +
-        (Array.isArray(aiAnalysis.next_steps) && aiAnalysis.next_steps.length
-          ? `Possible next steps:\n- ${aiAnalysis.next_steps.join("\n- ")}`
-          : ""),
-    }));
-  }
-
-  function applyAiOptions() {
-    if (!aiOptions.length) return;
-    setPlan((prev) => ({
-      ...prev,
-      options: aiOptions.map((option, index) => ({
-        key: `ai-option-${index + 1}`,
-        title: option.title || `Option ${index + 1}`,
-        notes: option.notes || "",
-        pros: option.pros || "",
-        cons: option.cons || "",
-        estimated_cost_note: option.estimated_cost_note || "",
-        is_selected: index === 0,
-      })),
-      selected_option_key: "ai-option-1",
-      status: prev.status === "planning" ? "ready_to_draft" : prev.status,
-    }));
-  }
-
-  async function createDraft(useAi) {
-    if (!canGenerateDraft(plan)) return;
-    setDraftBusy(true);
+  async function createDraft(postingMode) {
+    setPostingBusy(postingMode);
+    setError("");
     try {
-      const { data } = await api.post(
-        `/project-plans/${planId}/convert-to-draft/`,
-        {
-          use_ai: useAi,
-        },
-      );
+      const payload = { posting_mode: postingMode };
+      if (postingMode === "invite_only") {
+        payload.private_contractor_usernames = inviteUsernames
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+      const { data } = await api.post(`/project-plans/${planId}/convert-to-draft/`, payload);
       navigate(`/projects/${data.draft_id}`);
     } catch (err) {
-      const data = err?.response?.data;
-      if (data?.draft_id) {
-        navigate(`/projects/${data.draft_id}`);
-        return;
-      }
-      window.alert(normalizeError(err, "Could not generate a draft job post."));
+      setError(normalizeError(err, "Could not create a project draft from this intake."));
     } finally {
-      setDraftBusy(false);
+      setPostingBusy("");
     }
   }
 
   if (loading) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500">
-        Loading plan...
-      </div>
-    );
+    return <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500">Loading plan...</div>;
   }
 
   if (!plan) {
@@ -362,416 +321,418 @@ export default function ProjectPlanDetail() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <Link
-            to="/dashboard"
-            className="text-sm text-slate-500 hover:text-slate-900"
-          >
+          <Link to="/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
             Dashboard
           </Link>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
             {plan.title || "Untitled issue"}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge className="capitalize">
-              {String(plan.status || "planning").replaceAll("_", " ")}
-            </Badge>
-            <Badge>Private</Badge>
-            <Badge>{plan.ai_remaining_today} AI assists left today</Badge>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge>{projectTypeLabel(activeTemplate)}</Badge>
+            <Badge>Project Readiness: {plan.project_readiness_score ?? 0}% Complete</Badge>
+            <Badge>{plan.ai_remaining_today} AI generations left today</Badge>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <GhostButton type="button" onClick={archivePlan}>
-            Archive
-          </GhostButton>
-          <Button type="button" disabled={saving} onClick={savePlan}>
-            {saving ? "Saving..." : "Save"}
-          </Button>
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+          Move through the intake one step at a time, upload photos, mark them up, and then generate a contractor-ready draft.
         </div>
       </div>
 
-      {plan.converted_job_post ? (
-        <Card className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 shadow-none">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {error ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+      ) : null}
+      {statusMessage ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {statusMessage}
+        </div>
+      ) : null}
+
+      {!plan.project_type ? (
+        <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-lg font-semibold text-slate-950">Choose a project type</div>
+          <div className="mt-1 text-sm text-slate-500">
+            Start with the closest project type. You can still describe the specifics in your own words below.
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {projectTypes.map((type) => (
+              <button
+                key={type.key}
+                type="button"
+                onClick={() => selectProjectType(type.key)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition hover:border-slate-400 hover:bg-white"
+              >
+                <div className="font-semibold text-slate-900">{type.label}</div>
+                <div className="mt-1 text-sm text-slate-500">Use guided intake questions for this project.</div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {plan.project_type && currentQuestion ? (
+        <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="font-semibold text-emerald-900">
-                This plan already generated a draft job post.
-              </div>
-              <div className="text-sm text-emerald-800">
-                Keep this planner for reference or open the draft to keep
-                editing.
+              <div className="text-lg font-semibold text-slate-950">Guided Project Intake</div>
+              <div className="mt-1 text-sm text-slate-500">
+                Question {Math.min(currentQuestionIndex + 1, questions.length)} of {questions.length}
               </div>
             </div>
-            <Button
+            <button
               type="button"
-              onClick={() => navigate(`/projects/${plan.converted_job_post}`)}
+              onClick={() => setPlan((prev) => emptyPlan({ ...prev, project_type: "" }))}
+              className="text-sm text-slate-500 hover:text-slate-900"
             >
-              Open draft job post
-            </Button>
+              Change type
+            </button>
+          </div>
+
+          <div className="mt-5">
+            <div className="mb-3 flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
+              <span>{projectTypeLabel(activeTemplate)}</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+            <div className="text-xl font-semibold text-slate-950">{currentQuestion.question}</div>
+            {currentQuestion.help_text ? (
+              <div className="mt-2 text-sm leading-6 text-slate-600">{currentQuestion.help_text}</div>
+            ) : null}
+
+            <div className="mt-5">
+              {currentQuestion.type === "single_choice" || currentQuestion.type === "yes_no" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(currentQuestion.options || []).map((option) => {
+                    const active = currentAnswer === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => updateGuidedAnswer(option)}
+                        className={
+                          "rounded-2xl border px-4 py-4 text-left transition " +
+                          (active
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-400")
+                        }
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {currentQuestion.type === "multi_choice" || currentQuestion.type === "photo_prompt" ? (
+                <div className="space-y-3">
+                  {(currentQuestion.options || []).map((option) => {
+                    const selected = Array.isArray(currentAnswer) ? currentAnswer.includes(option) : false;
+                    return (
+                      <label
+                        key={option}
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(event) => {
+                            const next = new Set(Array.isArray(currentAnswer) ? currentAnswer : []);
+                            if (event.target.checked) next.add(option);
+                            else next.delete(option);
+                            updateGuidedAnswer(Array.from(next));
+                          }}
+                        />
+                        <span>{option}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {currentQuestion.type === "short_text" ? (
+                <Textarea
+                  rows={4}
+                  value={String(currentAnswer || "")}
+                  onChange={(event) => updateGuidedAnswer(event.target.value)}
+                  placeholder="Write a short answer"
+                />
+              ) : null}
+
+              {currentQuestion.type === "number" ? (
+                <Input
+                  value={String(currentAnswer || "")}
+                  inputMode="numeric"
+                  onChange={(event) => updateGuidedAnswer(event.target.value)}
+                  placeholder="Enter a number"
+                />
+              ) : null}
+            </div>
+
+            {currentPhotoSuggestions.length ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4">
+                <div className="text-sm font-semibold text-slate-900">Helpful photos for this step</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {currentPhotoSuggestions.map((item) => (
+                    <Badge key={item}>{item}</Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <GhostButton type="button" onClick={() => goToQuestion(currentQuestionIndex - 1)} disabled={saving || currentQuestionIndex === 0}>
+                Back
+              </GhostButton>
+              {currentQuestion.allow_skip ? (
+                <GhostButton type="button" onClick={skipQuestion} disabled={saving}>
+                  Skip
+                </GhostButton>
+              ) : null}
+              <Button type="button" onClick={saveAndNext} disabled={saving}>
+                {saving ? "Saving..." : currentQuestionIndex >= questions.length - 1 ? "Finish intake" : "Next"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 text-sm text-slate-500">
+            {answeredCount}/{questions.length} intake questions answered
           </div>
         </Card>
       ) : null}
 
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5">
-          <div className="text-lg font-semibold text-slate-950">
-            Project Details
-          </div>
-          <div className="mt-1 text-sm text-slate-500">
-            Define the project clearly before turning it into a job post.
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Project Title
-            </label>
-            <Input
-              value={plan.title || ""}
-              onChange={(event) => updateField("title", event.target.value)}
-              placeholder="Untitled issue"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Project Area
-            </label>
-            <Input
-              value={plan.house_location || ""}
-              onChange={(event) =>
-                updateField("house_location", event.target.value)
-              }
-              placeholder="Kitchen window, front porch, upstairs bathroom"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Issue Overview
-            </label>
-            <Textarea
-              rows={4}
-              value={plan.issue_summary || ""}
-              onChange={(event) =>
-                updateField("issue_summary", event.target.value)
-              }
-              placeholder="What seems wrong, what you have noticed, and what is worrying you."
-            />
-          </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Priority
-            </label>
-            <select
-              value={plan.priority || "medium"}
-              onChange={(event) => updateField("priority", event.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Planner Status
-            </label>
-            <select
-              value={plan.status || "planning"}
-              onChange={(event) => updateField("status", event.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
-            >
-              <option value="planning">Planning</option>
-              <option value="ready_to_draft">Ready to draft</option>
-              <option value="converted">Converted</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:col-span-2">
-            <label className="mb-3 block text-sm font-medium text-slate-700">
-              Budget Range
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                value={plan.budget_min ?? ""}
-                onChange={(event) =>
-                  updateField("budget_min", event.target.value)
-                }
-                inputMode="decimal"
-                placeholder="Min"
-              />
-              <Input
-                value={plan.budget_max ?? ""}
-                onChange={(event) =>
-                  updateField("budget_max", event.target.value)
-                }
-                inputMode="decimal"
-                placeholder="Max"
-              />
-            </div>
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Project Requirements
-            </label>
-            <Textarea
-              rows={8}
-              value={plan.notes || ""}
-              onChange={(event) => updateField("notes", event.target.value)}
-              placeholder="Required work, measurements, timing, materials, access details, concerns, and what you already know."
-            />
-          </div>
-        </div>
-      </Card>
-
-      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="font-semibold text-slate-950">
-              Image Markup Canvas
-            </div>
-            <div className="mt-1 max-w-[400px] text-sm text-slate-500">
-              Upload images, mark problem areas, add visual notes, and
-              communicate project details more clearly before sharing the
-              project.
+            <div className="text-lg font-semibold text-slate-950">Project Photos & Markup</div>
+            <div className="mt-1 text-sm text-slate-500">
+              Upload photos, then open the markup canvas to point out repair areas, additions, access constraints, or unclear details.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <GhostButton
-              type="button"
-              onClick={() => navigate(`/dashboard/planner/${planId}/markup`)}
-            >
-              <SymbolIcon name="edit_note" className="mr-1 text-[18px]" />
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+              <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
+              <SymbolIcon name="upload" className="text-[18px]" />
+              {uploading ? "Uploading..." : "Upload photos"}
+            </label>
+            <GhostButton type="button" onClick={() => navigate(`/dashboard/planner/${planId}/markup`)}>
               Open markup canvas
             </GhostButton>
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-              <SymbolIcon name="add_a_photo" className="text-[18px]" />
-              {uploading ? "Uploading..." : "Upload images"}
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={uploadImages}
-              />
-            </label>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {(plan.images || []).map((image) => (
-            <div
-              key={image.id}
-              className="rounded-lg border border-slate-200 p-3"
-            >
-              <img
-                src={image.image_url}
-                alt=""
-                className="h-44 w-full rounded-md object-cover"
-              />
-              <Input
-                className="mt-3"
-                value={image.caption || ""}
-                placeholder="Caption"
-                onChange={(event) =>
-                  setPlan((prev) => ({
-                    ...prev,
-                    images: (prev.images || []).map((item) =>
-                      item.id === image.id
-                        ? { ...item, caption: event.target.value }
-                        : item,
-                    ),
-                  }))
-                }
-                onBlur={(event) =>
-                  updateImage(image.id, { caption: event.target.value })
-                }
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <GhostButton
-                  type="button"
-                  onClick={() => updateImage(image.id, { is_cover: true })}
-                >
-                  {image.is_cover ? "Cover image" : "Make cover"}
-                </GhostButton>
-                <GhostButton
-                  type="button"
-                  onClick={() => removeImage(image.id)}
-                >
-                  Delete
-                </GhostButton>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <button
-          type="button"
-          onClick={() => setResearchOpen((value) => !value)}
-          className="flex w-full items-center justify-between gap-4 p-5 text-left"
-        >
-          <div>
-            <div className="font-semibold text-slate-950">Research Links</div>
-            <div className="mt-1 text-sm text-slate-500">
-              Save product links, inspiration, manufacturer references, videos,
-              products, or notes from research.
-            </div>
+        {activeTemplate?.photo_suggestions?.length ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {activeTemplate.photo_suggestions.map((item) => (
+              <Badge key={item}>{item}</Badge>
+            ))}
           </div>
-          <SymbolIcon
-            name={researchOpen ? "expand_less" : "expand_more"}
-            className="text-[22px] text-slate-500"
-          />
-        </button>
-        {researchOpen ? (
-          <div className="border-t border-slate-200 p-5">
-            <div className="space-y-3">
-              {(plan.links || []).map((item, index) => (
-                <div
-                  key={`link-${index}`}
-                  className="grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[1.4fr,1fr,1fr,auto]"
-                >
-                  <Input
-                    value={item.url || ""}
-                    onChange={(event) =>
-                      updateLink(index, "url", event.target.value)
-                    }
-                    placeholder="https://..."
-                  />
-                  <Input
-                    value={item.label || ""}
-                    onChange={(event) =>
-                      updateLink(index, "label", event.target.value)
-                    }
-                    placeholder="Label"
-                  />
-                  <Input
-                    value={item.notes || ""}
-                    onChange={(event) =>
-                      updateLink(index, "notes", event.target.value)
-                    }
-                    placeholder="Notes"
-                  />
-                  <GhostButton type="button" onClick={() => removeLink(index)}>
-                    Remove
-                  </GhostButton>
+        ) : null}
+
+        {plan.images.length ? (
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {plan.images.map((image) => (
+              <div key={image.id} className="rounded-2xl border border-slate-200 p-3">
+                <img src={image.image_url} alt="" className="h-44 w-full rounded-xl object-cover" />
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="text-xs text-slate-500">{image.caption || "Project photo"}</div>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(image.id)}
+                    className="text-xs font-medium text-rose-700 hover:text-rose-800"
+                  >
+                    Delete
+                  </button>
                 </div>
-              ))}
-            </div>
-            <div className="mt-3">
-              <GhostButton type="button" onClick={addLink}>
-                Add link
-              </GhostButton>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+            No project photos yet. Add overview shots, close-ups, and access photos.
+          </div>
+        )}
+
+        {markupVersions.length ? (
+          <div className="mt-6">
+            <div className="text-sm font-semibold text-slate-900">Saved markup versions</div>
+            <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+              {markupVersions.map((version) => {
+                const previewUrl = version.snapshot_url || version.background_url || "";
+                return (
+                  <div key={version.id} className="min-w-[220px] rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="" className="h-28 w-full rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-28 items-center justify-center rounded-xl bg-white text-xs text-slate-400">
+                        No snapshot preview
+                      </div>
+                    )}
+                    <div className="mt-3 font-semibold text-slate-900">{version.name || "Saved markup"}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {version.annotation_count ?? 0} markups
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteMarkupVersion(version.id)}
+                      className="mt-3 inline-flex h-8 w-full items-center justify-center rounded-lg border border-rose-200 bg-white text-xs font-medium text-rose-700 hover:bg-rose-50"
+                    >
+                      Delete version
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : null}
       </Card>
 
       <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-lg font-semibold text-slate-950">Manual project details</div>
+        <div className="mt-1 text-sm text-slate-500">
+          Manual editing remains available at all times. Use this to clarify anything the guided intake misses.
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Project title</label>
+            <Input value={plan.title || ""} onChange={(event) => updateLocalField("title", event.target.value)} onBlur={() => saveManualField("title")} />
+          </div>
           <div>
-            <div className="font-semibold text-slate-950">Contractor Type</div>
-            <div className="text-sm text-slate-500">
-              Choose the trades that seem most likely. You can edit them later.
-            </div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Affected area</label>
+            <Input value={plan.house_location || ""} onChange={(event) => updateLocalField("house_location", event.target.value)} onBlur={() => saveManualField("house_location")} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Site access</label>
+            <Input value={plan.site_access || ""} onChange={(event) => updateLocalField("site_access", event.target.value)} onBlur={() => saveManualField("site_access")} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Issue summary</label>
+            <Textarea rows={4} value={plan.issue_summary || ""} onChange={(event) => updateLocalField("issue_summary", event.target.value)} onBlur={() => saveManualField("issue_summary")} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Budget min</label>
+            <Input value={plan.budget_min ?? ""} inputMode="decimal" onChange={(event) => updateLocalField("budget_min", event.target.value)} onBlur={() => saveManualField("budget_min")} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Budget max</label>
+            <Input value={plan.budget_max ?? ""} inputMode="decimal" onChange={(event) => updateLocalField("budget_max", event.target.value)} onBlur={() => saveManualField("budget_max")} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Extra notes</label>
+            <Textarea rows={6} value={plan.notes || ""} onChange={(event) => updateLocalField("notes", event.target.value)} onBlur={() => saveManualField("notes")} />
           </div>
         </div>
+      </Card>
 
-        <div className="mt-4 flex flex-nowrap gap-2 overflow-hidden">
-          {contractorTypeOptions.map((item) => {
-            const active = (plan.contractor_types || []).includes(item);
-            return (
-              <button
-                key={item}
-                type="button"
-                onClick={() => toggleContractorType(item)}
-                className={
-                  "rounded-full border px-3 py-1 text-sm transition " +
-                  (active
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-300 bg-white text-slate-700 hover:border-slate-900")
-                }
-              >
-                {item}
-              </button>
-            );
-          })}
+      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-lg font-semibold text-slate-950">Generate Contractor-Ready Project</div>
+            <div className="mt-1 text-sm text-slate-500">
+              Use AI once you have enough intake answers, photos, and markup to turn this into a contractor-facing draft.
+            </div>
+          </div>
+          <Button type="button" onClick={generateContractorReadyProject} disabled={aiBusy || aiDisabled}>
+            {aiBusy ? "Generating..." : "Generate Contractor-Ready Project"}
+          </Button>
         </div>
 
-        <div className="mt-4 flex gap-2">
-          <Input
-            value={customContractor}
-            onChange={(event) => setCustomContractor(event.target.value)}
-            placeholder="Add another contractor type"
-          />
-          <GhostButton type="button" onClick={addCustomContractorType}>
-            Add
-          </GhostButton>
-        </div>
+        {aiDisabled ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            You have used your free AI project guides for today. You can still edit your planner manually.
+          </div>
+        ) : null}
 
-        {aiAnalysis ? (
-          <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 p-4">
-            <div className="font-semibold text-sky-950">AI issue review</div>
-            <div className="mt-2 text-sm text-slate-700">
-              <div>
-                <span className="font-medium">Possible issue:</span>{" "}
-                {aiAnalysis.likely_issue_label || "—"}
+        {contractorReady.summary ? (
+          <div className="mt-5 space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">Readiness summary</div>
+              <div className="mt-2 text-sm leading-6 text-slate-700">{contractorReady.summary}</div>
+              <div className="mt-3">
+                <Badge className="capitalize">
+                  {String(plan.contractor_ready_status || contractorReady.contractor_ready_status || "not_ready").replaceAll("_", " ")}
+                </Badge>
               </div>
-              <div className="mt-1">{aiAnalysis.explanation || ""}</div>
-              {Array.isArray(aiAnalysis.contractor_types) &&
-              aiAnalysis.contractor_types.length ? (
-                <div className="mt-2">
-                  <span className="font-medium">Likely contractor types:</span>{" "}
-                  {aiAnalysis.contractor_types.join(", ")}
-                </div>
-              ) : null}
-              {Array.isArray(aiAnalysis.next_steps) &&
-              aiAnalysis.next_steps.length ? (
-                <ul className="mt-2 list-disc pl-5">
-                  {aiAnalysis.next_steps.map((item, index) => (
-                    <li key={`step-${index}`}>{item}</li>
+            </div>
+
+            {Array.isArray(contractorReady.known_details) && contractorReady.known_details.length ? (
+              <section>
+                <div className="text-sm font-semibold text-slate-900">Known details</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                  {contractorReady.known_details.map((item) => (
+                    <li key={item}>{item}</li>
                   ))}
                 </ul>
-              ) : null}
-            </div>
-            <div className="mt-3">
-              <Button type="button" onClick={applyAnalysis}>
-                Apply suggestions to this plan
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </Card>
+              </section>
+            ) : null}
 
-      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="font-semibold text-slate-950">
-          Create Job Post Draft
-        </div>
-        <div className="mt-1 text-sm text-slate-500">
-          Turn this private planner into a private editable job posting draft.
-          You can review it before publishing anything publicly.
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            disabled={!canGenerateDraft(plan) || draftBusy}
-            onClick={() => createDraft(false)}
-          >
-            {draftBusy ? "Working..." : "Turn into job post"}
-          </Button>
-          <GhostButton
-            type="button"
-            disabled={aiDisabled || !canGenerateDraft(plan) || draftBusy}
-            onClick={() => createDraft(true)}
-          >
-            Generate draft with AI
-          </GhostButton>
-        </div>
-        {!canGenerateDraft(plan) ? (
-          <div className="mt-3 text-sm text-slate-500">
-            Add a title or issue summary plus at least one note or image before
-            generating the draft.
+            {Array.isArray(contractorReady.missing_information) && contractorReady.missing_information.length ? (
+              <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+                <div className="text-sm font-semibold text-amber-900">Missing information</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+                  {contractorReady.missing_information.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {Array.isArray(contractorReady.recommended_next_steps) && contractorReady.recommended_next_steps.length ? (
+              <section>
+                <div className="text-sm font-semibold text-slate-900">Project checklist</div>
+                <div className="mt-2 space-y-2">
+                  {contractorReady.recommended_next_steps.map((item) => (
+                    <label key={item} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                      <input type="checkbox" />
+                      <span>{item}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {Array.isArray(contractorReady.contractor_questions) && contractorReady.contractor_questions.length ? (
+              <section>
+                <div className="text-sm font-semibold text-slate-900">Contractor questions preview</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                  {contractorReady.contractor_questions.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="text-sm font-semibold text-slate-900">Next step</div>
+              <div className="mt-1 text-sm text-slate-500">
+                Turn this intake into a real project draft. You can post it locally or keep it invite-only for specific contractors.
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button type="button" onClick={() => createDraft("local_public")} disabled={postingBusy !== ""}>
+                  {postingBusy === "local_public" ? "Creating..." : "Post to Local Projects"}
+                </Button>
+                <GhostButton type="button" onClick={() => createDraft("draft")} disabled={postingBusy !== ""}>
+                  {postingBusy === "draft" ? "Creating..." : "Save as Private Draft"}
+                </GhostButton>
+              </div>
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm font-semibold text-slate-900">Invite Specific Contractors</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Enter contractor usernames separated by commas. This creates a private draft with those invites attached.
+                </div>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                  <Input value={inviteUsernames} onChange={(event) => setInviteUsernames(event.target.value)} placeholder="contractor1, contractor2" />
+                  <Button type="button" onClick={() => createDraft("invite_only")} disabled={postingBusy !== ""}>
+                    {postingBusy === "invite_only" ? "Creating..." : "Invite Specific Contractors"}
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
       </Card>

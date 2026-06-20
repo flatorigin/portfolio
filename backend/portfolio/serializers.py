@@ -27,6 +27,7 @@ from .models import (
     ProjectBid,
     ProjectBidVersion,
 )
+from .project_intake import get_project_intake_template, get_project_type_choices
 
 User = get_user_model()
 COMMENT_CHAR_LIMIT = 280
@@ -120,7 +121,12 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             "budget_max",
             "notes",
             "status",
+            "project_type",
             "visibility",
+            "visibility_status",
+            "guided_answers_json",
+            "guided_question_index",
+            "site_access",
             "contractor_types",
             "links",
             "options",
@@ -128,6 +134,10 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             "selected_option_key",
             "ai_generated_issue_summary",
             "ai_suggested_contractor_types",
+            "contractor_ready_summary_json",
+            "contractor_ready_status",
+            "project_readiness_score",
+            "ai_generated_at",
             "converted_job_post",
             "created_at",
             "updated_at",
@@ -144,8 +154,6 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             "owner",
             "owner_username",
             "visibility",
-            "ai_generated_issue_summary",
-            "ai_suggested_contractor_types",
             "converted_job_post",
             "created_at",
             "updated_at",
@@ -164,6 +172,73 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
         if not isinstance(value, dict):
             raise serializers.ValidationError("Markup data must be an object.")
         return value
+
+    def validate_project_type(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            return ""
+        valid_keys = {item["key"] for item in get_project_type_choices()}
+        if cleaned not in valid_keys:
+            raise serializers.ValidationError("Choose a supported project type.")
+        return cleaned
+
+    def validate_guided_answers_json(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Guided answers must be an object.")
+        cleaned = {}
+        for key, raw in value.items():
+            question_id = str(key or "").strip()
+            if not question_id:
+                continue
+            if isinstance(raw, list):
+                cleaned[question_id] = [str(item or "").strip() for item in raw if str(item or "").strip()]
+            elif raw in (None, ""):
+                continue
+            else:
+                cleaned[question_id] = str(raw).strip()
+        return cleaned
+
+    def validate_guided_question_index(self, value):
+        try:
+            index = int(value or 0)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("Guided question index must be a number.")
+        return max(index, 0)
+
+    def validate_visibility_status(self, value):
+        cleaned = str(value or "").strip()
+        allowed = {
+            ProjectPlan.VISIBILITY_DRAFT,
+            ProjectPlan.VISIBILITY_LOCAL_PUBLIC,
+            ProjectPlan.VISIBILITY_INVITE_ONLY,
+            ProjectPlan.VISIBILITY_PRIVATE,
+        }
+        if cleaned not in allowed:
+            raise serializers.ValidationError("Invalid planner visibility status.")
+        return cleaned
+
+    def validate_site_access(self, value):
+        return str(value or "").strip()[:255]
+
+    def validate_contractor_ready_summary_json(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Contractor-ready summary must be an object.")
+        return value
+
+    def validate_contractor_ready_status(self, value):
+        cleaned = str(value or "").strip()
+        allowed = {
+            ProjectPlan.CONTRACTOR_READY_NOT_READY,
+            ProjectPlan.CONTRACTOR_READY_NEEDS_MORE,
+            ProjectPlan.CONTRACTOR_READY_READY,
+        }
+        if cleaned not in allowed:
+            raise serializers.ValidationError("Invalid contractor-ready status.")
+        return cleaned
 
     def _normalize_string_list(self, value):
         if value in (None, ""):
@@ -268,6 +343,17 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             if attrs["budget_min"] > attrs["budget_max"]:
                 raise serializers.ValidationError(
                     {"budget_max": "Budget max must be greater than or equal to budget min."}
+                )
+
+        project_type = attrs.get("project_type", getattr(instance, "project_type", ""))
+        guided_answers = attrs.get("guided_answers_json", getattr(instance, "guided_answers_json", {}))
+        template = get_project_intake_template(project_type)
+        if template:
+            valid_question_ids = {item.get("id") for item in template.get("questions") or []}
+            invalid_keys = [key for key in guided_answers.keys() if key not in valid_question_ids]
+            if invalid_keys:
+                raise serializers.ValidationError(
+                    {"guided_answers_json": f"Unexpected guided answer keys: {', '.join(sorted(invalid_keys))}."}
                 )
 
         if not instance and request and request.user.is_authenticated:
