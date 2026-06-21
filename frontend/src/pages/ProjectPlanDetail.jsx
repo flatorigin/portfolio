@@ -112,6 +112,27 @@ function finalDetailsComplete(plan) {
   });
 }
 
+function finalQuestionComplete(plan, question) {
+  if (!question?.required) return true;
+  const value = String(plan?.[question.field] ?? "").trim();
+  if (question.field === "title") return value && value !== "Untitled issue";
+  return Boolean(value);
+}
+
+function getMissingFinalQuestions(plan) {
+  return FINAL_DETAIL_QUESTIONS.filter((question) => !finalQuestionComplete(plan, question));
+}
+
+function getFirstMissingFinalQuestionIndex(plan, startIndex = 0) {
+  const normalizedStart = Math.min(Math.max(Number(startIndex || 0), 0), FINAL_DETAIL_QUESTIONS.length - 1);
+  const afterStart = FINAL_DETAIL_QUESTIONS.findIndex(
+    (question, index) => index >= normalizedStart && !finalQuestionComplete(plan, question),
+  );
+  if (afterStart >= 0) return afterStart;
+  const firstMissing = FINAL_DETAIL_QUESTIONS.findIndex((question) => !finalQuestionComplete(plan, question));
+  return firstMissing >= 0 ? firstMissing : FINAL_DETAIL_QUESTIONS.length - 1;
+}
+
 function guidedAnswerRows(template, answers) {
   return (template?.questions || []).map((question) => ({
     id: question.id,
@@ -186,6 +207,7 @@ export default function ProjectPlanDetail() {
   const [inviteUsernames, setInviteUsernames] = useState("");
   const [finalQuestionIndex, setFinalQuestionIndex] = useState(0);
   const [finalDetailsFinished, setFinalDetailsFinished] = useState(false);
+  const [projectPreviewOpen, setProjectPreviewOpen] = useState(false);
 
   async function loadPlan() {
     setLoading(true);
@@ -195,8 +217,12 @@ export default function ProjectPlanDetail() {
         api.get(`/project-plans/${planId}/`),
         api.get("/project-plans/meta/"),
       ]);
-      setPlan(emptyPlan(planData));
+      const loadedPlan = emptyPlan(planData);
+      setPlan(loadedPlan);
       setMeta(metaData || null);
+      setFinalQuestionIndex(getFirstMissingFinalQuestionIndex(loadedPlan));
+      setFinalDetailsFinished(finalDetailsComplete(loadedPlan));
+      setProjectPreviewOpen(false);
     } catch (err) {
       setError(normalizeError(err, "Could not load this project plan."));
       setPlan(null);
@@ -238,8 +264,10 @@ export default function ProjectPlanDetail() {
   const markupVersions = getMarkupVersions(plan?.markup_data);
   const currentPhotoSuggestions = photoSuggestionList(activeTemplate, currentQuestion);
   const finalQuestion = FINAL_DETAIL_QUESTIONS[finalQuestionIndex] || FINAL_DETAIL_QUESTIONS[0];
-  const finalReady = finalDetailsComplete(plan);
-  const showProjectPreview = isIntakeComplete && finalReady && finalDetailsFinished;
+  const finalDetailsFilled = finalDetailsComplete(plan);
+  const finalReady = finalDetailsFinished && finalDetailsFilled;
+  const missingFinalQuestions = useMemo(() => getMissingFinalQuestions(plan), [plan]);
+  const showProjectPreview = isIntakeComplete && finalReady && projectPreviewOpen;
   const guidedRows = guidedAnswerRows(activeTemplate, plan?.guided_answers_json);
 
   async function patchPlan(patch, successMessage = "Saved.") {
@@ -261,7 +289,10 @@ export default function ProjectPlanDetail() {
 
   function updateLocalField(field, value) {
     setPlan((prev) => emptyPlan({ ...prev, [field]: value }));
-    setFinalDetailsFinished(false);
+    if (FINAL_DETAIL_QUESTIONS.some((question) => question.field === field)) {
+      setFinalDetailsFinished(false);
+      setProjectPreviewOpen(false);
+    }
   }
 
   function updateGuidedAnswer(value) {
@@ -351,14 +382,19 @@ export default function ProjectPlanDetail() {
       return;
     }
     setError("");
-    await patchPlan({ [finalQuestion.field]: plan[finalQuestion.field] }, "Project detail saved.");
-    if (finalQuestionIndex >= FINAL_DETAIL_QUESTIONS.length - 1) {
-      setFinalDetailsFinished(true);
+    const updatedPlan = emptyPlan(
+      await patchPlan({ [finalQuestion.field]: plan[finalQuestion.field] }, "Project detail saved."),
+    );
+    const completed = finalDetailsComplete(updatedPlan);
+    setFinalDetailsFinished(completed);
+    if (completed) {
+      setProjectPreviewOpen(true);
+      setFinalQuestionIndex(getFirstMissingFinalQuestionIndex(updatedPlan));
       setStatusMessage("Final details saved. Review the project preview below.");
       return;
     }
-    setFinalDetailsFinished(false);
-    setFinalQuestionIndex(Math.min(Math.max(nextIndex, 0), FINAL_DETAIL_QUESTIONS.length - 1));
+    setProjectPreviewOpen(false);
+    setFinalQuestionIndex(getFirstMissingFinalQuestionIndex(updatedPlan, nextIndex));
   }
 
   function openMarkupForImage(image) {
@@ -788,53 +824,122 @@ export default function ProjectPlanDetail() {
             <div>
               <div className="text-lg font-semibold text-slate-950">Final Project Details</div>
               <div className="mt-1 text-sm text-slate-500">
-                Question {finalQuestionIndex + 1} of {FINAL_DETAIL_QUESTIONS.length}
+                {finalReady
+                  ? "Your saved project detail is ready to review."
+                  : `Question ${finalQuestionIndex + 1} of ${FINAL_DETAIL_QUESTIONS.length}`}
               </div>
             </div>
-            {finalReady ? <Badge>Ready to generate</Badge> : null}
+            {finalReady ? (
+              <Badge>Ready to generate</Badge>
+            ) : (
+              <Badge className="border-amber-200 bg-amber-50 text-amber-900">
+                {finalDetailsFilled ? "Review changes" : `${missingFinalQuestions.length} left`}
+              </Badge>
+            )}
           </div>
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-            <label className="block text-xl font-semibold text-slate-950">{finalQuestion.label}</label>
-            <div className="mt-2 text-sm leading-6 text-slate-600">{finalQuestion.help}</div>
-            <div className="mt-5">
-              {finalQuestion.type === "textarea" ? (
-                <Textarea
-                  rows={5}
-                  value={plan[finalQuestion.field] || ""}
-                  onChange={(event) => updateLocalField(finalQuestion.field, event.target.value)}
-                  onBlur={() => saveManualField(finalQuestion.field)}
-                  placeholder={finalQuestion.placeholder}
-                />
-              ) : (
-                <Input
-                  value={plan[finalQuestion.field] || ""}
-                  onChange={(event) => updateLocalField(finalQuestion.field, event.target.value)}
-                  onBlur={() => saveManualField(finalQuestion.field)}
-                  placeholder={finalQuestion.placeholder}
-                />
-              )}
+          {!finalReady && !finalDetailsFilled ? (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+              <div className="text-sm font-semibold text-amber-950">Remaining questions</div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {FINAL_DETAIL_QUESTIONS.map((question, index) => {
+                  const complete = finalQuestionComplete(plan, question);
+                  const active = index === finalQuestionIndex;
+                  return (
+                    <button
+                      key={question.field}
+                      type="button"
+                      onClick={() => setFinalQuestionIndex(index)}
+                      className={
+                        "rounded-xl border px-3 py-2 text-left text-sm transition " +
+                        (complete
+                          ? "border-emerald-200 bg-white text-emerald-800"
+                          : active
+                            ? "border-amber-500 bg-white text-amber-950 ring-2 ring-amber-200"
+                            : "border-amber-200 bg-amber-100/70 text-amber-950 hover:bg-white")
+                      }
+                    >
+                      <div className="font-semibold">{question.label}</div>
+                      <div className="mt-0.5 text-xs">{complete ? "Answered" : "Needs answer"}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <GhostButton
-                type="button"
-                onClick={() => {
-                  setFinalDetailsFinished(false);
-                  setFinalQuestionIndex((index) => Math.max(index - 1, 0));
-                }}
-                disabled={saving || finalQuestionIndex === 0}
-              >
-                Back
-              </GhostButton>
-              <Button
-                type="button"
-                onClick={() => saveFinalDetailAndMove(finalQuestionIndex + 1)}
-                disabled={saving}
-              >
-                {saving ? "Saving..." : finalQuestionIndex >= FINAL_DETAIL_QUESTIONS.length - 1 ? "Review project" : "Next"}
-              </Button>
+          ) : null}
+
+          {finalReady ? (
+            <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+              <div className="text-sm font-semibold text-emerald-950">Project detail saved</div>
+              <div className="mt-1 text-sm text-emerald-900">
+                You can review it without going back through the final questions.
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button type="button" onClick={() => setProjectPreviewOpen(true)}>
+                  View Project Detail
+                </Button>
+                <GhostButton
+                  type="button"
+                  onClick={() => {
+                    setFinalDetailsFinished(false);
+                    setProjectPreviewOpen(false);
+                    setFinalQuestionIndex(getFirstMissingFinalQuestionIndex(plan));
+                  }}
+                >
+                  Edit details
+                </GhostButton>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+              <label className="block text-xl font-semibold text-slate-950">{finalQuestion.label}</label>
+              <div className="mt-2 text-sm leading-6 text-slate-600">{finalQuestion.help}</div>
+              <div className="mt-5">
+                {finalQuestion.type === "textarea" ? (
+                  <Textarea
+                    rows={5}
+                    value={plan[finalQuestion.field] || ""}
+                    onChange={(event) => updateLocalField(finalQuestion.field, event.target.value)}
+                    onBlur={() => saveManualField(finalQuestion.field)}
+                    placeholder={finalQuestion.placeholder}
+                  />
+                ) : (
+                  <Input
+                    value={plan[finalQuestion.field] || ""}
+                    onChange={(event) => updateLocalField(finalQuestion.field, event.target.value)}
+                    onBlur={() => saveManualField(finalQuestion.field)}
+                    placeholder={finalQuestion.placeholder}
+                  />
+                )}
+              </div>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <GhostButton
+                  type="button"
+                  onClick={() => {
+                    setFinalDetailsFinished(false);
+                    setProjectPreviewOpen(false);
+                    setFinalQuestionIndex((index) => Math.max(index - 1, 0));
+                  }}
+                  disabled={saving || finalQuestionIndex === 0}
+                >
+                  Back
+                </GhostButton>
+                <Button
+                  type="button"
+                  onClick={() => saveFinalDetailAndMove(finalQuestionIndex + 1)}
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : finalDetailsFilled
+                      ? "Save details"
+                      : finalQuestionIndex >= FINAL_DETAIL_QUESTIONS.length - 1
+                        ? "Review project"
+                        : "Next"}
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       ) : null}
 
@@ -850,7 +955,7 @@ export default function ProjectPlanDetail() {
               </div>
               <button
                 type="button"
-                onClick={() => setFinalDetailsFinished(false)}
+                onClick={() => setProjectPreviewOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                 aria-label="Close preview"
               >

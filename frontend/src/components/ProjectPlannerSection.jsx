@@ -25,6 +25,68 @@ function formatDate(value) {
   });
 }
 
+const REQUIRED_FINAL_DETAIL_FIELDS = [
+  { field: "title", label: "Name this project" },
+  { field: "house_location", label: "Work area" },
+  { field: "issue_summary", label: "Project summary" },
+];
+
+function planAnswerIsComplete(answer) {
+  if (Array.isArray(answer)) return answer.length > 0;
+  return String(answer || "").trim().length > 0;
+}
+
+function getPlanProgress(plan, templates) {
+  const template = (templates || []).find((item) => item.key === plan?.project_type);
+  const questions = template?.questions || [];
+  const guidedIndex = Math.max(Number(plan?.guided_question_index || 0), 0);
+  const answered = questions.reduce(
+    (count, question) => count + (planAnswerIsComplete(plan?.guided_answers_json?.[question.id]) ? 1 : 0),
+    0,
+  );
+  const intakeComplete = questions.length > 0 && guidedIndex >= questions.length;
+  const missingFinal = REQUIRED_FINAL_DETAIL_FIELDS.filter((question) => {
+    const value = String(plan?.[question.field] ?? "").trim();
+    if (question.field === "title") return !value || value === "Untitled issue";
+    return !value;
+  });
+
+  if (!plan?.project_type) {
+    return {
+      actionLabel: "Continue",
+      badge: "Choose project type",
+      helper: "Project type is still needed.",
+      highlight: true,
+    };
+  }
+
+  if (!intakeComplete) {
+    const remaining = Math.max(questions.length - answered, 0);
+    return {
+      actionLabel: "Continue",
+      badge: `${remaining} intake question${remaining === 1 ? "" : "s"} left`,
+      helper: `Guided intake ${answered}/${questions.length} answered.`,
+      highlight: remaining > 0,
+    };
+  }
+
+  if (missingFinal.length) {
+    return {
+      actionLabel: "Continue",
+      badge: `${missingFinal.length} detail${missingFinal.length === 1 ? "" : "s"} left`,
+      helper: `Next: ${missingFinal[0].label}`,
+      highlight: true,
+    };
+  }
+
+  return {
+    actionLabel: "View",
+    badge: "Details ready",
+    helper: "Project details are saved.",
+    highlight: false,
+  };
+}
+
 function LimitNotice({ meta }) {
   if (!meta || meta.can_create) return null;
   return (
@@ -99,6 +161,7 @@ export default function ProjectPlannerSection({ isVisible = false }) {
       (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
     );
   }, [plans]);
+  const templates = useMemo(() => meta?.project_intake_templates || [], [meta]);
 
   async function createPlan() {
     if (creating || meta?.can_create === false) return;
@@ -210,6 +273,7 @@ export default function ProjectPlannerSection({ isVisible = false }) {
             (() => {
               const isArchived = plan.status === "archived";
               const isSelected = selectedPlanId === plan.id;
+              const progress = getPlanProgress(plan, templates);
               return (
             <Card
               key={plan.id}
@@ -275,6 +339,18 @@ export default function ProjectPlannerSection({ isVisible = false }) {
 
                 <div className="text-xs text-slate-400">Updated {formatDate(plan.updated_at) || "recently"}</div>
 
+                <div
+                  className={
+                    "rounded-lg border px-3 py-2 text-xs " +
+                    (progress.highlight
+                      ? "border-amber-200 bg-amber-50 text-amber-900"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-800")
+                  }
+                >
+                  <div className="font-semibold">{progress.badge}</div>
+                  <div className="mt-0.5">{progress.helper}</div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   {isArchived ? (
                     <Button
@@ -292,7 +368,7 @@ export default function ProjectPlannerSection({ isVisible = false }) {
                         className="flex-1"
                         onClick={() => navigate(`/dashboard/planner/${plan.id}`)}
                       >
-                        Edit
+                        {progress.actionLabel}
                       </Button>
                       <GhostButton
                         type="button"
