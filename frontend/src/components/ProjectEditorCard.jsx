@@ -60,6 +60,16 @@ function JobPostingHelp({ text }) {
   );
 }
 
+function SectionIntro({ eyebrow, title, description }) {
+  return (
+    <div className="mb-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{eyebrow}</div>
+      <div className="mt-1 text-base font-semibold text-slate-900">{title}</div>
+      {description ? <div className="mt-1 text-sm leading-6 text-slate-500">{description}</div> : null}
+    </div>
+  );
+}
+
 function ComplianceNotice({ checked, onChange, publishLabel = "publish" }) {
   return (
     <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
@@ -307,126 +317,121 @@ export default function ProjectEditorCard({
         </div>
       </div>
 
-      {/* Basic fields */}
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Project Info (Draft)
-      </div>
-
+      {/* Project card fields */}
       <form
         id="project-editor-form"
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit?.(e);
         }}
-        className="grid grid-cols-1 gap-3 md:grid-cols-2"
+        className="rounded-xl border border-slate-200 bg-white p-4"
       >
-        <div className="md:col-span-2">
-          <ComplianceNotice
-            checked={!!form.compliance_confirmed}
-            onChange={(checked) => setForm((p) => ({ ...p, compliance_confirmed: checked }))}
-            publishLabel={isJobPosting ? "publish this post" : "publish this project"}
-          />
-        </div>
+        <SectionIntro
+          eyebrow="Project card"
+          title="Public project information"
+          description="These fields control how the project appears on the project card, profile, and detail page."
+        />
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Project Name</label>
-          <Input
-            value={form.title || ""}
-            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-            placeholder="Project name"
-          />
-        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Project Name</label>
+            <Input
+              value={form.title || ""}
+              onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+              placeholder="Project name"
+            />
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Category</label>
-          <Input
-            value={form.category || ""}
-            onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-            placeholder="Category"
-          />
-        </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Category</label>
+            <Input
+              value={form.category || ""}
+              onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+              placeholder="Category"
+            />
+          </div>
 
-        <div className="md:col-span-2">
-          <label className="mb-1 block text-sm text-slate-600">Summary</label>
-          <Textarea
-            value={form.summary || ""}
-            onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
-            placeholder="Short description..."
-          />
-        </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm text-slate-600">Project Card Summary</label>
+            <Textarea
+              value={form.summary || ""}
+              onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
+              placeholder="Short description shown on the project card."
+            />
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
-          <Input
-            value={form.location || ""}
-            onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
-            placeholder="City, State"
-          />
-        </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Location (not address)</label>
+            <Input
+              value={form.location || ""}
+              onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
+              placeholder="City, State"
+            />
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Budget</label>
-          <Input
-            value={form.budget ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
-            inputMode="numeric"
-            placeholder="e.g. 25000"
-          />
-        </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Budget</label>
+            <Input
+              value={form.budget ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
+              inputMode="numeric"
+              placeholder="e.g. 25000"
+            />
+          </div>
 
-        {/* ✅ sqf input (prevents "sqf must be integer" complaints) */}
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
-          <Input
-            value={form.sqf ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, sqf: e.target.value }))}
-            inputMode="numeric"
-            placeholder="e.g. 1800"
-          />
-        </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Square Feet</label>
+            <Input
+              value={form.sqf ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, sqf: e.target.value }))}
+              inputMode="numeric"
+              placeholder="e.g. 1800"
+            />
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
-          <Input
-            value={form.highlights || ""}
-            onChange={(e) => setForm((p) => ({ ...p, highlights: e.target.value }))}
-            placeholder="comma-separated tags"
-          />
-        </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Highlights (tags / text)</label>
+            <Input
+              value={form.highlights || ""}
+              onChange={(e) => setForm((p) => ({ ...p, highlights: e.target.value }))}
+              placeholder="comma-separated tags"
+            />
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Material / tool link (optional)</label>
-          <Input
-            value={form.material_url || ""}
-            onChange={(e) => setForm((p) => ({ ...p, material_url: e.target.value }))}
-            placeholder="https://www.example.com/product/123"
-          />
-        </div>
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Material / tool link (optional)</label>
+            <Input
+              value={form.material_url || ""}
+              onChange={(e) => setForm((p) => ({ ...p, material_url: e.target.value }))}
+              placeholder="https://www.example.com/product/123"
+            />
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm text-slate-600">Material label (title + price)</label>
-          <Input
-            value={form.material_label || ""}
-            onChange={(e) => setForm((p) => ({ ...p, material_label: e.target.value }))}
-            placeholder="e.g. Bosch SDS Hammer Drill – $129"
-          />
+          <div>
+            <label className="mb-1 block text-sm text-slate-600">Material label (title + price)</label>
+            <Input
+              value={form.material_label || ""}
+              onChange={(e) => setForm((p) => ({ ...p, material_label: e.target.value }))}
+              placeholder="e.g. Bosch SDS Hammer Drill - $129"
+            />
+          </div>
         </div>
 
         <button type="submit" className="hidden" />
       </form>
 
-      {/* Job Posting details */}
+      {/* Contractor-facing job fields */}
       {isJobPosting && (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Job Posting Details
-          </div>
-
-          <div className="mt-4">
-            <div className="text-sm font-semibold text-slate-800">1. Project Overview</div>
+        <div className="mt-4 space-y-4">
+          <section className="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
+            <SectionIntro
+              eyebrow="Planner and job post"
+              title="Contractor-facing scope"
+              description="Planner-generated drafts and homeowner job-post details live here. Keep this focused on what a contractor needs to estimate the work."
+            />
 
             <div className="mt-3">
-              <label className="mb-1 block text-sm text-slate-600">Project Summary</label>
+              <label className="mb-1 block text-sm text-slate-600">Work Request Summary</label>
               <Textarea
                 placeholder="e.g., Full kitchen remodel including custom cabinetry and island installation."
                 value={form.job_summary || ""}
@@ -435,7 +440,7 @@ export default function ProjectEditorCard({
             </div>
 
             <div className="mt-3">
-              <div className="mb-1 text-sm text-slate-600">Service Category</div>
+              <div className="mb-1 text-sm text-slate-600">Services Needed</div>
               <div className="flex flex-wrap gap-3 text-sm text-slate-700">
                 {["Plumbing", "Carpentry", "Electrical", "General", "Masonry"].map((c) => (
                   <label key={c} className="flex items-center gap-2">
@@ -486,7 +491,7 @@ export default function ProjectEditorCard({
               </div>
             </div>
 
-            <div className="mt-3">
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
               <div className="mb-1 text-sm text-slate-600">Part of Larger Project</div>
               <div className="flex items-center gap-4 text-sm text-slate-700">
                 <label className="flex items-center gap-2">
@@ -521,10 +526,14 @@ export default function ProjectEditorCard({
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
-          <div className="mt-6">
-            <div className="text-sm font-semibold text-slate-800">2. Professional &amp; Legal Requirements</div>
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <SectionIntro
+              eyebrow="Requirements"
+              title="Professional and permit needs"
+              description="Use this section for licensing expectations, permit handling, and other requirements that affect who can take the work."
+            />
 
             <div className="mt-3">
               <div className="mb-1 text-sm text-slate-600">Required Expertise</div>
@@ -598,11 +607,14 @@ export default function ProjectEditorCard({
                 </div>
               )}
             </div>
+          </section>
 
-          </div>
-
-          <div className="mt-6">
-            <div className="text-sm font-semibold text-slate-800">4. Visibility &amp; Media</div>
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <SectionIntro
+              eyebrow="Visibility"
+              title="Posting access and notifications"
+              description="Choose whether this job is public or sent privately, then confirm compliance before publishing or sending."
+            />
 
             <div className="mt-3 flex items-center gap-4 text-sm text-slate-700">
               <div className="font-medium">Post Privacy</div>
@@ -647,7 +659,14 @@ export default function ProjectEditorCard({
                 <span>Email me when I receive a response and need to take action.</span>
               </label>
             </div>
-          </div>
+            <div className="mt-4">
+              <ComplianceNotice
+                checked={!!form.compliance_confirmed}
+                onChange={(checked) => setForm((p) => ({ ...p, compliance_confirmed: checked }))}
+                publishLabel={isJobPosting ? "publish this post" : "publish this project"}
+              />
+            </div>
+          </section>
         </div>
       )}
 
