@@ -20,6 +20,7 @@ import {
 } from "../utils/locationOrigin";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
+const DIRECTORY_BATCH_SIZE = 6;
 
 // Sample data for preview (remove in production)
 const SAMPLE_PROJECTS = [
@@ -258,7 +259,7 @@ export default function Explore() {
   const [directoryLikeMap, setDirectoryLikeMap] = useState({});
   const [directoryLikeCounts, setDirectoryLikeCounts] = useState({});
   const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
-  const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(3);
+  const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(DIRECTORY_BATCH_SIZE);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -727,9 +728,16 @@ export default function Explore() {
 
   useEffect(() => {
     setVisibleDirectoryCount((prev) =>
-      Math.min(Math.max(prev, 3), filteredDirectoryListings.length || 3),
+      Math.min(
+        Math.max(prev, DIRECTORY_BATCH_SIZE),
+        filteredDirectoryListings.length || DIRECTORY_BATCH_SIZE,
+      ),
     );
   }, [filteredDirectoryListings.length]);
+
+  const allDirectoryListingsVisible =
+    filteredDirectoryListings.length > 0 &&
+    visibleDirectoryCount >= filteredDirectoryListings.length;
 
   const clearFilters = () => {
     setFilters({
@@ -1203,11 +1211,17 @@ export default function Explore() {
               </div>
               <button
                 type="button"
-                onClick={() => setVisibleDirectoryCount(filteredDirectoryListings.length)}
-                disabled={filteredDirectoryListings.length <= visibleDirectoryCount}
+                onClick={() =>
+                  setVisibleDirectoryCount(
+                    allDirectoryListingsVisible
+                      ? DIRECTORY_BATCH_SIZE
+                      : filteredDirectoryListings.length,
+                  )
+                }
+                disabled={filteredDirectoryListings.length <= DIRECTORY_BATCH_SIZE}
                 className="hidden h-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:inline-flex"
               >
-                View All Contractors
+                {allDirectoryListingsVisible ? "Show Less" : "View All Contractors"}
               </button>
             </div>
 
@@ -1333,7 +1347,11 @@ export default function Explore() {
             <div className="mt-8 flex justify-center">
               <button
                 type="button"
-                onClick={() => setVisibleDirectoryCount((prev) => prev + 9)}
+                onClick={() =>
+                  setVisibleDirectoryCount((prev) =>
+                    Math.min(prev + DIRECTORY_BATCH_SIZE, filteredDirectoryListings.length),
+                  )
+                }
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 Show More
