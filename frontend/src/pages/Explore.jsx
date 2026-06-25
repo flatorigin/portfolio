@@ -725,6 +725,12 @@ export default function Explore() {
     });
   }, [directoryListings, filters]);
 
+  useEffect(() => {
+    setVisibleDirectoryCount((prev) =>
+      Math.min(Math.max(prev, 3), filteredDirectoryListings.length || 3),
+    );
+  }, [filteredDirectoryListings.length]);
+
   const clearFilters = () => {
     setFilters({
       name: "",
@@ -1197,6 +1203,8 @@ export default function Explore() {
               </div>
               <button
                 type="button"
+                onClick={() => setVisibleDirectoryCount(filteredDirectoryListings.length)}
+                disabled={filteredDirectoryListings.length <= visibleDirectoryCount}
                 className="hidden h-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 sm:inline-flex"
               >
                 View All Contractors
