@@ -536,34 +536,35 @@ export default function ProjectPlanDetail() {
             </div>
             <Badge
               className={
-                packetReady
+                "h-8 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-semibold " +
+                (packetReady
                   ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-amber-200 bg-amber-50 text-amber-900"
+                  : "border-amber-200 bg-amber-50 text-amber-900")
               }
             >
               {packetStatus}
             </Badge>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {packetChecklist.map((item) => (
               <div
                 key={item.label}
                 className={
-                  "rounded-xl border px-3 py-3 text-sm " +
+                  "min-h-[92px] rounded-xl border px-4 py-3 text-sm " +
                   (item.complete
                     ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                     : "border-slate-200 bg-slate-50 text-slate-700")
                 }
               >
-                <div className="flex items-center gap-2 font-semibold">
+                <div className="flex items-start gap-2 font-semibold">
                   <SymbolIcon
                     name={item.complete ? "check_circle" : "radio_button_unchecked"}
-                    className={"text-[18px] " + (item.complete ? "text-emerald-600" : "text-slate-400")}
+                    className={"mt-0.5 shrink-0 text-[18px] " + (item.complete ? "text-emerald-600" : "text-slate-400")}
                   />
-                  {item.label}
+                  <span className="min-w-0 leading-5">{item.label}</span>
                 </div>
-                <div className="mt-1 text-xs leading-5 opacity-80">{item.helper}</div>
+                <div className="mt-2 text-xs leading-5 opacity-80">{item.helper}</div>
               </div>
             ))}
           </div>
