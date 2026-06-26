@@ -113,6 +113,14 @@ createRoot(document.getElementById("root")).render(
             }
           />
           <Route
+            path="dashboard/projects/:projectId/images/:imageId/markup"
+            element={
+              <RequireAuth>
+                <ProjectMarkupCanvas />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="profile/edit"
             element={
               <RequireAuth>

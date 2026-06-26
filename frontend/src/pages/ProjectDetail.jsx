@@ -10,6 +10,7 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea, Input, SymbolIcon } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
+import MarkupPresetOverlay, { getMarkupAnnotations, getMarkupVersion } from "../components/MarkupPresetOverlay";
 import MediaVideoPlayer from "../components/MediaVideoPlayer";
 import BidModule from "../components/bids/BidModule";
 import QuickMessageDrawer from "../components/QuickMessageDrawer";
@@ -66,6 +67,30 @@ function formatPostedDate(value) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function findMarkupForSourceImage(sourcePlanImageId, markupVersions = []) {
+  if (!sourcePlanImageId) return null;
+  return (markupVersions || []).find((version) => {
+    if (!version || typeof version !== "object") return false;
+    if (version.source_image_id && String(version.source_image_id) === String(sourcePlanImageId)) return true;
+    if (version.snapshot_image_id && String(version.snapshot_image_id) === String(sourcePlanImageId)) return true;
+    return false;
+  }) || null;
+}
+
+function normalizeImageExtraData(extraData, sourcePlanById = {}) {
+  const extra = extraData && typeof extraData === "object" ? { ...extraData } : {};
+  if (extra.markup_version) return extra;
+
+  const sourcePlanId = extra.source_plan_id;
+  const sourcePlanImageId = extra.source_plan_image_id;
+  const sourcePlan = sourcePlanId ? sourcePlanById[String(sourcePlanId)] : null;
+  const markupVersions = Array.isArray(sourcePlan?.markup_data?.versions)
+    ? sourcePlan.markup_data.versions
+    : [];
+  const markupVersion = findMarkupForSourceImage(sourcePlanImageId, markupVersions);
+  return markupVersion ? { ...extra, markup_version: markupVersion } : extra;
 }
 
 function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) {
@@ -435,22 +460,46 @@ export default function ProjectDetail() {
       if (!isMountedRef.current) return;
 
       const raw = Array.isArray(data) ? data : [];
+      const sourcePlanIds = Array.from(
+        new Set(
+          raw
+            .map((x) => x?.extra_data?.source_plan_id)
+            .filter((value) => value !== undefined && value !== null && value !== "")
+            .map((value) => String(value))
+        )
+      );
+      const sourcePlanEntries = await Promise.all(
+        sourcePlanIds.map(async (planId) => {
+          try {
+            const { data: planData } = await api.get(`/project-plans/${planId}/`);
+            return [planId, planData];
+          } catch {
+            return [planId, null];
+          }
+        })
+      );
+      const sourcePlanById = Object.fromEntries(sourcePlanEntries.filter(([, value]) => value));
 
       const publicImages = raw
-        .map((x) => ({
-          url: toUrl(x.url || x.image || x.src || x.file),
-          thumbnail: toUrl(x.thumbnail || x.thumb || ""),
-          caption: x.caption || "",
-          id: x.id ?? x.pk ?? x.image_id ?? null,
-          order: x.order ?? x.sort_order ?? null,
-          media_type: x.media_type || x.mediaType || "image",
-          processing_status: x.processing_status || x.processingStatus || "ready",
-        }))
+        .map((x) => {
+          const extraData = normalizeImageExtraData(x.extra_data, sourcePlanById);
+          return {
+            url: toUrl(x.url || x.image || x.src || x.file),
+            thumbnail: toUrl(x.thumbnail || x.thumb || ""),
+            caption: x.caption || "",
+            id: x.id ?? x.pk ?? x.image_id ?? null,
+            order: x.order ?? x.sort_order ?? null,
+            media_type: x.media_type || x.mediaType || "image",
+            processing_status: x.processing_status || x.processingStatus || "ready",
+            extra_data: extraData,
+          };
+        })
         .filter((x) => !!x.url);
 
       const editableImages = raw
         .map((x) => {
           const imgId = x.id ?? x.pk ?? x.image_id ?? null;
+          const extraData = normalizeImageExtraData(x.extra_data, sourcePlanById);
           return {
             id: imgId,
             url: toUrl(x.url || x.image || x.src || x.file),
@@ -459,6 +508,7 @@ export default function ProjectDetail() {
             order: x.order ?? x.sort_order ?? null,
             media_type: x.media_type || x.mediaType || "image",
             processing_status: x.processing_status || x.processingStatus || "ready",
+            extra_data: extraData,
             _localCaption: x.caption || "",
             _saving: false,
           };
@@ -2239,12 +2289,14 @@ export default function ProjectDetail() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                {images.map((img, i) => {
-                  const mediaType = mediaTypeFor(img);
-                  const thumbUrl = img.thumbnail || img.url;
-                  const isProcessing = img.processing_status && img.processing_status !== "ready";
+	                {images.map((img, i) => {
+	                  const mediaType = mediaTypeFor(img);
+	                  const thumbUrl = img.thumbnail || img.url;
+	                  const isProcessing = img.processing_status && img.processing_status !== "ready";
+	                  const markupVersion = getMarkupVersion(img);
+	                  const markupAnnotations = getMarkupAnnotations(img);
 
-                  return (
+	                  return (
                     <div
                       key={img.url + i}
                       className="group relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm hover:shadow-md"
@@ -2275,16 +2327,24 @@ export default function ProjectDetail() {
                                 </span>
                               </div>
                             </>
-                          ) : (
-                            <img
-                              src={img.url}
-                              alt={img.caption || ""}
-                              className="block h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-                            />
-                          )}
-                          {isProcessing ? (
-                            <div className="absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-1 text-[11px] font-medium text-slate-700 shadow">
-                              Processing video...
+	                          ) : (
+	                            <img
+	                              src={img.url}
+	                              alt={img.caption || ""}
+	                              className="block h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+	                            />
+	                          )}
+	                          {mediaType === "image" && markupAnnotations.length > 0 ? (
+	                            <MarkupPresetOverlay annotations={markupAnnotations} />
+	                          ) : null}
+	                          {markupVersion && mediaType === "image" ? (
+	                            <div className="absolute right-2 top-2 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
+	                              Marked up
+	                            </div>
+	                          ) : null}
+	                          {isProcessing ? (
+	                            <div className="absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-1 text-[11px] font-medium text-slate-700 shadow">
+	                              Processing video...
                             </div>
                           ) : null}
                         </div>
@@ -2535,15 +2595,18 @@ export default function ProjectDetail() {
                       poster={currentImage.thumbnail || undefined}
                       className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
                     />
-                  ) : (
-                    <img
-                      src={currentImage.url}
-                      alt={currentImage.caption || ""}
-                      className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
-                    />
-                  )}
-                  
-                  {/* Caption overlay on mobile */}
+	                  ) : (
+	                    <img
+	                      src={currentImage.url}
+	                      alt={currentImage.caption || ""}
+	                      className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+	                    />
+	                  )}
+	                  {mediaTypeFor(currentImage) === "image" && getMarkupAnnotations(currentImage).length > 0 ? (
+	                    <MarkupPresetOverlay annotations={getMarkupAnnotations(currentImage)} />
+	                  ) : null}
+	                  
+	                  {/* Caption overlay on mobile */}
                   {currentImage?.caption && (
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 sm:hidden">
                       <p className="text-sm text-white/90">{currentImage.caption}</p>

@@ -409,14 +409,15 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
 }
 
 export default function ProjectMarkupCanvas() {
-  const { planId } = useParams();
+  const { planId, projectId, imageId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const svgRef = useRef(null);
   const fileRef = useRef(null);
   const sidebarTextRef = useRef(null);
   const [plan, setPlan] = useState(null);
-  const [loadingPlan, setLoadingPlan] = useState(Boolean(planId));
+  const [projectImage, setProjectImage] = useState(null);
+  const [loadingPlan, setLoadingPlan] = useState(Boolean(planId || projectId));
   const [backgroundUrl, setBackgroundUrl] = useState("");
   const [annotations, setAnnotations] = useState([]);
   const [tool, setTool] = useState("rect");
@@ -433,7 +434,8 @@ export default function ProjectMarkupCanvas() {
   const [editingTextId, setEditingTextId] = useState("");
   const [focusedSidebarInputId, setFocusedSidebarInputId] = useState("");
 
-  const storageKey = `${STORAGE_PREFIX}:${planId || "standalone"}`;
+  const isProjectImageMode = Boolean(projectId && imageId);
+  const storageKey = `${STORAGE_PREFIX}:${planId ? `plan:${planId}` : isProjectImageMode ? `project:${projectId}:${imageId}` : "standalone"}`;
   const selectedImageId = useMemo(() => new URLSearchParams(location.search).get("image") || "", [location.search]);
 
   useEffect(() => {
@@ -502,6 +504,46 @@ export default function ProjectMarkupCanvas() {
       alive = false;
     };
   }, [planId, selectedImageId]);
+
+  useEffect(() => {
+    if (!isProjectImageMode) return;
+    let alive = true;
+    setLoadingPlan(true);
+    api
+      .get(`/projects/${projectId}/images/`)
+      .then(({ data }) => {
+        if (!alive) return;
+        const image = (Array.isArray(data) ? data : []).find((item) => String(item.id) === String(imageId));
+        if (!image) {
+          setMessage("Could not find this project image.");
+          setProjectImage(null);
+          return;
+        }
+
+        setProjectImage(image);
+        const url = image.url || image.image || image.image_url || image.file || "";
+        const markupVersion = image.extra_data?.markup_version;
+        if (markupVersion && typeof markupVersion === "object") {
+          setAnnotations(Array.isArray(markupVersion.annotations) ? markupVersion.annotations : []);
+          setBackgroundUrl(markupVersion.background_url || url || "");
+          if (markupVersion.visible_layers && typeof markupVersion.visible_layers === "object") {
+            setVisibleLayers((prev) => ({ ...prev, ...markupVersion.visible_layers }));
+          }
+        } else {
+          setAnnotations([]);
+          setBackgroundUrl(url || "");
+        }
+      })
+      .catch((err) => {
+        if (alive) setMessage(normalizeError(err, "Could not load this project image."));
+      })
+      .finally(() => {
+        if (alive) setLoadingPlan(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [imageId, isProjectImageMode, projectId]);
 
   const selected = useMemo(
     () => annotations.find((item) => item.id === selectedId) || null,
@@ -837,6 +879,49 @@ export default function ProjectMarkupCanvas() {
   }
 
   async function saveToPlanner() {
+    if (isProjectImageMode) {
+      if (!projectId || !projectImage?.id) {
+        setMessage("Open this canvas from a project image before saving a markup snapshot.");
+        return false;
+      }
+      setSaving(true);
+      setMessage("");
+      try {
+        const blob = await svgToPngBlob();
+        const formData = new FormData();
+        formData.append("images", new File([blob], `project-markup-${Date.now()}.png`, { type: "image/png" }));
+        formData.append("captions", `Marked up: ${projectImage.caption || "Project image"}`);
+        const { data: uploadedImages } = await api.post(`/projects/${projectId}/images/`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        const savedImage = Array.isArray(uploadedImages) ? uploadedImages[0] : null;
+        const snapshotUrl = savedImage?.url || savedImage?.image || "";
+        const snapshotImageId = savedImage?.id || null;
+
+        const savedOriginal = await saveEditableCanvas({
+          quiet: true,
+          versionSnapshotUrl: snapshotUrl,
+          versionSnapshotImageId: snapshotImageId,
+        });
+        if (snapshotImageId) {
+          await api.patch(`/projects/${projectId}/images/${snapshotImageId}/`, {
+            extra_data: {
+              source: "project_image_markup_snapshot",
+              source_project_image_id: projectImage.id,
+              is_markup_snapshot: true,
+            },
+          });
+        }
+        setMessage("Marked-up image added to this project.");
+        return true;
+      } catch (err) {
+        setMessage(normalizeError(err, "Could not save the marked-up image to this project."));
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    }
+
     if (!planId) {
       setMessage("Open this canvas from a project planner to save it back to the project file.");
       return;
@@ -865,6 +950,12 @@ export default function ProjectMarkupCanvas() {
   }
 
   async function saveAndBack() {
+    if (isProjectImageMode) {
+      const saved = await saveToPlanner();
+      if (saved && projectId) navigate(`/projects/${projectId}`);
+      return;
+    }
+
     const saved = await saveToPlanner();
     if (saved && planId) navigate(`/dashboard/planner/${planId}`);
   }
@@ -894,6 +985,56 @@ export default function ProjectMarkupCanvas() {
   }
 
   async function saveEditableCanvas({ quiet = false, versionSnapshotUrl = "", versionSnapshotImageId = null } = {}) {
+    if (isProjectImageMode) {
+      if (!projectImage?.id) {
+        setMessage("Open this canvas from a project image before saving markup.");
+        return null;
+      }
+      setSavingEditable(true);
+      if (!quiet) setMessage("");
+      try {
+        const now = new Date().toISOString();
+        const normalizedAnnotations = annotations.map((item) =>
+          item.type === "text" || item.type === "measure"
+            ? { ...item, text: normalizeMarkupText(item.text) }
+            : item,
+        );
+        const previousExtraData =
+          projectImage.extra_data && typeof projectImage.extra_data === "object"
+            ? projectImage.extra_data
+            : {};
+        const markupVersion = {
+          id: previousExtraData.markup_version?.id || `project-image-markup-${Date.now()}`,
+          name: previousExtraData.markup_version?.name || "Project image markup",
+          created_at: previousExtraData.markup_version?.created_at || now,
+          updated_at: now,
+          source_image_id: projectImage.id,
+          background_url: isPersistableUrl(backgroundUrl) ? backgroundUrl : (projectImage.url || ""),
+          snapshot_url: versionSnapshotUrl || previousExtraData.markup_version?.snapshot_url || "",
+          snapshot_image_id: versionSnapshotImageId || previousExtraData.markup_version?.snapshot_image_id || null,
+          annotations: normalizedAnnotations,
+          visible_layers: visibleLayers,
+          annotation_count: normalizedAnnotations.length,
+        };
+        const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
+          extra_data: {
+            ...previousExtraData,
+            source: previousExtraData.source || "project_image_markup",
+            markup_version: markupVersion,
+          },
+        });
+        setProjectImage(data);
+        if (!quiet) setMessage("Markup saved to this project image.");
+        return data;
+      } catch (err) {
+        if (!quiet) setMessage(normalizeError(err, "Could not save markup to this project image."));
+        if (quiet) throw err;
+        return null;
+      } finally {
+        setSavingEditable(false);
+      }
+    }
+
     if (!planId) {
       setMessage("Open this canvas from a project planner to save editable layer data.");
       return null;
@@ -1007,15 +1148,17 @@ export default function ProjectMarkupCanvas() {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-center gap-4">
             <Link
-              to={planId ? `/dashboard/planner/${planId}` : "/dashboard"}
+              to={isProjectImageMode ? `/projects/${projectId}` : planId ? `/dashboard/planner/${planId}` : "/dashboard"}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Back to planner"
+              aria-label={isProjectImageMode ? "Back to project" : "Back to planner"}
             >
               <SymbolIcon name="arrow_back" className="text-[22px]" />
             </Link>
             <div>
               <h1 className="text-base font-semibold text-slate-950">Markup canvas</h1>
-              <p className="text-xs text-slate-500">Mark the area that needs work</p>
+              <p className="text-xs text-slate-500">
+                {isProjectImageMode ? "Markup will stay on this project image" : "Mark the area that needs work"}
+              </p>
             </div>
           </div>
 
@@ -1068,11 +1211,11 @@ export default function ProjectMarkupCanvas() {
             <button
               type="button"
               onClick={saveAndBack}
-              disabled={saving}
+              disabled={saving || savingEditable}
               className="inline-flex h-9 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
             >
               <SymbolIcon name="check" className="text-[18px]" />
-              {saving ? "Saving..." : "Save & back"}
+              {saving || savingEditable ? "Saving..." : "Save & back"}
             </button>
           </div>
         </div>
@@ -1440,27 +1583,23 @@ export default function ProjectMarkupCanvas() {
                     <path d="M2,2 L10,6 L2,10 Z" fill={itemColor} />
                   </marker>
                 ))}
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" strokeWidth="1" />
-                </pattern>
-              </defs>
-              <rect width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
-              {backgroundUrl ? (
-                <image href={backgroundUrl} x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="xMidYMid meet" />
-              ) : (
-                <g>
-                  <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="url(#grid)" />
-                  <text x="600" y="355" textAnchor="middle" fill="#64748b" fontSize="30" fontWeight="700">
-                    Upload a photo, floor plan, or sketch
-                  </text>
+	              </defs>
+	              <rect width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
+	              {backgroundUrl ? (
+	                <image href={backgroundUrl} x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="xMidYMid meet" />
+	              ) : (
+	                <g>
+	                  <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
+	                  <text x="600" y="355" textAnchor="middle" fill="#64748b" fontSize="30" fontWeight="700">
+	                    Upload a photo, floor plan, or sketch
+	                  </text>
                   <text x="600" y="395" textAnchor="middle" fill="#94a3b8" fontSize="20">
                     Then draw boxes, arrows, notes, and measurements over it.
-                  </text>
-                </g>
-              )}
-              <rect width={CANVAS_W} height={CANVAS_H} fill="url(#grid)" opacity="0.22" />
+	                  </text>
+	                </g>
+	              )}
 
-              {layeredAnnotations.map((item) =>
+	              {layeredAnnotations.map((item) =>
                 renderAnnotation(item, {
                   selected: item.id === selectedId,
                   editing: item.id === editingTextId,

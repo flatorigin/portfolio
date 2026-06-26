@@ -1172,9 +1172,47 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             draft = serializer.save(owner=request.user)
             copied_images = []
+            markup_versions = []
+            if isinstance(plan.markup_data, dict):
+                markup_versions = [
+                    version
+                    for version in plan.markup_data.get("versions", [])
+                    if isinstance(version, dict)
+                ]
+
+            def markup_for_plan_image(plan_image):
+                plan_image_id = str(plan_image.id)
+                for version in markup_versions:
+                    source_id = version.get("source_image_id")
+                    snapshot_id = version.get("snapshot_image_id")
+                    if source_id and str(source_id) == plan_image_id:
+                        return version
+                    if snapshot_id and str(snapshot_id) == plan_image_id:
+                        return version
+                return None
+
             for image in plan.images.order_by("order", "id"):
                 if not image.image:
                     continue
+                markup_version = markup_for_plan_image(image)
+                image_extra_data = {
+                    "source": "project_planner",
+                    "source_plan_id": plan.id,
+                    "source_plan_image_id": image.id,
+                    "is_markup_snapshot": image.caption == "Project markup canvas",
+                }
+                if markup_version:
+                    image_extra_data["markup_version"] = {
+                        "id": markup_version.get("id"),
+                        "name": markup_version.get("name") or "Saved markup",
+                        "source_image_id": markup_version.get("source_image_id"),
+                        "snapshot_image_id": markup_version.get("snapshot_image_id"),
+                        "snapshot_url": markup_version.get("snapshot_url") or "",
+                        "background_url": markup_version.get("background_url") or "",
+                        "annotation_count": markup_version.get("annotation_count") or 0,
+                        "annotations": markup_version.get("annotations") or [],
+                        "visible_layers": markup_version.get("visible_layers") or {},
+                    }
                 image.image.open("rb")
                 copied_images.append(
                     ProjectImage(
@@ -1183,12 +1221,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                         order=image.order,
                         media_type=ProjectImage.MEDIA_TYPE_IMAGE,
                         processing_status=ProjectImage.STATUS_READY,
-                        extra_data={
-                            "source": "project_planner",
-                            "source_plan_id": plan.id,
-                            "source_plan_image_id": image.id,
-                            "is_markup_snapshot": image.caption == "Project markup canvas",
-                        },
+                        extra_data=image_extra_data,
                     )
                 )
                 copied_images[-1].image.save(

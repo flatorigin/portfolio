@@ -5,6 +5,7 @@
 // ============================================================================
 import { useMemo, useState } from "react";
 import ImageUploader from "./ImageUploader";
+import MarkupPresetOverlay, { getMarkupAnnotations, getMarkupVersion } from "./MarkupPresetOverlay";
 import { Card, Input, Textarea, Button, GhostButton, Badge, SymbolIcon } from "../ui";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
@@ -538,25 +539,27 @@ export default function ProjectEditorCard({
             <div className="mt-3">
               <div className="mb-1 text-sm text-slate-600">Required Expertise</div>
               <div className="flex flex-col gap-2 text-sm text-slate-700">
-                <label className="flex items-start gap-2">
-                  <input
-                    type="radio"
-                    name="expertise_edit"
-                    checked={form.required_expertise === "licensed_pro"}
-                    onChange={() => setForm((p) => ({ ...p, required_expertise: "licensed_pro" }))}
-                  />
+	                <label className="flex items-start gap-2">
+	                  <input
+	                    type="radio"
+	                    name="expertise_edit"
+	                    checked={form.required_expertise === "licensed_pro"}
+	                    onChange={() => setForm((p) => ({ ...p, required_expertise: "licensed_pro" }))}
+	                    className="mt-[3px]"
+	                  />
                   <span>
                     <span className="font-medium">Licensed Professional</span>{" "}
                     <span className="text-xs text-slate-500">(verified credentials/insurance)</span>
                   </span>
                 </label>
-                <label className="flex items-start gap-2">
-                  <input
-                    type="radio"
-                    name="expertise_edit"
-                    checked={form.required_expertise === "handyman"}
-                    onChange={() => setForm((p) => ({ ...p, required_expertise: "handyman" }))}
-                  />
+	                <label className="flex items-start gap-2">
+	                  <input
+	                    type="radio"
+	                    name="expertise_edit"
+	                    checked={form.required_expertise === "handyman"}
+	                    onChange={() => setForm((p) => ({ ...p, required_expertise: "handyman" }))}
+	                    className="mt-[3px]"
+	                  />
                   <span>
                     <span className="font-medium">Handyman / Expert Help</span>{" "}
                     <span className="text-xs text-slate-500">(general labor/skilled assistance)</span>
@@ -650,12 +653,13 @@ export default function ProjectEditorCard({
             )}
 
             <div className="mt-3">
-              <label className="flex items-start gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={!!form.notify_by_email}
-                  onChange={(e) => setForm((p) => ({ ...p, notify_by_email: e.target.checked }))}
-                />
+	              <label className="flex items-start gap-2 text-sm text-slate-700">
+	                <input
+	                  type="checkbox"
+	                  checked={!!form.notify_by_email}
+	                  onChange={(e) => setForm((p) => ({ ...p, notify_by_email: e.target.checked }))}
+	                  className="mt-[3px]"
+	                />
                 <span>Email me when I receive a response and need to take action.</span>
               </label>
             </div>
@@ -685,15 +689,18 @@ export default function ProjectEditorCard({
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-                {images.filter(Boolean).map((it) => {
-                  const mediaType = mediaTypeFor(it);
-                  const mediaUrl = it.url || it.image || it.image_url || it.file || "/placeholder.png";
-                  const thumbnailUrl = it.thumbnail || mediaUrl;
-                  const isProcessing = it.processing_status && it.processing_status !== "ready";
-                  const isCover = String(currentCoverId ?? "") === String(it.id ?? "");
+	                {images.filter(Boolean).map((it) => {
+	                  const mediaType = mediaTypeFor(it);
+	                  const mediaUrl = it.url || it.image || it.image_url || it.file || "/placeholder.png";
+	                  const thumbnailUrl = it.thumbnail || mediaUrl;
+	                  const markupVersion = getMarkupVersion(it);
+	                  const markupSnapshotUrl = markupVersion?.snapshot_url || "";
+	                  const markupAnnotations = getMarkupAnnotations(it);
+	                  const isProcessing = it.processing_status && it.processing_status !== "ready";
+	                  const isCover = String(currentCoverId ?? "") === String(it.id ?? "");
 
-                  return (
-                    <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+	                  return (
+	                    <figure key={it.id ?? it.url ?? crypto.randomUUID()} className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
                       {/* Image/Video preview */}
                       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-slate-100">
                         {mediaType === "video" ? (
@@ -716,30 +723,59 @@ export default function ProjectEditorCard({
                               </span>
                             </div>
                           </>
-                        ) : (
-                          <img
-                            src={mediaUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = "/placeholder.png";
-                            }}
-                          />
-                        )}
+	                        ) : (
+	                          <img
+	                            src={mediaUrl}
+	                            alt=""
+	                            className="h-full w-full object-cover"
+	                            onError={(e) => {
+	                              e.currentTarget.src = "/placeholder.png";
+	                            }}
+	                          />
+	                        )}
+	                        {mediaType === "image" && markupAnnotations.length > 0 ? (
+	                          <MarkupPresetOverlay annotations={markupAnnotations} />
+	                        ) : null}
 
                         {/* Cover badge */}
                         {isCover && mediaType === "image" && (
                           <div className="absolute left-2 top-2 rounded-md bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white">
-                            Cover
-                          </div>
-                        )}
+	                            Cover
+	                          </div>
+	                        )}
 
-                        {/* Hover actions overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                          {mediaType === "image" && !isCover && (
-                            <button
-                              type="button"
-                              onClick={() => handleMakeCover(it)}
+	                        {markupVersion && mediaType === "image" && (
+	                          <div className="absolute right-2 top-2 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
+	                            Markup preset
+	                          </div>
+	                        )}
+
+	                        {/* Hover actions overlay */}
+	                        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+	                          {mediaType === "image" && it.id && (
+	                            <a
+	                              href={`/dashboard/projects/${projectId}/images/${it.id}/markup`}
+	                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+	                              title="Markup image"
+	                            >
+	                              <SymbolIcon name="draw" className="text-[18px]" />
+	                            </a>
+	                          )}
+	                          {markupSnapshotUrl && (
+	                            <a
+	                              href={markupSnapshotUrl}
+	                              target="_blank"
+	                              rel="noreferrer"
+	                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm transition hover:bg-emerald-50"
+	                              title="Open markup preview"
+	                            >
+	                              <SymbolIcon name="visibility" className="text-[18px]" />
+	                            </a>
+	                          )}
+	                          {mediaType === "image" && !isCover && (
+	                            <button
+	                              type="button"
+	                              onClick={() => handleMakeCover(it)}
                               className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
                               title="Set as cover"
                             >
@@ -760,10 +796,15 @@ export default function ProjectEditorCard({
 
                       {/* Caption input and save */}
                       <div className="shrink-0 border-t border-slate-100 bg-white p-3">
-                        {isProcessing && (
-                          <div className="mb-2 text-xs font-medium text-slate-500">Processing video...</div>
-                        )}
-                        <div className="flex items-center gap-2">
+	                        {isProcessing && (
+	                          <div className="mb-2 text-xs font-medium text-slate-500">Processing video...</div>
+	                        )}
+	                        {markupVersion && (
+	                          <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800">
+	                            {markupVersion.annotation_count ?? 0} markup{Number(markupVersion.annotation_count || 0) === 1 ? "" : "s"} preset from planner
+	                          </div>
+	                        )}
+	                        <div className="flex items-center gap-2">
                           <input
                             className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none"
                             placeholder="Add caption..."

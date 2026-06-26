@@ -593,7 +593,21 @@ class ProjectPlannerTests(APITestCase):
             ),
             content_type="image/gif",
         )
-        plan.images.create(image=image, caption="Close up", order=0, is_cover=True)
+        plan_image = plan.images.create(image=image, caption="Close up", order=0, is_cover=True)
+        plan.markup_data = {
+            "versions": [
+                {
+                    "id": "version-test",
+                    "name": "Close up markup",
+                    "source_image_id": plan_image.id,
+                    "snapshot_url": "https://example.com/markup.png",
+                    "annotation_count": 2,
+                    "annotations": [{"type": "arrow", "x": 10, "y": 20}],
+                    "visible_layers": {"scope": True},
+                }
+            ]
+        }
+        plan.save(update_fields=["markup_data"])
 
         self.client.force_authenticate(user=self.homeowner)
         response = self.client.post(f"/api/project-plans/{plan.id}/convert-to-draft/", {"use_ai": False}, format="json")
@@ -616,6 +630,8 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(copied_image.caption, "Close up")
         self.assertEqual(copied_image.extra_data["source"], "project_planner")
         self.assertEqual(copied_image.extra_data["source_plan_id"], plan.id)
+        self.assertEqual(copied_image.extra_data["markup_version"]["id"], "version-test")
+        self.assertEqual(copied_image.extra_data["markup_version"]["annotation_count"], 2)
 
     @patch("portfolio.views.generate_text")
     def test_planner_ai_action_uses_shared_quota(self, mock_generate_text):
