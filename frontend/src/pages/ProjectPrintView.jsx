@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api";
 
@@ -43,11 +43,20 @@ function formatPostedDate(value) {
   });
 }
 
+function chunkItems(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 export default function ProjectPrintView() {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState(null);
   const [images, setImages] = useState([]);
+  const autoPrintStartedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -88,18 +97,26 @@ export default function ProjectPrintView() {
     };
   }, [id]);
 
-  const coverImage = useMemo(() => {
-    const directCover = toUrl(project?.cover_image_url);
-    if (directCover) return directCover;
-    return images.find((img) => mediaTypeFor(img) === "image")?.url || "";
-  }, [project?.cover_image_url, images]);
-
   const serviceCategoryList = Array.isArray(project?.service_categories)
     ? project.service_categories.filter((item) => String(item || "").trim())
     : [];
   const jobSummaryText = (project?.job_summary || project?.summary || "").trim();
   const projectRequirementsText =
     project?.summary && project.summary.trim() !== jobSummaryText ? project.summary.trim() : "";
+  const printableImages = images;
+  const printableImagePages = chunkItems(printableImages, 4);
+
+  useEffect(() => {
+    if (loading || !project || autoPrintStartedRef.current) return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("download") !== "1") return;
+
+    autoPrintStartedRef.current = true;
+    const timer = window.setTimeout(() => window.print(), 450);
+    return () => window.clearTimeout(timer);
+  }, [loading, project]);
 
   if (loading) {
     return <div className="min-h-screen bg-[#FBF9F7] px-4 py-10 text-sm text-slate-500">Loading…</div>;
@@ -111,6 +128,69 @@ export default function ProjectPrintView() {
 
   return (
     <div className="min-h-screen bg-[#FBF9F7] text-slate-900">
+      <style>
+        {`
+          @page {
+            size: A4;
+            margin: 13mm;
+          }
+
+          @media print {
+            html,
+            body {
+              background: #fff !important;
+            }
+
+            .pdf-sheet {
+              width: 184mm;
+              min-height: auto;
+            }
+
+            .pdf-first-page {
+              break-after: auto;
+            }
+
+            .pdf-overview-table {
+              break-inside: auto;
+            }
+
+            .pdf-overview-table thead {
+              display: table-header-group;
+            }
+
+            .pdf-overview-table tbody {
+              display: table-row-group;
+            }
+
+            .pdf-section {
+              break-inside: avoid;
+            }
+
+            .pdf-media-page {
+              break-before: page;
+              break-after: page;
+              min-height: 258mm;
+            }
+
+            .pdf-media-grid {
+              display: grid !important;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              grid-template-rows: repeat(2, minmax(0, 1fr));
+              gap: 8mm;
+            }
+
+            .pdf-media-item {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+
+            .pdf-media-img {
+              height: 105mm;
+              object-fit: contain;
+            }
+          }
+        `}
+      </style>
       <div className="mx-auto max-w-5xl px-4 py-6 print:px-0 print:py-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 print:hidden">
           <Link
@@ -119,38 +199,38 @@ export default function ProjectPrintView() {
           >
             Back to job post
           </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            Print / Save PDF
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Print
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Download PDF
+            </button>
+          </div>
         </div>
 
-        <article className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm print:rounded-none print:border-0 print:shadow-none">
-          {coverImage ? (
-            <div className="border-b border-slate-200 bg-slate-100">
-              <img src={coverImage} alt={project.title || ""} className="h-[280px] w-full object-cover print:h-[220px]" />
-            </div>
-          ) : null}
-
-          <div className="space-y-8 px-6 py-8 print:px-0">
-            <div className="space-y-4">
+        <article className="pdf-sheet overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
+          <div className="pdf-first-page space-y-5 px-6 py-7 print:px-0 print:py-0">
+            <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                 {project.is_job_posting ? <span>Job posting</span> : <span>Project</span>}
                 {project.category ? <span>{project.category}</span> : null}
                 {project.owner_username ? <span>by {project.owner_username}</span> : null}
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+              <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl print:text-[24pt]">
                 {project.title || `Project #${project.id}`}
               </h1>
-              <p className="max-w-3xl text-base leading-7 text-slate-700">
-                {(project.job_summary || project.summary || "").trim() || "Project requirements will appear here."}
-              </p>
             </div>
 
-            <div className="grid gap-y-5 border-y border-slate-200 py-5 sm:grid-cols-2 xl:grid-cols-6 xl:gap-x-0">
+            <div className="grid gap-y-4 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-6 xl:gap-x-0 print:grid-cols-3 print:gap-x-4 print:gap-y-3">
               {[
                 ["Location", project.location || "—"],
                 ["Budget", project.budget ?? "—"],
@@ -166,20 +246,49 @@ export default function ProjectPrintView() {
               ].map(([label, value], index) => (
                 <div
                   key={label}
-                  className={"min-w-0 xl:px-5 " + (index > 0 ? "xl:border-l xl:border-slate-200" : "")}
+                  className={
+                    "min-w-0 xl:px-5 print:px-0 " +
+                    (index > 0 ? "xl:border-l xl:border-slate-200 print:border-l-0" : "")
+                  }
                 >
-                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 print:text-[10pt]">{value}</div>
                 </div>
               ))}
             </div>
 
+            <table className="pdf-overview-table w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="bg-white pb-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Job overview
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="text-sm leading-7 text-slate-700 print:text-[10.5pt] print:leading-[1.55]">
+                    <p className="whitespace-pre-line">
+                      {jobSummaryText || "Project requirements will appear here."}
+                    </p>
+                    {project.larger_project_details ? (
+                      <div className="mt-4 border-t border-slate-200 pt-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Context
+                        </div>
+                        <p className="mt-2 whitespace-pre-line">{project.larger_project_details}</p>
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
             {(serviceCategoryList.length > 0 ||
               project.required_expertise ||
               project.highlights ||
-              projectRequirementsText ||
-              project.larger_project_details) && (
-              <section className="space-y-4">
+              projectRequirementsText) && (
+              <section className="pdf-section space-y-4 pt-2">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Requirements</div>
 
                 {serviceCategoryList.length > 0 ? (
@@ -195,7 +304,7 @@ export default function ProjectPrintView() {
                   </div>
                 ) : null}
 
-                <div className="grid gap-3 text-sm leading-7 text-slate-700">
+                <div className="grid gap-3 text-sm leading-7 text-slate-700 print:text-[10pt] print:leading-[1.55]">
                   {project.required_expertise ? (
                     <div>
                       <span className="font-semibold text-slate-900">Required expertise:</span> {project.required_expertise}
@@ -214,28 +323,41 @@ export default function ProjectPrintView() {
                       </p>
                     </div>
                   ) : null}
-                  {project.larger_project_details ? (
-                    <div>
-                      <span className="font-semibold text-slate-900">Context:</span> {project.larger_project_details}
-                    </div>
-                  ) : null}
                 </div>
               </section>
             )}
+          </div>
 
-            {images.length > 1 ? (
-              <section className="space-y-4 print:hidden">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Additional media</div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                  {images.slice(0, 6).map((img, index) => (
-                    <div key={`${img.url}-${index}`} className="overflow-hidden rounded-2xl bg-slate-100">
-                      <img src={img.thumbnail || img.url} alt={img.caption || ""} className="h-40 w-full object-cover" />
+          {printableImagePages.length > 0 ? (
+            <section className="space-y-6 px-6 pb-7 print:px-0 print:pb-0">
+              {printableImagePages.map((pageImages, pageIndex) => (
+                <div key={`media-page-${pageIndex}`} className="pdf-media-page space-y-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Project media {printableImagePages.length > 1 ? `${pageIndex + 1}/${printableImagePages.length}` : ""}
+                  </div>
+                  <div className="pdf-media-grid grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {pageImages.map((img, index) => (
+                    <div
+                      key={`${img.url}-${index}`}
+                      className="pdf-media-item break-inside-avoid overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 print:rounded-none print:border print:border-slate-200 print:bg-white"
+                    >
+                      <img
+                        src={img.url}
+                        alt={img.caption || ""}
+                        className="pdf-media-img max-h-[520px] w-full object-contain"
+                      />
+                      {img.caption ? (
+                        <div className="border-t border-slate-200 px-3 py-2 text-xs text-slate-600 print:px-0">
+                          {img.caption}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
+                  </div>
                 </div>
-              </section>
-            ) : null}
-          </div>
+              ))}
+            </section>
+          ) : null}
         </article>
       </div>
     </div>

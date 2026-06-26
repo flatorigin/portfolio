@@ -615,6 +615,15 @@ export default function ProjectDetail() {
   }, [fetchBids]);
 
   useEffect(() => {
+    if (!isEditing) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isEditing]);
+
+  useEffect(() => {
     setLikeCount(Number(project?.like_count || 0));
   }, [project?.like_count]);
 
@@ -1668,50 +1677,46 @@ export default function ProjectDetail() {
       </div>
 
       <Card className="mb-4 overflow-hidden border border-slate-200/80 bg-white shadow-sm">
-        {coverUrl && (
-          <div className="relative h-[200px] w-full bg-slate-200">
-            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-          </div>
-        )}
-
-        <div
-          className={
-            "border-b border-slate-100 text-white backdrop-blur-md " +
-            (project?.is_job_posting ? "bg-slate-800/90" : "bg-slate-900/90")
-          }
-        >
+        <div className="border-b border-slate-200 bg-white">
           {project?.is_job_posting ? (
             <>
-            <div className="px-5 py-4 sm:px-6 sm:py-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="px-5 py-5 sm:px-7 sm:py-6">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-xl font-semibold sm:text-2xl">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Project brief
+                  </div>
+                  <h1 className="mt-2 text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-3xl">
                     {project?.title || `Project #${id}`}
                   </h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                     {project?.category ? (
-                      <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">
                         {project.category}
                       </span>
                     ) : null}
                     {project?.owner_username ? (
-                      <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
-                        by {project.owner_username}
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                        Prepared by {project.owner_username}
+                      </span>
+                    ) : null}
+                    {project?.created_at ? (
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                        {formatPostedDate(project.created_at)}
                       </span>
                     ) : null}
                   </div>
                   <div className="mt-2">
-                    <span className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-1 text-[10px] font-semibold tracking-wide text-white">
+                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold tracking-wide text-emerald-800">
                       JOB POSTING
                     </span>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-4 sm:items-end">
-                  <div className="flex items-center justify-end gap-3 text-white">
+                  <div className="flex items-center justify-end gap-3 text-slate-700">
                     <div className="flex items-center gap-1.5">
-                      <span className="min-w-[1ch] text-[18px] font-medium text-white/92">
+                      <span className="min-w-[1ch] text-[18px] font-medium text-slate-900">
                         {Number.isFinite(likeCount) ? likeCount : 0}
                       </span>
                       {authed && project && !isOwnerUser ? (
@@ -1721,14 +1726,14 @@ export default function ProjectDetail() {
                           disabled={likeBusy}
                           aria-label={isLiked ? "Unlike project" : "Like project"}
                           title={isLiked ? "Unlike project" : "Like project"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                         >
                           <LikeCircleIcon active={isLiked} className="text-[9px]" />
                         </button>
                       ) : (
                         <span
                           aria-hidden="true"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
                         >
                           <LikeCircleIcon className="text-[9px]" />
                         </span>
@@ -1742,14 +1747,14 @@ export default function ProjectDetail() {
                         disabled={saveBusy}
                         aria-label={isSaved ? "Unsave project" : "Save project"}
                         title={isSaved ? "Unsave project" : "Save project"}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                       >
                         <SaveCircleIcon active={isSaved} className="text-[9px]" />
                       </button>
                     ) : (
                       <span
                         aria-hidden="true"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
                       >
                         <SaveCircleIcon className="text-[9px]" />
                       </span>
@@ -1757,22 +1762,32 @@ export default function ProjectDetail() {
                   </div>
                 </div>
               </div>
-              {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
+              {shareFeedback ? <div className="mt-3 text-xs text-slate-500">{shareFeedback}</div> : null}
             </div>
 
-            {/* Action buttons row - below dark header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-7">
               <div className="flex flex-wrap items-center gap-2">
                 {project?.id ? (
-                  <Link
-                    to={`/projects/${project.id}/print`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <SymbolIcon name="print" className="text-[16px]" />
-                    Print
-                  </Link>
+                  <>
+                    <Link
+                      to={`/projects/${project.id}/print`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <SymbolIcon name="print" className="text-[16px]" />
+                      Print
+                    </Link>
+                    <Link
+                      to={`/projects/${project.id}/print?download=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <SymbolIcon name="download" className="text-[16px]" />
+                      Download PDF
+                    </Link>
+                  </>
                 ) : null}
 
                 {canSharePublicJob ? (
@@ -1843,27 +1858,35 @@ export default function ProjectDetail() {
             </>
           ) : (
             <>
-            <div className="px-5 py-4 sm:px-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="px-5 py-5 sm:px-7 sm:py-6">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-xl font-semibold sm:text-2xl">{project?.title || `Project #${id}`}</h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/90">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Project document
+                  </div>
+                  <h1 className="mt-2 text-2xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-3xl">{project?.title || `Project #${id}`}</h1>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                     {project?.category && (
-                      <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">
                         {project.category}
                       </span>
                     )}
                     {project?.owner_username && (
-                      <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[11px]">
-                        by {project.owner_username}
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                        Prepared by {project.owner_username}
                       </span>
                     )}
+                    {project?.created_at ? (
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                        {formatPostedDate(project.created_at)}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 text-white">
+                <div className="flex items-center justify-end gap-3 text-slate-700">
                   <div className="flex items-center gap-1.5">
-                    <span className="min-w-[1ch] text-[18px] font-medium text-white/92">
+                    <span className="min-w-[1ch] text-[18px] font-medium text-slate-900">
                       {Number.isFinite(likeCount) ? likeCount : 0}
                     </span>
                     {authed && project && !isOwnerUser ? (
@@ -1873,14 +1896,14 @@ export default function ProjectDetail() {
                         disabled={likeBusy}
                         aria-label={isLiked ? "Unlike project" : "Like project"}
                         title={isLiked ? "Unlike project" : "Like project"}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                       >
                         <LikeCircleIcon active={isLiked} className="text-[9px]" />
                       </button>
                     ) : (
                       <span
                         aria-hidden="true"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
                       >
                         <LikeCircleIcon className="text-[9px]" />
                       </span>
@@ -1894,36 +1917,46 @@ export default function ProjectDetail() {
                       disabled={saveBusy}
                       aria-label={isSaved ? "Unsave project" : "Save project"}
                       title={isSaved ? "Unsave project" : "Save project"}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                     >
                       <SaveCircleIcon active={isSaved} className="text-[9px]" />
                     </button>
                   ) : (
                     <span
                       aria-hidden="true"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/10 text-white/90"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
                     >
                       <SaveCircleIcon className="text-[9px]" />
                     </span>
                   )}
                 </div>
               </div>
-              {shareFeedback ? <div className="mt-3 text-xs text-white/80">{shareFeedback}</div> : null}
+              {shareFeedback ? <div className="mt-3 text-xs text-slate-500">{shareFeedback}</div> : null}
             </div>
 
-            {/* Action buttons row - below dark header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-7">
               <div className="flex flex-wrap items-center gap-2">
                 {project?.id ? (
-                  <Link
-                    to={`/projects/${project.id}/print`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <SymbolIcon name="print" className="text-[16px]" />
-                    Print
-                  </Link>
+                  <>
+                    <Link
+                      to={`/projects/${project.id}/print`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <SymbolIcon name="print" className="text-[16px]" />
+                      Print
+                    </Link>
+                    <Link
+                      to={`/projects/${project.id}/print?download=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <SymbolIcon name="download" className="text-[16px]" />
+                      Download PDF
+                    </Link>
+                  </>
                 ) : null}
 
                 {project?.owner_username ? (
@@ -1984,9 +2017,9 @@ export default function ProjectDetail() {
           )}
         </div>
 
-        <div className="space-y-6 p-4 sm:p-6">
+        <div className="space-y-6 p-4 sm:p-7">
           {project?.is_job_posting ? (
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+            <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Job overview</div>
               <div className="mt-3 text-sm leading-7 text-slate-700 sm:text-[15px]">
                 {jobSummaryText || "Project requirements will appear here."}
@@ -2084,9 +2117,14 @@ export default function ProjectDetail() {
                   </div>
                 </div>
               ) : null}
-            </div>
+            </section>
           ) : project?.summary ? (
-            <p className="text-sm leading-relaxed text-slate-700 sm:text-[15px]">{project.summary}</p>
+            <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Project overview
+              </div>
+              <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-[15px]">{project.summary}</p>
+            </section>
           ) : null}
 
           {project?.is_job_posting && project?.id ? (
@@ -2098,47 +2136,10 @@ export default function ProjectDetail() {
               projectSummary={project.job_summary || project.summary || ""}
             />
           ) : null}
-          {isOwnerUser && isEditing && project && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0">
-              <ProjectEditorCard
-                mode="edit"
-                projectId={project.id}
-                form={editForm}
-                setForm={setEditForm}
-                coverFile={editCoverFile}
-                setCoverFile={setEditCoverFile}
-                busy={savingEdits}
-                images={editImages}
-                setImages={setEditImages}
-                onSaveImageCaption={handleSaveImageCaption}
-                onDeleteImage={handleDeleteImage}
-                onSubmit={handleSaveEdits}
-                onClose={() => setIsEditing(false)}
-                onView={() => window.open(`/projects/${project.id}`, "_self")}
-                onAfterUpload={async () => {
-                  await refreshImages();
-                }}
-                onMakeCover={handleMakeCoverImage}
-                coverImageId={editCoverImageId}
-                onCoverImageChange={(val) => {
-                  const normalized = val == null ? null : Number(val);
-                  setEditCoverImageId(normalized);
-                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
-                }}
-                setCoverImageId={(val) => {
-                  const normalized = val == null ? null : Number(val);
-                  setEditCoverImageId(normalized);
-                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
-                }}
-              />
-              {editError && <p className="px-5 pb-3 pt-1 text-xs text-red-600">{editError}</p>}
-            </div>
-          )}
-
           {(project?.material_url ||
             project?.material_label ||
             (Array.isArray(project?.extra_links) && project.extra_links.length > 0)) && (
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+            <section className="rounded-xl border border-slate-200 bg-white p-5">
               <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Materials &amp; tools used
               </div>
@@ -2217,10 +2218,10 @@ export default function ProjectDetail() {
                 These links point to products or materials used in this project (for example, tools, finishes, or
                 suppliers).
               </p>
-            </div>
+            </section>
           )}
 
-          <div className="space-y-2">
+          <section className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Project media
@@ -2305,9 +2306,9 @@ export default function ProjectDetail() {
                 })}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="space-y-2.5 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
+          <section className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Comments
@@ -2379,10 +2380,68 @@ export default function ProjectDetail() {
                 </p>
               )}
             </div>
-          </div>
+          </section>
 
         </div>
       </Card>
+
+      {isOwnerUser && isEditing && project ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/65 px-3 py-4 backdrop-blur-sm sm:px-6 sm:py-8">
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/15 bg-white px-4 py-3 shadow-xl">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Edit project</div>
+                <div className="truncate text-sm font-semibold text-slate-950">
+                  {project?.title || `Project #${project.id}`}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100"
+                aria-label="Close editor"
+              >
+                <SymbolIcon name="close" className="text-[18px]" />
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-0 shadow-2xl">
+              <ProjectEditorCard
+                mode="edit"
+                projectId={project.id}
+                form={editForm}
+                setForm={setEditForm}
+                coverFile={editCoverFile}
+                setCoverFile={setEditCoverFile}
+                busy={savingEdits}
+                images={editImages}
+                setImages={setEditImages}
+                onSaveImageCaption={handleSaveImageCaption}
+                onDeleteImage={handleDeleteImage}
+                onSubmit={handleSaveEdits}
+                onClose={() => setIsEditing(false)}
+                onView={() => window.open(`/projects/${project.id}`, "_self")}
+                onAfterUpload={async () => {
+                  await refreshImages();
+                }}
+                onMakeCover={handleMakeCoverImage}
+                coverImageId={editCoverImageId}
+                onCoverImageChange={(val) => {
+                  const normalized = val == null ? null : Number(val);
+                  setEditCoverImageId(normalized);
+                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
+                }}
+                setCoverImageId={(val) => {
+                  const normalized = val == null ? null : Number(val);
+                  setEditCoverImageId(normalized);
+                  setEditForm((prev) => ({ ...prev, cover_image_id: normalized }));
+                }}
+              />
+              {editError && <p className="px-5 pb-3 pt-1 text-xs text-red-600">{editError}</p>}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {unpublishModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
