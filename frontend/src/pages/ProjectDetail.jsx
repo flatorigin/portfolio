@@ -70,7 +70,7 @@ function formatPostedDate(value) {
 
 function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="inline-flex items-center gap-0">
       {[1, 2, 3, 4, 5].map((n) => {
         const filled = Number(value || 0) >= n;
         return (
@@ -83,7 +83,7 @@ function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) 
               onChange((prev) => (prev === n ? null : n));
             }}
             className={
-              "text-lg leading-none " +
+              "inline-flex h-6 w-4 items-center justify-center leading-none " +
               (disabled ? "cursor-default" : "cursor-pointer")
             }
             aria-label={`${titlePrefix} ${n} stars`}
@@ -92,7 +92,7 @@ function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) 
             <SymbolIcon
               name="star"
               fill={filled ? 1 : 0}
-              className={filled ? "text-[22px] text-amber-500" : "text-[22px] text-slate-300"}
+              className={filled ? "text-[19px] text-amber-500" : "text-[19px] text-slate-300"}
             />
           </button>
         );
@@ -1545,9 +1545,9 @@ export default function ProjectDetail() {
     return (
       <div
         key={c.id}
-        className={"rounded-lg border border-slate-200 bg-white p-3 text-sm " + (isReply ? "ml-3" : "")}
+        className={"rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm " + (isReply ? "ml-3" : "")}
       >
-        <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
+        <div className="mb-0.5 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center gap-2">
             <span className="font-medium text-slate-700">{c.author_username || "Anonymous"}</span>
             {isOwnerAuthor && (
@@ -1564,13 +1564,13 @@ export default function ProjectDetail() {
           <span>{c.created_at ? new Date(c.created_at).toLocaleString() : ""}</span>
         </div>
 
-        <div className="mb-1 flex items-center gap-1 text-[12px]">
+        <div className="mb-0.5 inline-flex items-center gap-0 text-[12px]">
           {[1, 2, 3, 4, 5].map((n) => (
             <SymbolIcon
               key={n}
               name="star"
               fill={(c.rating || 0) >= n ? 1 : 0}
-              className={(c.rating || 0) >= n ? "text-[15px] text-amber-500" : "text-[15px] text-slate-300"}
+              className={(c.rating || 0) >= n ? "text-[13px] text-amber-500" : "text-[13px] text-slate-300"}
             />
           ))}
         </div>
@@ -1604,10 +1604,10 @@ export default function ProjectDetail() {
             ) : null}
           </div>
         ) : (
-          <p className="whitespace-pre-line text-slate-800">{c.text}</p>
+          <p className="whitespace-pre-line leading-5 text-slate-800">{c.text}</p>
         )}
 
-        <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+        <div className="mt-1 flex flex-wrap items-center gap-2.5 text-[11px] text-slate-500">
           {isOwnerUser && !isOwnerAuthor && (
             <button type="button" onClick={() => replyAsOwnerTo(c)} className="font-medium hover:text-slate-700">
               Reply as owner
@@ -1637,7 +1637,7 @@ export default function ProjectDetail() {
         </div>
 
         {replies.length > 0 && (
-          <div className="mt-2 space-y-2 border-l border-slate-200 pl-3">
+          <div className="mt-2 space-y-1.5 border-l border-slate-200 pl-3">
             {replies.map((r) => renderCommentBlock(r, true))}
           </div>
         )}
@@ -2307,7 +2307,7 @@ export default function ProjectDetail() {
             )}
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+          <div className="space-y-2.5 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Comments
@@ -2317,7 +2317,7 @@ export default function ProjectDetail() {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {roots.length === 0 ? (
                 <p className="text-xs text-slate-500">No comments yet. Be the first to comment.</p>
               ) : (
@@ -2325,10 +2325,10 @@ export default function ProjectDetail() {
               )}
             </div>
 
-            <div className="border-t border-slate-200 pt-4">
+            <div className="border-t border-slate-200 pt-3">
               {authed ? (
-                <form onSubmit={submitComment} className="space-y-3">
-                  <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-[11px] text-slate-600">
+                <form onSubmit={submitComment} className="space-y-2.5">
+                  <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-1.5 text-[11px] text-slate-600">
                     Public comments are text-only. No links or media. Emoji is okay.
                   </div>
 
@@ -2358,7 +2358,7 @@ export default function ProjectDetail() {
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="Add a public comment…"
-                    className="min-h-[88px] rounded-xl border-slate-200 bg-white"
+                    className="min-h-[76px] rounded-xl border-slate-200 bg-white"
                   />
 
                   <div className="flex items-center justify-between gap-3">
