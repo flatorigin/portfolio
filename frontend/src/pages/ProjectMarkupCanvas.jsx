@@ -9,6 +9,10 @@ const STORAGE_PREFIX = "flatorigin_project_markup";
 
 const BASE_TOOLS = {
   select: { key: "select", label: "Select", icon: "near_me" },
+  curve: { key: "curve", label: "Curve", icon: "gesture" },
+  hand: { key: "hand", label: "Hand", icon: "pan_tool" },
+  zoomIn: { key: "zoom_in", label: "Zoom in", icon: "zoom_in" },
+  zoomOut: { key: "zoom_out", label: "Zoom out", icon: "zoom_out" },
   text: { key: "text", label: "Text", icon: "title" },
   arrow: { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
@@ -44,6 +48,7 @@ const DEFAULT_MARKUP_COLOR = "#2563eb";
 const DEFAULT_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_OPACITY = 1;
 const DEFAULT_FILL_OPACITY = 0.18;
+const CURVE_HANDLE_OFFSET = 34;
 const LINE_ENDPOINT_OPTIONS = [
   { key: "none", label: "None" },
   { key: "arrow", label: "Arrow" },
@@ -131,10 +136,10 @@ function blobToDataUrl(blob) {
   });
 }
 
-function pointFromEvent(event, svg) {
+function pointFromEvent(event, svg, viewBox = { x: 0, y: 0, width: CANVAS_W, height: CANVAS_H }) {
   const rect = svg.getBoundingClientRect();
-  const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
-  const y = ((event.clientY - rect.top) / rect.height) * CANVAS_H;
+  const x = viewBox.x + ((event.clientX - rect.left) / rect.width) * viewBox.width;
+  const y = viewBox.y + ((event.clientY - rect.top) / rect.height) * viewBox.height;
   return {
     x: clamp(Math.round(x), 0, CANVAS_W),
     y: clamp(Math.round(y), 0, CANVAS_H),
@@ -157,6 +162,34 @@ function softSnapPoint(point, enabled, geometry = null) {
 function distanceBetween(pointA, pointB) {
   if (!pointA || !pointB) return Infinity;
   return Math.hypot((pointA.x || 0) - (pointB.x || 0), (pointA.y || 0) - (pointB.y || 0));
+}
+
+function distanceToSegment(point, start, end) {
+  if (!point || !start || !end) return Infinity;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (!lengthSq) return distanceBetween(point, start);
+  const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq, 0, 1);
+  return distanceBetween(point, { x: start.x + dx * t, y: start.y + dy * t });
+}
+
+function nearestPenHit(item, point, tolerance = 18) {
+  const points = Array.isArray(item?.points) ? item.points : [];
+  if (!points.length) return null;
+  const nodeHits = points
+    .map((node, index) => ({ type: "node", index, distance: distanceBetween(point, node) }))
+    .sort((a, b) => a.distance - b.distance);
+  if (nodeHits[0]?.distance <= tolerance) return nodeHits[0];
+
+  let bestSegment = null;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const distance = distanceToSegment(point, points[index], points[index + 1]);
+    if (!bestSegment || distance < bestSegment.distance) {
+      bestSegment = { type: "segment", index, distance };
+    }
+  }
+  return bestSegment?.distance <= tolerance ? bestSegment : null;
 }
 
 function roughPlanGeometry(roughPlan) {
@@ -183,8 +216,13 @@ function roughPlanGeometry(roughPlan) {
 
 function annotationBounds(item) {
   if ((item.type === "freehand" || item.type === "pen") && Array.isArray(item.points) && item.points.length) {
-    const xs = item.points.map((point) => point.x);
-    const ys = item.points.map((point) => point.y);
+    const curvePoints =
+      item.type === "pen" && item.curvePoints && typeof item.curvePoints === "object"
+        ? Object.values(item.curvePoints).filter((point) => point && typeof point === "object")
+        : [];
+    const points = [...item.points, ...curvePoints];
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
     return {
       x1: Math.min(...xs),
       y1: Math.min(...ys),
@@ -209,6 +247,13 @@ function annotationBounds(item) {
       x2: (item.x || 0) + size / 2,
       y2: (item.y || 0) + size / 2,
     };
+  }
+  if (isLineLike(item) && item.curvePoint) {
+    const x1 = Math.min(item.x, item.x2 ?? item.x, item.curvePoint.x);
+    const y1 = Math.min(item.y, item.y2 ?? item.y, item.curvePoint.y);
+    const x2 = Math.max(item.x, item.x2 ?? item.x, item.curvePoint.x);
+    const y2 = Math.max(item.y, item.y2 ?? item.y, item.curvePoint.y);
+    return { x1, y1, x2, y2 };
   }
   const x1 = Math.min(item.x, item.x2 ?? item.x);
   const y1 = Math.min(item.y, item.y2 ?? item.y);
@@ -282,10 +327,8 @@ function displayBounds(item) {
 function labelPosition(item) {
   if (!item) return null;
   if (item.type === "measure") {
-    return {
-      x: ((item.x || 0) + (item.x2 || 0)) / 2,
-      y: ((item.y || 0) + (item.y2 || 0)) / 2 - 40,
-    };
+    const point = quadraticPoint(item, 0.5);
+    return { x: point.x, y: point.y - 40 };
   }
   if (item.type === "text") {
     return { x: item.x || 0, y: (item.y || 0) - 18 };
@@ -293,16 +336,150 @@ function labelPosition(item) {
   return null;
 }
 
-function controlHandlesFor(item) {
+function isLineLike(item) {
+  return item?.type === "line" || item?.type === "arrow" || item?.type === "measure";
+}
+
+function curveControlPoint(item) {
+  return item?.curvePoint && typeof item.curvePoint === "object"
+    ? item.curvePoint
+    : {
+        x: ((item?.x || 0) + (item?.x2 || item?.x || 0)) / 2,
+        y: ((item?.y || 0) + (item?.y2 || item?.y || 0)) / 2,
+      };
+}
+
+function offsetCurvePoint(item, point) {
+  return offsetSegmentCurvePoint(
+    { x: item?.x || 0, y: item?.y || 0 },
+    { x: item?.x2 || item?.x || 0, y: item?.y2 || item?.y || 0 },
+    point,
+  );
+}
+
+function offsetSegmentCurvePoint(start, end, point) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy) || 1;
+  return {
+    x: clamp(Math.round(point.x - (dy / length) * CURVE_HANDLE_OFFSET), 0, CANVAS_W),
+    y: clamp(Math.round(point.y + (dx / length) * CURVE_HANDLE_OFFSET), 0, CANVAS_H),
+  };
+}
+
+function quadraticPoint(item, t = 0.5) {
+  const start = { x: item?.x || 0, y: item?.y || 0 };
+  const end = { x: item?.x2 || item?.x || 0, y: item?.y2 || item?.y || 0 };
+  const control = curveControlPoint(item);
+  if (!item?.curvePoint) {
+    return {
+      x: start.x + (end.x - start.x) * t,
+      y: start.y + (end.y - start.y) * t,
+    };
+  }
+  const oneMinusT = 1 - t;
+  return {
+    x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * t * control.x + t * t * end.x,
+    y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * t * control.y + t * t * end.y,
+  };
+}
+
+function linePathD(item) {
+  if (!item?.curvePoint) {
+    return `M ${item.x || 0} ${item.y || 0} L ${item.x2 || item.x || 0} ${item.y2 || item.y || 0}`;
+  }
+  const control = curveControlPoint(item);
+  return `M ${item.x || 0} ${item.y || 0} Q ${control.x} ${control.y} ${item.x2 || item.x || 0} ${item.y2 || item.y || 0}`;
+}
+
+function penPathD(item) {
+  const points = Array.isArray(item?.points) ? item.points : [];
+  if (!points.length) return "";
+  const curves = item?.curvePoints && typeof item.curvePoints === "object" ? item.curvePoints : {};
+  return points.slice(1).reduce((path, point, index) => {
+    const control = curves[index];
+    return control && typeof control === "object"
+      ? `${path} Q ${control.x} ${control.y} ${point.x} ${point.y}`
+      : `${path} L ${point.x} ${point.y}`;
+  }, `M ${points[0].x} ${points[0].y}`);
+}
+
+function penSegmentAnchor(item, segmentIndex) {
+  const points = Array.isArray(item?.points) ? item.points : [];
+  const start = points[segmentIndex];
+  const end = points[segmentIndex + 1];
+  if (!start || !end) return null;
+  return {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
+  };
+}
+
+function rectCornerRadii(item, bounds) {
+  const maxRadius = Math.max(0, Math.min(Math.abs(bounds.x2 - bounds.x1), Math.abs(bounds.y2 - bounds.y1)) / 2);
+  const raw = item?.cornerRadii || {};
+  const fallback = item?.cornerRadius ?? 10;
+  return {
+    tl: clamp(Number(raw.tl ?? fallback) || 0, 0, maxRadius),
+    tr: clamp(Number(raw.tr ?? fallback) || 0, 0, maxRadius),
+    br: clamp(Number(raw.br ?? fallback) || 0, 0, maxRadius),
+    bl: clamp(Number(raw.bl ?? fallback) || 0, 0, maxRadius),
+  };
+}
+
+function roundedRectPath(bounds, radii) {
+  const { x1, y1, x2, y2 } = bounds;
+  const width = Math.max(1, x2 - x1);
+  const height = Math.max(1, y2 - y1);
+  const maxRadius = Math.min(width, height) / 2;
+  const tl = clamp(radii.tl || 0, 0, maxRadius);
+  const tr = clamp(radii.tr || 0, 0, maxRadius);
+  const br = clamp(radii.br || 0, 0, maxRadius);
+  const bl = clamp(radii.bl || 0, 0, maxRadius);
+  return [
+    `M ${x1 + tl} ${y1}`,
+    `L ${x2 - tr} ${y1}`,
+    tr ? `Q ${x2} ${y1} ${x2} ${y1 + tr}` : `L ${x2} ${y1}`,
+    `L ${x2} ${y2 - br}`,
+    br ? `Q ${x2} ${y2} ${x2 - br} ${y2}` : `L ${x2} ${y2}`,
+    `L ${x1 + bl} ${y2}`,
+    bl ? `Q ${x1} ${y2} ${x1} ${y2 - bl}` : `L ${x1} ${y2}`,
+    `L ${x1} ${y1 + tl}`,
+    tl ? `Q ${x1} ${y1} ${x1 + tl} ${y1}` : `L ${x1} ${y1}`,
+    "Z",
+  ].join(" ");
+}
+
+function controlHandlesFor(item, mode = "select") {
   if (!item) return [];
   const bounds = annotationBounds(item);
-  if (item.type === "line" || item.type === "arrow" || item.type === "measure") {
+  if (isLineLike(item)) {
+    const control = curveControlPoint(item);
     return [
       { key: "start", label: "Start point", x: item.x || 0, y: item.y || 0, kind: "endpoint", target: "start" },
       { key: "end", label: "End point", x: item.x2 || item.x || 0, y: item.y2 || item.y || 0, kind: "endpoint", target: "end" },
+      { key: "curve", label: "Curve", x: control.x, y: control.y, kind: "curve" },
     ];
   }
-  if (item.type === "rect" || item.type === "circle") {
+  if (item.type === "rect") {
+    const radii = rectCornerRadii(item, bounds);
+    const handleOffset = (radius) => clamp((Number(radius) || 0) + 18, 24, 72);
+    const tlOffset = handleOffset(radii.tl);
+    const trOffset = handleOffset(radii.tr);
+    const brOffset = handleOffset(radii.br);
+    const blOffset = handleOffset(radii.bl);
+    return [
+      { key: "nw", label: "Top left", x: bounds.x1, y: bounds.y1, kind: "corner", target: "nw" },
+      { key: "ne", label: "Top right", x: bounds.x2, y: bounds.y1, kind: "corner", target: "ne" },
+      { key: "sw", label: "Bottom left", x: bounds.x1, y: bounds.y2, kind: "corner", target: "sw" },
+      { key: "se", label: "Bottom right", x: bounds.x2, y: bounds.y2, kind: "corner", target: "se" },
+      { key: "radius-tl", label: "Top left radius", x: bounds.x1 + tlOffset, y: bounds.y1 + tlOffset, kind: "cornerRadius", target: "tl" },
+      { key: "radius-tr", label: "Top right radius", x: bounds.x2 - trOffset, y: bounds.y1 + trOffset, kind: "cornerRadius", target: "tr" },
+      { key: "radius-br", label: "Bottom right radius", x: bounds.x2 - brOffset, y: bounds.y2 - brOffset, kind: "cornerRadius", target: "br" },
+      { key: "radius-bl", label: "Bottom left radius", x: bounds.x1 + blOffset, y: bounds.y2 - blOffset, kind: "cornerRadius", target: "bl" },
+    ];
+  }
+  if (item.type === "circle") {
     return [
       { key: "nw", label: "Top left", x: bounds.x1, y: bounds.y1, kind: "corner", target: "nw" },
       { key: "ne", label: "Top right", x: bounds.x2, y: bounds.y1, kind: "corner", target: "ne" },
@@ -311,6 +488,26 @@ function controlHandlesFor(item) {
     ];
   }
   if (item.type === "pen" && Array.isArray(item.points)) {
+    if (mode === "curve") {
+      const curves = item.curvePoints && typeof item.curvePoints === "object" ? item.curvePoints : {};
+      return Object.entries(curves)
+        .map(([segmentIndex, point]) => ({ segmentIndex: Number(segmentIndex), point }))
+        .filter(({ segmentIndex, point }) =>
+          Number.isInteger(segmentIndex) &&
+          segmentIndex >= 0 &&
+          segmentIndex < item.points.length - 1 &&
+          point &&
+          typeof point === "object",
+        )
+        .map(({ segmentIndex, point }) => ({
+          key: `pen-curve-${segmentIndex}`,
+          label: `Curve segment ${segmentIndex + 1}`,
+          x: point.x,
+          y: point.y,
+          kind: "penCurve",
+          index: segmentIndex,
+        }));
+    }
     return item.points.map((point, index) => ({
       key: `point-${index}`,
       label: `Point ${index + 1}`,
@@ -357,6 +554,38 @@ function applyHandleDrag(drag, item, point) {
     if (!handle.target.includes("s")) next.y2 = bounds.y2;
     return next;
   }
+  if (handle.kind === "curve") {
+    return { ...item, curvePoint: point };
+  }
+  if (handle.kind === "penCurve") {
+    return {
+      ...item,
+      curvePoints: {
+        ...(item.curvePoints || {}),
+        [handle.index]: point,
+      },
+    };
+  }
+  if (handle.kind === "cornerRadius") {
+    const bounds = annotationBounds(drag.item);
+    const width = Math.max(1, Math.abs(bounds.x2 - bounds.x1));
+    const height = Math.max(1, Math.abs(bounds.y2 - bounds.y1));
+    const maxRadius = Math.min(width, height) / 2;
+    const current = rectCornerRadii(item, bounds);
+    const nextRadius = {
+      tl: Math.max(Math.abs(point.x - bounds.x1), Math.abs(point.y - bounds.y1)),
+      tr: Math.max(Math.abs(bounds.x2 - point.x), Math.abs(point.y - bounds.y1)),
+      br: Math.max(Math.abs(bounds.x2 - point.x), Math.abs(bounds.y2 - point.y)),
+      bl: Math.max(Math.abs(point.x - bounds.x1), Math.abs(bounds.y2 - point.y)),
+    }[handle.target];
+    return {
+      ...item,
+      cornerRadii: {
+        ...current,
+        [handle.target]: clamp(nextRadius, 0, maxRadius),
+      },
+    };
+  }
   if (handle.kind === "point" && Array.isArray(item.points)) {
     const points = item.points.map((pointItem, index) => (index === handle.index ? point : pointItem));
     const first = points[0] || item;
@@ -379,14 +608,11 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
 
   if (item.type === "rect") {
     const { x1, y1, x2, y2 } = annotationBounds(item);
+    const radii = rectCornerRadii(item, { x1, y1, x2, y2 });
     return (
       <g {...common}>
-        <rect
-          x={x1}
-          y={y1}
-          width={Math.max(1, x2 - x1)}
-          height={Math.max(1, y2 - y1)}
-          rx="10"
+        <path
+          d={roundedRectPath({ x1, y1, x2, y2 }, radii)}
           fill={style.fill}
           stroke={stroke}
           strokeOpacity={style.strokeOpacity}
@@ -419,23 +645,38 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
 
   if (item.type === "freehand" || item.type === "pen") {
     const points = Array.isArray(item.points) ? item.points : [];
-    const d = points
-      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-      .join(" ") + (item.type === "pen" && item.closed ? " Z" : "");
+    const d =
+      item.type === "pen"
+        ? penPathD(item)
+        : points
+            .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+            .join(" ");
     return (
-      <path
-        {...common}
-        d={d}
-        fill={item.type === "pen" && item.closed ? style.fill : "none"}
-        stroke={stroke}
-        strokeOpacity={style.strokeOpacity}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeDasharray={style.strokeDasharray}
-        markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
-        markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
-      />
+      <g {...common}>
+        {item.type === "pen" ? (
+          <path
+            d={d}
+            fill="none"
+            stroke="transparent"
+            strokeWidth={Math.max(18, strokeWidth + 10)}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pointerEvents="stroke"
+          />
+        ) : null}
+        <path
+          d={d}
+          fill="none"
+          stroke={stroke}
+          strokeOpacity={style.strokeOpacity}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={style.strokeDasharray}
+          markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
+          markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
+        />
+      </g>
     );
   }
 
@@ -475,8 +716,9 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         : item.endEndpoint === "dot"
           ? `url(#${dotMarkerIdForColor(stroke)})`
           : undefined;
-    const midX = ((item.x || 0) + (item.x2 || 0)) / 2;
-    const midY = ((item.y || 0) + (item.y2 || 0)) / 2;
+    const labelPoint = quadraticPoint(item, 0.5);
+    const midX = labelPoint.x;
+    const midY = labelPoint.y;
     const dx = (item.x2 || 0) - (item.x || 0);
     const dy = (item.y2 || 0) - (item.y || 0);
     const length = Math.hypot(dx, dy) || 1;
@@ -488,11 +730,9 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     const labelY = midY - box.height - 10;
     return (
       <g {...common}>
-        <line
-          x1={item.x}
-          y1={item.y}
-          x2={item.x2}
-          y2={item.y2}
+        <path
+          d={linePathD(item)}
+          fill="none"
           stroke={stroke}
           strokeOpacity={style.strokeOpacity}
           strokeWidth={strokeWidth}
@@ -704,6 +944,28 @@ function CollapsibleSection({
   );
 }
 
+function ToolIcon({ item, className = "" }) {
+  if (item?.key === "curve") {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className || "h-5 w-5"}
+        fill="none"
+      >
+        <circle cx="12" cy="16.5" r="2.15" fill="currentColor" />
+        <path
+          d="M6.5 14.5A8.5 8.5 0 0 1 18.8 7"
+          stroke="currentColor"
+          strokeWidth="2.25"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return <SymbolIcon name={item.icon} className={className} />;
+}
+
 export default function ProjectMarkupCanvas() {
   const { planId, projectId, imageId } = useParams();
   const location = useLocation();
@@ -731,6 +993,8 @@ export default function ProjectMarkupCanvas() {
   const [draft, setDraft] = useState(null);
   const [penDraftId, setPenDraftId] = useState("");
   const [drag, setDrag] = useState(null);
+  const [viewportZoom, setViewportZoom] = useState(1);
+  const [viewportOrigin, setViewportOrigin] = useState({ x: 0, y: 0 });
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -909,10 +1173,23 @@ export default function ProjectMarkupCanvas() {
   const isRoughPlan = canvasMode === "rough_plan";
   const modeLabel = isRoughPlan ? "Rough Plan" : "Photo Markup";
   const roughGeometry = useMemo(() => roughPlanGeometry(roughPlan), [roughPlan]);
+  const viewport = useMemo(() => {
+    const zoom = clamp(viewportZoom, 1, 4);
+    const width = CANVAS_W / zoom;
+    const height = CANVAS_H / zoom;
+    return {
+      x: clamp(viewportOrigin.x, 0, Math.max(0, CANVAS_W - width)),
+      y: clamp(viewportOrigin.y, 0, Math.max(0, CANVAS_H - height)),
+      width,
+      height,
+      zoom,
+    };
+  }, [viewportOrigin.x, viewportOrigin.y, viewportZoom]);
   const selectedColorMeta = MARKUP_COLORS.find((item) => item.color === activeColor) || MARKUP_COLORS[0];
   const toolGroups = useMemo(
     () => [
-      { key: "select", tools: [BASE_TOOLS.select] },
+      { key: "select", tools: [BASE_TOOLS.select, BASE_TOOLS.curve] },
+      { key: "view", tools: [BASE_TOOLS.hand, BASE_TOOLS.zoomIn, BASE_TOOLS.zoomOut] },
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen] },
       { key: "geometry", tools: [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
@@ -1035,8 +1312,38 @@ export default function ProjectMarkupCanvas() {
   }
 
   function canvasPointFromEvent(event) {
-    const point = pointFromEvent(event, svgRef.current);
+    const point = pointFromEvent(event, svgRef.current, viewport);
     return softSnapPoint(point, isRoughPlan && roughPlan.snap, roughGeometry);
+  }
+
+  function zoomViewport(direction) {
+    const factor = direction === "in" ? 1.25 : 0.8;
+    setViewportZoom((prevZoom) => {
+      const nextZoom = clamp(prevZoom * factor, 1, 4);
+      const currentWidth = CANVAS_W / prevZoom;
+      const currentHeight = CANVAS_H / prevZoom;
+      const centerX = viewportOrigin.x + currentWidth / 2;
+      const centerY = viewportOrigin.y + currentHeight / 2;
+      const nextWidth = CANVAS_W / nextZoom;
+      const nextHeight = CANVAS_H / nextZoom;
+      setViewportOrigin({
+        x: clamp(centerX - nextWidth / 2, 0, Math.max(0, CANVAS_W - nextWidth)),
+        y: clamp(centerY - nextHeight / 2, 0, Math.max(0, CANVAS_H - nextHeight)),
+      });
+      return nextZoom;
+    });
+  }
+
+  function handleToolSelect(toolKey) {
+    if (toolKey === "zoom_in") {
+      zoomViewport("in");
+      return;
+    }
+    if (toolKey === "zoom_out") {
+      zoomViewport("out");
+      return;
+    }
+    selectTool(toolKey);
   }
 
   function switchCanvasMode(nextMode) {
@@ -1052,7 +1359,7 @@ export default function ProjectMarkupCanvas() {
     if (nextMode === "rough_plan") setBackgroundUrl("");
   }
 
-  function finishPenPath({ exitTool = false, closed = false } = {}) {
+  function finishPenPath({ exitTool = false } = {}) {
     if (!penDraftId) return;
     setAnnotations((prev) =>
       prev.map((item) => {
@@ -1067,13 +1374,13 @@ export default function ProjectMarkupCanvas() {
           last.y === beforeLast.y;
         const points = hasPreviewPoint ? item.points.slice(0, -1) : item.points;
         const finalPoint = points[points.length - 1] || item;
-        const firstPoint = points[0] || finalPoint;
         return {
           ...item,
           points,
-          closed: closed || item.closed || false,
-          x2: closed ? firstPoint.x ?? item.x2 : finalPoint.x ?? item.x2,
-          y2: closed ? firstPoint.y ?? item.y2 : finalPoint.y ?? item.y2,
+          closed: false,
+          fillOpacity: 0,
+          x2: finalPoint.x ?? item.x2,
+          y2: finalPoint.y ?? item.y2,
         };
       }),
     );
@@ -1101,11 +1408,138 @@ export default function ProjectMarkupCanvas() {
     setTool(nextTool);
   }
 
+  function continuePenFromExisting(event, item) {
+    event.stopPropagation();
+    if (!svgRef.current || item.type !== "pen") return;
+    const point = canvasPointFromEvent(event);
+    const hit = nearestPenHit(item, point);
+    if (!hit) return;
+    finishPenPath();
+
+    if (hit.type === "segment") {
+      setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+      setAnnotations((prev) =>
+        prev.map((current) =>
+          current.id === item.id && Array.isArray(current.points)
+            ? {
+                ...current,
+                points: [
+                  ...current.points.slice(0, hit.index + 1),
+                  point,
+                  ...current.points.slice(hit.index + 1),
+                ],
+                closed: false,
+                fillOpacity: 0,
+              }
+            : current,
+        ),
+      );
+      setSelectedId(item.id);
+      return;
+    }
+
+    const points = Array.isArray(item.points) ? item.points : [];
+    const clickedPoint = points[hit.index];
+    if (!clickedPoint) return;
+    const isEndpoint = hit.index === 0 || hit.index === points.length - 1;
+
+    if (isEndpoint) {
+      const orientedPoints = hit.index === 0 ? [...points].reverse() : [...points];
+      const draftPoints = [...orientedPoints, clickedPoint];
+      setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+      setAnnotations((prev) =>
+        prev.map((current) =>
+          current.id === item.id
+            ? {
+                ...current,
+                points: draftPoints,
+                closed: false,
+                fillOpacity: 0,
+                x: draftPoints[0].x,
+                y: draftPoints[0].y,
+                x2: clickedPoint.x,
+                y2: clickedPoint.y,
+              }
+            : current,
+        ),
+      );
+      setSelectedId("");
+      setPenDraftId(item.id);
+      setDraft(null);
+      setTool("pen");
+      return;
+    }
+
+    const id = `mark-${Date.now()}`;
+    const next = {
+      ...item,
+      id,
+      x: clickedPoint.x,
+      y: clickedPoint.y,
+      x2: clickedPoint.x,
+      y2: clickedPoint.y,
+      points: [clickedPoint, clickedPoint],
+      closed: false,
+      fillOpacity: 0,
+    };
+    commitAnnotations([...annotations, next]);
+    setSelectedId("");
+    setPenDraftId(id);
+    setDraft(null);
+    setTool("pen");
+  }
+
+  function continuePenFromNode(event, item, nodeIndex) {
+    event.stopPropagation();
+    if (!item || item.type !== "pen" || !Array.isArray(item.points)) return;
+    const clickedPoint = item.points[nodeIndex];
+    if (!clickedPoint) return;
+    finishPenPath();
+    const isEndpoint = nodeIndex === 0 || nodeIndex === item.points.length - 1;
+    if (isEndpoint) {
+      const orientedPoints = nodeIndex === 0 ? [...item.points].reverse() : [...item.points];
+      const draftPoints = [...orientedPoints, clickedPoint];
+      setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+      setAnnotations((prev) =>
+        prev.map((current) =>
+          current.id === item.id
+            ? { ...current, points: draftPoints, closed: false, fillOpacity: 0, x: draftPoints[0].x, y: draftPoints[0].y, x2: clickedPoint.x, y2: clickedPoint.y }
+            : current,
+        ),
+      );
+      setSelectedId("");
+      setPenDraftId(item.id);
+      setDraft(null);
+      setTool("pen");
+      return;
+    }
+    const id = `mark-${Date.now()}`;
+    commitAnnotations([
+      ...annotations,
+      { ...item, id, x: clickedPoint.x, y: clickedPoint.y, x2: clickedPoint.x, y2: clickedPoint.y, points: [clickedPoint, clickedPoint], closed: false, fillOpacity: 0 },
+    ]);
+    setSelectedId("");
+    setPenDraftId(id);
+    setDraft(null);
+    setTool("pen");
+  }
+
   function startDrawing(event) {
     if (!svgRef.current) return;
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     setMessage("");
+
+    if (tool === "hand") {
+      finishPenPath();
+      setDrag({
+        mode: "pan",
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        viewport,
+      });
+      return;
+    }
 
     if (tool === "delete") {
       deleteSelected();
@@ -1113,6 +1547,13 @@ export default function ProjectMarkupCanvas() {
     }
 
     if (tool === "select") {
+      finishPenPath();
+      setSelectedId("");
+      setEditingTextId("");
+      return;
+    }
+
+    if (tool === "curve") {
       finishPenPath();
       setSelectedId("");
       setEditingTextId("");
@@ -1131,27 +1572,6 @@ export default function ProjectMarkupCanvas() {
           finishPenPath({ exitTool: true });
           return;
         }
-        const firstPoint = fixedPoints[0];
-        if (fixedPoints.length >= 3 && distanceBetween(point, firstPoint) <= 20) {
-          setAnnotations((prev) =>
-            prev.map((item) =>
-              item.id === penDraftId && Array.isArray(item.points)
-                ? {
-                    ...item,
-                    points: fixedPoints,
-                    closed: true,
-                    x2: firstPoint.x,
-                    y2: firstPoint.y,
-                  }
-                : item,
-            ),
-          );
-          setSelectedId(penDraftId);
-          setDraft(null);
-          setPenDraftId("");
-          setTool("select");
-          return;
-        }
         setAnnotations((prev) =>
           prev.map((item) => {
             if (item.id !== penDraftId || !Array.isArray(item.points)) return item;
@@ -1164,6 +1584,7 @@ export default function ProjectMarkupCanvas() {
             };
           }),
         );
+        setDraft(null);
         return;
       }
     }
@@ -1185,7 +1606,7 @@ export default function ProjectMarkupCanvas() {
       colorLabel: selectedColorMeta.label,
       strokeWidth: activeStrokeWidth,
       strokeOpacity: activeStrokeOpacity,
-      fillOpacity: activeFillOpacity,
+      fillOpacity: tool === "pen" ? 0 : activeFillOpacity,
       strokeAlign: "center",
       startEndpoint: "none",
       endEndpoint: tool === "arrow" ? "arrow" : "none",
@@ -1202,7 +1623,7 @@ export default function ProjectMarkupCanvas() {
     if (tool === "pen") {
       setSelectedId("");
       setPenDraftId(id);
-      setDraft(id);
+      setDraft(null);
       return;
     }
     if (tool === "text" || tool === "priority" || ["door", "window", "tree", "steps", "fence"].includes(tool)) return;
@@ -1213,21 +1634,41 @@ export default function ProjectMarkupCanvas() {
     if (!svgRef.current) return;
     const point = canvasPointFromEvent(event);
 
+    if (drag?.mode === "pan") {
+      const rect = svgRef.current.getBoundingClientRect();
+      const dx = ((event.clientX - drag.startClientX) / rect.width) * drag.viewport.width;
+      const dy = ((event.clientY - drag.startClientY) / rect.height) * drag.viewport.height;
+      setViewportOrigin({
+        x: clamp(drag.viewport.x - dx, 0, Math.max(0, CANVAS_W - drag.viewport.width)),
+        y: clamp(drag.viewport.y - dy, 0, Math.max(0, CANVAS_H - drag.viewport.height)),
+      });
+      return;
+    }
+
+    if (penDraftId) {
+      setAnnotations((prev) =>
+        prev.map((item) =>
+          item.id === penDraftId && item.type === "pen" && Array.isArray(item.points)
+            ? {
+                ...item,
+                points: item.points.map((pointItem, index) =>
+                  index === item.points.length - 1 ? point : pointItem,
+                ),
+                x2: point.x,
+                y2: point.y,
+              }
+            : item,
+        ),
+      );
+      return;
+    }
+
     if (draft) {
       setAnnotations((prev) =>
         prev.map((item) =>
           item.id === draft
             ? item.type === "freehand"
               ? { ...item, points: [...(item.points || []), point], x2: point.x, y2: point.y }
-              : item.type === "pen" && Array.isArray(item.points)
-                ? {
-                    ...item,
-                    points: item.points.map((pointItem, index) =>
-                      index === item.points.length - 1 ? point : pointItem,
-                    ),
-                    x2: point.x,
-                    y2: point.y,
-                  }
               : { ...item, x2: point.x, y2: point.y }
             : item,
         ),
@@ -1292,13 +1733,97 @@ export default function ProjectMarkupCanvas() {
     setDrag({ id: item.id, startX: point.x, startY: point.y, item });
   }
 
-  function startHandleMove(event, handle) {
+  function startCurveEdit(event, item) {
+    event.stopPropagation();
+    if (!svgRef.current) return;
+    svgRef.current.setPointerCapture?.(event.pointerId);
+    const point = canvasPointFromEvent(event);
+    finishPenPath();
+    setTool("curve");
+    setSelectedId(item.id);
+    if (item.id !== editingTextId) setEditingTextId("");
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+
+    if (isLineLike(item)) {
+      const curvedItem = { ...item, curvePoint: offsetCurvePoint(item, point) };
+      setAnnotations((prev) =>
+        prev.map((current) => (current.id === item.id ? curvedItem : current)),
+      );
+      setDrag(null);
+      return;
+    }
+
+    if (item.type === "pen" && Array.isArray(item.points)) {
+      const hit = nearestPenHit(item, point);
+      if (hit?.type === "segment") {
+        const start = item.points[hit.index];
+        const end = item.points[hit.index + 1];
+        const curvedItem = {
+          ...item,
+          curvePoints: {
+            ...(item.curvePoints || {}),
+            [hit.index]: offsetSegmentCurvePoint(start, end, point),
+          },
+        };
+        setAnnotations((prev) =>
+          prev.map((current) => (current.id === item.id ? curvedItem : current)),
+        );
+      }
+      setDrag(null);
+      return;
+    }
+
+    setDrag(null);
+  }
+
+  function startCurveHandleActivation(event, handle) {
+    event.stopPropagation();
+    if (!selected) return;
+    finishPenPath();
+    setTool("curve");
+    setSelectedId(selected.id);
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+
+    if (isLineLike(selected)) {
+      const point = { x: handle.x, y: handle.y };
+      const curvedItem = { ...selected, curvePoint: offsetCurvePoint(selected, point) };
+      setAnnotations((prev) =>
+        prev.map((current) => (current.id === selected.id ? curvedItem : current)),
+      );
+      setDrag(null);
+      return;
+    }
+
+    if (selected.type === "rect" && handle.kind === "corner") {
+      const targetMap = { nw: "tl", ne: "tr", se: "br", sw: "bl" };
+      const radiusTarget = targetMap[handle.target];
+      if (!radiusTarget) return;
+      const bounds = annotationBounds(selected);
+      const current = rectCornerRadii(selected, bounds);
+      setAnnotations((prev) =>
+        prev.map((currentItem) =>
+          currentItem.id === selected.id
+            ? {
+                ...currentItem,
+                cornerRadii: {
+                  ...current,
+                  [radiusTarget]: Math.max(current[radiusTarget] || 0, 12),
+                },
+              }
+            : currentItem,
+        ),
+      );
+    }
+    setDrag(null);
+  }
+
+  function startHandleMove(event, handle, options = {}) {
     event.stopPropagation();
     if (!svgRef.current || !selected) return;
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     finishPenPath();
-    setTool("select");
+    if (!options.preserveTool) setTool("select");
     setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
     setDrag({ id: selected.id, startX: point.x, startY: point.y, item: selected, handle });
   }
@@ -1321,6 +1846,7 @@ export default function ProjectMarkupCanvas() {
     const clone = svgRef.current?.cloneNode(true);
     if (!clone) return "";
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("viewBox", `0 0 ${CANVAS_W} ${CANVAS_H}`);
     clone.querySelectorAll(".editing-only").forEach((node) => node.remove());
     return new XMLSerializer().serializeToString(clone);
   }
@@ -1330,6 +1856,7 @@ export default function ProjectMarkupCanvas() {
     if (!clone) return "";
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    clone.setAttribute("viewBox", `0 0 ${CANVAS_W} ${CANVAS_H}`);
     clone.querySelectorAll(".editing-only").forEach((node) => node.remove());
 
     const imageNodes = Array.from(clone.querySelectorAll("image"));
@@ -1678,11 +2205,23 @@ export default function ProjectMarkupCanvas() {
   const selectedForEditing = selected?.id === penDraftId ? null : selected;
   const selectedLabelPosition = labelPosition(selectedForEditing);
   const selectedDisplayBounds = selectedForEditing ? displayBounds(selectedForEditing) : null;
-  const selectedControlHandles = selectedForEditing ? controlHandlesFor(selectedForEditing) : [];
+  const selectedControlHandles = selectedForEditing ? controlHandlesFor(selectedForEditing, tool) : [];
+  const visibleControlHandles =
+    tool === "curve"
+      ? selectedControlHandles.filter((handle) =>
+          isLineLike(selectedForEditing)
+            ? handle.kind === "curve"
+            : selectedForEditing?.type === "rect"
+              ? handle.kind === "cornerRadius" || handle.kind === "corner"
+              : selectedForEditing?.type === "pen"
+                ? handle.kind === "penCurve"
+              : false,
+        )
+      : selectedControlHandles;
   const selectedDeletePosition = selectedDisplayBounds
     ? {
-        left: `${(clamp(selectedDisplayBounds.x2 + 18, 18, CANVAS_W - 18) / CANVAS_W) * 100}%`,
-        top: `${(clamp(selectedDisplayBounds.y1 - 18, 18, CANVAS_H - 18) / CANVAS_H) * 100}%`,
+        left: `${((clamp(selectedDisplayBounds.x2 + 18, viewport.x + 18, viewport.x + viewport.width - 18) - viewport.x) / viewport.width) * 100}%`,
+        top: `${((clamp(selectedDisplayBounds.y1 - 18, viewport.y + 18, viewport.y + viewport.height - 18) - viewport.y) / viewport.height) * 100}%`,
       }
     : null;
   const editingSelectedText =
@@ -2015,14 +2554,6 @@ export default function ProjectMarkupCanvas() {
                     </div>
                   );
                 })}
-                <button
-                  type="button"
-                  onClick={clearCanvas}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50"
-                >
-                  <SymbolIcon name="ink_eraser" className="text-[18px]" />
-                  Clear annotations
-                </button>
               </div>
             </CollapsibleSection>
 
@@ -2242,6 +2773,15 @@ export default function ProjectMarkupCanvas() {
               onToggle={toggleSidebarSection}
               onPin={toggleSidebarPin}
             >
+              <button
+                type="button"
+                onClick={clearCanvas}
+                disabled={!annotations.length}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <SymbolIcon name="ink_eraser" className="text-[18px]" />
+                Clear annotations
+              </button>
               {selected ? (
                 <div className="mt-4 border-t border-slate-100 pt-4">
                   {selected.type === "text" || selected.type === "measure" ? (
@@ -2430,6 +2970,7 @@ export default function ProjectMarkupCanvas() {
             <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-sm text-slate-500">
               <span>Planner: <span className="text-slate-700">{plan?.title || "Untitled issue"}</span></span>
               <div className="flex items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{Math.round(viewport.zoom * 100)}%</span>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{modeLabel}</span>
                 <button
                   type="button"
@@ -2447,7 +2988,7 @@ export default function ProjectMarkupCanvas() {
                 <span>Area: {(Number(roughPlan.width) || 0) * (Number(roughPlan.length) || 0)} sq {roughPlan.unit}</span>
                 <span>Grid scale: 1 square = 1 {roughGeometry.unit}</span>
                 <span>Soft snap: {roughPlan.snap ? "on" : "off"}</span>
-                <span>Zoom: {roughPlan.zoom}%</span>
+                <span>Zoom: {Math.round(viewport.zoom * 100)}%</span>
               </div>
             ) : null}
             <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
@@ -2465,7 +3006,7 @@ export default function ProjectMarkupCanvas() {
                             deleteSelected();
                             return;
                           }
-                          selectTool(activeItem.key);
+                          handleToolSelect(activeItem.key);
                         }}
                         title={activeItem.label}
                         aria-label={activeItem.label}
@@ -2477,7 +3018,7 @@ export default function ProjectMarkupCanvas() {
                               : "bg-transparent text-white/80 hover:bg-white/10 hover:text-white"
                         }`}
                       >
-                        <SymbolIcon name={activeItem.icon} className="text-[21px]" />
+                        <ToolIcon item={activeItem} className="h-[21px] w-[21px] text-[21px]" />
                         {hasFlyout ? (
                           <SymbolIcon name="arrow_drop_down" className="absolute -bottom-1 -right-1 text-[15px] text-white/80" />
                         ) : null}
@@ -2489,14 +3030,14 @@ export default function ProjectMarkupCanvas() {
                               <button
                                 key={item.key}
                                 type="button"
-                                onClick={() => selectTool(item.key)}
+                                onClick={() => handleToolSelect(item.key)}
                                 title={item.label}
                                 aria-label={item.label}
                                 className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
                                   tool === item.key ? "bg-blue-600" : "text-white/80 hover:bg-white/10 hover:text-white"
                                 }`}
                               >
-                                <SymbolIcon name={item.icon} className="text-[21px]" />
+                                <ToolIcon item={item} className="h-[21px] w-[21px] text-[21px]" />
                               </button>
                             ))}
                           </div>
@@ -2508,8 +3049,8 @@ export default function ProjectMarkupCanvas() {
               </div>
               <svg
                 ref={svgRef}
-                viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-                className={`block h-auto w-full touch-none select-none bg-white ${expanded ? "min-h-[calc(100vh-190px)]" : "min-h-[560px]"}`}
+                viewBox={`${viewport.x} ${viewport.y} ${viewport.width} ${viewport.height}`}
+                className={`block h-auto w-full touch-none select-none bg-white ${tool === "hand" ? "cursor-grab active:cursor-grabbing" : ""} ${expanded ? "min-h-[calc(100vh-190px)]" : "min-h-[560px]"}`}
                 onPointerDown={startDrawing}
                 onPointerMove={moveDrawing}
                 onPointerUp={stopPointer}
@@ -2609,7 +3150,14 @@ export default function ProjectMarkupCanvas() {
                 renderAnnotation(item, {
                   selected: item.id === selectedForEditing?.id,
                   editing: item.id === editingTextId,
-                  onPointerDown: item.id === penDraftId ? undefined : (event) => startMove(event, item),
+                  onPointerDown:
+                    item.id === penDraftId
+                      ? undefined
+                      : tool === "curve"
+                        ? (event) => startCurveEdit(event, item)
+                      : tool === "pen" && item.type === "pen"
+                        ? (event) => continuePenFromExisting(event, item)
+                        : (event) => startMove(event, item),
                   onDoubleClick: item.id === penDraftId ? undefined : (event) => {
                     event.stopPropagation();
                     if (item.type === "text" || item.type === "measure") {
@@ -2667,24 +3215,52 @@ export default function ProjectMarkupCanvas() {
                       strokeDasharray="12 8"
                       strokeWidth="3"
                     />
-                    {selectedControlHandles.map((handle) => (
+                    {visibleControlHandles.map((handle) => (
                       <g key={handle.key}>
+                        {(handle.kind === "curve" && isLineLike(selectedForEditing)) || (handle.kind === "penCurve" && selectedForEditing?.type === "pen") ? (() => {
+                          const anchor =
+                            handle.kind === "penCurve"
+                              ? penSegmentAnchor(selectedForEditing, handle.index)
+                              : quadraticPoint(selectedForEditing, 0.5);
+                          if (!anchor) return null;
+                          return (
+                            <line
+                              className="pointer-events-none"
+                              x1={anchor.x}
+                              y1={anchor.y}
+                              x2={handle.x}
+                              y2={handle.y}
+                              stroke="#2563eb"
+                              strokeWidth="2"
+                              strokeDasharray="6 5"
+                              opacity="0.75"
+                            />
+                          );
+                        })() : null}
                         <circle
                           className="cursor-pointer"
                           cx={handle.x}
                           cy={handle.y}
-                          r="11"
-                          fill="#ffffff"
-                          stroke="#2563eb"
-                          strokeWidth="3"
-                          onPointerDown={(event) => startHandleMove(event, handle)}
+                          r={handle.kind === "curve" || handle.kind === "penCurve" ? "14" : handle.kind === "cornerRadius" ? "10" : "11"}
+                          fill={handle.kind === "curve" || handle.kind === "penCurve" ? "#eff6ff" : handle.kind === "cornerRadius" ? "#fef3c7" : "#ffffff"}
+                          stroke={handle.kind === "cornerRadius" ? "#d97706" : "#2563eb"}
+                          strokeWidth={handle.kind === "curve" || handle.kind === "penCurve" ? "4" : "3"}
+                          onPointerDown={(event) =>
+                            tool === "curve" && ["endpoint", "corner"].includes(handle.kind)
+                              ? startCurveHandleActivation(event, handle)
+                              : tool === "pen" && selectedForEditing?.type === "pen" && handle.kind === "point"
+                              ? continuePenFromNode(event, selectedForEditing, handle.index)
+                              : startHandleMove(event, handle, {
+                                  preserveTool: tool === "curve",
+                                })
+                          }
                         />
                         <circle
                           className="pointer-events-none"
                           cx={handle.x}
                           cy={handle.y}
                           r="3"
-                          fill="#2563eb"
+                          fill={handle.kind === "cornerRadius" ? "#d97706" : "#2563eb"}
                         />
                       </g>
                     ))}
@@ -2719,8 +3295,8 @@ export default function ProjectMarkupCanvas() {
                   className="absolute z-30 min-h-9 w-48 resize rounded-lg border border-blue-300 bg-white/95 px-3 py-2 text-left text-sm font-semibold leading-snug text-slate-950 shadow-xl outline-none ring-4 ring-blue-500/15 placeholder:text-slate-400"
                   placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
                   style={{
-                    left: `${(selectedLabelPosition.x / CANVAS_W) * 100}%`,
-                    top: `${(selectedLabelPosition.y / CANVAS_H) * 100}%`,
+                    left: `${((selectedLabelPosition.x - viewport.x) / viewport.width) * 100}%`,
+                    top: `${((selectedLabelPosition.y - viewport.y) / viewport.height) * 100}%`,
                     transform: "translate(-50%, -50%)",
                     width: selectedTextBox ? `${Math.max(160, selectedTextBox.width + 22)}px` : undefined,
                     minHeight: selectedTextBox ? `${Math.max(38, selectedTextBox.height + 12)}px` : undefined,
