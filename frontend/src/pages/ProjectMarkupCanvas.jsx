@@ -7,15 +7,31 @@ const CANVAS_W = 1200;
 const CANVAS_H = 760;
 const STORAGE_PREFIX = "flatorigin_project_markup";
 
-const TOOLS = [
+const PHOTO_TOOLS = [
   { key: "select", label: "Select", icon: "near_me" },
-  { key: "measure", label: "Measure", icon: "straighten" },
-  { key: "rect", label: "Box", icon: "crop_square" },
-  { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
-  { key: "freehand", label: "Freehand", icon: "draw" },
   { key: "text", label: "Text", icon: "title" },
+  { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
+  { key: "line", label: "Line", icon: "horizontal_rule" },
+  { key: "freehand", label: "Draw", icon: "draw" },
+  { key: "rect", label: "Rectangle", icon: "crop_square" },
   { key: "circle", label: "Circle", icon: "radio_button_unchecked" },
-  { key: "priority", label: "Priority", icon: "looks_one" },
+  { key: "measure", label: "Measure", icon: "straighten" },
+  { key: "delete", label: "Delete", icon: "delete" },
+];
+
+const ROUGH_PLAN_TOOLS = [
+  { key: "select", label: "Select", icon: "near_me" },
+  { key: "line", label: "Line", icon: "horizontal_rule" },
+  { key: "freehand", label: "Draw", icon: "draw" },
+  { key: "rect", label: "Rectangle", icon: "crop_square" },
+  { key: "text", label: "Text", icon: "title" },
+  { key: "measure", label: "Measure", icon: "straighten" },
+  { key: "door", label: "Door", icon: "door_front" },
+  { key: "window", label: "Window", icon: "window" },
+  { key: "tree", label: "Tree", icon: "park" },
+  { key: "steps", label: "Steps", icon: "stairs" },
+  { key: "fence", label: "Fence", icon: "fence" },
+  { key: "delete", label: "Delete", icon: "delete" },
 ];
 
 const LAYERS = [
@@ -24,13 +40,18 @@ const LAYERS = [
 ];
 
 const MARKUP_COLORS = [
-  "#0f172a",
-  "#2563eb",
-  "#dc2626",
-  "#16a34a",
-  "#eab308",
-  "#9333ea",
+  { key: "blue", label: "General notes", color: "#2563eb" },
+  { key: "red", label: "Problems/repairs", color: "#dc2626" },
+  { key: "green", label: "New additions", color: "#16a34a" },
+  { key: "yellow", label: "Warnings/access", color: "#ca8a04" },
 ];
+
+const DEFAULT_MARKUP_COLOR = "#2563eb";
+const DEFAULT_STROKE_WIDTH = 4;
+const STROKE_WIDTH_OPTIONS = [2, 4, 6, 8, 10, 12];
+const ROUGH_GRID_SIZE = 40;
+const ROUGH_SOFT_SNAP_DISTANCE = 9;
+const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100 };
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -54,7 +75,7 @@ function normalizeMarkupText(value) {
 }
 
 function hexToRgba(hex, alpha = 1) {
-  const normalized = String(hex || "#0f172a").replace("#", "");
+  const normalized = String(hex || DEFAULT_MARKUP_COLOR).replace("#", "");
   if (!/^[0-9a-f]{6}$/i.test(normalized)) return `rgba(15, 23, 42, ${alpha})`;
   const value = parseInt(normalized, 16);
   const r = (value >> 16) & 255;
@@ -64,19 +85,24 @@ function hexToRgba(hex, alpha = 1) {
 }
 
 function styleFor(item) {
-  const strokeColor = item.strokeColor || item.color || "#0f172a";
+  const strokeColor = item.strokeColor || item.color || DEFAULT_MARKUP_COLOR;
   const fillColor = item.fillColor || item.color || strokeColor;
   const strokeStyle = item.strokeStyle === "dashed" ? "dashed" : "solid";
   return {
     strokeColor,
     fillColor,
-    fill: hexToRgba(fillColor, 0.3),
+    fill: hexToRgba(fillColor, 0.18),
     strokeDasharray: strokeStyle === "dashed" ? "12 8" : undefined,
   };
 }
 
+function strokeWidthFor(item) {
+  const fallback = item?.type === "measure" ? 5 : DEFAULT_STROKE_WIDTH;
+  return clamp(Number(item?.strokeWidth) || fallback, 1, 18);
+}
+
 function markerIdForColor(color) {
-  return `arrow-${String(color || "#0f172a").replace(/[^a-z0-9]/gi, "")}`;
+  return `arrow-${String(color || DEFAULT_MARKUP_COLOR).replace(/[^a-z0-9]/gi, "")}`;
 }
 
 function blobToDataUrl(blob) {
@@ -98,6 +124,15 @@ function pointFromEvent(event, svg) {
   };
 }
 
+function softSnapPoint(point, enabled) {
+  if (!enabled) return point;
+  const snap = (value) => {
+    const nearest = Math.round(value / ROUGH_GRID_SIZE) * ROUGH_GRID_SIZE;
+    return Math.abs(nearest - value) <= ROUGH_SOFT_SNAP_DISTANCE ? nearest : value;
+  };
+  return { x: clamp(Math.round(snap(point.x)), 0, CANVAS_W), y: clamp(Math.round(snap(point.y)), 0, CANVAS_H) };
+}
+
 function annotationBounds(item) {
   if (item.type === "freehand" && Array.isArray(item.points) && item.points.length) {
     const xs = item.points.map((point) => point.x);
@@ -116,6 +151,15 @@ function annotationBounds(item) {
       y1: (item.y || 0) - radius,
       x2: (item.x || 0) + radius,
       y2: (item.y || 0) + radius,
+    };
+  }
+  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+    const size = item.type === "tree" ? 70 : 64;
+    return {
+      x1: (item.x || 0) - size / 2,
+      y1: (item.y || 0) - size / 2,
+      x2: (item.x || 0) + size / 2,
+      y2: (item.y || 0) + size / 2,
     };
   }
   const x1 = Math.min(item.x, item.x2 ?? item.x);
@@ -147,9 +191,15 @@ function wrappedTextLines(text) {
 function labelBox(text, fontSize = 18) {
   const lines = wrappedTextLines(text);
   const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  const paddingX = 14;
+  const paddingY = 9;
+  const lineHeight = Math.round(fontSize * 1.28);
   return {
-    width: Math.max(44, longest * fontSize * 0.52 + 18),
-    height: lines.length * (fontSize + 4) + 10,
+    width: Math.max(56, longest * fontSize * 0.52 + paddingX * 2),
+    height: lines.length * lineHeight + paddingY * 2,
+    paddingX,
+    paddingY,
+    lineHeight,
     lines,
   };
 }
@@ -158,11 +208,13 @@ function displayBounds(item) {
   if (!item) return { x1: 0, y1: 0, x2: 0, y2: 0 };
   if (item.type === "text") {
     const box = labelBox(item.text || "Note", 18);
+    const labelX = (item.x || 0) - box.paddingX;
+    const labelY = (item.y || 0) - box.height + 7;
     return {
-      x1: (item.x || 0) - 10,
-      y1: (item.y || 0) - box.height + 7,
-      x2: (item.x || 0) - 10 + box.width,
-      y2: (item.y || 0) + 7,
+      x1: labelX,
+      y1: labelY,
+      x2: labelX + box.width,
+      y2: labelY + box.height,
     };
   }
   if (item.type === "measure") {
@@ -196,6 +248,7 @@ function labelPosition(item) {
 function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onDoubleClick } = {}) {
   const style = styleFor(item);
   const stroke = style.strokeColor;
+  const strokeWidth = strokeWidthFor(item);
   const common = {
     key: item.id,
     onPointerDown,
@@ -215,7 +268,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           rx="10"
           fill={style.fill}
           stroke={stroke}
-          strokeWidth="2"
+          strokeWidth={strokeWidth}
           strokeDasharray={style.strokeDasharray}
         />
       </g>
@@ -235,7 +288,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         ry={Math.max(10, Math.abs(y2 - y1) / 2)}
         fill={style.fill}
         stroke={stroke}
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeDasharray={style.strokeDasharray}
       />
     );
@@ -252,7 +305,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         d={d}
         fill="none"
         stroke={stroke}
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeDasharray={style.strokeDasharray}
@@ -270,7 +323,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           r={radius}
           fill={style.fill}
           stroke={stroke}
-          strokeWidth="2"
+          strokeWidth={strokeWidth}
           strokeDasharray={style.strokeDasharray}
         />
         <text
@@ -287,7 +340,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     );
   }
 
-  if (item.type === "arrow" || item.type === "measure") {
+  if (item.type === "line" || item.type === "arrow" || item.type === "measure") {
     const marker = item.type === "arrow" ? `url(#${markerIdForColor(stroke)})` : undefined;
     const midX = ((item.x || 0) + (item.x2 || 0)) / 2;
     const midY = ((item.y || 0) + (item.y2 || 0)) / 2;
@@ -298,6 +351,8 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     const capY = (dx / length) * 22;
     const label = item.text || "measurement";
     const box = labelBox(label, 18);
+    const labelX = midX - box.width / 2;
+    const labelY = midY - box.height - 10;
     return (
       <g {...common}>
         <line
@@ -306,7 +361,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           x2={item.x2}
           y2={item.y2}
           stroke={stroke}
-          strokeWidth="2"
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           markerEnd={marker}
           strokeDasharray={style.strokeDasharray}
@@ -319,7 +374,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               x2={(item.x || 0) + capX}
               y2={(item.y || 0) + capY}
               stroke={stroke}
-              strokeWidth="2"
+              strokeWidth={strokeWidth}
               strokeLinecap="square"
               strokeDasharray={style.strokeDasharray}
             />
@@ -329,7 +384,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               x2={(item.x2 || 0) + capX}
               y2={(item.y2 || 0) + capY}
               stroke={stroke}
-              strokeWidth="2"
+              strokeWidth={strokeWidth}
               strokeLinecap="square"
               strokeDasharray={style.strokeDasharray}
             />
@@ -339,23 +394,24 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           <g>
             <rect
               x={midX - box.width / 2}
-              y={midY - box.height - 10}
+              y={labelY}
               width={box.width}
               height={box.height}
               rx="8"
-              fill={style.fill}
-              stroke={stroke}
-              strokeWidth="2"
+              fill="rgba(255,255,255,0.88)"
+              stroke={hexToRgba(stroke, 0.52)}
+              strokeWidth="1.5"
+              filter="url(#label-shadow)"
             />
             <text
-              x={midX - box.width / 2 + 10}
-              y={midY - box.height + 16}
-              fill={stroke}
+              x={labelX + box.paddingX}
+              y={labelY + box.paddingY + 16}
+              fill="#0f172a"
               fontSize="18"
-              fontWeight="200"
+              fontWeight="600"
             >
               {box.lines.map((line, index) => (
-                <tspan key={`${item.id}-line-${index}`} x={midX - box.width / 2 + 10} dy={index === 0 ? 0 : 23}>
+                <tspan key={`${item.id}-line-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>
                   {line}
                 </tspan>
               ))}
@@ -366,8 +422,57 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     );
   }
 
+  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+    const x = item.x || 0;
+    const y = item.y || 0;
+    if (item.type === "door") {
+      return (
+        <g {...common}>
+          <path d={`M ${x - 26} ${y + 28} L ${x - 26} ${y - 26} L ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <path d={`M ${x - 24} ${y + 24} A 54 54 0 0 1 ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} strokeDasharray="7 7" />
+        </g>
+      );
+    }
+    if (item.type === "window") {
+      return (
+        <g {...common}>
+          <rect x={x - 32} y={y - 12} width="64" height="24" rx="3" fill="rgba(255,255,255,0.9)" stroke={stroke} strokeWidth={strokeWidth} />
+          <line x1={x} y1={y - 12} x2={x} y2={y + 12} stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} />
+        </g>
+      );
+    }
+    if (item.type === "tree") {
+      return (
+        <g {...common}>
+          <circle cx={x} cy={y - 8} r="28" fill={hexToRgba(stroke, 0.16)} stroke={stroke} strokeWidth={strokeWidth} />
+          <path d={`M ${x} ${y + 20} L ${x} ${y + 36}`} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+        </g>
+      );
+    }
+    if (item.type === "steps") {
+      return (
+        <g {...common}>
+          {[0, 1, 2, 3].map((index) => (
+            <rect key={`${item.id}-step-${index}`} x={x - 34 + index * 16} y={y - 24 + index * 12} width="48" height="10" fill="rgba(255,255,255,0.92)" stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} />
+          ))}
+        </g>
+      );
+    }
+    return (
+      <g {...common}>
+        <line x1={x - 34} y1={y - 18} x2={x + 34} y2={y - 18} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+        <line x1={x - 34} y1={y + 18} x2={x + 34} y2={y + 18} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+        {[-24, 0, 24].map((offset) => (
+          <line key={`${item.id}-post-${offset}`} x1={x + offset} y1={y - 30} x2={x + offset} y2={y + 30} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+        ))}
+      </g>
+    );
+  }
+
   const label = item.text || "Note";
   const box = labelBox(label, 18);
+  const labelX = (item.x || 0) - box.paddingX;
+  const labelY = (item.y || 0) - box.height + 7;
   if (editing) {
     return (
       <g
@@ -381,25 +486,26 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
   return (
     <g {...common}>
       <rect
-        x={item.x - 10}
-        y={item.y - box.height + 7}
+        x={labelX}
+        y={labelY}
         width={box.width}
         height={box.height}
         rx="8"
-        fill={style.fill}
-        stroke={stroke}
-        strokeWidth="2"
+        fill="rgba(255,255,255,0.88)"
+        stroke={hexToRgba(stroke, 0.52)}
+        strokeWidth="1.5"
         strokeDasharray={style.strokeDasharray}
+        filter="url(#label-shadow)"
       />
       <text
-        x={item.x}
-        y={item.y - box.height + 25}
-        fill={stroke}
+        x={labelX + box.paddingX}
+        y={labelY + box.paddingY + 16}
+        fill="#0f172a"
         fontSize="18"
-        fontWeight="200"
+        fontWeight="600"
       >
         {box.lines.map((line, index) => (
-          <tspan key={`${item.id}-line-${index}`} x={item.x} dy={index === 0 ? 0 : 23}>
+          <tspan key={`${item.id}-line-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>
             {line}
           </tspan>
         ))}
@@ -420,7 +526,12 @@ export default function ProjectMarkupCanvas() {
   const [loadingPlan, setLoadingPlan] = useState(Boolean(planId || projectId));
   const [backgroundUrl, setBackgroundUrl] = useState("");
   const [annotations, setAnnotations] = useState([]);
-  const [tool, setTool] = useState("rect");
+  const [tool, setTool] = useState("select");
+  const [canvasMode, setCanvasMode] = useState("photo");
+  const [activeColor, setActiveColor] = useState(DEFAULT_MARKUP_COLOR);
+  const [activeStrokeWidth, setActiveStrokeWidth] = useState(DEFAULT_STROKE_WIDTH);
+  const [roughPlan, setRoughPlan] = useState(ROUGH_PLAN_DEFAULTS);
+  const [expanded, setExpanded] = useState(false);
   const [activeLayer, setActiveLayer] = useState("homeowner");
   const [visibleLayers, setVisibleLayers] = useState({ homeowner: true, contractor: true });
   const [selectedId, setSelectedId] = useState("");
@@ -443,6 +554,11 @@ export default function ProjectMarkupCanvas() {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "{}");
       if (saved.backgroundUrl) setBackgroundUrl(saved.backgroundUrl);
       if (Array.isArray(saved.annotations)) setAnnotations(saved.annotations);
+      if (saved.canvasMode === "rough_plan" || saved.canvasMode === "photo") setCanvasMode(saved.canvasMode);
+      if (saved.roughPlan && typeof saved.roughPlan === "object") {
+        setRoughPlan((prev) => ({ ...prev, ...saved.roughPlan }));
+      }
+      if (saved.activeStrokeWidth) setActiveStrokeWidth(clamp(Number(saved.activeStrokeWidth) || DEFAULT_STROKE_WIDTH, 1, 18));
     } catch {
       // Ignore broken session drafts.
     }
@@ -451,9 +567,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeStrokeWidth }),
     );
-  }, [annotations, backgroundUrl, storageKey]);
+  }, [activeStrokeWidth, annotations, backgroundUrl, canvasMode, roughPlan, storageKey]);
 
   useEffect(() => {
     if (!planId) return;
@@ -479,15 +595,24 @@ export default function ProjectMarkupCanvas() {
         if (selectedImageVersion) {
           setAnnotations(Array.isArray(selectedImageVersion.annotations) ? selectedImageVersion.annotations : []);
           setBackgroundUrl(selectedImageVersion.background_url || selectedImage.image_url || "");
+          setCanvasMode(selectedImageVersion.version_type === "rough_plan" ? "rough_plan" : "photo");
+          if (selectedImageVersion.rough_plan && typeof selectedImageVersion.rough_plan === "object") {
+            setRoughPlan((prev) => ({ ...prev, ...selectedImageVersion.rough_plan }));
+          }
           if (selectedImageVersion.visible_layers && typeof selectedImageVersion.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...selectedImageVersion.visible_layers }));
           }
         } else if (selectedImage) {
           setAnnotations([]);
           setBackgroundUrl(selectedImage.image_url || "");
+          setCanvasMode("photo");
         } else {
           if (Array.isArray(markup.annotations)) setAnnotations(markup.annotations);
           if (markup.background_url) setBackgroundUrl(markup.background_url);
+          if (markup.canvas_mode === "rough_plan" || markup.version_type === "rough_plan") setCanvasMode("rough_plan");
+          if (markup.rough_plan && typeof markup.rough_plan === "object") {
+            setRoughPlan((prev) => ({ ...prev, ...markup.rough_plan }));
+          }
           if (markup.visible_layers && typeof markup.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
           }
@@ -526,12 +651,17 @@ export default function ProjectMarkupCanvas() {
         if (markupVersion && typeof markupVersion === "object") {
           setAnnotations(Array.isArray(markupVersion.annotations) ? markupVersion.annotations : []);
           setBackgroundUrl(markupVersion.background_url || url || "");
+          setCanvasMode(markupVersion.version_type === "rough_plan" ? "rough_plan" : "photo");
+          if (markupVersion.rough_plan && typeof markupVersion.rough_plan === "object") {
+            setRoughPlan((prev) => ({ ...prev, ...markupVersion.rough_plan }));
+          }
           if (markupVersion.visible_layers && typeof markupVersion.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...markupVersion.visible_layers }));
           }
         } else {
           setAnnotations([]);
           setBackgroundUrl(url || "");
+          setCanvasMode("photo");
         }
       })
       .catch((err) => {
@@ -564,7 +694,14 @@ export default function ProjectMarkupCanvas() {
     return undefined;
   }, [selected?.id, selected?.type]);
 
-  const color = LAYERS.find((item) => item.key === activeLayer)?.color || "#0f172a";
+  const isRoughPlan = canvasMode === "rough_plan";
+  const availableTools = isRoughPlan ? ROUGH_PLAN_TOOLS : PHOTO_TOOLS;
+  const modeLabel = isRoughPlan ? "Rough Plan" : "Photo Markup";
+  const selectedColorMeta = MARKUP_COLORS.find((item) => item.color === activeColor) || MARKUP_COLORS[0];
+  const markerColors = useMemo(
+    () => Array.from(new Set([...MARKUP_COLORS.map((item) => item.color), ...annotations.map((item) => styleFor(item).strokeColor)])),
+    [annotations],
+  );
 
   const savedVersions = useMemo(() => {
     const markup = safeMarkupData(plan?.markup_data);
@@ -586,13 +723,16 @@ export default function ProjectMarkupCanvas() {
     );
     const version = {
       id: `version-${Date.now()}`,
-      name: versionOverrides.name || `Markup version ${nextVersionNumber}`,
+      name: versionOverrides.name || `${modeLabel} ${nextVersionNumber}`,
+      version_type: isRoughPlan ? "rough_plan" : "photo_markup",
+      type_label: modeLabel,
       created_at: now,
-      background_url,
+      background_url: isRoughPlan ? "" : background_url,
       source_image_id: sourceImage?.id || null,
       snapshot_url: versionOverrides.snapshot_url || "",
       snapshot_image_id: versionOverrides.snapshot_image_id || null,
       annotations: normalizedAnnotations,
+      rough_plan: isRoughPlan ? roughPlan : undefined,
       visible_layers: visibleLayers,
       annotation_count: normalizedAnnotations.length,
     };
@@ -600,8 +740,11 @@ export default function ProjectMarkupCanvas() {
     return {
       schema_version: 1,
       canvas: { width: CANVAS_W, height: CANVAS_H },
+      canvas_mode: canvasMode,
+      version_type: isRoughPlan ? "rough_plan" : "photo_markup",
+      rough_plan: isRoughPlan ? roughPlan : undefined,
       active_layer: activeLayer,
-      background_url,
+      background_url: isRoughPlan ? "" : background_url,
       annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
       updated_at: now,
@@ -668,11 +811,34 @@ export default function ProjectMarkupCanvas() {
     event.target.value = "";
   }
 
+  function canvasPointFromEvent(event) {
+    const point = pointFromEvent(event, svgRef.current);
+    return softSnapPoint(point, isRoughPlan && roughPlan.snap);
+  }
+
+  function switchCanvasMode(nextMode) {
+    if (nextMode === canvasMode) return;
+    if (annotations.length && !window.confirm("Switch modes and clear the current unsaved annotations? Save first if you need this version.")) {
+      return;
+    }
+    commitAnnotations([]);
+    setSelectedId("");
+    setEditingTextId("");
+    setCanvasMode(nextMode);
+    setTool("select");
+    if (nextMode === "rough_plan") setBackgroundUrl("");
+  }
+
   function startDrawing(event) {
     if (!svgRef.current) return;
     svgRef.current.setPointerCapture?.(event.pointerId);
-    const point = pointFromEvent(event, svgRef.current);
+    const point = canvasPointFromEvent(event);
     setMessage("");
+
+    if (tool === "delete") {
+      deleteSelected();
+      return;
+    }
 
     if (tool === "select") {
       setSelectedId("");
@@ -691,25 +857,28 @@ export default function ProjectMarkupCanvas() {
       y: point.y,
       x2: point.x,
       y2: point.y,
-      color,
-      strokeColor: color,
-      fillColor: color,
+      color: activeColor,
+      strokeColor: activeColor,
+      fillColor: activeColor,
+      colorLabel: selectedColorMeta.label,
+      strokeWidth: activeStrokeWidth,
       strokeStyle: "solid",
       points: tool === "freehand" ? [point] : undefined,
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
+      canvasMode,
     };
 
     commitAnnotations([...annotations, base]);
     setSelectedId(id);
     setEditingTextId(tool === "text" ? id : "");
-    if (tool === "text" || tool === "priority") return;
+    if (tool === "text" || tool === "priority" || ["door", "window", "tree", "steps", "fence"].includes(tool)) return;
     setDraft(id);
   }
 
   function moveDrawing(event) {
     if (!svgRef.current) return;
-    const point = pointFromEvent(event, svgRef.current);
+    const point = canvasPointFromEvent(event);
 
     if (draft) {
       setAnnotations((prev) =>
@@ -765,7 +934,7 @@ export default function ProjectMarkupCanvas() {
     event.stopPropagation();
     if (!svgRef.current) return;
     svgRef.current.setPointerCapture?.(event.pointerId);
-    const point = pointFromEvent(event, svgRef.current);
+    const point = canvasPointFromEvent(event);
     setTool("select");
     setSelectedId(item.id);
     if (item.id !== editingTextId) setEditingTextId("");
@@ -960,6 +1129,14 @@ export default function ProjectMarkupCanvas() {
     if (saved && planId) navigate(`/dashboard/planner/${planId}`);
   }
 
+  async function handleSave() {
+    if (isProjectImageMode) {
+      await saveEditableCanvas();
+      return;
+    }
+    await saveToPlanner();
+  }
+
   async function deletePlanner() {
     if (!planId) {
       setMessage("Open this canvas from a saved project planner before deleting.");
@@ -1005,14 +1182,17 @@ export default function ProjectMarkupCanvas() {
             : {};
         const markupVersion = {
           id: previousExtraData.markup_version?.id || `project-image-markup-${Date.now()}`,
-          name: previousExtraData.markup_version?.name || "Project image markup",
+          name: previousExtraData.markup_version?.name || modeLabel,
+          version_type: isRoughPlan ? "rough_plan" : "photo_markup",
+          type_label: modeLabel,
           created_at: previousExtraData.markup_version?.created_at || now,
           updated_at: now,
           source_image_id: projectImage.id,
-          background_url: isPersistableUrl(backgroundUrl) ? backgroundUrl : (projectImage.url || ""),
+          background_url: isRoughPlan ? "" : isPersistableUrl(backgroundUrl) ? backgroundUrl : (projectImage.url || ""),
           snapshot_url: versionSnapshotUrl || previousExtraData.markup_version?.snapshot_url || "",
           snapshot_image_id: versionSnapshotImageId || previousExtraData.markup_version?.snapshot_image_id || null,
           annotations: normalizedAnnotations,
+          rough_plan: isRoughPlan ? roughPlan : undefined,
           visible_layers: visibleLayers,
           annotation_count: normalizedAnnotations.length,
         };
@@ -1068,7 +1248,16 @@ export default function ProjectMarkupCanvas() {
   function restoreVersion(version) {
     if (!version) return;
     if (Array.isArray(version.annotations)) commitAnnotations(version.annotations);
-    if (version.background_url) setBackgroundUrl(version.background_url);
+    const nextMode = version.version_type === "rough_plan" ? "rough_plan" : "photo";
+    setCanvasMode(nextMode);
+    if (nextMode === "rough_plan") {
+      setBackgroundUrl("");
+      if (version.rough_plan && typeof version.rough_plan === "object") {
+        setRoughPlan((prev) => ({ ...prev, ...version.rough_plan }));
+      }
+    } else if (version.background_url) {
+      setBackgroundUrl(version.background_url);
+    }
     if (version.visible_layers && typeof version.visible_layers === "object") {
       setVisibleLayers((prev) => ({ ...prev, ...version.visible_layers }));
     }
@@ -1141,11 +1330,18 @@ export default function ProjectMarkupCanvas() {
     !!selected && (editingTextId === selected.id || focusedSidebarInputId === selected.id);
   const selectedTextBox = selected ? labelBox(selected.text || (selected.type === "measure" ? "measurement" : "Note"), 18) : null;
   const selectedStyle = selected ? styleFor(selected) : null;
+  const currentStrokeWidth = selected ? strokeWidthFor(selected) : activeStrokeWidth;
+
+  function changeStrokeWidth(nextWidth) {
+    const width = clamp(Number(nextWidth) || DEFAULT_STROKE_WIDTH, 1, 18);
+    setActiveStrokeWidth(width);
+    if (selected) updateSelected({ strokeWidth: width });
+  }
 
   return (
     <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50">
       <div className="border-b border-slate-200 bg-white/95">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-center gap-4">
             <Link
               to={isProjectImageMode ? `/projects/${projectId}` : planId ? `/dashboard/planner/${planId}` : "/dashboard"}
@@ -1157,7 +1353,7 @@ export default function ProjectMarkupCanvas() {
             <div>
               <h1 className="text-base font-semibold text-slate-950">Markup canvas</h1>
               <p className="text-xs text-slate-500">
-                {isProjectImageMode ? "Markup will stay on this project image" : "Mark the area that needs work"}
+                {isProjectImageMode ? "Markup will stay on this project image" : `${modeLabel}: mark the area that needs work`}
               </p>
             </div>
           </div>
@@ -1201,12 +1397,12 @@ export default function ProjectMarkupCanvas() {
             </button>
             <button
               type="button"
-              onClick={() => saveEditableCanvas()}
-              disabled={savingEditable}
+              onClick={handleSave}
+              disabled={savingEditable || saving}
               className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
               <SymbolIcon name="save" className="text-[18px]" />
-              {savingEditable ? "Saving..." : "Save"}
+              {savingEditable || saving ? "Saving..." : "Save"}
             </button>
             <button
               type="button"
@@ -1221,7 +1417,7 @@ export default function ProjectMarkupCanvas() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-6 py-4">
+      <div className={`${expanded ? "fixed inset-0 z-50 overflow-auto bg-slate-50 px-4 py-4" : "mx-auto max-w-7xl px-6 py-4"}`}>
         {loadingPlan ? (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
             Loading planner...
@@ -1234,8 +1430,83 @@ export default function ProjectMarkupCanvas() {
           </div>
         ) : null}
 
-        <div className="grid items-start gap-4 lg:grid-cols-[288px_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[286px_minmax(0,1fr)]">
           <div className="space-y-4">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-sm font-semibold text-slate-950">Markup mode</div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => switchCanvasMode("photo")}
+                  className={`h-10 rounded-xl border px-3 text-sm font-medium ${
+                    !isRoughPlan ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Photo Markup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchCanvasMode("rough_plan")}
+                  className={`h-10 rounded-xl border px-3 text-sm font-medium ${
+                    isRoughPlan ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Create Rough Plan
+                </button>
+              </div>
+              {isRoughPlan ? (
+                <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-slate-500">Width</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={roughPlan.width}
+                        onChange={(event) => setRoughPlan((prev) => ({ ...prev, width: event.target.value }))}
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-slate-500">Length</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={roughPlan.length}
+                        onChange={(event) => setRoughPlan((prev) => ({ ...prev, length: event.target.value }))}
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                      />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-slate-500">Unit</span>
+                    <select
+                      value={roughPlan.unit}
+                      onChange={(event) => setRoughPlan((prev) => ({ ...prev, unit: event.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                    >
+                      <option value="ft">ft</option>
+                      <option value="in">in</option>
+                      <option value="m">m</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                    <span>Soft snap</span>
+                    <input
+                      type="checkbox"
+                      checked={roughPlan.snap}
+                      onChange={(event) => setRoughPlan((prev) => ({ ...prev, snap: event.target.checked }))}
+                      className="h-4 w-4 align-middle accent-blue-600"
+                    />
+                  </label>
+                  <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                    This is a rough planning tool to help explain your project area. It is not intended for design, engineering, or construction drawings.
+                  </p>
+                </div>
+              ) : null}
+            </section>
+
+            {!isRoughPlan ? (
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="text-sm font-semibold text-slate-950">Background</div>
               <p className="mt-1 text-xs text-slate-500">Use a room photo, floor plan, or sketch.</p>
@@ -1258,6 +1529,7 @@ export default function ProjectMarkupCanvas() {
                 </button>
               ) : null}
             </section>
+            ) : null}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="text-sm font-semibold text-slate-950">Layers</div>
@@ -1305,6 +1577,63 @@ export default function ProjectMarkupCanvas() {
                   <SymbolIcon name="ink_eraser" className="text-[18px]" />
                   Clear annotations
                 </button>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-sm font-semibold text-slate-950">Markup color</div>
+              <div className="mt-3 grid gap-2">
+                {MARKUP_COLORS.map((itemColor) => (
+                  <button
+                    key={itemColor.key}
+                    type="button"
+                    onClick={() => setActiveColor(itemColor.color)}
+                    className={`flex h-10 items-center gap-3 rounded-xl border px-3 text-left text-xs font-medium ${
+                      activeColor === itemColor.color ? "border-slate-950 bg-slate-50 text-slate-950" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="h-4 w-4 rounded-full ring-1 ring-slate-200" style={{ backgroundColor: itemColor.color }} />
+                    <span>{itemColor.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
+                  <span>Line thickness</span>
+                  <span className="text-slate-700">{currentStrokeWidth}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="2"
+                  max="12"
+                  step="1"
+                  value={currentStrokeWidth}
+                  onChange={(event) => changeStrokeWidth(event.target.value)}
+                  className="w-full accent-blue-600"
+                  aria-label="Line thickness"
+                />
+                <div className="mt-2 flex items-center justify-between gap-1">
+                  {STROKE_WIDTH_OPTIONS.map((width) => (
+                    <button
+                      key={width}
+                      type="button"
+                      onClick={() => changeStrokeWidth(width)}
+                      className={`h-7 min-w-8 rounded-lg border px-2 text-xs font-medium ${
+                        currentStrokeWidth === width
+                          ? "border-slate-950 bg-slate-950 text-white"
+                          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      {width}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                  <div
+                    className="rounded-full bg-blue-600"
+                    style={{ height: `${currentStrokeWidth}px`, maxHeight: "12px" }}
+                  />
+                </div>
               </div>
             </section>
 
@@ -1371,21 +1700,23 @@ export default function ProjectMarkupCanvas() {
                   <div className="mb-4 flex flex-wrap gap-2">
                     {MARKUP_COLORS.map((itemColor) => (
                       <button
-                        key={`stroke-${itemColor}`}
+                        key={`stroke-${itemColor.key}`}
                         type="button"
                         onClick={() =>
                           updateSelected({
-                            color: itemColor,
-                            strokeColor: itemColor,
+                            color: itemColor.color,
+                            strokeColor: itemColor.color,
+                            colorLabel: itemColor.label,
                           })
                         }
-                        aria-label={`Set stroke color ${itemColor}`}
+                        aria-label={`Set stroke color ${itemColor.label}`}
+                        title={itemColor.label}
                         className={`h-7 w-7 rounded-full border transition ${
-                          selectedStyle?.strokeColor === itemColor
+                          selectedStyle?.strokeColor === itemColor.color
                             ? "border-slate-950 ring-2 ring-slate-900/25"
                             : "border-white ring-1 ring-slate-300 hover:scale-105"
                         }`}
-                        style={{ backgroundColor: itemColor }}
+                        style={{ backgroundColor: itemColor.color }}
                       />
                     ))}
                   </div>
@@ -1394,16 +1725,17 @@ export default function ProjectMarkupCanvas() {
                   <div className="mb-4 flex flex-wrap gap-2">
                     {MARKUP_COLORS.map((itemColor) => (
                       <button
-                        key={`fill-${itemColor}`}
+                        key={`fill-${itemColor.key}`}
                         type="button"
-                        onClick={() => updateSelected({ fillColor: itemColor })}
-                        aria-label={`Set fill color ${itemColor}`}
+                        onClick={() => updateSelected({ fillColor: itemColor.color })}
+                        aria-label={`Set fill color ${itemColor.label}`}
+                        title={itemColor.label}
                         className={`h-7 w-7 rounded-full border transition ${
-                          selectedStyle?.fillColor === itemColor
+                          selectedStyle?.fillColor === itemColor.color
                             ? "border-slate-950 ring-2 ring-slate-900/25"
                             : "border-white ring-1 ring-slate-300 hover:scale-105"
                         }`}
-                        style={{ backgroundColor: hexToRgba(itemColor, 0.3) }}
+                        style={{ backgroundColor: hexToRgba(itemColor.color, 0.3) }}
                       />
                     ))}
                   </div>
@@ -1436,14 +1768,15 @@ export default function ProjectMarkupCanvas() {
                   <div className="text-sm font-semibold text-slate-950">Versions</div>
                   <div className="text-sm font-semibold text-slate-950">{savedVersions.length}</div>
                 </div>
-                <div className="mt-3 max-h-96 space-y-3 overflow-y-auto pr-1">
+                <div className="mt-3 grid max-h-[28rem] grid-cols-1 gap-3 overflow-y-auto pr-1">
                   {savedVersions.map((version, index) => {
                     const previewUrl = version.snapshot_url || version.background_url || "";
                     const versionName = version.name || `Markup version ${savedVersions.length - index}`;
+                    const versionType = version.type_label || (version.version_type === "rough_plan" ? "Rough Plan" : "Photo Markup");
                     return (
                       <div
                         key={version.id || `version-${index}`}
-                        className="rounded-xl border border-slate-200 p-3 text-xs text-slate-600"
+                        className="group rounded-xl border border-slate-200 p-3 text-xs text-slate-600"
                       >
                         <button
                           type="button"
@@ -1464,6 +1797,9 @@ export default function ProjectMarkupCanvas() {
                               Save with image snapshot to create a preview.
                             </div>
                           )}
+                          <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm">
+                            {versionType}
+                          </span>
                           <span className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/85 text-white shadow-sm">
                             <SymbolIcon name="edit_note" className="text-[16px]" />
                           </span>
@@ -1474,8 +1810,9 @@ export default function ProjectMarkupCanvas() {
                           className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900 outline-none focus:border-slate-400"
                           aria-label="Version name"
                         />
-                        <div className="mt-1">
-                          {version.annotation_count ?? 0} markups
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <span>{version.annotation_count ?? 0} markups</span>
+                          <span>{versionType}</span>
                         </div>
                         <div className="mt-1 text-slate-400">
                           {version.created_at ? new Date(version.created_at).toLocaleString() : "Saved version"}
@@ -1483,7 +1820,7 @@ export default function ProjectMarkupCanvas() {
                         <button
                           type="button"
                           onClick={() => deleteVersion(version.id)}
-                          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white text-xs font-medium text-rose-700 hover:bg-rose-50"
+                          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-500 opacity-80 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100"
                         >
                           <SymbolIcon name="delete" className="text-[16px]" />
                           Delete version
@@ -1495,7 +1832,7 @@ export default function ProjectMarkupCanvas() {
               </section>
             ) : null}
 
-            {plan?.images?.length ? (
+            {!isRoughPlan && plan?.images?.length ? (
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="text-sm font-semibold text-slate-950">Planner images</div>
                 <div className="mt-2 max-h-44 space-y-2 overflow-y-auto pr-1">
@@ -1536,40 +1873,65 @@ export default function ProjectMarkupCanvas() {
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-sm text-slate-500">
               <span>Planner: <span className="text-slate-700">{plan?.title || "Untitled issue"}</span></span>
-              <div className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center rounded-xl bg-slate-950 p-1 shadow-xl">
-                <div className="flex items-center gap-1">
-                  {TOOLS.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setTool(item.key)}
-                      title={item.label}
-                      aria-label={item.label}
-                      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
-                        tool === item.key
-                          ? "bg-blue-600 shadow-sm"
-                          : "bg-transparent text-white/80 hover:bg-white/10 hover:text-white"
-                      }`}
-                    >
-                      <SymbolIcon name={item.icon} className="text-[21px]" />
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{modeLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => setExpanded((prev) => !prev)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  aria-label={expanded ? "Exit expanded canvas" : "Expand canvas"}
+                >
+                  <SymbolIcon name={expanded ? "close_fullscreen" : "open_in_full"} className="text-[18px]" />
+                </button>
               </div>
-              <span className="text-xs text-slate-400">{annotations.length} annotations</span>
             </div>
+            {isRoughPlan ? (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <span className="font-semibold text-slate-800">{roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}</span>
+                <span>Area: {(Number(roughPlan.width) || 0) * (Number(roughPlan.length) || 0)} sq {roughPlan.unit}</span>
+                <span>Grid scale: 1 square</span>
+                <span>Soft snap: {roughPlan.snap ? "on" : "off"}</span>
+                <span>Zoom: {roughPlan.zoom}%</span>
+              </div>
+            ) : null}
             <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+              <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-row flex-wrap gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl lg:bottom-auto lg:left-3 lg:top-1/2 lg:max-w-none lg:-translate-y-1/2 lg:flex-col">
+                {availableTools.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      if (item.key === "delete") {
+                        deleteSelected();
+                        return;
+                      }
+                      setTool(item.key);
+                    }}
+                    title={item.label}
+                    aria-label={item.label}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
+                      tool === item.key
+                        ? "bg-blue-600 shadow-sm"
+                        : item.key === "delete"
+                          ? "bg-transparent text-white/70 hover:bg-red-600 hover:text-white"
+                          : "bg-transparent text-white/80 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <SymbolIcon name={item.icon} className="text-[21px]" />
+                  </button>
+                ))}
+              </div>
               <svg
                 ref={svgRef}
                 viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
-                className="block h-auto min-h-[420px] w-full touch-none select-none bg-white"
+                className={`block h-auto w-full touch-none select-none bg-white ${expanded ? "min-h-[calc(100vh-190px)]" : "min-h-[560px]"}`}
                 onPointerDown={startDrawing}
                 onPointerMove={moveDrawing}
                 onPointerUp={stopPointer}
                 onPointerLeave={stopPointer}
               >
               <defs>
-                {MARKUP_COLORS.map((itemColor) => (
+                {markerColors.map((itemColor) => (
                   <marker
                     key={itemColor}
                     id={markerIdForColor(itemColor)}
@@ -1583,9 +1945,27 @@ export default function ProjectMarkupCanvas() {
                     <path d="M2,2 L10,6 L2,10 Z" fill={itemColor} />
                   </marker>
                 ))}
+                <filter id="label-shadow" x="-20%" y="-30%" width="140%" height="160%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.13" />
+                </filter>
+                <pattern id="rough-grid-small" width={ROUGH_GRID_SIZE} height={ROUGH_GRID_SIZE} patternUnits="userSpaceOnUse">
+                  <path d={`M ${ROUGH_GRID_SIZE} 0 L 0 0 0 ${ROUGH_GRID_SIZE}`} fill="none" stroke="#cbd5e1" strokeWidth="1" />
+                </pattern>
+                <pattern id="rough-grid-large" width={ROUGH_GRID_SIZE * 4} height={ROUGH_GRID_SIZE * 4} patternUnits="userSpaceOnUse">
+                  <rect width={ROUGH_GRID_SIZE * 4} height={ROUGH_GRID_SIZE * 4} fill="url(#rough-grid-small)" />
+                  <path d={`M ${ROUGH_GRID_SIZE * 4} 0 L 0 0 0 ${ROUGH_GRID_SIZE * 4}`} fill="none" stroke="#94a3b8" strokeWidth="1.5" />
+                </pattern>
 	              </defs>
 	              <rect width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
-	              {backgroundUrl ? (
+	              {isRoughPlan ? (
+                  <g>
+                    <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#ffffff" />
+                    <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="url(#rough-grid-large)" opacity="0.72" />
+                    <text x="36" y="54" fill="#64748b" fontSize="20" fontWeight="700">
+                      Rough plan: {roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}
+                    </text>
+                  </g>
+	              ) : backgroundUrl ? (
 	                <image href={backgroundUrl} x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="xMidYMid meet" />
 	              ) : (
 	                <g>
@@ -1624,10 +2004,10 @@ export default function ProjectMarkupCanvas() {
                       y={y1 - 8}
                       width={Math.max(16, x2 - x1 + 16)}
                       height={Math.max(16, y2 - y1 + 16)}
-                      fill="none"
-                      stroke="#38bdf8"
-                      strokeDasharray="10 8"
-                      strokeWidth="2"
+                      fill="rgba(37,99,235,0.06)"
+                      stroke="#2563eb"
+                      strokeDasharray="12 8"
+                      strokeWidth="3"
                     />
                   </g>
                 );
@@ -1657,7 +2037,7 @@ export default function ProjectMarkupCanvas() {
                   value={selected.text || ""}
                   onChange={(event) => updateSelected({ text: event.target.value })}
                   rows={selected.type === "text" ? 3 : 1}
-                  className="absolute z-30 min-h-9 w-48 resize rounded-lg border border-white/20 bg-slate-950/80 px-2 py-1 text-left text-sm font-extralight leading-snug text-white shadow-xl outline-none placeholder:text-white/60"
+                  className="absolute z-30 min-h-9 w-48 resize rounded-lg border border-blue-300 bg-white/95 px-3 py-2 text-left text-sm font-semibold leading-snug text-slate-950 shadow-xl outline-none ring-4 ring-blue-500/15 placeholder:text-slate-400"
                   placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
                   style={{
                     left: `${(selectedLabelPosition.x / CANVAS_W) * 100}%`,
