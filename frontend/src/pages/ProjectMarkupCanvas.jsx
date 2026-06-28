@@ -396,12 +396,17 @@ function penPathD(item) {
   const points = Array.isArray(item?.points) ? item.points : [];
   if (!points.length) return "";
   const curves = item?.curvePoints && typeof item.curvePoints === "object" ? item.curvePoints : {};
-  return points.slice(1).reduce((path, point, index) => {
+  const openPath = points.slice(1).reduce((path, point, index) => {
     const control = curves[index];
     return control && typeof control === "object"
       ? `${path} Q ${control.x} ${control.y} ${point.x} ${point.y}`
       : `${path} L ${point.x} ${point.y}`;
   }, `M ${points[0].x} ${points[0].y}`);
+  if (!item?.closed || points.length < 3) return openPath;
+  const closingControl = curves[points.length - 1];
+  return closingControl && typeof closingControl === "object"
+    ? `${openPath} Q ${closingControl.x} ${closingControl.y} ${points[0].x} ${points[0].y} Z`
+    : `${openPath} Z`;
 }
 
 function penSegmentAnchor(item, segmentIndex) {
@@ -413,6 +418,28 @@ function penSegmentAnchor(item, segmentIndex) {
     x: (start.x + end.x) / 2,
     y: (start.y + end.y) / 2,
   };
+}
+
+function remapCurvePointsForReverse(curvePoints, pointCount) {
+  if (!curvePoints || typeof curvePoints !== "object") return {};
+  return Object.entries(curvePoints).reduce((next, [key, point]) => {
+    const index = Number(key);
+    if (!Number.isInteger(index) || !point || typeof point !== "object") return next;
+    const reversedIndex = pointCount - 2 - index;
+    if (reversedIndex >= 0) next[reversedIndex] = point;
+    return next;
+  }, {});
+}
+
+function remapCurvePointsForInsert(curvePoints, segmentIndex) {
+  if (!curvePoints || typeof curvePoints !== "object") return {};
+  return Object.entries(curvePoints).reduce((next, [key, point]) => {
+    const index = Number(key);
+    if (!Number.isInteger(index) || !point || typeof point !== "object") return next;
+    if (index < segmentIndex) next[index] = point;
+    if (index > segmentIndex) next[index + 1] = point;
+    return next;
+  }, {});
 }
 
 function rectCornerRadii(item, bounds) {
@@ -666,7 +693,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         ) : null}
         <path
           d={d}
-          fill="none"
+          fill={item.type === "pen" && item.closed ? style.fill : "none"}
           stroke={stroke}
           strokeOpacity={style.strokeOpacity}
           strokeWidth={strokeWidth}
@@ -1146,6 +1173,7 @@ export default function ProjectMarkupCanvas() {
 
   useEffect(() => {
     if (selected?.type === "text" || selected?.type === "measure") {
+      setOpenSidebarSection("annotations");
       const frame = requestAnimationFrame(() => {
         sidebarTextRef.current?.focus();
         const length = sidebarTextRef.current?.value?.length ?? 0;
@@ -1359,7 +1387,7 @@ export default function ProjectMarkupCanvas() {
     if (nextMode === "rough_plan") setBackgroundUrl("");
   }
 
-  function finishPenPath({ exitTool = false } = {}) {
+  function finishPenPath({ exitTool = false, closed = false } = {}) {
     if (!penDraftId) return;
     setAnnotations((prev) =>
       prev.map((item) => {
@@ -1374,13 +1402,14 @@ export default function ProjectMarkupCanvas() {
           last.y === beforeLast.y;
         const points = hasPreviewPoint ? item.points.slice(0, -1) : item.points;
         const finalPoint = points[points.length - 1] || item;
+        const canClose = closed && points.length >= 3;
         return {
           ...item,
           points,
-          closed: false,
-          fillOpacity: 0,
-          x2: finalPoint.x ?? item.x2,
-          y2: finalPoint.y ?? item.y2,
+          closed: canClose,
+          fillOpacity: canClose ? activeFillOpacity : 0,
+          x2: canClose ? points[0]?.x ?? item.x2 : finalPoint.x ?? item.x2,
+          y2: canClose ? points[0]?.y ?? item.y2 : finalPoint.y ?? item.y2,
         };
       }),
     );
@@ -1397,9 +1426,15 @@ export default function ProjectMarkupCanvas() {
       ? currentPen.points.slice(0, -1)
       : [];
     const lastFixedPoint = fixedPoints[fixedPoints.length - 1];
+    const firstFixedPoint = fixedPoints[0];
+    if (firstFixedPoint && fixedPoints.length >= 3 && distanceBetween(point, firstFixedPoint) <= 18) {
+      event.preventDefault();
+      finishPenPath({ exitTool: true, closed: true });
+      return;
+    }
     if (lastFixedPoint && fixedPoints.length >= 3 && distanceBetween(point, lastFixedPoint) <= 18) {
       event.preventDefault();
-      finishPenPath({ exitTool: true });
+      finishPenPath({ exitTool: true, closed: true });
     }
   }
 
@@ -1417,6 +1452,11 @@ export default function ProjectMarkupCanvas() {
     finishPenPath();
 
     if (hit.type === "segment") {
+      if (event.detail < 2) {
+        setSelectedId(item.id);
+        setEditingTextId("");
+        return;
+      }
       setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
       setAnnotations((prev) =>
         prev.map((current) =>
@@ -1428,6 +1468,7 @@ export default function ProjectMarkupCanvas() {
                   point,
                   ...current.points.slice(hit.index + 1),
                 ],
+                curvePoints: remapCurvePointsForInsert(current.curvePoints, hit.index),
                 closed: false,
                 fillOpacity: 0,
               }
@@ -1446,6 +1487,7 @@ export default function ProjectMarkupCanvas() {
     if (isEndpoint) {
       const orientedPoints = hit.index === 0 ? [...points].reverse() : [...points];
       const draftPoints = [...orientedPoints, clickedPoint];
+      const nextCurvePoints = hit.index === 0 ? remapCurvePointsForReverse(item.curvePoints, points.length) : item.curvePoints || {};
       setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
       setAnnotations((prev) =>
         prev.map((current) =>
@@ -1453,6 +1495,7 @@ export default function ProjectMarkupCanvas() {
             ? {
                 ...current,
                 points: draftPoints,
+                curvePoints: nextCurvePoints,
                 closed: false,
                 fillOpacity: 0,
                 x: draftPoints[0].x,
@@ -1479,6 +1522,7 @@ export default function ProjectMarkupCanvas() {
       x2: clickedPoint.x,
       y2: clickedPoint.y,
       points: [clickedPoint, clickedPoint],
+      curvePoints: {},
       closed: false,
       fillOpacity: 0,
     };
@@ -1496,14 +1540,19 @@ export default function ProjectMarkupCanvas() {
     if (!clickedPoint) return;
     finishPenPath();
     const isEndpoint = nodeIndex === 0 || nodeIndex === item.points.length - 1;
+    if (!isEndpoint && event.detail < 2) {
+      setSelectedId(item.id);
+      return;
+    }
     if (isEndpoint) {
       const orientedPoints = nodeIndex === 0 ? [...item.points].reverse() : [...item.points];
       const draftPoints = [...orientedPoints, clickedPoint];
+      const nextCurvePoints = nodeIndex === 0 ? remapCurvePointsForReverse(item.curvePoints, item.points.length) : item.curvePoints || {};
       setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
       setAnnotations((prev) =>
         prev.map((current) =>
           current.id === item.id
-            ? { ...current, points: draftPoints, closed: false, fillOpacity: 0, x: draftPoints[0].x, y: draftPoints[0].y, x2: clickedPoint.x, y2: clickedPoint.y }
+            ? { ...current, points: draftPoints, curvePoints: nextCurvePoints, closed: false, fillOpacity: 0, x: draftPoints[0].x, y: draftPoints[0].y, x2: clickedPoint.x, y2: clickedPoint.y }
             : current,
         ),
       );
@@ -1516,7 +1565,7 @@ export default function ProjectMarkupCanvas() {
     const id = `mark-${Date.now()}`;
     commitAnnotations([
       ...annotations,
-      { ...item, id, x: clickedPoint.x, y: clickedPoint.y, x2: clickedPoint.x, y2: clickedPoint.y, points: [clickedPoint, clickedPoint], closed: false, fillOpacity: 0 },
+      { ...item, id, x: clickedPoint.x, y: clickedPoint.y, x2: clickedPoint.x, y2: clickedPoint.y, points: [clickedPoint, clickedPoint], curvePoints: {}, closed: false, fillOpacity: 0 },
     ]);
     setSelectedId("");
     setPenDraftId(id);
@@ -1567,9 +1616,15 @@ export default function ProjectMarkupCanvas() {
           ? currentPen.points.slice(0, -1)
           : [];
         const lastFixedPoint = fixedPoints[fixedPoints.length - 1];
-        if (event.detail >= 2 && lastFixedPoint && distanceBetween(point, lastFixedPoint) <= 18) {
+        const firstFixedPoint = fixedPoints[0];
+        if (
+          event.detail >= 2 &&
+          fixedPoints.length >= 3 &&
+          ((firstFixedPoint && distanceBetween(point, firstFixedPoint) <= 18) ||
+            (lastFixedPoint && distanceBetween(point, lastFixedPoint) <= 18))
+        ) {
           event.preventDefault();
-          finishPenPath({ exitTool: true });
+          finishPenPath({ exitTool: true, closed: true });
           return;
         }
         setAnnotations((prev) =>
@@ -1701,6 +1756,17 @@ export default function ProjectMarkupCanvas() {
                       y: pointItem.y + dy,
                     }))
                   : item.points,
+                curvePoints: drag.item.curvePoints && typeof drag.item.curvePoints === "object"
+                  ? Object.fromEntries(
+                      Object.entries(drag.item.curvePoints).map(([key, pointItem]) => [
+                        key,
+                        {
+                          x: pointItem.x + dx,
+                          y: pointItem.y + dy,
+                        },
+                      ]),
+                    )
+                  : item.curvePoints,
               }
             : item,
         ),
