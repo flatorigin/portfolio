@@ -18,6 +18,8 @@ const BASE_TOOLS = {
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
   freehand: { key: "freehand", label: "Pencil", icon: "draw" },
   pen: { key: "pen", label: "Pen", icon: "polyline" },
+  penAdd: { key: "pen_add", label: "Add node", icon: "add" },
+  penRemove: { key: "pen_remove", label: "Remove node", icon: "remove" },
   rect: { key: "rect", label: "Rectangle", icon: "crop_square" },
   circle: { key: "circle", label: "Circle", icon: "radio_button_unchecked" },
   measure: { key: "measure", label: "Measure", icon: "straighten" },
@@ -32,17 +34,22 @@ const SYMBOL_TOOLS = [
   { key: "fence", label: "Fence", icon: "fence" },
 ];
 
-const LAYERS = [
-  { key: "homeowner", label: "Homeowner", color: "#0f172a" },
-  { key: "contractor", label: "Contractor", color: "#2563eb" },
-];
-
 const MARKUP_COLORS = [
   { key: "blue", label: "General notes", color: "#2563eb" },
   { key: "red", label: "Problems/repairs", color: "#dc2626" },
   { key: "green", label: "New additions", color: "#16a34a" },
   { key: "yellow", label: "Warnings/access", color: "#ca8a04" },
 ];
+
+const FILL_MATERIALS = [
+  { key: "flat", label: "Flat" },
+  { key: "deck", label: "Deck slats" },
+  { key: "gravel", label: "Gravel" },
+  { key: "concrete", label: "Concrete" },
+  { key: "soil", label: "Soil" },
+];
+
+const TEXTURE_LIBRARY_STORAGE_KEY = "flatorigin_fill_texture_library";
 
 const DEFAULT_MARKUP_COLOR = "#2563eb";
 const DEFAULT_STROKE_WIDTH = 4;
@@ -98,18 +105,26 @@ function safeHexColor(value, fallback = DEFAULT_MARKUP_COLOR) {
   return isHexColor(value) ? value : fallback;
 }
 
+function isFillMaterialKey(value) {
+  const key = String(value || "");
+  return FILL_MATERIALS.some((material) => material.key === key) || key.startsWith("custom-");
+}
+
 function styleFor(item) {
   const strokeColor = item.strokeColor || item.color || DEFAULT_MARKUP_COLOR;
   const fillColor = item.fillColor || item.color || strokeColor;
+  const fillMaterial = isFillMaterialKey(item.fillMaterial) ? item.fillMaterial : "flat";
   const strokeStyle = item.strokeStyle === "dashed" ? "dashed" : "solid";
   const strokeOpacity = clamp(Number(item.strokeOpacity ?? DEFAULT_STROKE_OPACITY), 0, 1);
   const fillOpacity = clamp(Number(item.fillOpacity ?? DEFAULT_FILL_OPACITY), 0, 1);
   return {
     strokeColor,
     fillColor,
+    fillMaterial,
     strokeOpacity,
     fillOpacity,
-    fill: hexToRgba(fillColor, fillOpacity),
+    fill: fillMaterial === "flat" ? hexToRgba(fillColor, fillOpacity) : `url(#fill-material-${fillMaterial})`,
+    svgFillOpacity: fillMaterial === "flat" ? 1 : fillOpacity,
     strokeDasharray: strokeStyle === "dashed" ? "12 8" : undefined,
   };
 }
@@ -125,6 +140,71 @@ function markerIdForColor(color) {
 
 function dotMarkerIdForColor(color) {
   return `dot-${String(color || DEFAULT_MARKUP_COLOR).replace(/[^a-z0-9]/gi, "")}`;
+}
+
+function svgToDataUrl(svg) {
+  try {
+    return `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(svg)))}`;
+  } catch {
+    return "";
+  }
+}
+
+function fillMaterialPreviewStyle(material, fillColor, fillOpacity) {
+  if (!material || material.key === "flat") return { backgroundColor: hexToRgba(fillColor, fillOpacity) };
+  if (material.key.startsWith("custom-")) {
+    const previewUrl = svgToDataUrl(material.svg);
+    return {
+      backgroundColor: "#fff",
+      backgroundImage: previewUrl ? `url("${previewUrl}")` : undefined,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      filter: "grayscale(1) contrast(1.15)",
+    };
+  }
+  if (material.key === "deck") {
+    return {
+      background:
+        "repeating-linear-gradient(90deg, #fff 0 13px, #111827 13px 15px, #f1f5f9 15px 28px, #475569 28px 29px)",
+    };
+  }
+  if (material.key === "gravel") {
+    return {
+      backgroundColor: "#fff",
+      backgroundImage:
+        "radial-gradient(circle at 25% 30%, #111827 0 2px, transparent 2px), radial-gradient(circle at 66% 24%, #64748b 0 2px, transparent 2px), radial-gradient(circle at 76% 70%, #0f172a 0 3px, transparent 3px), radial-gradient(circle at 34% 78%, #94a3b8 0 2px, transparent 2px)",
+    };
+  }
+  if (material.key === "concrete") {
+    return {
+      backgroundColor: "#f8fafc",
+      backgroundImage:
+        "radial-gradient(circle at 28% 36%, #64748b 0 1px, transparent 1px), radial-gradient(circle at 70% 26%, #cbd5e1 0 1px, transparent 1px), linear-gradient(135deg, transparent 0 58%, #94a3b8 58% 60%, transparent 60%)",
+    };
+  }
+  return {
+    backgroundColor: "#fff",
+    backgroundImage:
+      "radial-gradient(circle at 24% 28%, #111827 0 3px, transparent 3px), radial-gradient(circle at 68% 26%, #64748b 0 2px, transparent 2px), radial-gradient(circle at 76% 70%, #0f172a 0 3px, transparent 3px), radial-gradient(circle at 34% 78%, #94a3b8 0 2px, transparent 2px)",
+  };
+}
+
+function annotationLayerLabel(item, index) {
+  const fallback = `Layer ${index + 1}`;
+  if (!item) return fallback;
+  if (item.type === "text") return normalizeMarkupText(item.text) || "Text note";
+  if (item.type === "measure") return normalizeMarkupText(item.text) || "Measurement";
+  if (item.type === "pen") return item.closed ? "Pen shape" : "Pen path";
+  if (item.type === "freehand") return "Pencil drawing";
+  if (item.type === "rect") return "Rectangle";
+  if (item.type === "circle") return "Circle";
+  if (item.type === "arrow") return "Arrow";
+  if (item.type === "line") return "Line";
+  if (item.type === "priority") return `Priority ${item.priorityNumber || index + 1}`;
+  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+    return item.type.charAt(0).toUpperCase() + item.type.slice(1);
+  }
+  return fallback;
 }
 
 function blobToDataUrl(blob) {
@@ -189,6 +269,13 @@ function nearestPenHit(item, point, tolerance = 18) {
       bestSegment = { type: "segment", index, distance };
     }
   }
+  if (item?.closed && points.length > 2) {
+    const closingIndex = points.length - 1;
+    const distance = distanceToSegment(point, points[closingIndex], points[0]);
+    if (!bestSegment || distance < bestSegment.distance) {
+      bestSegment = { type: "segment", index: closingIndex, distance };
+    }
+  }
   return bestSegment?.distance <= tolerance ? bestSegment : null;
 }
 
@@ -218,7 +305,13 @@ function annotationBounds(item) {
   if ((item.type === "freehand" || item.type === "pen") && Array.isArray(item.points) && item.points.length) {
     const curvePoints =
       item.type === "pen" && item.curvePoints && typeof item.curvePoints === "object"
-        ? Object.values(item.curvePoints).filter((point) => point && typeof point === "object")
+        ? Object.values(item.curvePoints).flatMap((point) =>
+            point?.type === "cubic"
+              ? [point.c1, point.c2].filter(Boolean)
+              : point && typeof point === "object"
+                ? [point]
+                : [],
+          )
         : [];
     const points = [...item.points, ...curvePoints];
     const xs = points.map((point) => point.x);
@@ -367,6 +460,15 @@ function offsetSegmentCurvePoint(start, end, point) {
   };
 }
 
+function constrainOrthogonalPoint(anchor, point) {
+  if (!anchor || !point) return point;
+  const dx = point.x - anchor.x;
+  const dy = point.y - anchor.y;
+  return Math.abs(dx) >= Math.abs(dy)
+    ? { x: point.x, y: anchor.y }
+    : { x: anchor.x, y: point.y };
+}
+
 function quadraticPoint(item, t = 0.5) {
   const start = { x: item?.x || 0, y: item?.y || 0 };
   const end = { x: item?.x2 || item?.x || 0, y: item?.y2 || item?.y || 0 };
@@ -398,12 +500,18 @@ function penPathD(item) {
   const curves = item?.curvePoints && typeof item.curvePoints === "object" ? item.curvePoints : {};
   const openPath = points.slice(1).reduce((path, point, index) => {
     const control = curves[index];
+    if (control?.type === "cubic" && control.c1 && control.c2) {
+      return `${path} C ${control.c1.x} ${control.c1.y} ${control.c2.x} ${control.c2.y} ${point.x} ${point.y}`;
+    }
     return control && typeof control === "object"
       ? `${path} Q ${control.x} ${control.y} ${point.x} ${point.y}`
       : `${path} L ${point.x} ${point.y}`;
   }, `M ${points[0].x} ${points[0].y}`);
   if (!item?.closed || points.length < 3) return openPath;
   const closingControl = curves[points.length - 1];
+  if (closingControl?.type === "cubic" && closingControl.c1 && closingControl.c2) {
+    return `${openPath} C ${closingControl.c1.x} ${closingControl.c1.y} ${closingControl.c2.x} ${closingControl.c2.y} ${points[0].x} ${points[0].y} Z`;
+  }
   return closingControl && typeof closingControl === "object"
     ? `${openPath} Q ${closingControl.x} ${closingControl.y} ${points[0].x} ${points[0].y} Z`
     : `${openPath} Z`;
@@ -417,6 +525,40 @@ function penSegmentAnchor(item, segmentIndex) {
   return {
     x: (start.x + end.x) / 2,
     y: (start.y + end.y) / 2,
+  };
+}
+
+function semicirclePenCurveControls(item, segmentIndex, point) {
+  const points = Array.isArray(item?.points) ? item.points : [];
+  const start = points[segmentIndex];
+  const end = points[segmentIndex + 1];
+  if (!start || !end) return point;
+  const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+  const chordX = end.x - start.x;
+  const chordY = end.y - start.y;
+  const chordLength = Math.hypot(chordX, chordY);
+  if (!chordLength) return point;
+  const normal = { x: -chordY / chordLength, y: chordX / chordLength };
+  const projection = (point.x - mid.x) * normal.x + (point.y - mid.y) * normal.y;
+  const sign = projection < 0 ? -1 : 1;
+  const rawDepth = Math.abs(projection);
+  const halfChord = chordLength / 2;
+  const depth =
+    rawDepth <= halfChord
+      ? rawDepth * 2
+      : chordLength + (rawDepth - halfChord);
+  const cappedDepth = clamp(depth, 0, chordLength * 2.75);
+  const handleLength = cappedDepth * (2 / 3);
+  return {
+    type: "cubic",
+    c1: {
+      x: clamp(Math.round(start.x + normal.x * sign * handleLength), 0, CANVAS_W),
+      y: clamp(Math.round(start.y + normal.y * sign * handleLength), 0, CANVAS_H),
+    },
+    c2: {
+      x: clamp(Math.round(end.x + normal.x * sign * handleLength), 0, CANVAS_W),
+      y: clamp(Math.round(end.y + normal.y * sign * handleLength), 0, CANVAS_H),
+    },
   };
 }
 
@@ -438,6 +580,18 @@ function remapCurvePointsForInsert(curvePoints, segmentIndex) {
     if (!Number.isInteger(index) || !point || typeof point !== "object") return next;
     if (index < segmentIndex) next[index] = point;
     if (index > segmentIndex) next[index + 1] = point;
+    return next;
+  }, {});
+}
+
+function remapCurvePointsForRemove(curvePoints, pointIndex) {
+  if (!curvePoints || typeof curvePoints !== "object") return {};
+  return Object.entries(curvePoints).reduce((next, [key, point]) => {
+    const index = Number(key);
+    if (!Number.isInteger(index) || !point || typeof point !== "object") return next;
+    if (index === pointIndex - 1 || index === pointIndex) return next;
+    if (index > pointIndex) next[index - 1] = point;
+    else next[index] = point;
     return next;
   }, {});
 }
@@ -526,14 +680,37 @@ function controlHandlesFor(item, mode = "select") {
           point &&
           typeof point === "object",
         )
-        .map(({ segmentIndex, point }) => ({
-          key: `pen-curve-${segmentIndex}`,
-          label: `Curve segment ${segmentIndex + 1}`,
-          x: point.x,
-          y: point.y,
-          kind: "penCurve",
-          index: segmentIndex,
-        }));
+        .flatMap(({ segmentIndex, point }) =>
+          point.type === "cubic" && point.c1 && point.c2
+            ? [
+                {
+                  key: `pen-cubic-start-${segmentIndex}`,
+                  label: `Start curve handle ${segmentIndex + 1}`,
+                  x: point.c1.x,
+                  y: point.c1.y,
+                  kind: "penCubic",
+                  target: "c1",
+                  index: segmentIndex,
+                },
+                {
+                  key: `pen-cubic-end-${segmentIndex}`,
+                  label: `End curve handle ${segmentIndex + 1}`,
+                  x: point.c2.x,
+                  y: point.c2.y,
+                  kind: "penCubic",
+                  target: "c2",
+                  index: segmentIndex,
+                },
+              ]
+            : [{
+                key: `pen-curve-${segmentIndex}`,
+                label: `Curve segment ${segmentIndex + 1}`,
+                x: point.x,
+                y: point.y,
+                kind: "penCurve",
+                index: segmentIndex,
+              }],
+        );
     }
     return item.points.map((point, index) => ({
       key: `point-${index}`,
@@ -585,11 +762,35 @@ function applyHandleDrag(drag, item, point) {
     return { ...item, curvePoint: point };
   }
   if (handle.kind === "penCurve") {
+    const curvePoint = drag.deepCurve ? semicirclePenCurveControls(item, handle.index, point) : point;
     return {
       ...item,
       curvePoints: {
         ...(item.curvePoints || {}),
-        [handle.index]: point,
+        [handle.index]: curvePoint,
+      },
+    };
+  }
+  if (handle.kind === "penCubic") {
+    if (drag.deepCurve) {
+      return {
+        ...item,
+        curvePoints: {
+          ...(item.curvePoints || {}),
+          [handle.index]: semicirclePenCurveControls(item, handle.index, point),
+        },
+      };
+    }
+    const current = item.curvePoints?.[handle.index];
+    if (!current || current.type !== "cubic") return item;
+    return {
+      ...item,
+      curvePoints: {
+        ...(item.curvePoints || {}),
+        [handle.index]: {
+          ...current,
+          [handle.target]: point,
+        },
       },
     };
   }
@@ -641,6 +842,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         <path
           d={roundedRectPath({ x1, y1, x2, y2 }, radii)}
           fill={style.fill}
+          fillOpacity={style.svgFillOpacity}
           stroke={stroke}
           strokeOpacity={style.strokeOpacity}
           strokeWidth={strokeWidth}
@@ -662,6 +864,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         rx={Math.max(10, Math.abs(x2 - x1) / 2)}
         ry={Math.max(10, Math.abs(y2 - y1) / 2)}
         fill={style.fill}
+        fillOpacity={style.svgFillOpacity}
         stroke={stroke}
         strokeOpacity={style.strokeOpacity}
         strokeWidth={strokeWidth}
@@ -694,6 +897,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         <path
           d={d}
           fill={item.type === "pen" && item.closed ? style.fill : "none"}
+          fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined}
           stroke={stroke}
           strokeOpacity={style.strokeOpacity}
           strokeWidth={strokeWidth}
@@ -715,8 +919,9 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           cx={item.x}
           cy={item.y}
           r={radius}
-          fill={style.fill}
-          stroke={stroke}
+              fill={style.fill}
+              fillOpacity={style.svgFillOpacity}
+              stroke={stroke}
           strokeOpacity={style.strokeOpacity}
           strokeWidth={strokeWidth}
           strokeDasharray={style.strokeDasharray}
@@ -972,6 +1177,39 @@ function CollapsibleSection({
 }
 
 function ToolIcon({ item, className = "" }) {
+  if (["pen", "pen_add", "pen_remove"].includes(item?.key)) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className={className || "h-5 w-5"}
+        fill="none"
+      >
+        <path
+          d="M12 3.2 5.6 9.6l1.7 9.2L12 21l4.7-2.2 1.7-9.2L12 3.2Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M12 3.2v9.1"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <circle cx="12" cy="13.2" r="1.7" fill="currentColor" />
+        {item.key === "pen_add" ? (
+          <g stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M18.2 2.6V8" />
+            <path d="M15.5 5.3h5.4" />
+          </g>
+        ) : null}
+        {item.key === "pen_remove" ? (
+          <path d="M15.5 5.3h5.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        ) : null}
+      </svg>
+    );
+  }
   if (item?.key === "curve") {
     return (
       <svg
@@ -999,6 +1237,7 @@ export default function ProjectMarkupCanvas() {
   const navigate = useNavigate();
   const svgRef = useRef(null);
   const fileRef = useRef(null);
+  const textureFileRef = useRef(null);
   const sidebarTextRef = useRef(null);
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
@@ -1009,13 +1248,22 @@ export default function ProjectMarkupCanvas() {
   const [canvasMode, setCanvasMode] = useState("photo");
   const [activeColor, setActiveColor] = useState(DEFAULT_MARKUP_COLOR);
   const [activeFillColor, setActiveFillColor] = useState(DEFAULT_MARKUP_COLOR);
+  const [activeFillMaterial, setActiveFillMaterial] = useState("flat");
+  const [fillTextureLibrary, setFillTextureLibrary] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TEXTURE_LIBRARY_STORAGE_KEY) || "[]");
+      return Array.isArray(saved) ? saved.filter((item) => item?.key?.startsWith("custom-") && item.svg) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeStrokeWidth, setActiveStrokeWidth] = useState(DEFAULT_STROKE_WIDTH);
   const [activeStrokeOpacity, setActiveStrokeOpacity] = useState(DEFAULT_STROKE_OPACITY);
   const [activeFillOpacity, setActiveFillOpacity] = useState(DEFAULT_FILL_OPACITY);
   const [roughPlan, setRoughPlan] = useState(ROUGH_PLAN_DEFAULTS);
   const [expanded, setExpanded] = useState(false);
-  const [activeLayer, setActiveLayer] = useState("homeowner");
-  const [visibleLayers, setVisibleLayers] = useState({ homeowner: true, contractor: true });
+  const [visibleLayers, setVisibleLayers] = useState({});
+  const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState(null);
   const [penDraftId, setPenDraftId] = useState("");
@@ -1048,8 +1296,10 @@ export default function ProjectMarkupCanvas() {
       if (saved.activeStrokeWidth) setActiveStrokeWidth(clamp(Number(saved.activeStrokeWidth) || DEFAULT_STROKE_WIDTH, 1, 18));
       if (saved.activeColor) setActiveColor(saved.activeColor);
       if (saved.activeFillColor) setActiveFillColor(saved.activeFillColor);
+      if (isFillMaterialKey(saved.activeFillMaterial)) setActiveFillMaterial(saved.activeFillMaterial);
       if (saved.activeStrokeOpacity != null) setActiveStrokeOpacity(clamp(Number(saved.activeStrokeOpacity), 0, 1));
       if (saved.activeFillOpacity != null) setActiveFillOpacity(clamp(Number(saved.activeFillOpacity), 0, 1));
+      if (saved.visibleLayers && typeof saved.visibleLayers === "object") setVisibleLayers(saved.visibleLayers);
     } catch {
       // Ignore broken session drafts.
     }
@@ -1058,9 +1308,13 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers }),
     );
-  }, [activeColor, activeFillColor, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, roughPlan, storageKey]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, roughPlan, storageKey, visibleLayers]);
+
+  useEffect(() => {
+    localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
+  }, [fillTextureLibrary]);
 
   useEffect(() => {
     if (!planId) return;
@@ -1108,7 +1362,6 @@ export default function ProjectMarkupCanvas() {
             setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
           }
         }
-        if (markup.active_layer) setActiveLayer(markup.active_layer);
       })
       .catch((err) => {
         if (alive) setMessage(normalizeError(err, "Could not load this project plan."));
@@ -1198,6 +1451,37 @@ export default function ProjectMarkupCanvas() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [penDraftId]);
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      const target = event.target;
+      const isTextInput =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable;
+      const modifier = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+
+      if (modifier && key === "z" && !isTextInput) {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (modifier && key === "y" && !isTextInput) {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedId && !isTextInput) {
+        event.preventDefault();
+        deleteSelected();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [history, annotations, selectedId]);
+
   const isRoughPlan = canvasMode === "rough_plan";
   const modeLabel = isRoughPlan ? "Rough Plan" : "Photo Markup";
   const roughGeometry = useMemo(() => roughPlanGeometry(roughPlan), [roughPlan]);
@@ -1219,7 +1503,7 @@ export default function ProjectMarkupCanvas() {
       { key: "select", tools: [BASE_TOOLS.select, BASE_TOOLS.curve] },
       { key: "view", tools: [BASE_TOOLS.hand, BASE_TOOLS.zoomIn, BASE_TOOLS.zoomOut] },
       { key: "text", tools: [BASE_TOOLS.text] },
-      { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen] },
+      { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
       { key: "geometry", tools: [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
       ...(isRoughPlan ? [{ key: "symbols", tools: SYMBOL_TOOLS }] : []),
       { key: "delete", tools: [BASE_TOOLS.delete] },
@@ -1244,11 +1528,11 @@ export default function ProjectMarkupCanvas() {
       : [];
     const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
-    const normalizedAnnotations = annotations.map((item) =>
-      item.type === "text" || item.type === "measure"
-        ? { ...item, text: normalizeMarkupText(item.text) }
-        : item,
-    );
+    const normalizedAnnotations = annotations.map((item) => ({
+      ...item,
+      layer: item.id,
+      text: item.type === "text" || item.type === "measure" ? normalizeMarkupText(item.text) : item.text,
+    }));
     const version = {
       id: `version-${Date.now()}`,
       name: versionOverrides.name || `${modeLabel} ${nextVersionNumber}`,
@@ -1271,7 +1555,6 @@ export default function ProjectMarkupCanvas() {
       canvas_mode: canvasMode,
       version_type: isRoughPlan ? "rough_plan" : "photo_markup",
       rough_plan: isRoughPlan ? roughPlan : undefined,
-      active_layer: activeLayer,
       background_url: isRoughPlan ? "" : background_url,
       annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
@@ -1285,6 +1568,36 @@ export default function ProjectMarkupCanvas() {
     setAnnotations((prev) =>
       prev.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)),
     );
+  }
+
+  function toggleAnnotationLayerVisibility(annotationId) {
+    setVisibleLayers((prev) => ({ ...prev, [annotationId]: prev[annotationId] === false }));
+  }
+
+  function moveAnnotationLayer(annotationId, direction) {
+    setAnnotations((prev) => {
+      const index = prev.findIndex((item) => item.id === annotationId);
+      if (index < 0) return prev;
+      const nextIndex = direction === "up" ? index + 1 : index - 1;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  }
+
+  function moveAnnotationLayerTo(annotationId, targetId) {
+    if (!annotationId || !targetId || annotationId === targetId) return;
+    setAnnotations((prev) => {
+      const draggedIndex = prev.findIndex((item) => item.id === annotationId);
+      const targetIndex = prev.findIndex((item) => item.id === targetId);
+      if (draggedIndex < 0 || targetIndex < 0) return prev;
+      const next = [...prev];
+      const [dragged] = next.splice(draggedIndex, 1);
+      const targetIndexAfterRemoval = next.findIndex((item) => item.id === targetId);
+      next.splice(targetIndexAfterRemoval + 1, 0, dragged);
+      return next;
+    });
   }
 
   async function patchMarkupData(nextMarkup, successMessage = "") {
@@ -1337,6 +1650,49 @@ export default function ProjectMarkupCanvas() {
       return url;
     });
     event.target.value = "";
+  }
+
+  function sanitizeTextureSvg(svgText) {
+    const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
+    const svg = parsed.querySelector("svg");
+    if (!svg || parsed.querySelector("parsererror")) return "";
+    svg.querySelectorAll("script, foreignObject, iframe, object, embed").forEach((node) => node.remove());
+    svg.querySelectorAll("*").forEach((node) => {
+      Array.from(node.attributes).forEach((attr) => {
+        const name = attr.name.toLowerCase();
+        const value = String(attr.value || "").trim().toLowerCase();
+        if (name.startsWith("on") || value.startsWith("javascript:")) node.removeAttribute(attr.name);
+      });
+    });
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    return new XMLSerializer().serializeToString(svg);
+  }
+
+  function handleTextureUpload(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.type && file.type !== "image/svg+xml" && !file.name.toLowerCase().endsWith(".svg")) {
+      setMessage("Upload an SVG texture file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const svg = sanitizeTextureSvg(String(reader.result || ""));
+      if (!svg) {
+        setMessage("Could not read that SVG texture.");
+        return;
+      }
+      const id = `custom-${Date.now()}`;
+      const label = file.name.replace(/\.svg$/i, "").slice(0, 32) || "Custom texture";
+      const nextTexture = { key: id, label, svg, visibility: "private", publishRequested: false };
+      setFillTextureLibrary((prev) => [...prev, nextTexture]);
+      changeFillMaterial(id);
+      setMessage("Texture added to your fill texture library.");
+    };
+    reader.readAsText(file);
   }
 
   function canvasPointFromEvent(event) {
@@ -1573,6 +1929,73 @@ export default function ProjectMarkupCanvas() {
     setTool("pen");
   }
 
+  function addPenNode(event, item) {
+    event.stopPropagation();
+    if (!svgRef.current || item.type !== "pen" || !Array.isArray(item.points)) return;
+    const point = canvasPointFromEvent(event);
+    const hit = nearestPenHit(item, point);
+    finishPenPath();
+    setTool("pen_add");
+    setSelectedId(item.id);
+    setEditingTextId("");
+    if (hit?.type !== "segment") return;
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+    setAnnotations((prev) =>
+      prev.map((current) =>
+        current.id === item.id && Array.isArray(current.points)
+          ? {
+              ...current,
+              points: [
+                ...current.points.slice(0, hit.index + 1),
+                point,
+                ...current.points.slice(hit.index + 1),
+              ],
+              curvePoints: remapCurvePointsForInsert(current.curvePoints, hit.index),
+            }
+          : current,
+      ),
+    );
+  }
+
+  function removePenNode(event, item, nodeIndex = null) {
+    event.stopPropagation();
+    if (!item || item.type !== "pen" || !Array.isArray(item.points)) return;
+    const point = svgRef.current && nodeIndex == null ? canvasPointFromEvent(event) : null;
+    const hit = nodeIndex == null && point ? nearestPenHit(item, point, 22) : null;
+    const index = nodeIndex ?? (hit?.type === "node" ? hit.index : null);
+    if (index == null) {
+      setTool("pen_remove");
+      setSelectedId(item.id);
+      setEditingTextId("");
+      return;
+    }
+    const minPoints = item.closed ? 3 : 2;
+    if (item.points.length <= minPoints) return;
+    finishPenPath();
+    setTool("pen_remove");
+    setSelectedId(item.id);
+    setEditingTextId("");
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+    setAnnotations((prev) =>
+      prev.map((current) => {
+        if (current.id !== item.id || !Array.isArray(current.points)) return current;
+        const points = current.points.filter((_, pointIndex) => pointIndex !== index);
+        const first = points[0] || current;
+        const last = points[points.length - 1] || current;
+        return {
+          ...current,
+          points,
+          curvePoints: remapCurvePointsForRemove(current.curvePoints, index),
+          closed: current.closed && points.length >= 3,
+          x: first.x ?? current.x,
+          y: first.y ?? current.y,
+          x2: current.closed && points.length >= 3 ? first.x ?? current.x2 : last.x ?? current.x2,
+          y2: current.closed && points.length >= 3 ? first.y ?? current.y2 : last.y ?? current.y2,
+        };
+      }),
+    );
+  }
+
   function startDrawing(event) {
     if (!svgRef.current) return;
     svgRef.current.setPointerCapture?.(event.pointerId);
@@ -1609,6 +2032,13 @@ export default function ProjectMarkupCanvas() {
       return;
     }
 
+    if (tool === "pen_add" || tool === "pen_remove") {
+      finishPenPath();
+      setSelectedId("");
+      setEditingTextId("");
+      return;
+    }
+
     if (tool === "pen") {
       if (penDraftId) {
         const currentPen = annotations.find((item) => item.id === penDraftId);
@@ -1617,6 +2047,7 @@ export default function ProjectMarkupCanvas() {
           : [];
         const lastFixedPoint = fixedPoints[fixedPoints.length - 1];
         const firstFixedPoint = fixedPoints[0];
+        const nextPoint = event.shiftKey && lastFixedPoint ? constrainOrthogonalPoint(lastFixedPoint, point) : point;
         if (
           event.detail >= 2 &&
           fixedPoints.length >= 3 &&
@@ -1632,10 +2063,10 @@ export default function ProjectMarkupCanvas() {
             if (item.id !== penDraftId || !Array.isArray(item.points)) return item;
             return {
               ...item,
-              points: [...fixedPoints, point, point],
+              points: [...fixedPoints, nextPoint, nextPoint],
               closed: false,
-              x2: point.x,
-              y2: point.y,
+              x2: nextPoint.x,
+              y2: nextPoint.y,
             };
           }),
         );
@@ -1649,7 +2080,7 @@ export default function ProjectMarkupCanvas() {
       annotations.filter((item) => item.type === "priority").length + 1;
     const base = {
       id,
-      layer: activeLayer,
+      layer: id,
       type: tool,
       x: point.x,
       y: point.y,
@@ -1658,6 +2089,7 @@ export default function ProjectMarkupCanvas() {
       color: activeColor,
       strokeColor: activeColor,
       fillColor: activeFillColor,
+      fillMaterial: activeFillMaterial,
       colorLabel: selectedColorMeta.label,
       strokeWidth: activeStrokeWidth,
       strokeOpacity: activeStrokeOpacity,
@@ -1704,14 +2136,19 @@ export default function ProjectMarkupCanvas() {
       setAnnotations((prev) =>
         prev.map((item) =>
           item.id === penDraftId && item.type === "pen" && Array.isArray(item.points)
-            ? {
-                ...item,
-                points: item.points.map((pointItem, index) =>
-                  index === item.points.length - 1 ? point : pointItem,
-                ),
-                x2: point.x,
-                y2: point.y,
-              }
+            ? (() => {
+                const fixedPoints = item.points.slice(0, -1);
+                const anchor = fixedPoints[fixedPoints.length - 1];
+                const nextPoint = event.shiftKey && anchor ? constrainOrthogonalPoint(anchor, point) : point;
+                return {
+                  ...item,
+                  points: item.points.map((pointItem, index) =>
+                    index === item.points.length - 1 ? nextPoint : pointItem,
+                  ),
+                  x2: nextPoint.x,
+                  y2: nextPoint.y,
+                };
+              })()
             : item,
         ),
       );
@@ -1733,7 +2170,18 @@ export default function ProjectMarkupCanvas() {
 
     if (drag?.id && drag.handle) {
       setAnnotations((prev) =>
-        prev.map((item) => (item.id === drag.id ? applyHandleDrag(drag, item, point) : item)),
+        prev.map((item) =>
+          item.id === drag.id
+            ? applyHandleDrag(
+                {
+                  ...drag,
+                  deepCurve: ["penCurve", "penCubic"].includes(drag.handle?.kind) && event.shiftKey,
+                },
+                item,
+                point,
+              )
+            : item,
+        ),
       );
       return;
     }
@@ -1760,10 +2208,16 @@ export default function ProjectMarkupCanvas() {
                   ? Object.fromEntries(
                       Object.entries(drag.item.curvePoints).map(([key, pointItem]) => [
                         key,
-                        {
-                          x: pointItem.x + dx,
-                          y: pointItem.y + dy,
-                        },
+                        pointItem?.type === "cubic"
+                          ? {
+                              ...pointItem,
+                              c1: { x: pointItem.c1.x + dx, y: pointItem.c1.y + dy },
+                              c2: { x: pointItem.c2.x + dx, y: pointItem.c2.y + dy },
+                            }
+                          : {
+                              x: pointItem.x + dx,
+                              y: pointItem.y + dy,
+                            },
                       ]),
                     )
                   : item.curvePoints,
@@ -1828,7 +2282,9 @@ export default function ProjectMarkupCanvas() {
           ...item,
           curvePoints: {
             ...(item.curvePoints || {}),
-            [hit.index]: offsetSegmentCurvePoint(start, end, point),
+            [hit.index]: event.shiftKey
+              ? semicirclePenCurveControls(item, hit.index, point)
+              : offsetSegmentCurvePoint(start, end, point),
           },
         };
         setAnnotations((prev) =>
@@ -2261,12 +2717,15 @@ export default function ProjectMarkupCanvas() {
     }
   }
 
-  const visibleAnnotations = annotations.filter((item) => visibleLayers[item.layer]);
-  const layeredAnnotations = [
-    ...visibleAnnotations.filter((item) => item.type !== "text" && item.type !== "measure"),
-    ...visibleAnnotations.filter((item) => item.type === "measure"),
-    ...visibleAnnotations.filter((item) => item.type === "text"),
-  ];
+  const visibleAnnotations = annotations.filter((item) => visibleLayers[item.id] !== false);
+  const layeredAnnotations = visibleAnnotations;
+  const annotationLayers = annotations
+    .map((item, index) => ({
+      item,
+      index,
+      label: annotationLayerLabel(item, index),
+    }))
+    .reverse();
   const penDraft = penDraftId ? annotations.find((item) => item.id === penDraftId) || null : null;
   const selectedForEditing = selected?.id === penDraftId ? null : selected;
   const selectedLabelPosition = labelPosition(selectedForEditing);
@@ -2280,7 +2739,7 @@ export default function ProjectMarkupCanvas() {
             : selectedForEditing?.type === "rect"
               ? handle.kind === "cornerRadius" || handle.kind === "corner"
               : selectedForEditing?.type === "pen"
-                ? handle.kind === "penCurve"
+                ? handle.kind === "penCurve" || handle.kind === "penCubic"
               : false,
         )
       : selectedControlHandles;
@@ -2302,12 +2761,19 @@ export default function ProjectMarkupCanvas() {
   const currentStrokeWidth = selectedForEditing ? strokeWidthFor(selectedForEditing) : activeStrokeWidth;
   const currentStrokeColor = safeHexColor(selectedStyle?.strokeColor || activeColor);
   const currentFillColor = safeHexColor(selectedStyle?.fillColor || activeFillColor);
+  const currentFillMaterial = selectedStyle?.fillMaterial || activeFillMaterial;
   const currentStrokeOpacity = selectedStyle?.strokeOpacity ?? activeStrokeOpacity;
   const currentFillOpacity = selectedStyle?.fillOpacity ?? activeFillOpacity;
   const currentStrokeStyle = selectedForEditing?.strokeStyle || "solid";
   const currentStrokeAlign = selectedForEditing?.strokeAlign || "center";
   const currentStartEndpoint = selectedForEditing?.startEndpoint || "none";
   const currentEndEndpoint = selectedForEditing?.endEndpoint || (selectedForEditing?.type === "arrow" ? "arrow" : "none");
+  const fillMaterialLibrary = useMemo(
+    () => [...FILL_MATERIALS, ...fillTextureLibrary],
+    [fillTextureLibrary],
+  );
+  const currentFillMaterialOption =
+    fillMaterialLibrary.find((material) => material.key === currentFillMaterial) || FILL_MATERIALS[0];
   const selectedSupportsEndpoints =
     !selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type);
 
@@ -2327,6 +2793,34 @@ export default function ProjectMarkupCanvas() {
     if (!isHexColor(nextColor)) return;
     setActiveFillColor(nextColor);
     if (selectedForEditing) updateSelected({ fillColor: nextColor });
+  }
+
+  function changeFillMaterial(nextMaterial) {
+    const material = isFillMaterialKey(nextMaterial) ? nextMaterial : "flat";
+    setActiveFillMaterial(material);
+    if (selectedForEditing) updateSelected({ fillMaterial: material });
+  }
+
+  function toggleTexturePublishRequest(textureKey) {
+    setFillTextureLibrary((prev) =>
+      prev.map((texture) =>
+        texture.key === textureKey
+          ? {
+              ...texture,
+              publishRequested: !texture.publishRequested,
+              visibility: texture.publishRequested ? "private" : "review_requested",
+            }
+          : texture,
+      ),
+    );
+  }
+
+  function removeCustomTexture(textureKey) {
+    setFillTextureLibrary((prev) => prev.filter((texture) => texture.key !== textureKey));
+    setAnnotations((prev) =>
+      prev.map((item) => (item.fillMaterial === textureKey ? { ...item, fillMaterial: "flat" } : item)),
+    );
+    if (currentFillMaterial === textureKey) changeFillMaterial("flat");
   }
 
   function changeStrokeOpacity(nextOpacity) {
@@ -2585,41 +3079,92 @@ export default function ProjectMarkupCanvas() {
               onPin={toggleSidebarPin}
             >
               <div className="mt-3 space-y-2">
-                {LAYERS.map((layer) => {
-                  const active = activeLayer === layer.key;
+                {annotationLayers.length ? annotationLayers.map(({ item, index, label }, stackIndex) => {
+                  const active = selectedId === item.id;
+                  const visible = visibleLayers[item.id] !== false;
+                  const topLayer = stackIndex === 0;
+                  const bottomLayer = stackIndex === annotationLayers.length - 1;
                   return (
                     <div
-                      key={layer.key}
-                      className={`flex h-12 items-center justify-between rounded-xl border px-3 ${
+                      key={item.id}
+                      draggable
+                      onDragStart={(event) => {
+                        setDraggingLayerId(item.id);
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", item.id);
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const draggedId = event.dataTransfer.getData("text/plain") || draggingLayerId;
+                        moveAnnotationLayerTo(draggedId, item.id);
+                        setDraggingLayerId("");
+                      }}
+                      onDragEnd={() => setDraggingLayerId("")}
+                      className={`flex min-h-14 items-center gap-2 rounded-xl border px-2 py-2 ${
                         active ? "border-slate-950 bg-slate-50" : "border-slate-200 bg-white"
                       }`}
                     >
                       <button
                         type="button"
-                        onClick={() => setActiveLayer(layer.key)}
-                        className="flex min-w-0 items-center gap-2 text-sm text-slate-700"
+                        className="inline-flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
+                        aria-label={`Drag ${label} layer`}
                       >
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: layer.color }} />
-                        <span>{layer.label}</span>
-                        {active ? (
-                          <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-                            Editing
-                          </span>
-                        ) : null}
+                        <SymbolIcon name="drag_indicator" className="text-[18px]" />
                       </button>
                       <button
                         type="button"
-                        onClick={() =>
-                          setVisibleLayers((prev) => ({ ...prev, [layer.key]: !prev[layer.key] }))
-                        }
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-                        aria-label={`${visibleLayers[layer.key] ? "Hide" : "Show"} ${layer.label} layer`}
+                        onClick={() => setSelectedId(item.id)}
+                        className="min-w-0 flex-1 text-left"
                       >
-                        <SymbolIcon name={visibleLayers[layer.key] ? "visibility" : "visibility_off"} className="text-[18px]" />
+                        <span className="block truncate text-sm font-medium text-slate-700">{label}</span>
+                        <span className="block truncate text-[11px] text-slate-400">
+                          {topLayer ? "Top" : bottomLayer ? "Bottom" : `Stack ${annotationLayers.length - stackIndex}`}
+                        </span>
                       </button>
+                      {active ? (
+                        <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                          Editing
+                        </span>
+                      ) : null}
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveAnnotationLayer(item.id, "up")}
+                          disabled={topLayer}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-35"
+                          aria-label={`Move ${label} up`}
+                        >
+                          <SymbolIcon name="keyboard_arrow_up" className="text-[18px]" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveAnnotationLayer(item.id, "down")}
+                          disabled={bottomLayer}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-35"
+                          aria-label={`Move ${label} down`}
+                        >
+                          <SymbolIcon name="keyboard_arrow_down" className="text-[18px]" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleAnnotationLayerVisibility(item.id)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                          aria-label={`${visible ? "Hide" : "Show"} ${label} layer`}
+                        >
+                          <SymbolIcon name={visible ? "visibility" : "visibility_off"} className="text-[18px]" />
+                        </button>
+                      </div>
                     </div>
                   );
-                })}
+                }) : (
+                  <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-400">
+                    Draw an annotation to create its layer.
+                  </div>
+                )}
               </div>
             </CollapsibleSection>
 
@@ -2792,6 +3337,7 @@ export default function ProjectMarkupCanvas() {
               onPin={toggleSidebarPin}
             >
               <div className="mt-3 space-y-4">
+                <input ref={textureFileRef} type="file" accept=".svg,image/svg+xml" className="hidden" onChange={handleTextureUpload} />
                 <label className="block">
                   <span className="mb-2 block text-xs font-medium text-slate-500">Fill color</span>
                   <div className="flex items-center gap-2">
@@ -2826,7 +3372,73 @@ export default function ProjectMarkupCanvas() {
                     aria-label="Fill opacity"
                   />
                 </label>
-                <div className="h-10 rounded-lg border border-slate-200" style={{ backgroundColor: hexToRgba(currentFillColor, currentFillOpacity) }} />
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-500">Fill texture library</span>
+                    <button
+                      type="button"
+                      onClick={() => textureFileRef.current?.click()}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    >
+                      <SymbolIcon name="upload" className="text-[16px]" />
+                      Add SVG
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {fillMaterialLibrary.map((material) => {
+                      const active = currentFillMaterial === material.key;
+                      const isCustom = material.key.startsWith("custom-");
+                      const previewStyle = fillMaterialPreviewStyle(material, currentFillColor, currentFillOpacity);
+
+                      return (
+                        <div
+                          key={material.key}
+                          className={`rounded-xl border p-2 transition ${
+                            active ? "border-slate-950 bg-slate-50" : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => changeFillMaterial(material.key)}
+                            className="block w-full text-left"
+                          >
+                            <span className="block h-12 rounded-lg border border-slate-200" style={previewStyle} />
+                            <span className="mt-2 block truncate text-xs font-medium text-slate-700">{material.label}</span>
+                            <span className="mt-0.5 block text-[10px] uppercase tracking-wide text-slate-400">
+                              {isCustom ? (material.publishRequested ? "Public review requested" : "Private") : "Public"}
+                            </span>
+                          </button>
+                          {isCustom ? (
+                            <div className="mt-2 flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => toggleTexturePublishRequest(material.key)}
+                                className="h-7 flex-1 rounded-lg border border-slate-200 px-2 text-[11px] font-medium text-slate-500 hover:bg-slate-50"
+                              >
+                                {material.publishRequested ? "Keep private" : "Request public"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeCustomTexture(material.key)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                aria-label={`Remove ${material.label} texture`}
+                              >
+                                <SymbolIcon name="delete" className="text-[15px]" />
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-4 text-slate-400">
+                    Uploaded SVG textures are saved to your local texture library. Public textures require a review flow before they can be shared.
+                  </p>
+                </div>
+                <div
+                  className="h-10 rounded-lg border border-slate-200"
+                  style={fillMaterialPreviewStyle(currentFillMaterialOption, currentFillColor, currentFillOpacity)}
+                />
               </div>
             </CollapsibleSection>
 
@@ -3149,6 +3761,52 @@ export default function ProjectMarkupCanvas() {
                     </marker>
                   </g>
                 ))}
+                <filter id="texture-bw-filter">
+                  <feColorMatrix type="saturate" values="0" />
+                  <feComponentTransfer>
+                    <feFuncR type="linear" slope="1.15" intercept="-0.04" />
+                    <feFuncG type="linear" slope="1.15" intercept="-0.04" />
+                    <feFuncB type="linear" slope="1.15" intercept="-0.04" />
+                  </feComponentTransfer>
+                </filter>
+                <pattern id="fill-material-deck" width="34" height="34" patternUnits="userSpaceOnUse">
+                  <rect width="34" height="34" fill="#fff" />
+                  <rect x="0" y="0" width="15" height="34" fill="#f1f5f9" />
+                  <rect x="16" y="0" width="16" height="34" fill="#fff" />
+                  <line x1="16" y1="0" x2="16" y2="34" stroke="#111827" strokeWidth="2" opacity="0.8" />
+                  <line x1="33" y1="0" x2="33" y2="34" stroke="#475569" strokeWidth="1.5" opacity="0.65" />
+                </pattern>
+                <pattern id="fill-material-gravel" width="42" height="42" patternUnits="userSpaceOnUse">
+                  <rect width="42" height="42" fill="#fff" />
+                  <circle cx="8" cy="11" r="3" fill="#111827" opacity="0.72" />
+                  <circle cx="23" cy="8" r="2.4" fill="#94a3b8" opacity="0.9" />
+                  <circle cx="34" cy="19" r="3.3" fill="#0f172a" opacity="0.58" />
+                  <circle cx="15" cy="31" r="2.8" fill="#64748b" opacity="0.78" />
+                  <circle cx="31" cy="35" r="2.2" fill="#111827" opacity="0.62" />
+                </pattern>
+                <pattern id="fill-material-concrete" width="48" height="48" patternUnits="userSpaceOnUse">
+                  <rect width="48" height="48" fill="#f8fafc" />
+                  <circle cx="10" cy="14" r="1.2" fill="#64748b" opacity="0.65" />
+                  <circle cx="33" cy="11" r="1" fill="#cbd5e1" opacity="0.9" />
+                  <circle cx="22" cy="32" r="1.4" fill="#64748b" opacity="0.55" />
+                  <path d="M2 40 C 12 35, 20 44, 31 38 S 43 37, 48 33" stroke="#94a3b8" strokeWidth="1" fill="none" opacity="0.8" />
+                </pattern>
+                <pattern id="fill-material-soil" width="44" height="44" patternUnits="userSpaceOnUse">
+                  <rect width="44" height="44" fill="#fff" />
+                  <circle cx="9" cy="12" r="3" fill="#111827" opacity="0.82" />
+                  <circle cx="27" cy="10" r="2" fill="#475569" opacity="0.48" />
+                  <circle cx="35" cy="28" r="3.4" fill="#0f172a" opacity="0.55" />
+                  <circle cx="15" cy="34" r="2.5" fill="#64748b" opacity="0.8" />
+                </pattern>
+                {fillTextureLibrary.map((texture) => {
+                  const href = svgToDataUrl(texture.svg);
+                  return href ? (
+                    <pattern key={texture.key} id={`fill-material-${texture.key}`} width="56" height="56" patternUnits="userSpaceOnUse">
+                      <rect width="56" height="56" fill="#fff" />
+                      <image href={href} x="0" y="0" width="56" height="56" preserveAspectRatio="xMidYMid slice" filter="url(#texture-bw-filter)" />
+                    </pattern>
+                  ) : null;
+                })}
                 <filter id="label-shadow" x="-20%" y="-30%" width="140%" height="160%">
                   <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.13" />
                 </filter>
@@ -3221,6 +3879,10 @@ export default function ProjectMarkupCanvas() {
                       ? undefined
                       : tool === "curve"
                         ? (event) => startCurveEdit(event, item)
+                      : tool === "pen_add" && item.type === "pen"
+                        ? (event) => addPenNode(event, item)
+                      : tool === "pen_remove" && item.type === "pen"
+                        ? (event) => removePenNode(event, item)
                       : tool === "pen" && item.type === "pen"
                         ? (event) => continuePenFromExisting(event, item)
                         : (event) => startMove(event, item),
@@ -3283,11 +3945,15 @@ export default function ProjectMarkupCanvas() {
                     />
                     {visibleControlHandles.map((handle) => (
                       <g key={handle.key}>
-                        {(handle.kind === "curve" && isLineLike(selectedForEditing)) || (handle.kind === "penCurve" && selectedForEditing?.type === "pen") ? (() => {
-                          const anchor =
-                            handle.kind === "penCurve"
-                              ? penSegmentAnchor(selectedForEditing, handle.index)
-                              : quadraticPoint(selectedForEditing, 0.5);
+                        {(handle.kind === "curve" && isLineLike(selectedForEditing)) || (["penCurve", "penCubic"].includes(handle.kind) && selectedForEditing?.type === "pen") ? (() => {
+                          const penPoints = Array.isArray(selectedForEditing?.points) ? selectedForEditing.points : [];
+                          let anchor = quadraticPoint(selectedForEditing, 0.5);
+                          if (handle.kind === "penCurve") {
+                            anchor = penSegmentAnchor(selectedForEditing, handle.index);
+                          }
+                          if (handle.kind === "penCubic") {
+                            anchor = handle.target === "c1" ? penPoints[handle.index] : penPoints[handle.index + 1];
+                          }
                           if (!anchor) return null;
                           return (
                             <line
@@ -3307,13 +3973,16 @@ export default function ProjectMarkupCanvas() {
                           className="cursor-pointer"
                           cx={handle.x}
                           cy={handle.y}
-                          r={handle.kind === "curve" || handle.kind === "penCurve" ? "14" : handle.kind === "cornerRadius" ? "10" : "11"}
-                          fill={handle.kind === "curve" || handle.kind === "penCurve" ? "#eff6ff" : handle.kind === "cornerRadius" ? "#fef3c7" : "#ffffff"}
+                          r={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "14" : handle.kind === "cornerRadius" ? "10" : "11"}
+                          fill={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "#eff6ff" : handle.kind === "cornerRadius" ? "#fef3c7" : "#ffffff"}
                           stroke={handle.kind === "cornerRadius" ? "#d97706" : "#2563eb"}
-                          strokeWidth={handle.kind === "curve" || handle.kind === "penCurve" ? "4" : "3"}
+                          strokeWidth={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "4" : "3"}
+                          aria-label={["penCurve", "penCubic"].includes(handle.kind) ? "Curve handle. Hold Shift for semicircle curve." : handle.label}
                           onPointerDown={(event) =>
                             tool === "curve" && ["endpoint", "corner"].includes(handle.kind)
                               ? startCurveHandleActivation(event, handle)
+                              : tool === "pen_remove" && selectedForEditing?.type === "pen" && handle.kind === "point"
+                              ? removePenNode(event, selectedForEditing, handle.index)
                               : tool === "pen" && selectedForEditing?.type === "pen" && handle.kind === "point"
                               ? continuePenFromNode(event, selectedForEditing, handle.index)
                               : startHandleMove(event, handle, {
