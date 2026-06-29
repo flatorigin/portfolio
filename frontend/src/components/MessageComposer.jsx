@@ -1,15 +1,27 @@
 import { useMemo, useRef, useState } from "react";
 import { Button, Textarea, Input, SymbolIcon } from "../ui";
+import ImageMarkupModal from "./ImageMarkupModal";
 
-function AttachmentChip({ item, onRemove }) {
+function AttachmentChip({ item, onRemove, onMarkup }) {
   const label =
     item?.kind === "link"
       ? item.url
       : item?.file?.name || item?.label || "Attachment";
+  const canMarkup = !!onMarkup && (item?.kind === "image" || item?.kind === "camera") && item?.file;
 
   return (
     <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm">
       <span className="truncate">{label}</span>
+      {canMarkup ? (
+        <button
+          type="button"
+          onClick={onMarkup}
+          className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200"
+        >
+          <SymbolIcon name="edit" className="text-[14px]" />
+          Markup
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={onRemove}
@@ -70,6 +82,7 @@ export default function MessageComposer({
   const [menuOpen, setMenuOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkValue, setLinkValue] = useState("");
+  const [markupTargetIndex, setMarkupTargetIndex] = useState(null);
 
   const cameraInputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -113,6 +126,23 @@ export default function MessageComposer({
     next.splice(index, 1);
     onAttachmentsChange?.(next);
   }
+
+  function saveMarkedAttachment(file) {
+    if (markupTargetIndex === null) return;
+    const next = [...(attachments || [])];
+    if (!next[markupTargetIndex]) return;
+    next[markupTargetIndex] = {
+      ...next[markupTargetIndex],
+      kind: "image",
+      file,
+      label: file.name,
+      markedUp: true,
+    };
+    onAttachmentsChange?.(next);
+    setMarkupTargetIndex(null);
+  }
+
+  const markupTarget = markupTargetIndex === null ? null : attachments?.[markupTargetIndex] || null;
 
   return (
     <form onSubmit={onSend} className="space-y-3">
@@ -262,6 +292,11 @@ export default function MessageComposer({
                 <AttachmentChip
                   key={`${item.kind}-${item.url || item.file?.name || index}-${index}`}
                   item={item}
+                  onMarkup={
+                    (item.kind === "image" || item.kind === "camera") && item.file
+                      ? () => setMarkupTargetIndex(index)
+                      : undefined
+                  }
                   onRemove={() => removeAttachment(index)}
                 />
               ))}
@@ -275,6 +310,12 @@ export default function MessageComposer({
           </Button>
         </div>
       </div>
+      <ImageMarkupModal
+        open={!!markupTarget?.file}
+        file={markupTarget?.file || null}
+        onClose={() => setMarkupTargetIndex(null)}
+        onSave={saveMarkedAttachment}
+      />
     </form>
   );
 }
