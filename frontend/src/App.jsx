@@ -334,6 +334,11 @@ export default function App() {
     navigate("/profile/edit");
   };
 
+  const goSavedLikes = () => {
+    setMenuOpen(false);
+    navigate("/profile/saved-likes");
+  };
+
   const goRoleSetup = () => {
     setShowContractorSetupPrompt(false);
     navigate(`/onboarding/${setupRole || "contractor"}`);
@@ -492,6 +497,17 @@ export default function App() {
                           <SymbolIcon name="public" className="text-[18px]" />
                         </span>
                         <span>Public Profile</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={goSavedLikes}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
+                          <SymbolIcon name="favorite" className="text-[18px]" />
+                        </span>
+                        <span>Saved &amp; Likes</span>
                       </button>
 
                       <div className="my-1 h-px bg-slate-100" />

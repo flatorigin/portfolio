@@ -22,6 +22,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const EditProfile = lazy(() => import("./pages/EditProfile.jsx"));
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail.jsx"));
 const PublicProfile = lazy(() => import("./pages/PublicProfile.jsx"));
+const SavedLikesPage = lazy(() => import("./pages/SavedLikesPage.jsx"));
 const ProjectPrintView = lazy(() => import("./pages/ProjectPrintView.jsx"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword.jsx"));
@@ -125,6 +126,14 @@ createRoot(document.getElementById("root")).render(
             element={
               <RequireAuth>
                 <EditProfile />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="profile/saved-likes"
+            element={
+              <RequireAuth>
+                <SavedLikesPage />
               </RequireAuth>
             }
           />

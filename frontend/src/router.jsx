@@ -8,6 +8,7 @@ import Explore from "./pages/Explore";
 import ProjectGuides from "./pages/ProjectGuides";
 import Dashboard from "./pages/Dashboard";
 import ProfileEdit from "./pages/EditProfile";
+import SavedLikesPage from "./pages/SavedLikesPage";
 import ProjectDetail from "./pages/ProjectDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: "contractor-check", element: <ContractorLeadCheck /> },
       { path: "work", element: <FindLocalWork /> },
       { path: "profile/edit", element: <ProfileEdit /> },
+      { path: "profile/saved-likes", element: <SavedLikesPage /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "dashboard/planner/:planId", element: <ProjectPlanDetail /> },
       { path: "onboarding/homeowner", element: <HomeownerOnboarding /> },

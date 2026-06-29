@@ -7,7 +7,6 @@ import api from "../api";
 
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
-import SavedLikesCard from "../components/SavedLikesCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
 import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
@@ -1081,8 +1080,6 @@ export default function Dashboard() {
       </div>
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
-
-      <SavedLikesCard />
 
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between">
