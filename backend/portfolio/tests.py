@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from io import BytesIO
 import json
 from unittest.mock import patch
 
@@ -7,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import AIConfiguration, AIUsageEvent, Profile
-from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan
+from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan, MessageAttachment
 from apps.bids.models import Bid
 
 
@@ -486,6 +487,38 @@ class MessagePrefillTests(APITestCase):
             response.data[0]["text"],
             "I can handle this for 4500 and finish in two weeks.",
         )
+
+    def test_project_thread_message_image_is_saved_as_attachment(self):
+        self.client.force_authenticate(user=self.contractor)
+        upload = SimpleUploadedFile(
+            "marked.png",
+            BytesIO(b"message image bytes").read(),
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            f"/api/projects/{self.project.id}/threads/{self.project_thread.id}/messages/",
+            {"text": "", "images": [upload]},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["text"], "")
+        self.assertEqual(len(response.data["attachments"]), 1)
+        self.assertEqual(response.data["attachments"][0]["kind"], "image")
+        self.assertEqual(response.data["attachments"][0]["name"], "marked.png")
+        self.assertTrue(
+            MessageAttachment.objects.filter(
+                message_id=response.data["id"],
+                kind="image",
+                original_name="marked.png",
+            ).exists()
+        )
+
+        inbox_response = self.client.get("/api/inbox/threads/")
+        self.assertEqual(inbox_response.status_code, status.HTTP_200_OK)
+        thread_row = next(item for item in inbox_response.data if item["id"] == self.project_thread.id)
+        self.assertEqual(thread_row["latest_message"]["attachment_name"], "marked.png")
 
     def test_contractor_can_start_direct_message_with_homeowner(self):
         self.client.force_authenticate(user=self.contractor)

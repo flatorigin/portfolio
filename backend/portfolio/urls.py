@@ -8,14 +8,13 @@ from .views import (
     ProjectCommentListCreateView,
     ProjectCommentDetailView,
     ProjectThreadCreateView,
-    ThreadMessageListCreateView,
+    ThreadMessagesView,
     InboxThreadListView,
     ThreadActionView,
     BlockListView,
     FavoriteProjectListView,
     LikedProjectListView,
     DirectMessageStartView,
-    DirectThreadMessageListCreateView,
     PublishTestimonialView,
     UnpublishTestimonialView,
     MessageDetailView,
@@ -58,7 +57,7 @@ urlpatterns = [
     path("projects/<int:pk>/threads/", ProjectThreadCreateView.as_view(), name="project-thread"),
     path(
         "projects/<int:pk>/threads/<int:thread_id>/messages/",
-        ThreadMessageListCreateView.as_view(),
+        ThreadMessagesView.as_view(),
         name="project-thread-messages",
     ),
 
@@ -71,7 +70,7 @@ urlpatterns = [
     path("messages/start/", DirectMessageStartView.as_view(), name="dm-start"),
     path(
         "messages/threads/<int:thread_id>/messages/",
-        DirectThreadMessageListCreateView.as_view(),
+        ThreadMessagesView.as_view(),
         name="dm-thread-messages",
     ),
     path("messages/<int:message_id>/", MessageDetailView.as_view(), name="message-detail"),

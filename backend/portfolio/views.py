@@ -1594,43 +1594,6 @@ class ProjectThreadCreateView(generics.GenericAPIView):
         return Response(ser.data)
 
 
-class ThreadMessageListCreateView(generics.ListCreateAPIView):
-    serializer_class = PrivateMessageSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-
-    def get_thread(self):
-        thread = get_object_or_404(MessageThread, id=self.kwargs.get("thread_id"))
-        user = self.request.user
-
-        if user not in (thread.owner, thread.client):
-            raise PermissionDenied("You are not in this conversation.")
-        if thread.is_blocked_for(user):
-            raise PermissionDenied("This conversation is blocked.")
-        return thread
-
-    def get_queryset(self):
-        thread = self.get_thread()
-        return PrivateMessage.objects.filter(thread=thread).select_related("sender", "context_project")
-
-    def perform_create(self, serializer):
-        thread = self.get_thread()
-        user = self.request.user
-
-        other = thread.client if user.id == thread.owner_id else thread.owner
-        ignored_until = thread.ignored_until_for(other)
-        if (not thread.user_has_accepted(other)) and ignored_until and timezone.now() < ignored_until:
-            raise permissions.PermissionDenied("Recipient ignored this request. Try again tomorrow.")
-
-        if thread.is_blocked_for(user):
-            raise PermissionDenied("This conversation is blocked.")
-
-        message = serializer.save(sender=user, thread=thread)
-        thread.updated_at = timezone.now()
-        thread.save(update_fields=["updated_at"])
-        return message
-
-
 class InboxThreadListView(generics.ListAPIView):
     serializer_class = MessageThreadSerializer
     permission_classes = [permissions.IsAuthenticated]

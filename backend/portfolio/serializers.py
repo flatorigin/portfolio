@@ -1036,19 +1036,32 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             msg = obj.messages.order_by("-created_at").first()
             if not msg:
                 return None
+            attachment_name = msg.attachment_name or (
+                msg.attachments.values_list("original_name", flat=True).first() or ""
+            )
             return {
                 "id": msg.id,
                 "sender_username": getattr(msg.sender, "username", ""),
                 "text": msg.text or "",
-                "attachment_name": msg.attachment_name or "",
+                "attachment_name": attachment_name,
                 "created_at": msg.created_at,
             }
+
+        attachment_name = getattr(obj, "latest_message_attachment_name", "") or ""
+        if not attachment_name:
+            attachment_name = (
+                MessageAttachment.objects
+                .filter(message_id=latest_id)
+                .values_list("original_name", flat=True)
+                .first()
+                or ""
+            )
 
         return {
             "id": latest_id,
             "sender_username": getattr(obj, "latest_message_sender_username", "") or "",
             "text": getattr(obj, "latest_message_text", "") or "",
-            "attachment_name": getattr(obj, "latest_message_attachment_name", "") or "",
+            "attachment_name": attachment_name,
             "created_at": getattr(obj, "latest_message_created_at", None),
         }
 
