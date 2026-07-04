@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import AIConfiguration, AIUsageEvent, Profile
-from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan, MessageAttachment, FeedbackTicket
+from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan, MessageAttachment, FeedbackTicket, FeedbackReply
 from apps.bids.models import Bid
 
 
@@ -113,6 +113,78 @@ class FeedbackTicketApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(FeedbackTicket.objects.count(), 0)
+
+    def test_lists_only_current_user_feedback_tickets(self):
+        other = User.objects.create_user(username="otherfeedback", password="pw123456")
+        mine = FeedbackTicket.objects.create(
+            user=self.user,
+            category="general_feedback",
+            subject="Mine",
+            message="My ticket",
+        )
+        FeedbackTicket.objects.create(
+            user=other,
+            category="general_feedback",
+            subject="Other",
+            message="Other ticket",
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get("/api/feedback/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [mine.id])
+
+    @patch("portfolio.models.FeedbackReply.send_created_notification")
+    def test_user_can_reply_to_own_feedback_ticket(self, mock_notify):
+        ticket = FeedbackTicket.objects.create(
+            user=self.user,
+            category="technical_support",
+            subject="Need help",
+            message="Initial message",
+        )
+        self.client.force_authenticate(user=self.user)
+        upload = SimpleUploadedFile(
+            "detail.txt",
+            b"more context",
+            content_type="text/plain",
+        )
+
+        response = self.client.post(
+            f"/api/feedback/{ticket.id}/replies/",
+            {
+                "message": "Here is more information.",
+                "attachments": [upload],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        reply = FeedbackReply.objects.get(id=response.data["id"])
+        self.assertEqual(reply.ticket, ticket)
+        self.assertEqual(reply.author, self.user)
+        self.assertFalse(reply.is_staff_reply)
+        self.assertEqual(reply.attachments.count(), 1)
+        mock_notify.assert_called_once()
+
+    def test_user_cannot_reply_to_another_users_feedback_ticket(self):
+        other = User.objects.create_user(username="otherfeedback2", password="pw123456")
+        ticket = FeedbackTicket.objects.create(
+            user=other,
+            category="technical_support",
+            subject="Not mine",
+            message="Initial message",
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            f"/api/feedback/{ticket.id}/replies/",
+            {"message": "Trying to reply."},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(FeedbackReply.objects.count(), 0)
 
 
 class PrivateProjectAccessTests(APITestCase):

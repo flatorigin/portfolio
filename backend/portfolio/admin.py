@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html, format_html_join
 
-from .models import Project, ProjectImage, FeedbackTicket, FeedbackAttachment
+from .models import Project, ProjectImage, FeedbackTicket, FeedbackAttachment, FeedbackReply
 
 class ProjectImageInline(admin.TabularInline):
     model = ProjectImage
@@ -35,6 +35,13 @@ class FeedbackAttachmentInline(admin.TabularInline):
     download_link.short_description = "File"
 
 
+class FeedbackReplyInline(admin.StackedInline):
+    model = FeedbackReply
+    extra = 0
+    fields = ("author", "is_staff_reply", "message", "created_at", "notified_at")
+    readonly_fields = ("created_at", "notified_at")
+
+
 @admin.register(FeedbackTicket)
 class FeedbackTicketAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "category", "subject", "status", "created_at", "updated_at")
@@ -53,7 +60,22 @@ class FeedbackTicketAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
-    inlines = [FeedbackAttachmentInline]
+    inlines = [FeedbackAttachmentInline, FeedbackReplyInline]
+
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+        for instance in instances:
+            if isinstance(instance, FeedbackReply) and instance.pk is None:
+                if instance.author_id is None:
+                    instance.author = request.user
+                instance.is_staff_reply = True
+                instance.save()
+                instance.send_created_notification()
+            else:
+                instance.save()
+        for obj in formset.deleted_objects:
+            obj.delete()
+        formset.save_m2m()
 
     def safe_links(self, obj):
         links = obj.links if isinstance(obj.links, list) else []
@@ -70,7 +92,7 @@ class FeedbackTicketAdmin(admin.ModelAdmin):
 
 @admin.register(FeedbackAttachment)
 class FeedbackAttachmentAdmin(admin.ModelAdmin):
-    list_display = ("id", "ticket", "original_name", "content_type", "size", "uploaded_at", "download_link")
+    list_display = ("id", "ticket", "reply", "original_name", "content_type", "size", "uploaded_at", "download_link")
     list_filter = ("content_type", "uploaded_at")
     search_fields = ("original_name", "ticket__subject", "ticket__user__username", "ticket__user__email")
     readonly_fields = ("ticket", "original_name", "content_type", "size", "uploaded_at", "download_link")
@@ -84,3 +106,11 @@ class FeedbackAttachmentAdmin(admin.ModelAdmin):
         )
 
     download_link.short_description = "File"
+
+
+@admin.register(FeedbackReply)
+class FeedbackReplyAdmin(admin.ModelAdmin):
+    list_display = ("id", "ticket", "author", "is_staff_reply", "created_at", "notified_at")
+    list_filter = ("is_staff_reply", "created_at", "notified_at")
+    search_fields = ("message", "ticket__subject", "author__username", "author__email")
+    readonly_fields = ("created_at", "notified_at")

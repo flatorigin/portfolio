@@ -1105,6 +1105,22 @@ class FeedbackTicket(models.Model):
         except Exception:
             return False
 
+    def _send_internal_email(self, subject, body):
+        recipients = getattr(settings, "FEEDBACK_NOTIFICATION_EMAILS", None) or []
+        if not recipients:
+            single = str(getattr(settings, "FEEDBACK_NOTIFICATION_EMAIL", "") or "").strip()
+            recipients = [single] if single else []
+        recipients = [email for email in recipients if email]
+        if not recipients:
+            return False
+
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+        try:
+            send_mail(subject, body, from_email, recipients, fail_silently=True)
+            return True
+        except Exception:
+            return False
+
     def send_submission_confirmation(self):
         return self._send_feedback_email(
             "We received your feedback",
@@ -1115,11 +1131,6 @@ class FeedbackTicket(models.Model):
         )
 
     def send_internal_submission_notification(self):
-        recipient = str(getattr(settings, "FEEDBACK_NOTIFICATION_EMAIL", "") or "").strip()
-        if not recipient:
-            return False
-
-        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
         link_lines = "\n".join(str(link) for link in (self.links or [])) or "None"
         body = (
             "A new Feedback & Support ticket was submitted.\n\n"
@@ -1132,17 +1143,7 @@ class FeedbackTicket(models.Model):
             f"Links:\n{link_lines}\n\n"
             "Review this ticket in Django Admin under Portfolio > Feedback tickets."
         )
-        try:
-            send_mail(
-                f"New FlatOrigin feedback: {self.subject}",
-                body,
-                from_email,
-                [recipient],
-                fail_silently=True,
-            )
-            return True
-        except Exception:
-            return False
+        return self._send_internal_email(f"New FlatOrigin feedback: {self.subject}", body)
 
     def save(self, *args, **kwargs):
         previous_status = None
@@ -1194,6 +1195,13 @@ class FeedbackAttachment(models.Model):
         related_name="attachments",
         on_delete=models.CASCADE,
     )
+    reply = models.ForeignKey(
+        "FeedbackReply",
+        related_name="attachments",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
     file = models.FileField(upload_to=feedback_attachment_upload_path)
     original_name = models.CharField(max_length=255)
     content_type = models.CharField(max_length=120, blank=True)
@@ -1205,3 +1213,58 @@ class FeedbackAttachment(models.Model):
 
     def __str__(self):
         return self.original_name or f"Feedback attachment {self.id}"
+
+
+class FeedbackReply(models.Model):
+    ticket = models.ForeignKey(
+        FeedbackTicket,
+        related_name="replies",
+        on_delete=models.CASCADE,
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="feedback_replies",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    is_staff_reply = models.BooleanField(default=False)
+    message = models.TextField()
+    notified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"FeedbackReply<{self.id}> ticket {self.ticket_id}"
+
+    def send_created_notification(self):
+        if self.is_staff_reply:
+            sent = self.ticket._send_feedback_email(
+                "FlatOrigin support replied to your ticket",
+                (
+                    "FlatOrigin support has replied to your feedback request.\n\n"
+                    f"Subject: {self.ticket.subject}\n\n"
+                    f"Reply:\n{self.message}"
+                ),
+            )
+        else:
+            sent = self.ticket._send_internal_email(
+                f"New reply on FlatOrigin feedback: {self.ticket.subject}",
+                (
+                    "A user added a reply to a Feedback & Support ticket.\n\n"
+                    f"Ticket ID: {self.ticket_id}\n"
+                    f"User: {getattr(self.author, 'username', '')} <{getattr(self.author, 'email', '')}>\n"
+                    f"Subject: {self.ticket.subject}\n\n"
+                    f"Reply:\n{self.message}\n\n"
+                    "Review this ticket in Django Admin under Portfolio > Feedback tickets."
+                ),
+            )
+
+        if sent and self.notified_at is None:
+            self.notified_at = timezone.now()
+            FeedbackReply.objects.filter(pk=self.pk, notified_at__isnull=True).update(
+                notified_at=self.notified_at
+            )
+        return sent
