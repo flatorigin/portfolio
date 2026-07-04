@@ -531,6 +531,20 @@ export default function App() {
                         <span>Feedback &amp; Support</span>
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          navigate("/profile/support");
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
+                          <SymbolIcon name="history" className="text-[18px]" />
+                        </span>
+                        <span>Support Tickets</span>
+                      </button>
+
                       <div className="my-1 h-px bg-slate-100" />
 
                       {/* Log out */}

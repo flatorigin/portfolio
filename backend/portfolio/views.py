@@ -43,6 +43,7 @@ from .models import (
     MessageAttachment,
     ProjectBid,
     ProjectBidVersion,
+    FeedbackTicket,
 )
 from apps.bids.models import Bid
 from .access import can_access_job_interactions, can_view_project, visible_projects_q_for_user
@@ -59,6 +60,7 @@ from .serializers import (
     ProjectBidSerializer,
     ProjectBidVersionSerializer,
     FeedbackTicketSerializer,
+    FeedbackReplySerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 from .project_intake import (
@@ -96,10 +98,42 @@ SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (
 )
 
 
-class FeedbackTicketCreateView(generics.CreateAPIView):
+class FeedbackTicketListCreateView(generics.ListCreateAPIView):
     serializer_class = FeedbackTicketSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        return (
+            FeedbackTicket.objects.filter(user=self.request.user)
+            .prefetch_related("attachments", "replies__attachments")
+            .order_by("-updated_at", "-created_at")
+        )
+
+
+class FeedbackTicketDetailView(generics.RetrieveAPIView):
+    serializer_class = FeedbackTicketSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (
+            FeedbackTicket.objects.filter(user=self.request.user)
+            .prefetch_related("attachments", "replies__attachments")
+        )
+
+
+class FeedbackReplyCreateView(generics.CreateAPIView):
+    serializer_class = FeedbackReplySerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_ticket(self):
+        return get_object_or_404(FeedbackTicket, pk=self.kwargs["pk"], user=self.request.user)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["ticket"] = self.get_ticket()
+        return context
 
 VIDEO_UPLOAD_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 VIDEO_UPLOAD_EXTENSIONS = (".mp4", ".mov", ".webm")

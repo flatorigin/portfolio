@@ -30,6 +30,7 @@ from .models import (
     ProjectBidVersion,
     FeedbackTicket,
     FeedbackAttachment,
+    FeedbackReply,
 )
 from .project_intake import get_project_intake_template, get_project_type_choices
 
@@ -102,20 +103,27 @@ class FeedbackLinksField(serializers.Field):
 class FeedbackTicketSerializer(serializers.ModelSerializer):
     links = FeedbackLinksField(required=False)
     attachments = FeedbackAttachmentSerializer(many=True, read_only=True)
+    replies = serializers.SerializerMethodField()
+    category_label = serializers.CharField(source="get_category_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = FeedbackTicket
         fields = (
             "id",
             "category",
+            "category_label",
             "subject",
             "message",
             "links",
             "status",
+            "status_label",
             "attachments",
+            "replies",
             "created_at",
+            "updated_at",
         )
-        read_only_fields = ("id", "status", "attachments", "created_at")
+        read_only_fields = ("id", "status", "attachments", "replies", "created_at", "updated_at")
 
     def _incoming_attachments(self):
         request = self.context.get("request")
@@ -125,6 +133,10 @@ class FeedbackTicketSerializer(serializers.ModelSerializer):
         for key in ("attachments", "attachments[]"):
             files.extend(request.FILES.getlist(key))
         return files
+
+    def get_replies(self, obj):
+        replies = obj.replies.select_related("author").prefetch_related("attachments").all()
+        return FeedbackReplySerializer(replies, many=True, context=self.context).data
 
     def validate_subject(self, value):
         cleaned = str(value or "").strip()
@@ -176,6 +188,86 @@ class FeedbackTicketSerializer(serializers.ModelSerializer):
         ticket.send_submission_confirmation()
         ticket.send_internal_submission_notification()
         return ticket
+
+
+class FeedbackReplySerializer(serializers.ModelSerializer):
+    attachments = FeedbackAttachmentSerializer(many=True, read_only=True)
+    author_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeedbackReply
+        fields = (
+            "id",
+            "message",
+            "is_staff_reply",
+            "author_name",
+            "attachments",
+            "created_at",
+        )
+        read_only_fields = ("id", "is_staff_reply", "author_name", "attachments", "created_at")
+
+    def _incoming_attachments(self):
+        request = self.context.get("request")
+        if not request:
+            return []
+        files = []
+        for key in ("attachments", "attachments[]"):
+            files.extend(request.FILES.getlist(key))
+        return files
+
+    def get_author_name(self, obj):
+        if obj.is_staff_reply:
+            return "FlatOrigin Support"
+        return getattr(obj.author, "username", "") or "You"
+
+    def validate_message(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Message is required.")
+        return cleaned
+
+    def validate(self, attrs):
+        files = self._incoming_attachments()
+        if len(files) > FEEDBACK_MAX_FILES:
+            raise serializers.ValidationError({"attachments": f"Upload up to {FEEDBACK_MAX_FILES} files."})
+
+        for file_obj in files:
+            name = getattr(file_obj, "name", "") or ""
+            ext = os.path.splitext(name.lower())[1]
+            content_type = (getattr(file_obj, "content_type", "") or "").lower()
+            size = int(getattr(file_obj, "size", 0) or 0)
+
+            if ext not in FEEDBACK_ALLOWED_EXTENSIONS:
+                raise serializers.ValidationError({"attachments": f"{name} is not an allowed file type."})
+            if content_type and content_type not in FEEDBACK_ALLOWED_CONTENT_TYPES:
+                raise serializers.ValidationError({"attachments": f"{name} has an unsupported content type."})
+            if size > FEEDBACK_MAX_FILE_SIZE:
+                raise serializers.ValidationError({"attachments": f"{name} is larger than 20MB."})
+
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        ticket = self.context["ticket"]
+        files = self._incoming_attachments()
+        with transaction.atomic():
+            reply = FeedbackReply.objects.create(
+                ticket=ticket,
+                author=request.user,
+                is_staff_reply=False,
+                **validated_data,
+            )
+            for file_obj in files:
+                FeedbackAttachment.objects.create(
+                    ticket=ticket,
+                    reply=reply,
+                    file=file_obj,
+                    original_name=getattr(file_obj, "name", "") or "attachment",
+                    content_type=getattr(file_obj, "content_type", "") or "",
+                    size=int(getattr(file_obj, "size", 0) or 0),
+                )
+        reply.send_created_notification()
+        return reply
 
 
 class ProjectImageSerializer(serializers.ModelSerializer):
