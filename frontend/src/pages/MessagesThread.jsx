@@ -66,6 +66,34 @@ function getThreadBidMeta(thread) {
   };
 }
 
+function safeJsonParse(raw, fallback) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function getInboxReadMap() {
+  return safeJsonParse(localStorage.getItem("inbox_read_map") || "{}", {});
+}
+
+function setInboxReadMap(next) {
+  localStorage.setItem("inbox_read_map", JSON.stringify(next || {}));
+  window.dispatchEvent(new CustomEvent("inbox:read-map-changed"));
+}
+
+function markInboxThreadLatestRead(threadId, latestMessageId) {
+  if (!threadId || !latestMessageId) return false;
+  const map = getInboxReadMap();
+  const key = String(threadId);
+  const value = String(latestMessageId);
+  if (String(map[key] || "") === value) return false;
+  map[key] = value;
+  setInboxReadMap(map);
+  return true;
+}
+
 function MessageAttachments({
   attachments = [],
   mine = false,
@@ -307,6 +335,7 @@ export default function MessagesThread() {
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   const [readThreadIds, setReadThreadIds] = useState(new Set());
+  const [inboxReadMap, setInboxReadMapState] = useState(() => getInboxReadMap());
   const [meUsername, setMeUsername] = useState(() => localStorage.getItem("username") || "");
   const [meProfileType, setMeProfileType] = useState("");
   const [draftError, setDraftError] = useState("");
@@ -332,6 +361,22 @@ export default function MessagesThread() {
     return () => {
       window.removeEventListener("storage", syncUsername);
       window.removeEventListener("auth:changed", syncUsername);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncReadMap = () => {
+      if (isMountedRef.current) {
+        setInboxReadMapState(getInboxReadMap());
+      }
+    };
+
+    window.addEventListener("storage", syncReadMap);
+    window.addEventListener("inbox:read-map-changed", syncReadMap);
+
+    return () => {
+      window.removeEventListener("storage", syncReadMap);
+      window.removeEventListener("inbox:read-map-changed", syncReadMap);
     };
   }, []);
 
@@ -371,12 +416,16 @@ export default function MessagesThread() {
   const canReply =
     activeThread?.can_reply !== undefined ? !!activeThread.can_reply : true;
 
-  const markThreadRead = (id) => {
+  const markThreadRead = (id, latestMessageId = null) => {
     setReadThreadIds((prev) => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
+
+    if (latestMessageId && markInboxThreadLatestRead(id, latestMessageId)) {
+      setInboxReadMapState(getInboxReadMap());
+    }
   };
 
   const counterpartFor = (thread) => {
@@ -504,6 +553,12 @@ export default function MessagesThread() {
     const timer = setInterval(() => fetchMessages({ silent: true }), 8000);
     return () => clearInterval(timer);
   }, [activeThread?.id, fetchMessages]);
+
+  useEffect(() => {
+    if (!activeThread?.id || messages.length === 0) return;
+    const latest = messages[messages.length - 1];
+    markThreadRead(activeThread.id, latest?.id || null);
+  }, [activeThread?.id, messages]);
 
   async function threadAction(action) {
     if (!activeThread?.id) return;
@@ -754,8 +809,9 @@ export default function MessagesThread() {
   };
 
   const openThread = (id) => {
+    const thread = threads.find((item) => String(item.id) === String(id));
     setActiveThreadId(id);
-    markThreadRead(id);
+    markThreadRead(id, thread?.latest_message?.id || null);
     navigate(`/messages/${id}`);
   };
 
@@ -801,7 +857,10 @@ export default function MessagesThread() {
                   latest?.sender_username &&
                   latest.sender_username.toLowerCase() === meLower;
 
-                const hasBeenRead = readThreadIds.has(t.id);
+                const lastReadId = inboxReadMap[String(t.id)];
+                const hasBeenRead =
+                  readThreadIds.has(t.id) ||
+                  (!!latest?.id && String(lastReadId || "") === String(latest.id));
                 const isUnread = !hasBeenRead && !latestFromMe && !!latest;
 
                 const isActive = String(t.id) === String(activeThreadId);
