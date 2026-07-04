@@ -206,7 +206,10 @@ export default function App() {
         fetchInboxThreads({ force: true });
       }
     };
-    const handleInboxChanged = () => fetchInboxThreads({ force: true });
+    const handleInboxChanged = () => {
+      setInboxReadMap(getInboxReadMap());
+      fetchInboxThreads({ force: true });
+    };
 
     const interval = setInterval(fetchInboxThreads, 60000);
     window.addEventListener("focus", handleFocus);
@@ -410,14 +413,16 @@ export default function App() {
                     aria-label="Account menu"
                     aria-expanded={menuOpen ? "true" : "false"}
                   >
-                    {avatarInitial || "U"}
+                    <span className="block font-sans leading-none">
+                      {avatarInitial || "U"}
+                    </span>
                     {unreadInboxCount > 0 ? (
                       <span className="absolute -bottom-1 -right-1 z-10 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-[18px] text-white ring-2 ring-white">
                         {unreadBadgeLabel}
                       </span>
                     ) : (
                       <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-slate-900 shadow">
-                        <SymbolIcon name="keyboard_arrow_down" className="block text-[14px] leading-none" />
+                        <span className="h-1.5 w-1.5 rotate-45 border-b-2 border-r-2 border-current" />
                       </span>
                     )}
                   </button>
@@ -536,9 +541,9 @@ export default function App() {
                     aria-label="Account menu"
                     aria-expanded={menuOpen ? "true" : "false"}
                   >
-                    ?
+                    <span className="block font-sans leading-none">?</span>
                     <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-slate-900 shadow">
-                      <SymbolIcon name="keyboard_arrow_down" className="block text-[14px] leading-none" />
+                      <span className="h-1.5 w-1.5 rotate-45 border-b-2 border-r-2 border-current" />
                     </span>
                   </button>
 

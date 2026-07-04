@@ -24,6 +24,30 @@ function toInitial(nameOrUsername) {
   return s ? s[0].toUpperCase() : "U";
 }
 
+function safeJsonParse(raw, fallback) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function getInboxReadMap() {
+  return safeJsonParse(localStorage.getItem("inbox_read_map") || "{}", {});
+}
+
+function markInboxThreadLatestRead(threadId, latestMessageId) {
+  if (!threadId || !latestMessageId) return false;
+  const map = getInboxReadMap();
+  const key = String(threadId);
+  const value = String(latestMessageId);
+  if (String(map[key] || "") === value) return false;
+  map[key] = value;
+  localStorage.setItem("inbox_read_map", JSON.stringify(map));
+  window.dispatchEvent(new CustomEvent("inbox:read-map-changed"));
+  return true;
+}
+
 function isWithinDeleteWindow(createdAt) {
   if (!createdAt) return false;
   const created = new Date(createdAt).getTime();
@@ -248,6 +272,12 @@ export default function QuickMessageDrawer({
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [open, messages.length]);
+
+  useEffect(() => {
+    if (!open || !threadId || messages.length === 0) return;
+    const latest = messages[messages.length - 1];
+    markInboxThreadLatestRead(threadId, latest?.id || null);
+  }, [open, threadId, messages]);
 
   async function reloadMessages() {
     if (!threadId) return;
