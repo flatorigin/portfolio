@@ -21,6 +21,7 @@ from .views import (
     MessageAttachmentDeleteView,
     MessagePrefillBidView,
     MessagePrefillProjectView,
+    FeedbackTicketCreateView,
 )
 
 router = DefaultRouter()
@@ -34,6 +35,7 @@ urlpatterns = [
     # Favorites list for current user
     path("favorites/projects/", FavoriteProjectListView.as_view(), name="favorite-projects"),
     path("likes/projects/", LikedProjectListView.as_view(), name="liked-projects"),
+    path("feedback/", FeedbackTicketCreateView.as_view(), name="feedback-create"),
 
     # Comments
     path("projects/<int:pk>/comments/", ProjectCommentListCreateView.as_view(), name="project-comments"),

@@ -3,7 +3,9 @@
 # =============================================================================
 from datetime import timedelta
 import json
+import os
 import re
+from urllib.parse import urlparse
 
 from rest_framework import serializers
 from django.utils import timezone
@@ -26,12 +28,153 @@ from .models import (
     ProjectInvite,
     ProjectBid,
     ProjectBidVersion,
+    FeedbackTicket,
+    FeedbackAttachment,
 )
 from .project_intake import get_project_intake_template, get_project_type_choices
 
 User = get_user_model()
 COMMENT_CHAR_LIMIT = 280
 URL_PATTERN = re.compile(r"(https?://|www\.)", re.IGNORECASE)
+FEEDBACK_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".doc", ".docx", ".txt"}
+FEEDBACK_ALLOWED_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+}
+FEEDBACK_MAX_FILES = 5
+FEEDBACK_MAX_FILE_SIZE = 20 * 1024 * 1024
+
+
+class FeedbackAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeedbackAttachment
+        fields = ("id", "original_name", "content_type", "size", "url", "uploaded_at")
+        read_only_fields = fields
+
+    def get_url(self, obj):
+        if not obj.file:
+            return ""
+        try:
+            url = obj.file.url
+        except ValueError:
+            return ""
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
+
+class FeedbackLinksField(serializers.Field):
+    def to_internal_value(self, data):
+        if data in (None, "", []):
+            return []
+        if isinstance(data, str):
+            try:
+                parsed = json.loads(data)
+                raw_links = parsed if isinstance(parsed, list) else data.splitlines()
+            except (TypeError, ValueError):
+                raw_links = data.splitlines()
+        elif isinstance(data, list):
+            raw_links = data
+        else:
+            raise serializers.ValidationError("Links must be submitted as a list or one URL per line.")
+
+        links = []
+        for raw in raw_links:
+            url = str(raw or "").strip()
+            if not url:
+                continue
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise serializers.ValidationError("Links must start with http:// or https://.")
+            links.append(url)
+        return links
+
+    def to_representation(self, value):
+        return value if isinstance(value, list) else []
+
+
+class FeedbackTicketSerializer(serializers.ModelSerializer):
+    links = FeedbackLinksField(required=False)
+    attachments = FeedbackAttachmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = FeedbackTicket
+        fields = (
+            "id",
+            "category",
+            "subject",
+            "message",
+            "links",
+            "status",
+            "attachments",
+            "created_at",
+        )
+        read_only_fields = ("id", "status", "attachments", "created_at")
+
+    def _incoming_attachments(self):
+        request = self.context.get("request")
+        if not request:
+            return []
+        files = []
+        for key in ("attachments", "attachments[]"):
+            files.extend(request.FILES.getlist(key))
+        return files
+
+    def validate_subject(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Subject is required.")
+        if len(cleaned) > 200:
+            raise serializers.ValidationError("Subject must be 200 characters or less.")
+        return cleaned
+
+    def validate_message(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Message is required.")
+        return cleaned
+
+    def validate(self, attrs):
+        files = self._incoming_attachments()
+        if len(files) > FEEDBACK_MAX_FILES:
+            raise serializers.ValidationError({"attachments": f"Upload up to {FEEDBACK_MAX_FILES} files."})
+
+        for file_obj in files:
+            name = getattr(file_obj, "name", "") or ""
+            ext = os.path.splitext(name.lower())[1]
+            content_type = (getattr(file_obj, "content_type", "") or "").lower()
+            size = int(getattr(file_obj, "size", 0) or 0)
+
+            if ext not in FEEDBACK_ALLOWED_EXTENSIONS:
+                raise serializers.ValidationError({"attachments": f"{name} is not an allowed file type."})
+            if content_type and content_type not in FEEDBACK_ALLOWED_CONTENT_TYPES:
+                raise serializers.ValidationError({"attachments": f"{name} has an unsupported content type."})
+            if size > FEEDBACK_MAX_FILE_SIZE:
+                raise serializers.ValidationError({"attachments": f"{name} is larger than 20MB."})
+
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        files = self._incoming_attachments()
+        with transaction.atomic():
+            ticket = FeedbackTicket.objects.create(user=request.user, **validated_data)
+            for file_obj in files:
+                FeedbackAttachment.objects.create(
+                    ticket=ticket,
+                    file=file_obj,
+                    original_name=getattr(file_obj, "name", "") or "attachment",
+                    content_type=getattr(file_obj, "content_type", "") or "",
+                    size=int(getattr(file_obj, "size", 0) or 0),
+                )
+        ticket.send_submission_confirmation()
+        return ticket
 
 
 class ProjectImageSerializer(serializers.ModelSerializer):

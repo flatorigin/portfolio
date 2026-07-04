@@ -9,6 +9,7 @@ import api from "./api";
 import { Container, SymbolIcon } from "./ui";
 import { logout } from "./auth";
 import { roleLandingPath } from "./landingRole";
+import FeedbackSupportModal from "./components/FeedbackSupportModal";
 
 function normalizeUsername(value) {
   return String(value || "").trim().toLowerCase();
@@ -58,6 +59,7 @@ export default function App() {
   // user + menu state
   const [me, setMe] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [showContractorSetupPrompt, setShowContractorSetupPrompt] = useState(false);
   const [inboxThreads, setInboxThreads] = useState([]);
   const [inboxReadMap, setInboxReadMap] = useState(() => getInboxReadMap());
@@ -515,6 +517,20 @@ export default function App() {
                         <span>Saved &amp; Likes</span>
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setFeedbackModalOpen(true);
+                        }}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
+                          <SymbolIcon name="support_agent" className="text-[18px]" />
+                        </span>
+                        <span>Feedback &amp; Support</span>
+                      </button>
+
                       <div className="my-1 h-px bg-slate-100" />
 
                       {/* Log out */}
@@ -676,6 +692,11 @@ export default function App() {
           </Container>
         )}
       </main>
+
+      <FeedbackSupportModal
+        open={feedbackModalOpen}
+        onClose={() => setFeedbackModalOpen(false)}
+      />
     </div>
   );
 }

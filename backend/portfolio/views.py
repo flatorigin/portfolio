@@ -58,6 +58,7 @@ from .serializers import (
     ProjectLikeSerializer,
     ProjectBidSerializer,
     ProjectBidVersionSerializer,
+    FeedbackTicketSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 from .project_intake import (
@@ -93,6 +94,12 @@ SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (
     ".mov",
     ".webm",
 )
+
+
+class FeedbackTicketCreateView(generics.CreateAPIView):
+    serializer_class = FeedbackTicketSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 VIDEO_UPLOAD_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 VIDEO_UPLOAD_EXTENSIONS = (".mp4", ".mov", ".webm")

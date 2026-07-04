@@ -10,6 +10,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.mail import send_mail
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils import timezone
@@ -57,6 +58,11 @@ def message_attachment_upload_path(instance, filename):
     thread = instance.message.thread
     project_part = thread.project_id or "direct"
     return f"messages/{thread.owner_id}/{project_part}/{thread.client_id}/{filename}"
+
+def feedback_attachment_upload_path(instance, filename):
+    ticket_id = instance.ticket_id or "new"
+    user_id = getattr(instance.ticket, "user_id", "unknown")
+    return f"feedback_attachments/{user_id}/{ticket_id}/{filename}"
 
 def project_bid_attachment_upload_path(instance, filename):
     project_id = instance.bid.project_id or "project"
@@ -1040,3 +1046,132 @@ class MessageAttachment(models.Model):
 
     def __str__(self):
         return f"{self.kind} -> message {self.message_id}"
+
+
+class FeedbackTicket(models.Model):
+    CATEGORY_GENERAL_FEEDBACK = "general_feedback"
+    CATEGORY_TECHNICAL_SUPPORT = "technical_support"
+    CATEGORY_COPYRIGHT_CONTENT_REPORT = "copyright_content_report"
+    CATEGORY_CUSTOMER_SERVICE = "customer_service"
+    CATEGORY_CHOICES = [
+        (CATEGORY_GENERAL_FEEDBACK, "General Feedback"),
+        (CATEGORY_TECHNICAL_SUPPORT, "Technical Support"),
+        (CATEGORY_COPYRIGHT_CONTENT_REPORT, "Copyright & Content Report"),
+        (CATEGORY_CUSTOMER_SERVICE, "Customer Service"),
+    ]
+
+    STATUS_NEW = "new"
+    STATUS_WORK_IN_PROGRESS = "work_in_progress"
+    STATUS_NEEDS_MORE_SUPPORTING_DOCUMENTS = "needs_more_supporting_documents"
+    STATUS_RESOLVED = "resolved"
+    STATUS_REMOVED = "removed"
+    STATUS_CHOICES = [
+        (STATUS_NEW, "New"),
+        (STATUS_WORK_IN_PROGRESS, "Work in progress"),
+        (STATUS_NEEDS_MORE_SUPPORTING_DOCUMENTS, "Needs more supporting documents"),
+        (STATUS_RESOLVED, "Resolved"),
+        (STATUS_REMOVED, "Removed"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="feedback_tickets",
+    )
+    category = models.CharField(max_length=40, choices=CATEGORY_CHOICES)
+    subject = models.CharField(max_length=200)
+    message = models.TextField()
+    links = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=40, choices=STATUS_CHOICES, default=STATUS_NEW)
+    internal_admin_note = models.TextField(blank=True)
+    resolved_notified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"FeedbackTicket<{self.id}> {self.subject}"
+
+    def _send_feedback_email(self, subject, body):
+        recipient = getattr(self.user, "email", "") or ""
+        if not recipient:
+            return False
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+        try:
+            send_mail(subject, body, from_email, [recipient], fail_silently=True)
+            return True
+        except Exception:
+            return False
+
+    def send_submission_confirmation(self):
+        return self._send_feedback_email(
+            "We received your feedback",
+            (
+                "Thank you for your submission. The FlatOrigin team will review it "
+                "and contact you if more information is needed."
+            ),
+        )
+
+    def save(self, *args, **kwargs):
+        previous_status = None
+        if self.pk:
+            previous_status = (
+                FeedbackTicket.objects.filter(pk=self.pk)
+                .values_list("status", flat=True)
+                .first()
+            )
+
+        status_changed = previous_status is not None and previous_status != self.status
+        should_notify_resolved = (
+            status_changed
+            and self.status == self.STATUS_RESOLVED
+            and self.resolved_notified_at is None
+        )
+        should_notify_more_docs = (
+            status_changed
+            and self.status == self.STATUS_NEEDS_MORE_SUPPORTING_DOCUMENTS
+        )
+
+        if should_notify_resolved:
+            self.resolved_notified_at = timezone.now()
+
+        super().save(*args, **kwargs)
+
+        if should_notify_resolved:
+            self._send_feedback_email(
+                "Your feedback has been resolved",
+                (
+                    "Thank you for contacting FlatOrigin. Your feedback has been "
+                    "reviewed and marked as resolved."
+                ),
+            )
+        elif should_notify_more_docs:
+            self._send_feedback_email(
+                "Additional information is needed",
+                (
+                    "Thank you for contacting FlatOrigin. Please provide more "
+                    "supporting documents, screenshots, or clarification so we can "
+                    "continue reviewing your request."
+                ),
+            )
+
+
+class FeedbackAttachment(models.Model):
+    ticket = models.ForeignKey(
+        FeedbackTicket,
+        related_name="attachments",
+        on_delete=models.CASCADE,
+    )
+    file = models.FileField(upload_to=feedback_attachment_upload_path)
+    original_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=120, blank=True)
+    size = models.PositiveBigIntegerField(default=0)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at"]
+
+    def __str__(self):
+        return self.original_name or f"Feedback attachment {self.id}"
