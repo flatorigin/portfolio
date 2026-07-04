@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import AIConfiguration, AIUsageEvent, Profile
-from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan, MessageAttachment
+from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan, MessageAttachment, FeedbackTicket
 from apps.bids.models import Bid
 
 
@@ -25,6 +25,92 @@ def set_profile_type(user, profile_type, **defaults):
     )
     user._state.fields_cache["profile"] = profile
     return profile
+
+
+class FeedbackTicketApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="feedbackuser",
+            email="feedback@example.com",
+            password="pw123456",
+        )
+
+    def test_requires_authentication(self):
+        response = self.client.post(
+            "/api/feedback/",
+            {
+                "category": "general_feedback",
+                "subject": "Suggestion",
+                "message": "This is helpful.",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("portfolio.models.FeedbackTicket.send_submission_confirmation")
+    def test_creates_feedback_ticket_with_links_and_attachment(self, mock_email):
+        self.client.force_authenticate(user=self.user)
+        upload = SimpleUploadedFile(
+            "screenshot.png",
+            b"fake-image-content",
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            "/api/feedback/",
+            {
+                "category": "technical_support",
+                "subject": "Upload issue",
+                "message": "The upload flow needs help.",
+                "links": "https://flatorigin.com/projects/1\nhttp://example.com/context",
+                "attachments": [upload],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        ticket = FeedbackTicket.objects.get(id=response.data["id"])
+        self.assertEqual(ticket.user, self.user)
+        self.assertEqual(ticket.links, ["https://flatorigin.com/projects/1", "http://example.com/context"])
+        self.assertEqual(ticket.attachments.count(), 1)
+        mock_email.assert_called_once()
+
+    def test_rejects_unsafe_link_protocol(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/feedback/",
+            {
+                "category": "general_feedback",
+                "subject": "Bad link",
+                "message": "Please check this.",
+                "links": "javascript:alert(1)",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(FeedbackTicket.objects.count(), 0)
+
+    def test_rejects_invalid_attachment_type(self):
+        self.client.force_authenticate(user=self.user)
+        upload = SimpleUploadedFile(
+            "payload.exe",
+            b"not allowed",
+            content_type="application/octet-stream",
+        )
+
+        response = self.client.post(
+            "/api/feedback/",
+            {
+                "category": "technical_support",
+                "subject": "Attachment",
+                "message": "Testing attachment validation.",
+                "attachments": [upload],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(FeedbackTicket.objects.count(), 0)
 
 
 class PrivateProjectAccessTests(APITestCase):
