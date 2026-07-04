@@ -46,8 +46,9 @@ class FeedbackTicketApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    @patch("portfolio.models.FeedbackTicket.send_internal_submission_notification")
     @patch("portfolio.models.FeedbackTicket.send_submission_confirmation")
-    def test_creates_feedback_ticket_with_links_and_attachment(self, mock_email):
+    def test_creates_feedback_ticket_with_links_and_attachment(self, mock_email, mock_internal_email):
         self.client.force_authenticate(user=self.user)
         upload = SimpleUploadedFile(
             "screenshot.png",
@@ -73,6 +74,7 @@ class FeedbackTicketApiTests(APITestCase):
         self.assertEqual(ticket.links, ["https://flatorigin.com/projects/1", "http://example.com/context"])
         self.assertEqual(ticket.attachments.count(), 1)
         mock_email.assert_called_once()
+        mock_internal_email.assert_called_once()
 
     def test_rejects_unsafe_link_protocol(self):
         self.client.force_authenticate(user=self.user)

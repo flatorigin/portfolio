@@ -174,6 +174,7 @@ class FeedbackTicketSerializer(serializers.ModelSerializer):
                     size=int(getattr(file_obj, "size", 0) or 0),
                 )
         ticket.send_submission_confirmation()
+        ticket.send_internal_submission_notification()
         return ticket
 
 
