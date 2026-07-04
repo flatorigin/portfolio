@@ -1,8 +1,28 @@
 @import "tailwindcss";
 
 /* theme */
-html, body, #root { height: 100%; }
-body { @apply text-slate-900; background-color: #FBF9F7; }
+html, body, #root {
+  height: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  @apply text-slate-900;
+  background-color: #FBF9F7;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+img, video, canvas, svg {
+  max-width: 100%;
+}
+
+input, textarea, select, button {
+  max-width: 100%;
+}
 
 .material-symbols-rounded {
   display: inline-block;

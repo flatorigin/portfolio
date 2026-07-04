@@ -778,7 +778,7 @@ export default function PublicProfile() {
       {/* MAIN CONTENT */}
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-10">
         {/* About + Contact + Map row */}
-        <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           {/* About Card */}
           <div className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md">
             <div className="flex items-center justify-between gap-4">
@@ -817,13 +817,13 @@ export default function PublicProfile() {
           </div>
 
           {/* Contact Card - Compact sidebar */}
-          <div className="flex flex-col gap-4">
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="min-w-0 flex flex-col gap-4">
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md sm:p-5">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Get in touch
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <span
                     className={[
                       "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
@@ -848,14 +848,14 @@ export default function PublicProfile() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-2.5">
-                <div className="group relative">
+              <div className="mt-4 grid min-w-0 grid-cols-1 gap-2.5">
+                <div className="group relative min-w-0">
                   <button
                     type="button"
                     onClick={openDirectThread}
                     disabled={disableDirectMessage}
                     className={[
-                      "w-full rounded-xl px-4 py-3 text-sm font-medium transition",
+                      "flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl px-4 py-3 text-sm font-medium transition",
                       !disableDirectMessage
                         ? "bg-slate-900 text-white hover:bg-slate-800"
                         : "cursor-not-allowed bg-slate-200 text-slate-400",
@@ -880,16 +880,20 @@ export default function PublicProfile() {
                   )}
                 </div>
 
-                {publicContactMethods.map((method) => (
-                  <a
-                    key={method.key}
-                    href={method.href}
-                    className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    <SymbolIcon name={method.icon} className="text-[18px] text-slate-500" />
-                    <span>{method.label}</span>
-                  </a>
-                ))}
+                {publicContactMethods.length ? (
+                  <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
+                    {publicContactMethods.map((method) => (
+                      <a
+                        key={method.key}
+                        href={method.href}
+                        className="flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        <SymbolIcon name={method.icon} className="shrink-0 text-[18px] text-slate-500" />
+                        <span className="truncate">{method.label}</span>
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
 
                 {publicContactMethods.length === 0 && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-500">
@@ -911,7 +915,7 @@ export default function PublicProfile() {
 
             {/* Map - Compact */}
             {shouldRenderMap ? (
-              <div className="overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+              <div className="min-w-0 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
                 <Suspense
                   fallback={
                     <div className="flex h-40 items-center justify-center bg-slate-100 text-sm text-slate-500">

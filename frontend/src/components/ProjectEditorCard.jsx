@@ -688,7 +688,7 @@ export default function ProjectEditorCard({
                 No media yet.
               </div>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+              <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] gap-4">
 	                {images.filter(Boolean).map((it) => {
 	                  const mediaType = mediaTypeFor(it);
 	                  const mediaUrl = it.url || it.image || it.image_url || it.file || "/placeholder.png";

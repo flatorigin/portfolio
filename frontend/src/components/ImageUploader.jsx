@@ -229,7 +229,7 @@ export default function ImageUploader({ projectId, onUploaded }) {
 
       {files.length > 0 && (
         <>
-          <div className="mb-3 grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+          <div className="mb-3 grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] gap-3">
             {files.filter(Boolean).map((it, i) => {
               const fileName = it.file?.name || it.name || "Uploaded image";
               const imageUrl = it.url || it.image || it.image_url || it.src || "/placeholder.png";

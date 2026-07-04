@@ -356,7 +356,7 @@ export default function ProjectChecklistTool({ mode, storageKey }) {
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
           <div className="space-y-5">
             <Card className="p-5">
               <div className="mb-4">

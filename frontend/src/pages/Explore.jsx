@@ -1032,7 +1032,7 @@ export default function Explore() {
       {/* Main content area */}
       <div className="py-6">
         {loading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+          <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-5">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="aspect-[4/3] bg-slate-200" />
@@ -1062,7 +1062,7 @@ export default function Explore() {
               Showing <span className="font-medium text-slate-700">{filteredProjects.length + filteredDirectoryListings.length}</span> projects
             </p>
 
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+            <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-5">
         {filteredProjects.map((p) => {
           const pack = buildThumbPack(p);
           const coverUrl = pack.cover;

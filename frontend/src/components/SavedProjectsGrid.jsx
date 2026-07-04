@@ -116,7 +116,7 @@ export default function SavedProjectsGrid() {
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-4">
             {visible.map((fav) => {
               const projectId = extractProjectId(fav);
 

@@ -141,6 +141,10 @@ BUSINESS_DIRECTORY_REVIEW_EMAIL = os.environ.get(
     "BUSINESS_DIRECTORY_REVIEW_EMAIL",
     "babak@flatorigin.com",
 )
+FEEDBACK_NOTIFICATION_EMAIL = os.environ.get(
+    "FEEDBACK_NOTIFICATION_EMAIL",
+    "babak@flatorigin.com",
+)
 
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",

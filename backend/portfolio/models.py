@@ -1114,6 +1114,36 @@ class FeedbackTicket(models.Model):
             ),
         )
 
+    def send_internal_submission_notification(self):
+        recipient = str(getattr(settings, "FEEDBACK_NOTIFICATION_EMAIL", "") or "").strip()
+        if not recipient:
+            return False
+
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+        link_lines = "\n".join(str(link) for link in (self.links or [])) or "None"
+        body = (
+            "A new Feedback & Support ticket was submitted.\n\n"
+            f"Ticket ID: {self.id}\n"
+            f"Category: {self.get_category_display()}\n"
+            f"Status: {self.get_status_display()}\n"
+            f"User: {getattr(self.user, 'username', '')} <{getattr(self.user, 'email', '')}>\n"
+            f"Subject: {self.subject}\n\n"
+            f"Message:\n{self.message}\n\n"
+            f"Links:\n{link_lines}\n\n"
+            "Review this ticket in Django Admin under Portfolio > Feedback tickets."
+        )
+        try:
+            send_mail(
+                f"New FlatOrigin feedback: {self.subject}",
+                body,
+                from_email,
+                [recipient],
+                fail_silently=True,
+            )
+            return True
+        except Exception:
+            return False
+
     def save(self, *args, **kwargs):
         previous_status = None
         if self.pk:
