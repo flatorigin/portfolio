@@ -777,6 +777,108 @@ export default function PublicProfile() {
 
       {/* MAIN CONTENT */}
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-10">
+        <div className="mb-5 space-y-4 lg:hidden">
+          <div className="w-full overflow-hidden rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur-md">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Get in touch
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Message, call, or email from this profile.
+                </div>
+              </div>
+              {!isMine ? (
+                <ReportContentButton
+                  targetType="profile"
+                  targetId={profile.id}
+                  subject={profile.display_name || profile.username || "Profile"}
+                  label={<SymbolIcon name="flag" className="text-[14px]" />}
+                  title="Report profile"
+                  ariaLabel="Report profile"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                />
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid w-full grid-cols-1 gap-2.5">
+              <button
+                type="button"
+                onClick={openDirectThread}
+                disabled={disableDirectMessage}
+                className={[
+                  "flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-medium transition",
+                  !disableDirectMessage
+                    ? "bg-slate-900 text-white hover:bg-slate-800"
+                    : "cursor-not-allowed bg-slate-200 text-slate-400",
+                ].join(" ")}
+              >
+                {messageBusy ? "Opening..." : "Message"}
+              </button>
+
+              {messageError ? (
+                <p className="text-xs text-red-600">{messageError}</p>
+              ) : null}
+
+              {publicContactMethods.map((method) => (
+                <a
+                  key={method.key}
+                  href={method.href}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <SymbolIcon name={method.icon} className="shrink-0 text-[18px] text-slate-500" />
+                  <span>{method.label}</span>
+                </a>
+              ))}
+
+              {publicContactMethods.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-500">
+                  Contact info shared after connecting.
+                </div>
+              ) : null}
+
+              {!profile.allow_direct_messages ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-500">
+                  This user has not opted in to receive direct messages.
+                </div>
+              ) : authed && isMine ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs leading-5 text-slate-500">
+                  You can&apos;t message your own profile.
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {shouldRenderMap ? (
+            <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+              <Suspense
+                fallback={
+                  <div className="flex h-44 items-center justify-center bg-slate-100 text-sm text-slate-500">
+                    Loading map…
+                  </div>
+                }
+              >
+                <ServiceAreaMap
+                  locationQuery={profile?.service_location || ""}
+                  radiusMiles={profile?.coverage_radius_miles || ""}
+                  resolvedCenter={
+                    profile?.service_lat !== null &&
+                    profile?.service_lat !== undefined &&
+                    profile?.service_lng !== null &&
+                    profile?.service_lng !== undefined
+                      ? {
+                          lat: Number(profile.service_lat),
+                          lng: Number(profile.service_lng),
+                        }
+                      : null
+                  }
+                  heightClassName="h-44"
+                />
+              </Suspense>
+            </div>
+          ) : null}
+        </div>
+
         {/* About + Contact + Map row */}
         <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           {/* About Card */}
@@ -817,7 +919,7 @@ export default function PublicProfile() {
           </div>
 
           {/* Contact Card - Compact sidebar */}
-          <div className="min-w-0 flex flex-col gap-4">
+          <div className="hidden min-w-0 flex-col gap-4 lg:flex">
             <div className="min-w-0 overflow-hidden rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md sm:p-5">
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0 text-xs font-semibold uppercase tracking-wide text-slate-500">
