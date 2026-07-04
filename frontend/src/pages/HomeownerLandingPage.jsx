@@ -76,9 +76,6 @@ function LandingNav() {
   const [profile, setProfile] = useState(null);
   const profileType = profile?.profile_type || "";
   const displayName = profile?.display_name || profile?.username || "Account";
-  const avatarSrc = toUrl(
-    profile?.avatar_url || profile?.logo_url || profile?.logo || "",
-  );
   const avatarInitial = displayName.trim().charAt(0).toUpperCase() || "U";
 
   useEffect(() => {
@@ -144,17 +141,9 @@ function LandingNav() {
                   to="/dashboard"
                   aria-label="Open dashboard"
                   title={displayName}
-                  className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                  className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-900 font-sans text-xs font-semibold leading-none text-white shadow-sm transition hover:bg-slate-800"
                 >
-                  {avatarSrc ? (
-                    <img
-                      src={avatarSrc}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    avatarInitial
-                  )}
+                  <span className="block leading-none">{avatarInitial}</span>
                 </Link>
               </>
             ) : (
