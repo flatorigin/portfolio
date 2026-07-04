@@ -915,7 +915,7 @@ export default function PublicProfile() {
 
             {/* Map - Compact */}
             {shouldRenderMap ? (
-              <div className="overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+              <div className="min-w-0 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
                 <Suspense
                   fallback={
                     <div className="flex h-40 items-center justify-center bg-slate-100 text-sm text-slate-500">
