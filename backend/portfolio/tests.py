@@ -248,14 +248,29 @@ class LocalPromotionTests(APITestCase):
 
         mock_fetch_page_text.return_value = [
             "About our local supply store",
+            "Media, PA 19063",
             "Seasonal special: save 20% on pressure-treated lumber through 12/31/2026. Coupon code DECK20.",
             "Contact us for regular hours.",
         ]
+        self.source.name = ""
+        self.source.business_name = ""
+        self.source.category = ""
+        self.source.city = ""
+        self.source.state = ""
+        self.source.zip_code = ""
+        self.source.save()
 
         result = scrape_source(self.source, delay=False)
 
         self.assertEqual(result.status, PromotionSource.STATUS_SUCCESS)
         self.assertEqual(result.found, 1)
+        self.source.refresh_from_db()
+        self.assertEqual(self.source.name, "Example")
+        self.assertEqual(self.source.business_name, "Example")
+        self.assertEqual(self.source.category, "Lumber & Materials")
+        self.assertEqual(self.source.city, "Media")
+        self.assertEqual(self.source.state, "PA")
+        self.assertEqual(self.source.zip_code, "19063")
         promotion = LocalPromotion.objects.get(source=self.source)
         self.assertFalse(promotion.admin_approved)
         self.assertFalse(promotion.is_active)
