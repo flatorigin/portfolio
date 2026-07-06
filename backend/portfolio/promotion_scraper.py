@@ -47,6 +47,24 @@ DATE_RE = re.compile(
     r"([A-Z][a-z]{2,8}\s+\d{1,2}(?:,\s*\d{4})?|\d{1,2}/\d{1,2}/\d{2,4})",
     re.IGNORECASE,
 )
+LOCATION_RE = re.compile(
+    r"\b([A-Z][A-Za-z .'-]{2,60}),?\s+"
+    r"(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|IA|ID|IL|IN|KS|KY|LA|MA|MD|ME|MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VA|VT|WA|WI|WV|WY)"
+    r"\s+(\d{5}(?:-\d{4})?)\b"
+)
+
+CATEGORY_KEYWORDS = (
+    ("Lumber & Materials", ("lumber", "plywood", "deck board", "framing", "drywall", "concrete", "cement", "insulation", "siding")),
+    ("Tools & Equipment", ("tool", "drill", "saw", "rental", "equipment", "ladder", "compressor", "nailer")),
+    ("Roofing", ("roof", "shingle", "gutter", "flashing")),
+    ("Landscaping", ("landscape", "mulch", "gravel", "stone", "paver", "tree", "soil")),
+    ("Flooring", ("flooring", "tile", "hardwood", "vinyl", "carpet")),
+    ("Paint", ("paint", "primer", "stain", "brush", "roller")),
+    ("Plumbing", ("plumbing", "pipe", "faucet", "water heater", "drain")),
+    ("Electrical", ("electrical", "wire", "breaker", "lighting", "outlet")),
+    ("Windows & Doors", ("window", "door", "trim", "molding")),
+    ("Contractor Services", ("handyman", "contractor", "installation", "repair", "remodel", "free estimate")),
+)
 
 
 class PromotionScrapeError(Exception):
@@ -140,6 +158,50 @@ def fetch_page_text(url):
         blocks.append(text)
 
     return blocks
+
+
+def source_name_from_url(url):
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().split("@")[-1].split(":")[0]
+    host = re.sub(r"^www\.", "", host)
+    root = host.split(".")[0] if host else "Promotion source"
+    words = re.split(r"[-_]+", root)
+    return " ".join(word.capitalize() for word in words if word) or host or "Promotion source"
+
+
+def infer_source_details(source, blocks):
+    text = "\n".join(blocks[:80])
+    updates = {}
+    fallback_name = source_name_from_url(source.website_url)
+
+    if not source.name:
+        updates["name"] = fallback_name
+    if not source.business_name:
+        updates["business_name"] = fallback_name
+
+    if not source.category:
+        lower = text.lower()
+        for category, keywords in CATEGORY_KEYWORDS:
+            if any(keyword in lower for keyword in keywords):
+                updates["category"] = category
+                break
+
+    if not (source.city and source.state and source.zip_code):
+        match = LOCATION_RE.search(text)
+        if match:
+            city, state, zip_code = match.groups()
+            if not source.city:
+                updates["city"] = normalize_space(city)
+            if not source.state:
+                updates["state"] = state
+            if not source.zip_code:
+                updates["zip_code"] = zip_code
+
+    if updates:
+        for field, value in updates.items():
+            setattr(source, field, value)
+        source.save(update_fields=[*updates.keys(), "updated_at"])
+    return source
 
 
 def block_has_signal(text):
@@ -254,6 +316,7 @@ def scrape_source(source, *, delay=True):
     now = timezone.now()
     try:
         blocks = fetch_page_text(source.website_url)
+        source = infer_source_details(source, blocks)
         promotion_data = extract_promotions_from_blocks(source, blocks)
     except Exception as exc:
         error = str(exc)

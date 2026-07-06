@@ -171,6 +171,50 @@ class PromotionSourceAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+    fieldsets = (
+        (
+            "Paste URL",
+            {
+                "description": "Only Website url is required. Save this source and FlatOrigin will scrape the page and fill business details when it can.",
+                "fields": ("website_url", "is_active"),
+            },
+        ),
+        (
+            "Auto-filled business details",
+            {
+                "description": "Optional. Leave these blank if you want the scraper to infer them from the page.",
+                "fields": (
+                    "name",
+                    "business_name",
+                    "category",
+                    "city",
+                    "state",
+                    "zip_code",
+                    "service_radius_miles",
+                    "refresh_interval_hours",
+                ),
+            },
+        ),
+        (
+            "Scrape status",
+            {
+                "fields": (
+                    "scrape_status",
+                    "scrape_error",
+                    "paused_due_to_failures",
+                    "consecutive_failures",
+                    "last_scraped_at",
+                    "last_successful_scrape_at",
+                    "last_promotions_found",
+                    "last_promotions_added",
+                    "last_promotions_updated",
+                    "last_promotions_expired",
+                    "created_at",
+                    "updated_at",
+                ),
+            },
+        ),
+    )
     actions = ("scrape_now", "resume_scheduled_scraping")
     inlines = [PromotionScrapeLogInline]
 

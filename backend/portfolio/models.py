@@ -1282,7 +1282,7 @@ class PromotionSource(models.Model):
         (STATUS_NO_PROMOTIONS_FOUND, "No promotions found"),
     ]
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, blank=True, default="")
     website_url = models.URLField(max_length=1000)
     business_name = models.CharField(max_length=255, blank=True, default="")
     category = models.CharField(max_length=120, blank=True, default="")
