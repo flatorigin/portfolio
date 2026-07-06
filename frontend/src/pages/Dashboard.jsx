@@ -8,7 +8,6 @@ import api from "../api";
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
-import LocalPromotionsSection from "../components/LocalPromotionsSection";
 import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
@@ -1081,12 +1080,6 @@ export default function Dashboard() {
       </div>
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
-
-      <LocalPromotionsSection
-        role={isHomeownerAccount ? "homeowner" : "contractor"}
-        compact
-        initialLimit={4}
-      />
 
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between">

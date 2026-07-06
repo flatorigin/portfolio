@@ -31,7 +31,6 @@ from .models import (
     FeedbackTicket,
     FeedbackAttachment,
     FeedbackReply,
-    LocalPromotion,
 )
 from .project_intake import get_project_intake_template, get_project_type_choices
 
@@ -50,39 +49,6 @@ FEEDBACK_ALLOWED_CONTENT_TYPES = {
 }
 FEEDBACK_MAX_FILES = 5
 FEEDBACK_MAX_FILE_SIZE = 20 * 1024 * 1024
-
-
-class LocalPromotionSerializer(serializers.ModelSerializer):
-    note = serializers.SerializerMethodField()
-
-    class Meta:
-        model = LocalPromotion
-        fields = (
-            "id",
-            "title",
-            "business_name",
-            "category",
-            "promotion_text",
-            "product_or_service_name",
-            "original_price",
-            "sale_price",
-            "discount_text",
-            "coupon_code",
-            "start_date",
-            "end_date",
-            "website_url",
-            "city",
-            "state",
-            "zip_code",
-            "applies_to_homeowners",
-            "applies_to_contractors",
-            "note",
-            "updated_at",
-        )
-        read_only_fields = fields
-
-    def get_note(self, obj):
-        return "Promotion details should be verified with the business."
 
 
 class FeedbackAttachmentSerializer(serializers.ModelSerializer):

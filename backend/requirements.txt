@@ -11,5 +11,3 @@ psycopg2-binary
 dj-database-url
 whitenoise
 django-anymail[resend]
-requests
-beautifulsoup4

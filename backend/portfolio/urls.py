@@ -24,7 +24,6 @@ from .views import (
     FeedbackTicketListCreateView,
     FeedbackTicketDetailView,
     FeedbackReplyCreateView,
-    LocalPromotionListView,
 )
 
 router = DefaultRouter()
@@ -41,7 +40,6 @@ urlpatterns = [
     path("feedback/", FeedbackTicketListCreateView.as_view(), name="feedback-list-create"),
     path("feedback/<int:pk>/", FeedbackTicketDetailView.as_view(), name="feedback-detail"),
     path("feedback/<int:pk>/replies/", FeedbackReplyCreateView.as_view(), name="feedback-reply-create"),
-    path("local-promotions/", LocalPromotionListView.as_view(), name="local-promotions"),
 
     # Comments
     path("projects/<int:pk>/comments/", ProjectCommentListCreateView.as_view(), name="project-comments"),

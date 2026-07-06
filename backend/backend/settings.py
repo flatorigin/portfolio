@@ -165,16 +165,6 @@ OPENAI_MODEL_LIGHT = os.environ.get("OPENAI_MODEL_LIGHT", "gpt-5.4-nano").strip(
 AI_ENABLED = parse_bool_env("AI_ENABLED", default=False)
 AI_DAILY_LIMIT_PER_USER = int(os.environ.get("AI_DAILY_LIMIT_PER_USER", "10"))
 
-PROMOTIONS_USER_AGENT = os.environ.get(
-    "PROMOTIONS_USER_AGENT",
-    "FlatOriginBot/1.0 (+https://flatorigin.com)",
-)
-PROMOTIONS_RESPECT_ROBOTS_TXT = parse_bool_env("PROMOTIONS_RESPECT_ROBOTS_TXT", default=True)
-PROMOTIONS_SCRAPE_TIMEOUT_SECONDS = int(os.environ.get("PROMOTIONS_SCRAPE_TIMEOUT_SECONDS", "12"))
-PROMOTIONS_SCRAPE_DELAY_MIN_SECONDS = float(os.environ.get("PROMOTIONS_SCRAPE_DELAY_MIN_SECONDS", "0.5"))
-PROMOTIONS_SCRAPE_DELAY_MAX_SECONDS = float(os.environ.get("PROMOTIONS_SCRAPE_DELAY_MAX_SECONDS", "2.0"))
-PROMOTIONS_MAX_CONSECUTIVE_FAILURES = int(os.environ.get("PROMOTIONS_MAX_CONSECUTIVE_FAILURES", "5"))
-
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

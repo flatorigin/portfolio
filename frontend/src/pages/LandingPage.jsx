@@ -82,12 +82,6 @@ function GatewayNav() {
               Guides
             </Link>
             <Link
-              to="/local-promotions"
-              className="hidden px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900 sm:inline-flex"
-            >
-              Deals
-            </Link>
-            <Link
               to={authed ? "/dashboard" : "/login"}
               className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
             >
