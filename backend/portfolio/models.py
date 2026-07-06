@@ -1268,3 +1268,123 @@ class FeedbackReply(models.Model):
                 notified_at=self.notified_at
             )
         return sent
+
+
+class PromotionSource(models.Model):
+    STATUS_NOT_SCRAPED = "not_scraped"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+    STATUS_NO_PROMOTIONS_FOUND = "no_promotions_found"
+    STATUS_CHOICES = [
+        (STATUS_NOT_SCRAPED, "Not scraped"),
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_NO_PROMOTIONS_FOUND, "No promotions found"),
+    ]
+
+    name = models.CharField(max_length=255)
+    website_url = models.URLField(max_length=1000)
+    business_name = models.CharField(max_length=255, blank=True, default="")
+    category = models.CharField(max_length=120, blank=True, default="")
+    city = models.CharField(max_length=120, blank=True, default="")
+    state = models.CharField(max_length=80, blank=True, default="")
+    zip_code = models.CharField(max_length=20, blank=True, default="")
+    service_radius_miles = models.PositiveIntegerField(default=25)
+    refresh_interval_hours = models.PositiveIntegerField(default=24)
+    is_active = models.BooleanField(default=True)
+    paused_due_to_failures = models.BooleanField(default=False)
+    consecutive_failures = models.PositiveIntegerField(default=0)
+    last_scraped_at = models.DateTimeField(null=True, blank=True)
+    last_successful_scrape_at = models.DateTimeField(null=True, blank=True)
+    last_promotions_found = models.PositiveIntegerField(default=0)
+    last_promotions_added = models.PositiveIntegerField(default=0)
+    last_promotions_updated = models.PositiveIntegerField(default=0)
+    last_promotions_expired = models.PositiveIntegerField(default=0)
+    scrape_status = models.CharField(
+        max_length=40,
+        choices=STATUS_CHOICES,
+        default=STATUS_NOT_SCRAPED,
+    )
+    scrape_error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["business_name", "name"]
+
+    def __str__(self):
+        return self.business_name or self.name or self.website_url
+
+    @property
+    def should_scrape(self):
+        if not self.is_active or self.paused_due_to_failures:
+            return False
+        if not self.last_scraped_at:
+            return True
+        return timezone.now() >= self.last_scraped_at + timedelta(hours=self.refresh_interval_hours or 24)
+
+
+class LocalPromotion(models.Model):
+    source = models.ForeignKey(
+        PromotionSource,
+        on_delete=models.CASCADE,
+        related_name="promotions",
+    )
+    title = models.CharField(max_length=255)
+    business_name = models.CharField(max_length=255, blank=True, default="")
+    category = models.CharField(max_length=120, blank=True, default="")
+    promotion_text = models.TextField()
+    product_or_service_name = models.CharField(max_length=255, blank=True, default="")
+    original_price = models.CharField(max_length=80, blank=True, default="")
+    sale_price = models.CharField(max_length=80, blank=True, default="")
+    discount_text = models.CharField(max_length=160, blank=True, default="")
+    coupon_code = models.CharField(max_length=80, blank=True, default="")
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    website_url = models.URLField(max_length=1000)
+    city = models.CharField(max_length=120, blank=True, default="")
+    state = models.CharField(max_length=80, blank=True, default="")
+    zip_code = models.CharField(max_length=20, blank=True, default="")
+    applies_to_homeowners = models.BooleanField(default=True)
+    applies_to_contractors = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
+    admin_approved = models.BooleanField(default=False)
+    confidence_score = models.FloatField(null=True, blank=True)
+    raw_excerpt = models.TextField(blank=True, default="")
+    source_key = models.CharField(max_length=160, blank=True, default="", db_index=True)
+    content_fingerprint = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    missing_since = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["admin_approved", "is_active"]),
+            models.Index(fields=["category", "city"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} - {self.business_name or self.source}"
+
+
+class PromotionScrapeLog(models.Model):
+    source = models.ForeignKey(
+        PromotionSource,
+        on_delete=models.CASCADE,
+        related_name="scrape_logs",
+    )
+    status = models.CharField(max_length=40, choices=PromotionSource.STATUS_CHOICES)
+    promotions_found = models.PositiveIntegerField(default=0)
+    promotions_added = models.PositiveIntegerField(default=0)
+    promotions_updated = models.PositiveIntegerField(default=0)
+    promotions_expired = models.PositiveIntegerField(default=0)
+    error = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.source} scrape {self.status} at {self.created_at:%Y-%m-%d %H:%M}"

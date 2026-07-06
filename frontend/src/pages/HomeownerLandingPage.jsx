@@ -126,6 +126,12 @@ function LandingNav() {
             >
               Guides
             </Link>
+            <Link
+              to="/local-promotions"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
+            >
+              Deals
+            </Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
             {authed ? (
@@ -173,8 +179,8 @@ function FeatureStrip() {
   const features = [
     [
       "edit_square",
-      "Organize Ideas",
-      "Upload photos, add notes and measurements.",
+      "Highlighted Project Planner",
+      "Build a contractor-ready project packet with photos, notes, markup, and measurements.",
     ],
     ["lock", "Private or Public", "Control who can see your project."],
     [
@@ -266,14 +272,14 @@ export default function HomeownerLandingPage() {
               {/* Left: Content */}
               <div className="max-w-xl">
                 <Badge className="border-amber-200/60 bg-amber-50 font-semibold uppercase tracking-[0.12em] text-amber-700">
-                  For homeowners
+                  Highlighted homeowner feature
                 </Badge>
                 <h1 className="mt-5 text-balance text-4xl font-bold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-[3.5rem]">
-                  Plan your home project with clarity
+                  Organize your project with the Project Planner
                 </h1>
                 <p className="mt-6 text-pretty text-lg leading-relaxed text-slate-600">
-                  Save ideas, organize project details, compare bids, and
-                  communicate with contractors - all in one place.
+                  Easily turn photos, notes, measurements, and markups into a
+                  clear, contractor-ready plan before you reach out for pricing.
                 </p>
                 <div className="mt-8 flex flex-wrap items-center gap-4">
                   <Link
@@ -431,10 +437,10 @@ export default function HomeownerLandingPage() {
                       </span>
                       <div>
                         <div className="text-xs font-semibold text-slate-900">
-                          $2.4M+ projects
+                          Contractor-ready plan
                         </div>
                         <div className="text-[11px] text-slate-500">
-                          Posted this month
+                          Photos, notes, and markup
                         </div>
                       </div>
                     </div>
@@ -457,7 +463,7 @@ export default function HomeownerLandingPage() {
               Why Choose FlatOrigin
             </h2>
             <p className="mx-auto mt-3 max-w-lg text-slate-500">
-              Built different from traditional contractor marketplaces
+              Start with a clearer project packet, then compare contractors with less guesswork.
             </p>
           </div>
           <div className="mx-auto mt-12 max-w-5xl px-4">
