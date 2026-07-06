@@ -8,7 +8,18 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import AIConfiguration, AIUsageEvent, Profile
-from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan, MessageAttachment, FeedbackTicket, FeedbackReply
+from .models import (
+    Project,
+    ProjectInvite,
+    MessageThread,
+    PrivateMessage,
+    ProjectPlan,
+    MessageAttachment,
+    FeedbackTicket,
+    FeedbackReply,
+    HelperListing,
+    HelperFeedback,
+)
 from apps.bids.models import Bid
 
 
@@ -185,6 +196,158 @@ class FeedbackTicketApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(FeedbackReply.objects.count(), 0)
+
+
+class ProjectHelperApiTests(APITestCase):
+    def setUp(self):
+        self.helper_user = User.objects.create_user(
+            username="helperuser",
+            email="helper@example.com",
+            password="pw123456",
+        )
+        self.homeowner = User.objects.create_user(
+            username="homeownerhelper",
+            email="homeowner@example.com",
+            password="pw123456",
+        )
+        set_profile_type(self.homeowner, Profile.ProfileType.HOMEOWNER)
+
+    def helper_payload(self):
+        return {
+            "full_name": "Alex Helper",
+            "city": "Media",
+            "state": "pa",
+            "service_radius_miles": 20,
+            "phone": "555-111-2222",
+            "email": "helper@example.com",
+            "preferred_contact_method": "email",
+            "skills": ["cleanup", "painting"],
+            "availability": ["weekends", "one_day_help"],
+            "experience_level": "1_3_years",
+            "bio": "Available for cleanup and painting support.",
+        }
+
+    def test_public_list_only_shows_approved_verified_active_helpers(self):
+        visible = HelperListing.objects.create(
+            owner=self.helper_user,
+            full_name="Visible Helper",
+            city="Media",
+            state="PA",
+            service_radius_miles=15,
+            email="visible@example.com",
+            preferred_contact_method="email",
+            skills=["cleanup"],
+            availability=["weekends"],
+            experience_level="1_3_years",
+            is_active=True,
+            admin_approved=True,
+            contact_verified=True,
+        )
+        HelperListing.objects.create(
+            owner=self.helper_user,
+            full_name="Hidden Helper",
+            city="Media",
+            state="PA",
+            service_radius_miles=15,
+            email="hidden@example.com",
+            preferred_contact_method="email",
+            skills=["cleanup"],
+            availability=["weekends"],
+            experience_level="1_3_years",
+            is_active=True,
+            admin_approved=False,
+            contact_verified=True,
+        )
+
+        response = self.client.get("/api/project-helpers/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [visible.id])
+        self.assertEqual(response.data[0]["email"], "visible@example.com")
+
+    @patch("portfolio.models.HelperListing.send_verification_email")
+    def test_anonymous_user_can_create_unpublished_helper_listing(self, mock_verify):
+        response = self.client.post("/api/project-helpers/", self.helper_payload(), format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        listing = HelperListing.objects.get(id=response.data["id"])
+        self.assertIsNone(listing.owner)
+        self.assertEqual(listing.state, "PA")
+        self.assertFalse(listing.admin_approved)
+        self.assertFalse(listing.contact_verified)
+        mock_verify.assert_called_once()
+
+    @patch("portfolio.models.HelperListing.send_verification_email")
+    def test_phone_only_listing_submits_for_manual_verification(self, mock_verify):
+        payload = self.helper_payload()
+        payload["email"] = ""
+        payload["preferred_contact_method"] = "phone"
+
+        response = self.client.post("/api/project-helpers/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        listing = HelperListing.objects.get(id=response.data["id"])
+        self.assertEqual(listing.phone, "555-111-2222")
+        self.assertFalse(listing.contact_verified)
+        mock_verify.assert_called_once()
+
+    def test_verify_token_marks_contact_verified(self):
+        listing = HelperListing.objects.create(
+            owner=self.helper_user,
+            full_name="Verify Helper",
+            city="Media",
+            state="PA",
+            service_radius_miles=15,
+            email="verify@example.com",
+            preferred_contact_method="email",
+            skills=["cleanup"],
+            availability=["weekends"],
+            experience_level="1_3_years",
+        )
+
+        response = self.client.get(f"/api/project-helpers/verify/{listing.verification_token}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        listing.refresh_from_db()
+        self.assertTrue(listing.contact_verified)
+
+    def test_feedback_requires_homeowner_or_contractor_and_stays_unapproved(self):
+        listing = HelperListing.objects.create(
+            owner=self.helper_user,
+            full_name="Feedback Helper",
+            city="Media",
+            state="PA",
+            service_radius_miles=15,
+            email="feedback@example.com",
+            preferred_contact_method="email",
+            skills=["cleanup"],
+            availability=["weekends"],
+            experience_level="1_3_years",
+            is_active=True,
+            admin_approved=True,
+            contact_verified=True,
+        )
+        self.client.force_authenticate(user=self.homeowner)
+
+        response = self.client.post(
+            f"/api/project-helpers/{listing.id}/feedback/",
+            {
+                "project_type": "Garage cleanup",
+                "worked_together": True,
+                "reliability_rating": 5,
+                "communication_rating": 4,
+                "work_quality_rating": 5,
+                "would_hire_again": True,
+                "short_note": "Helpful and on time.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        feedback = HelperFeedback.objects.get(id=response.data["id"])
+        self.assertEqual(feedback.helper, listing)
+        self.assertEqual(feedback.reviewer, self.homeowner)
+        self.assertFalse(feedback.is_approved)
 
 
 class PrivateProjectAccessTests(APITestCase):

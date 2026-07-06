@@ -44,6 +44,7 @@ from .models import (
     ProjectBid,
     ProjectBidVersion,
     FeedbackTicket,
+    HelperListing,
 )
 from apps.bids.models import Bid
 from .access import can_access_job_interactions, can_view_project, visible_projects_q_for_user
@@ -61,6 +62,8 @@ from .serializers import (
     ProjectBidVersionSerializer,
     FeedbackTicketSerializer,
     FeedbackReplySerializer,
+    HelperListingSerializer,
+    HelperFeedbackSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 from .project_intake import (
@@ -134,6 +137,123 @@ class FeedbackReplyCreateView(generics.CreateAPIView):
         context = super().get_serializer_context()
         context["ticket"] = self.get_ticket()
         return context
+
+
+class HelperListingViewSet(viewsets.ModelViewSet):
+    serializer_class = HelperListingSerializer
+    permission_classes = [permissions.AllowAny]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        queryset = (
+            HelperListing.objects.filter(
+                is_active=True,
+                admin_approved=True,
+                contact_verified=True,
+            )
+            .prefetch_related("feedback")
+            .order_by("-created_at")
+        )
+
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(full_name__icontains=search)
+                | Q(city__icontains=search)
+                | Q(state__icontains=search)
+                | Q(skills__icontains=search)
+                | Q(availability__icontains=search)
+                | Q(other_skill__icontains=search)
+                | Q(bio__icontains=search)
+            )
+
+        skill = (self.request.query_params.get("skill") or "").strip()
+        if skill:
+            queryset = queryset.filter(skills__icontains=skill)
+
+        city = (self.request.query_params.get("city") or "").strip()
+        if city:
+            queryset = queryset.filter(city__iexact=city)
+
+        availability = (self.request.query_params.get("availability") or "").strip()
+        if availability:
+            queryset = queryset.filter(availability__icontains=availability)
+
+        experience = (self.request.query_params.get("experience_level") or "").strip()
+        if experience:
+            queryset = queryset.filter(experience_level=experience)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[permissions.AllowAny],
+        url_path="options",
+    )
+    def listing_options(self, request):
+        return Response(
+            {
+                "skills": [
+                    {"value": value, "label": label}
+                    for value, label in HelperListing.SKILL_CHOICES
+                ],
+                "availability": [
+                    {"value": value, "label": label}
+                    for value, label in HelperListing.AVAILABILITY_CHOICES
+                ],
+                "experience_levels": [
+                    {"value": value, "label": label}
+                    for value, label in HelperListing.EXPERIENCE_CHOICES
+                ],
+                "preferred_contact_methods": [
+                    {"value": value, "label": label}
+                    for value, label in HelperListing.CONTACT_METHOD_CHOICES
+                ],
+            }
+        )
+
+
+class HelperListingVerifyView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token):
+        helper = get_object_or_404(HelperListing, verification_token=token)
+        if not helper.contact_verified:
+            helper.contact_verified = True
+            helper.contact_verified_at = timezone.now()
+            helper.save(update_fields=["contact_verified", "contact_verified_at", "updated_at"])
+        return Response(
+            {
+                "detail": "Contact verified. Your listing will appear after admin review.",
+                "contact_verified": True,
+                "admin_approved": helper.admin_approved,
+                "is_active": helper.is_active,
+            }
+        )
+
+
+class HelperFeedbackCreateView(generics.CreateAPIView):
+    serializer_class = HelperFeedbackSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_helper(self):
+        return get_object_or_404(
+            HelperListing,
+            pk=self.kwargs["pk"],
+            is_active=True,
+            admin_approved=True,
+            contact_verified=True,
+        )
+
+    def perform_create(self, serializer):
+        profile_type = getattr(getattr(self.request.user, "profile", None), "profile_type", "")
+        if profile_type not in ("homeowner", "contractor"):
+            raise PermissionDenied("Only homeowner or contractor accounts can leave helper feedback.")
+        serializer.save(helper=self.get_helper(), reviewer=self.request.user)
 
 VIDEO_UPLOAD_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 VIDEO_UPLOAD_EXTENSIONS = (".mp4", ".mov", ".webm")

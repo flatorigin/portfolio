@@ -37,6 +37,7 @@ const ProjectMarkupCanvas = lazy(() => import("./pages/ProjectMarkupCanvas.jsx")
 const ProjectCheckGateway = lazy(() => import("./pages/ProjectCheckGateway.jsx"));
 const HomeownerProjectCheck = lazy(() => import("./pages/HomeownerProjectCheck.jsx"));
 const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx"));
+const ProjectHelpers = lazy(() => import("./pages/ProjectHelpers.jsx"));
 
 function RouteFallback() {
   return (
@@ -74,6 +75,8 @@ createRoot(document.getElementById("root")).render(
           <Route path="project-check/homeowner" element={<HomeownerProjectCheck />} />
           <Route path="project-check/contractor" element={<ContractorLeadCheck />} />
           <Route path="contractor-check" element={<ContractorLeadCheck />} />
+          <Route path="project-helpers" element={<ProjectHelpers />} />
+          <Route path="project-helpers/verify/:token" element={<ProjectHelpers />} />
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />

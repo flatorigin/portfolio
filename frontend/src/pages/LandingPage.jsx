@@ -82,6 +82,12 @@ function GatewayNav() {
               Guides
             </Link>
             <Link
+              to="/project-helpers"
+              className="hidden px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900 md:inline-flex"
+            >
+              Helpers
+            </Link>
+            <Link
               to={authed ? "/dashboard" : "/login"}
               className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
             >

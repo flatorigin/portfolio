@@ -381,6 +381,9 @@ export default function App() {
               <NavLink to="/guides" compact>
                 Guides
               </NavLink>
+              <NavLink to="/project-helpers" compact>
+                Helpers
+              </NavLink>
             </div>
 
             {/* Desktop center: role-aware nav */}
@@ -388,6 +391,7 @@ export default function App() {
               <NavLink to="/explore">Explore</NavLink>
               {authed ? <NavLink to="/work">{workNavLabel}</NavLink> : null}
               <NavLink to="/guides">Guides</NavLink>
+              <NavLink to="/project-helpers">Project Helpers</NavLink>
             </div>
 
             {/* Right side */}

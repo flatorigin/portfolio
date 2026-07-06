@@ -3,6 +3,7 @@ from io import BytesIO
 import os
 import subprocess
 import tempfile
+import uuid
 from datetime import timedelta
 from pathlib import Path
 
@@ -1046,6 +1047,203 @@ class MessageAttachment(models.Model):
 
     def __str__(self):
         return f"{self.kind} -> message {self.message_id}"
+
+
+class HelperListing(models.Model):
+    SKILL_GENERAL_LABOR = "general_labor"
+    SKILL_DEMOLITION = "demolition"
+    SKILL_CLEANUP = "cleanup"
+    SKILL_PAINTING = "painting"
+    SKILL_LANDSCAPING = "landscaping"
+    SKILL_FLOORING = "flooring"
+    SKILL_DRYWALL = "drywall"
+    SKILL_FRAMING = "framing"
+    SKILL_DECKS = "decks"
+    SKILL_CONCRETE = "concrete"
+    SKILL_TILE = "tile"
+    SKILL_CABINET_INSTALLATION = "cabinet_installation"
+    SKILL_MOVING_MATERIALS = "moving_materials"
+    SKILL_ROOFING_ASSISTANT = "roofing_assistant"
+    SKILL_ELECTRICAL_ASSISTANT = "electrical_assistant"
+    SKILL_PLUMBING_ASSISTANT = "plumbing_assistant"
+    SKILL_OTHER = "other"
+    SKILL_CHOICES = [
+        (SKILL_GENERAL_LABOR, "General labor"),
+        (SKILL_DEMOLITION, "Demolition"),
+        (SKILL_CLEANUP, "Cleanup"),
+        (SKILL_PAINTING, "Painting"),
+        (SKILL_LANDSCAPING, "Landscaping"),
+        (SKILL_FLOORING, "Flooring"),
+        (SKILL_DRYWALL, "Drywall"),
+        (SKILL_FRAMING, "Framing"),
+        (SKILL_DECKS, "Decks"),
+        (SKILL_CONCRETE, "Concrete"),
+        (SKILL_TILE, "Tile"),
+        (SKILL_CABINET_INSTALLATION, "Cabinet installation"),
+        (SKILL_MOVING_MATERIALS, "Moving materials"),
+        (SKILL_ROOFING_ASSISTANT, "Roofing assistant"),
+        (SKILL_ELECTRICAL_ASSISTANT, "Electrical assistant"),
+        (SKILL_PLUMBING_ASSISTANT, "Plumbing assistant"),
+        (SKILL_OTHER, "Other"),
+    ]
+    SKILL_LABELS = dict(SKILL_CHOICES)
+
+    AVAILABILITY_WEEKDAYS = "weekdays"
+    AVAILABILITY_EVENINGS = "evenings"
+    AVAILABILITY_WEEKENDS = "weekends"
+    AVAILABILITY_PART_TIME = "part_time"
+    AVAILABILITY_FULL_TIME = "full_time"
+    AVAILABILITY_ONE_DAY_HELP = "one_day_help"
+    AVAILABILITY_CHOICES = [
+        (AVAILABILITY_WEEKDAYS, "Weekdays"),
+        (AVAILABILITY_EVENINGS, "Evenings"),
+        (AVAILABILITY_WEEKENDS, "Weekends"),
+        (AVAILABILITY_PART_TIME, "Part-time"),
+        (AVAILABILITY_FULL_TIME, "Full-time"),
+        (AVAILABILITY_ONE_DAY_HELP, "One-day help"),
+    ]
+    AVAILABILITY_LABELS = dict(AVAILABILITY_CHOICES)
+
+    EXPERIENCE_BEGINNER = "beginner"
+    EXPERIENCE_1_3 = "1_3_years"
+    EXPERIENCE_3_10 = "3_10_years"
+    EXPERIENCE_10_PLUS = "10_plus_years"
+    EXPERIENCE_CHOICES = [
+        (EXPERIENCE_BEGINNER, "Beginner"),
+        (EXPERIENCE_1_3, "1-3 years"),
+        (EXPERIENCE_3_10, "3-10 years"),
+        (EXPERIENCE_10_PLUS, "10+ years"),
+    ]
+
+    CONTACT_PHONE = "phone"
+    CONTACT_EMAIL = "email"
+    CONTACT_EITHER = "either"
+    CONTACT_METHOD_CHOICES = [
+        (CONTACT_PHONE, "Phone"),
+        (CONTACT_EMAIL, "Email"),
+        (CONTACT_EITHER, "Either"),
+    ]
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="helper_listings",
+        null=True,
+        blank=True,
+    )
+    full_name = models.CharField(max_length=160)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=2)
+    service_radius_miles = models.PositiveIntegerField(default=15)
+    phone = models.CharField(max_length=40, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    preferred_contact_method = models.CharField(
+        max_length=10,
+        choices=CONTACT_METHOD_CHOICES,
+        default=CONTACT_EMAIL,
+    )
+    skills = models.JSONField(default=list, blank=True)
+    other_skill = models.CharField(max_length=100, blank=True, default="")
+    availability = models.JSONField(default=list, blank=True)
+    experience_level = models.CharField(max_length=20, choices=EXPERIENCE_CHOICES)
+    bio = models.CharField(max_length=300, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    admin_approved = models.BooleanField(default=False)
+    contact_verified = models.BooleanField(default=False)
+    contact_verified_at = models.DateTimeField(null=True, blank=True)
+    verification_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    verification_sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.full_name} - {self.city}, {self.state}"
+
+    @property
+    def is_publicly_visible(self):
+        return bool(self.is_active and self.admin_approved and self.contact_verified)
+
+    def skill_labels(self):
+        return [self.SKILL_LABELS.get(skill, skill) for skill in self.skills or []]
+
+    def availability_labels(self):
+        return [
+            self.AVAILABILITY_LABELS.get(item, item)
+            for item in self.availability or []
+        ]
+
+    def send_verification_email(self, request=None):
+        if not self.email:
+            return False
+
+        base_url = ""
+        if request:
+            base_url = request.build_absolute_uri("/")[:-1]
+        else:
+            base_url = getattr(settings, "FRONTEND_BASE_URL", "") or getattr(
+                settings, "SITE_URL", ""
+            )
+        if not base_url:
+            return False
+
+        verify_url = f"{base_url}/project-helpers/verify/{self.verification_token}"
+        subject = "Verify your Project Helpers listing"
+        body = (
+            "Please verify your contact email for your FlatOrigin Project Helpers listing.\n\n"
+            f"Verify listing: {verify_url}\n\n"
+            "Your listing will not appear publicly until contact verification and admin review are complete."
+        )
+
+        try:
+            send_mail(
+                subject,
+                body,
+                getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                [self.email],
+                fail_silently=True,
+            )
+            self.verification_sent_at = timezone.now()
+            self.save(update_fields=["verification_sent_at"])
+            return True
+        except Exception:
+            return False
+
+
+class HelperFeedback(models.Model):
+    helper = models.ForeignKey(
+        HelperListing,
+        on_delete=models.CASCADE,
+        related_name="feedback",
+    )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="helper_feedback",
+    )
+    project_type = models.CharField(max_length=120)
+    worked_together = models.BooleanField(default=False)
+    reliability_rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    communication_rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    work_quality_rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    would_hire_again = models.BooleanField(default=False)
+    short_note = models.CharField(max_length=200, blank=True, default="")
+    is_approved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Feedback<{self.id}> helper={self.helper_id} reviewer={self.reviewer_id}"
 
 
 class FeedbackTicket(models.Model):

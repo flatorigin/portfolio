@@ -24,11 +24,15 @@ from .views import (
     FeedbackTicketListCreateView,
     FeedbackTicketDetailView,
     FeedbackReplyCreateView,
+    HelperListingViewSet,
+    HelperListingVerifyView,
+    HelperFeedbackCreateView,
 )
 
 router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
 router.register("project-plans", ProjectPlanViewSet, basename="project-plan")
+router.register("project-helpers", HelperListingViewSet, basename="project-helper")
 
 urlpatterns = [
     # DRF router (projects CRUD)
@@ -40,6 +44,8 @@ urlpatterns = [
     path("feedback/", FeedbackTicketListCreateView.as_view(), name="feedback-list-create"),
     path("feedback/<int:pk>/", FeedbackTicketDetailView.as_view(), name="feedback-detail"),
     path("feedback/<int:pk>/replies/", FeedbackReplyCreateView.as_view(), name="feedback-reply-create"),
+    path("project-helpers/verify/<uuid:token>/", HelperListingVerifyView.as_view(), name="project-helper-verify"),
+    path("project-helpers/<int:pk>/feedback/", HelperFeedbackCreateView.as_view(), name="project-helper-feedback"),
 
     # Comments
     path("projects/<int:pk>/comments/", ProjectCommentListCreateView.as_view(), name="project-comments"),

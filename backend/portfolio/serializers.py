@@ -31,6 +31,8 @@ from .models import (
     FeedbackTicket,
     FeedbackAttachment,
     FeedbackReply,
+    HelperListing,
+    HelperFeedback,
 )
 from .project_intake import get_project_intake_template, get_project_type_choices
 
@@ -49,6 +51,259 @@ FEEDBACK_ALLOWED_CONTENT_TYPES = {
 }
 FEEDBACK_MAX_FILES = 5
 FEEDBACK_MAX_FILE_SIZE = 20 * 1024 * 1024
+
+
+def _clean_choice_list(values, allowed_values, field_name):
+    if values in (None, ""):
+        return []
+    if isinstance(values, str):
+        try:
+            parsed = json.loads(values)
+            values = parsed
+        except (TypeError, ValueError):
+            values = [item.strip() for item in values.split(",")]
+    if not isinstance(values, list):
+        raise serializers.ValidationError({field_name: "Submit a list of values."})
+
+    cleaned = []
+    invalid = []
+    for value in values:
+        item = str(value or "").strip()
+        if not item:
+            continue
+        if item not in allowed_values:
+            invalid.append(item)
+        elif item not in cleaned:
+            cleaned.append(item)
+
+    if invalid:
+        raise serializers.ValidationError(
+            {field_name: f"Unsupported value: {', '.join(invalid)}."}
+        )
+    return cleaned
+
+
+class HelperFeedbackSerializer(serializers.ModelSerializer):
+    reviewer_username = serializers.CharField(source="reviewer.username", read_only=True)
+
+    class Meta:
+        model = HelperFeedback
+        fields = (
+            "id",
+            "helper",
+            "reviewer_username",
+            "project_type",
+            "worked_together",
+            "reliability_rating",
+            "communication_rating",
+            "work_quality_rating",
+            "would_hire_again",
+            "short_note",
+            "is_approved",
+            "created_at",
+        )
+        read_only_fields = ("id", "helper", "reviewer_username", "is_approved", "created_at")
+
+    def validate_project_type(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Project type is required.")
+        return cleaned[:120]
+
+    def validate_short_note(self, value):
+        cleaned = str(value or "").strip()
+        if len(cleaned) > 200:
+            raise serializers.ValidationError("Short note must be 200 characters or less.")
+        return cleaned
+
+    def validate(self, attrs):
+        for field in ("reliability_rating", "communication_rating", "work_quality_rating"):
+            value = attrs.get(field)
+            if value is None or int(value) < 1 or int(value) > 5:
+                raise serializers.ValidationError({field: "Rating must be between 1 and 5."})
+        return attrs
+
+
+class HelperListingSerializer(serializers.ModelSerializer):
+    skill_labels = serializers.SerializerMethodField()
+    availability_labels = serializers.SerializerMethodField()
+    experience_level_label = serializers.CharField(source="get_experience_level_display", read_only=True)
+    preferred_contact_method_label = serializers.CharField(source="get_preferred_contact_method_display", read_only=True)
+    contact_status = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+    feedback_count = serializers.SerializerMethodField()
+    would_hire_again_count = serializers.SerializerMethodField()
+    approved_feedback = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HelperListing
+        fields = (
+            "id",
+            "full_name",
+            "city",
+            "state",
+            "service_radius_miles",
+            "phone",
+            "email",
+            "preferred_contact_method",
+            "preferred_contact_method_label",
+            "skills",
+            "skill_labels",
+            "other_skill",
+            "availability",
+            "availability_labels",
+            "experience_level",
+            "experience_level_label",
+            "bio",
+            "is_active",
+            "admin_approved",
+            "contact_verified",
+            "contact_status",
+            "average_rating",
+            "feedback_count",
+            "would_hire_again_count",
+            "approved_feedback",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "admin_approved",
+            "contact_verified",
+            "contact_status",
+            "average_rating",
+            "feedback_count",
+            "would_hire_again_count",
+            "approved_feedback",
+            "created_at",
+            "updated_at",
+        )
+
+    def _can_view_contact(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and user.is_authenticated and (user.is_staff or user.id == obj.owner_id):
+            return True
+        return obj.is_publicly_visible
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not self._can_view_contact(instance):
+            data["phone"] = ""
+            data["email"] = ""
+        return data
+
+    def get_skill_labels(self, obj):
+        return obj.skill_labels()
+
+    def get_availability_labels(self, obj):
+        return obj.availability_labels()
+
+    def get_contact_status(self, obj):
+        if obj.contact_verified:
+            return "Verified Contact"
+        return "Unverified Contact"
+
+    def _approved_feedback(self, obj):
+        prefetched = getattr(obj, "_prefetched_objects_cache", {}).get("feedback")
+        if prefetched is not None:
+            return [item for item in prefetched if item.is_approved]
+        return list(obj.feedback.filter(is_approved=True))
+
+    def get_average_rating(self, obj):
+        feedback = self._approved_feedback(obj)
+        if not feedback:
+            return None
+        total = 0
+        for item in feedback:
+            total += (
+                item.reliability_rating
+                + item.communication_rating
+                + item.work_quality_rating
+            ) / 3
+        return round(total / len(feedback), 1)
+
+    def get_feedback_count(self, obj):
+        return len(self._approved_feedback(obj))
+
+    def get_would_hire_again_count(self, obj):
+        return sum(1 for item in self._approved_feedback(obj) if item.would_hire_again)
+
+    def get_approved_feedback(self, obj):
+        feedback = self._approved_feedback(obj)[:3]
+        return HelperFeedbackSerializer(feedback, many=True, context=self.context).data
+
+    def validate_full_name(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Full name is required.")
+        return cleaned
+
+    def validate_city(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("City is required.")
+        return cleaned
+
+    def validate_state(self, value):
+        cleaned = str(value or "").strip().upper()
+        if len(cleaned) != 2:
+            raise serializers.ValidationError("Use a 2-letter state abbreviation.")
+        return cleaned
+
+    def validate_bio(self, value):
+        cleaned = str(value or "").strip()
+        if len(cleaned) > 300:
+            raise serializers.ValidationError("Bio must be 300 characters or less.")
+        return cleaned
+
+    def validate_other_skill(self, value):
+        return str(value or "").strip()[:100]
+
+    def validate_phone(self, value):
+        return str(value or "").strip()
+
+    def validate_email(self, value):
+        return str(value or "").strip().lower()
+
+    def validate(self, attrs):
+        allowed_skills = {choice[0] for choice in HelperListing.SKILL_CHOICES}
+        allowed_availability = {choice[0] for choice in HelperListing.AVAILABILITY_CHOICES}
+        attrs["skills"] = _clean_choice_list(attrs.get("skills"), allowed_skills, "skills")
+        attrs["availability"] = _clean_choice_list(
+            attrs.get("availability"), allowed_availability, "availability"
+        )
+
+        if not attrs["skills"]:
+            raise serializers.ValidationError({"skills": "Choose at least one skill."})
+        if not attrs["availability"]:
+            raise serializers.ValidationError({"availability": "Choose at least one availability option."})
+
+        phone = attrs.get("phone", "")
+        email = attrs.get("email", "")
+        preferred = attrs.get("preferred_contact_method", HelperListing.CONTACT_EMAIL)
+        if not phone and not email:
+            raise serializers.ValidationError("Provide at least one contact method.")
+        if preferred == HelperListing.CONTACT_PHONE and not phone:
+            raise serializers.ValidationError({"phone": "Phone is required for phone contact."})
+        if preferred == HelperListing.CONTACT_EMAIL and not email:
+            raise serializers.ValidationError({"email": "Email is required for email contact."})
+        if HelperListing.SKILL_OTHER in attrs["skills"] and not attrs.get("other_skill"):
+            raise serializers.ValidationError({"other_skill": "Describe the other skill."})
+
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        user = request.user if request.user and request.user.is_authenticated else None
+        listing = HelperListing.objects.create(
+            owner=user,
+            admin_approved=False,
+            contact_verified=False,
+            **validated_data,
+        )
+        listing.send_verification_email(request=request)
+        return listing
 
 
 class FeedbackAttachmentSerializer(serializers.ModelSerializer):

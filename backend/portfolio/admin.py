@@ -1,7 +1,16 @@
 from django.contrib import admin
+from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
-from .models import Project, ProjectImage, FeedbackTicket, FeedbackAttachment, FeedbackReply
+from .models import (
+    Project,
+    ProjectImage,
+    FeedbackTicket,
+    FeedbackAttachment,
+    FeedbackReply,
+    HelperListing,
+    HelperFeedback,
+)
 
 class ProjectImageInline(admin.TabularInline):
     model = ProjectImage
@@ -15,6 +24,161 @@ class ProjectAdmin(admin.ModelAdmin):
 @admin.register(ProjectImage)
 class ProjectImageAdmin(admin.ModelAdmin):
     list_display = ("project", "media_type", "processing_status", "order", "created_at")
+
+
+class HelperSkillListFilter(admin.SimpleListFilter):
+    title = "skill"
+    parameter_name = "skill"
+
+    def lookups(self, request, model_admin):
+        return HelperListing.SKILL_CHOICES
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        return queryset.filter(skills__icontains=value)
+
+
+class HelperFeedbackInline(admin.TabularInline):
+    model = HelperFeedback
+    extra = 0
+    fields = (
+        "reviewer",
+        "project_type",
+        "worked_together",
+        "reliability_rating",
+        "communication_rating",
+        "work_quality_rating",
+        "would_hire_again",
+        "short_note",
+        "is_approved",
+        "created_at",
+    )
+    readonly_fields = ("reviewer", "created_at")
+
+
+@admin.register(HelperListing)
+class HelperListingAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "full_name",
+        "city",
+        "state",
+        "experience_level",
+        "is_active",
+        "admin_approved",
+        "contact_verified",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = (
+        "is_active",
+        "admin_approved",
+        "contact_verified",
+        "city",
+        HelperSkillListFilter,
+        "experience_level",
+    )
+    search_fields = (
+        "full_name",
+        "city",
+        "email",
+        "phone",
+        "skills",
+        "bio",
+    )
+    readonly_fields = (
+        "owner",
+        "verification_token",
+        "verification_sent_at",
+        "contact_verified_at",
+        "created_at",
+        "updated_at",
+    )
+    fields = (
+        "owner",
+        "full_name",
+        "city",
+        "state",
+        "service_radius_miles",
+        "phone",
+        "email",
+        "preferred_contact_method",
+        "skills",
+        "other_skill",
+        "availability",
+        "experience_level",
+        "bio",
+        "is_active",
+        "admin_approved",
+        "contact_verified",
+        "contact_verified_at",
+        "verification_token",
+        "verification_sent_at",
+        "created_at",
+        "updated_at",
+    )
+    inlines = [HelperFeedbackInline]
+    actions = ("approve_listings", "deactivate_listings", "mark_contact_verified")
+
+    def approve_listings(self, request, queryset):
+        queryset.update(admin_approved=True)
+
+    approve_listings.short_description = "Approve selected helper listings"
+
+    def deactivate_listings(self, request, queryset):
+        queryset.update(is_active=False)
+
+    deactivate_listings.short_description = "Deactivate selected helper listings"
+
+    def mark_contact_verified(self, request, queryset):
+        queryset.update(contact_verified=True, contact_verified_at=timezone.now())
+
+    mark_contact_verified.short_description = "Mark selected contacts verified"
+
+
+@admin.register(HelperFeedback)
+class HelperFeedbackAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "helper",
+        "reviewer",
+        "project_type",
+        "worked_together",
+        "would_hire_again",
+        "is_approved",
+        "created_at",
+    )
+    list_filter = (
+        "is_approved",
+        "worked_together",
+        "would_hire_again",
+        "reliability_rating",
+        "communication_rating",
+        "work_quality_rating",
+        "created_at",
+    )
+    search_fields = (
+        "helper__full_name",
+        "helper__city",
+        "reviewer__username",
+        "reviewer__email",
+        "project_type",
+        "short_note",
+    )
+    readonly_fields = ("helper", "reviewer", "created_at")
+    actions = ("approve_feedback", "remove_feedback")
+
+    def approve_feedback(self, request, queryset):
+        queryset.update(is_approved=True)
+
+    approve_feedback.short_description = "Approve selected feedback"
+
+    def remove_feedback(self, request, queryset):
+        queryset.update(is_approved=False)
+
+    remove_feedback.short_description = "Unapprove selected feedback"
 
 
 class FeedbackAttachmentInline(admin.TabularInline):
