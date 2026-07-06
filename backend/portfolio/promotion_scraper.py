@@ -135,12 +135,28 @@ def fetch_page_text(url):
         "Accept": "text/html,application/xhtml+xml",
     }
     timeout = int(getattr(settings, "PROMOTIONS_SCRAPE_TIMEOUT_SECONDS", 12))
-    response = requests.get(url, headers=headers, timeout=timeout)
-    response.raise_for_status()
+    try:
+        response = requests.get(url, headers=headers, timeout=timeout)
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as exc:
+        status_code = getattr(exc.response, "status_code", "")
+        reason = getattr(exc.response, "reason", "")
+        raise PromotionScrapeError(f"HTTP {status_code} {reason}".strip()) from exc
+    except requests.exceptions.Timeout as exc:
+        raise PromotionScrapeError(f"Request timed out after {timeout} seconds.") from exc
+    except requests.exceptions.RequestException as exc:
+        raise PromotionScrapeError(str(exc)) from exc
 
-    content_type = response.headers.get("content-type", "")
-    if "text/html" not in content_type and "application/xhtml+xml" not in content_type:
-        raise PromotionScrapeError("Source did not return an HTML page.")
+    content_type = (response.headers.get("content-type", "") or "").lower()
+    looks_like_html = bool(re.search(r"<\s*(html|body|head|div|main|section|article|p|h1|h2)\b", response.text[:5000], re.IGNORECASE))
+    if (
+        content_type
+        and "text/html" not in content_type
+        and "application/xhtml+xml" not in content_type
+        and "text/plain" not in content_type
+        and not looks_like_html
+    ):
+        raise PromotionScrapeError(f"Source did not return an HTML page. Content-Type: {content_type}")
 
     soup = BeautifulSoup(response.text, "html.parser")
     for tag in soup(["script", "style", "noscript", "svg", "img", "picture", "video", "audio", "iframe"]):

@@ -299,6 +299,41 @@ class LocalPromotionTests(APITestCase):
         self.assertIn("save 20%", promotion.promotion_text.lower())
         self.assertEqual(promotion.coupon_code, "DECK20")
 
+    @patch("portfolio.promotion_scraper.requests.get")
+    @patch("portfolio.promotion_scraper.can_fetch_url", return_value=True)
+    def test_fetch_page_text_accepts_html_body_with_plain_text_content_type(self, mock_can_fetch, mock_get):
+        from .promotion_scraper import fetch_page_text
+
+        class FakeResponse:
+            headers = {"content-type": "text/plain"}
+            text = "<html><body><h1>Local special</h1><p>Save 10% on lumber.</p></body></html>"
+
+            def raise_for_status(self):
+                return None
+
+        mock_get.return_value = FakeResponse()
+
+        blocks = fetch_page_text("https://example.com/promos")
+
+        self.assertIn("Save 10% on lumber.", blocks)
+
+    @patch("portfolio.promotion_scraper.requests.get")
+    @patch("portfolio.promotion_scraper.can_fetch_url", return_value=True)
+    def test_fetch_page_text_reports_http_error_status(self, mock_can_fetch, mock_get):
+        from requests import HTTPError, Response
+        from .promotion_scraper import PromotionScrapeError, fetch_page_text
+
+        response = Response()
+        response.status_code = 403
+        response.reason = "Forbidden"
+        error = HTTPError(response=response)
+        mock_get.return_value.raise_for_status.side_effect = error
+
+        with self.assertRaises(PromotionScrapeError) as ctx:
+            fetch_page_text("https://example.com/promos")
+
+        self.assertIn("HTTP 403 Forbidden", str(ctx.exception))
+
 
 class PrivateProjectAccessTests(APITestCase):
     def setUp(self):
