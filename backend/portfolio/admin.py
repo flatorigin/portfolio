@@ -123,9 +123,14 @@ class HelperListingAdmin(admin.ModelAdmin):
     actions = ("approve_listings", "deactivate_listings", "mark_contact_verified")
 
     def approve_listings(self, request, queryset):
-        queryset.update(admin_approved=True)
+        queryset.update(
+            admin_approved=True,
+            is_active=True,
+            contact_verified=True,
+            contact_verified_at=timezone.now(),
+        )
 
-    approve_listings.short_description = "Approve selected helper listings"
+    approve_listings.short_description = "Approve and publish selected helper listings"
 
     def deactivate_listings(self, request, queryset):
         queryset.update(is_active=False)

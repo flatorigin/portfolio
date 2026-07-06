@@ -142,104 +142,160 @@ function RatingInput({ label, value, onChange }) {
 }
 
 function HelperCard({ helper, authed, onFeedback }) {
+  const [expanded, setExpanded] = useState(false);
+  const availabilityText = (helper.availability_labels || []).join(", ") || "Availability not listed";
+  const contactItems = [
+    helper.phone ? ["Phone", helper.phone] : null,
+    helper.email ? ["Email", helper.email] : null,
+  ].filter(Boolean);
+
   return (
-    <article className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <article
+      className={
+        "group rounded-2xl border border-white/70 bg-white/85 shadow-sm backdrop-blur transition hover:border-slate-200 hover:shadow-md " +
+        (expanded ? "ring-1 ring-slate-200" : "")
+      }
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        onFocus={() => setExpanded(true)}
+        className="grid w-full gap-3 px-4 py-3 text-left sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center"
+        aria-expanded={expanded ? "true" : "false"}
+      >
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-bold tracking-tight text-slate-950">
-              {helper.full_name}
-            </h2>
-            {helper.contact_verified ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                <SymbolIcon name="verified" className="text-[14px]" />
-                Verified Contact
-              </span>
+          <div className="truncate text-sm font-bold text-slate-950">{helper.full_name}</div>
+          {helper.contact_verified ? (
+            <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+              <SymbolIcon name="verified" className="text-[13px]" />
+              Verified Contact
+            </div>
+          ) : null}
+        </div>
+        <div className="min-w-0 text-sm text-slate-600">
+          <span className="font-medium text-slate-700">Location:</span>{" "}
+          <span className="truncate">
+            {helper.city}, {helper.state} · {helper.service_radius_miles} mi
+          </span>
+        </div>
+        <div className="min-w-0 text-sm text-slate-600">
+          <span className="font-medium text-slate-700">Availability:</span>{" "}
+          <span className="line-clamp-1">{availabilityText}</span>
+        </div>
+        <div className="flex items-center justify-end gap-2 text-xs font-semibold text-slate-500">
+          <span>{expanded ? "Show less" : "Show more"}</span>
+          <SymbolIcon
+            name={expanded ? "expand_less" : "expand_more"}
+            className="text-[18px]"
+          />
+        </div>
+      </button>
+
+      <div
+        className={
+          "grid overflow-hidden transition-all duration-200 " +
+          (expanded
+            ? "grid-rows-[1fr] border-t border-slate-100 opacity-100"
+            : "grid-rows-[0fr] opacity-0")
+        }
+      >
+        <div className="min-h-0">
+          <div className="space-y-4 px-4 py-4">
+            <div className="flex flex-wrap gap-2">
+              {(helper.skill_labels || []).map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                >
+                  {skill}
+                </span>
+              ))}
+              {helper.other_skill ? (
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                  {helper.other_skill}
+                </span>
+              ) : null}
+            </div>
+
+            <dl className="grid gap-3 text-sm text-slate-700 sm:grid-cols-3">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Experience
+                </dt>
+                <dd>{helper.experience_level_label}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Preferred contact
+                </dt>
+                <dd>{helper.preferred_contact_method_label}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Feedback
+                </dt>
+                <dd>
+                  {helper.average_rating ? `${helper.average_rating}/5` : "No rating yet"} ·{" "}
+                  {helper.would_hire_again_count || 0} would hire again
+                </dd>
+              </div>
+            </dl>
+
+            {helper.bio ? (
+              <p className="text-sm leading-6 text-slate-600">{helper.bio}</p>
             ) : null}
+
+            <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Copy contact info
+              </div>
+              {contactItems.length ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {contactItems.map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2"
+                    >
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        {label}
+                      </div>
+                      <div className="select-all break-all text-sm font-medium text-slate-800">
+                        {value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500">No public contact listed.</div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">
+                Verify helper availability, qualifications, and payment terms directly.
+              </p>
+              {authed ? (
+                <button
+                  type="button"
+                  onClick={() => onFeedback(helper)}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <SymbolIcon name="rate_review" className="text-[17px]" />
+                  Leave feedback
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Log in to leave feedback
+                </Link>
+              )}
+            </div>
           </div>
-          <p className="mt-1 text-sm text-slate-600">
-            {helper.city}, {helper.state} · {helper.service_radius_miles} mile radius
-          </p>
         </div>
-        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          <span className="font-semibold">
-            {helper.average_rating ? `${helper.average_rating}/5` : "No rating yet"}
-          </span>
-          <span className="text-slate-400"> · </span>
-          <span>{helper.would_hire_again_count || 0} would hire again</span>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {(helper.skill_labels || []).map((skill) => (
-          <span
-            key={skill}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
-          >
-            {skill}
-          </span>
-        ))}
-        {helper.other_skill ? (
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
-            {helper.other_skill}
-          </span>
-        ) : null}
-      </div>
-
-      <dl className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-3">
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Availability
-          </dt>
-          <dd>{(helper.availability_labels || []).join(", ")}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Experience
-          </dt>
-          <dd>{helper.experience_level_label}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Preferred contact
-          </dt>
-          <dd>{helper.preferred_contact_method_label}</dd>
-        </div>
-      </dl>
-
-      {helper.bio ? <p className="mt-4 text-sm leading-6 text-slate-600">{helper.bio}</p> : null}
-
-      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Contact directly
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
-          {helper.phone ? <a href={`tel:${helper.phone}`}>{helper.phone}</a> : null}
-          {helper.email ? <a href={`mailto:${helper.email}`}>{helper.email}</a> : null}
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">
-          Helper availability, qualifications, and payment terms should be verified directly.
-        </p>
-        {authed ? (
-          <button
-            type="button"
-            onClick={() => onFeedback(helper)}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <SymbolIcon name="rate_review" className="text-[18px]" />
-            Leave feedback
-          </button>
-        ) : (
-          <Link
-            to="/login"
-            className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Log in to leave feedback
-          </Link>
-        )}
       </div>
     </article>
   );
@@ -820,7 +876,7 @@ export default function ProjectHelpers() {
             ))}
           </div>
         ) : helpers.length ? (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="space-y-3">
             {helpers.map((helper) => (
               <HelperCard
                 key={helper.id}
