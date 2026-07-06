@@ -174,6 +174,51 @@ function getBidSummaryMeta(bids) {
   };
 }
 
+const DASHBOARD_CONTENT_PRESENCE_DEFAULT = {
+  jobPosts: false,
+  projects: false,
+  bids: false,
+  invites: false,
+};
+
+function getDashboardPresenceKey(user) {
+  const identity = user?.username || user?.id || "";
+  return identity ? `dashboard_content_presence:${identity}` : "";
+}
+
+function readDashboardContentPresence(key) {
+  if (!key) return DASHBOARD_CONTENT_PRESENCE_DEFAULT;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+    return { ...DASHBOARD_CONTENT_PRESENCE_DEFAULT, ...parsed };
+  } catch {
+    return DASHBOARD_CONTENT_PRESENCE_DEFAULT;
+  }
+}
+
+function DashboardLoadingSection({ title, helper = "Loading..." }) {
+  return (
+    <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+      <div className="mb-4">
+        <div className="text-sm font-semibold text-slate-900">{title}</div>
+        <div className="text-xs text-slate-500">{helper}</div>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
+            <div className="h-36 animate-pulse bg-slate-100" />
+            <div className="space-y-3 p-4">
+              <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
+              <div className="h-3 w-full animate-pulse rounded bg-slate-100" />
+              <div className="h-3 w-4/5 animate-pulse rounded bg-slate-100" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const isMountedRef = useRef(false);
@@ -473,11 +518,18 @@ export default function Dashboard() {
   const [meUser, setMeUser] = useState({
     username: localStorage.getItem("username") || "",
   });
+  const [meLoading, setMeLoading] = useState(true);
+  const [contentPresence, setContentPresence] = useState(
+    DASHBOARD_CONTENT_PRESENCE_DEFAULT
+  );
+  const presenceStorageKey = getDashboardPresenceKey(meUser);
 
   const [myThumbs, setMyThumbs] = useState({});
   const [myBids, setMyBids] = useState([]);
   const [invitedJobPosts, setInvitedJobPosts] = useState([]);
   const [activeBidCard, setActiveBidCard] = useState(null);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [bidsLoading, setBidsLoading] = useState(true);
 
   // NEW: bid summary per owned job/project
   const [jobBidMeta, setJobBidMeta] = useState({});
@@ -500,6 +552,8 @@ export default function Dashboard() {
         } catch {
           /* fallback */
         }
+      } finally {
+        if (active && isMountedRef.current) setMeLoading(false);
       }
     })();
 
@@ -507,6 +561,23 @@ export default function Dashboard() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setContentPresence(readDashboardContentPresence(presenceStorageKey));
+  }, [presenceStorageKey]);
+
+  const rememberContentPresence = useCallback(
+    (updates) => {
+      setContentPresence((prev) => {
+        const next = { ...prev, ...updates };
+        if (presenceStorageKey) {
+          localStorage.setItem(presenceStorageKey, JSON.stringify(next));
+        }
+        return next;
+      });
+    },
+    [presenceStorageKey]
+  );
 
   const [createErr, setCreateErr] = useState("");
   const [createOk, setCreateOk] = useState(false);
@@ -587,6 +658,8 @@ export default function Dashboard() {
   const [myJobPosts, setMyJobPosts] = useState([]);
 
   const refreshMyBids = useCallback(async () => {
+    if (!meUser.username) return;
+    if (isMountedRef.current) setBidsLoading(true);
     try {
       const { data } = await api.get("/bids/");
       const mine = Array.isArray(data)
@@ -596,13 +669,19 @@ export default function Dashboard() {
               (meUser.username || "").toLowerCase()
           )
         : [];
-      if (isMountedRef.current) setMyBids(mine);
+      if (isMountedRef.current) {
+        setMyBids(mine);
+        rememberContentPresence({ bids: mine.length > 0 });
+      }
     } catch {
       if (isMountedRef.current) setMyBids([]);
+    } finally {
+      if (isMountedRef.current) setBidsLoading(false);
     }
-  }, [meUser.username]);
+  }, [meUser.username, rememberContentPresence]);
 
   const refreshMyJobPosts = useCallback(async () => {
+    if (!meUser.username) return;
     try {
       const { data } = await api.get("/projects/");
       const mineJobs = Array.isArray(data)
@@ -614,7 +693,10 @@ export default function Dashboard() {
           )
         : [];
 
-      if (isMountedRef.current) setMyJobPosts(mineJobs);
+      if (isMountedRef.current) {
+        setMyJobPosts(mineJobs);
+        rememberContentPresence({ jobPosts: mineJobs.length > 0 });
+      }
       await refreshJobBidMeta(mineJobs);
     } catch {
       if (isMountedRef.current) {
@@ -622,9 +704,11 @@ export default function Dashboard() {
         setJobBidMeta({});
       }
     }
-  }, [meUser.username, refreshJobBidMeta]);
+  }, [meUser.username, refreshJobBidMeta, rememberContentPresence]);
 
   const refreshProjects = useCallback(async () => {
+    if (!meUser.username) return;
+    if (isMountedRef.current) setProjectsLoading(true);
     try {
       const { data } = await api.get("/projects/");
       const all = Array.isArray(data) ? data : [];
@@ -647,6 +731,11 @@ export default function Dashboard() {
         setProjects(mineProjects);
         setMyJobPosts(mineJobPosts);
         setInvitedJobPosts(invitedPrivateJobs);
+        rememberContentPresence({
+          projects: mineProjects.length > 0,
+          jobPosts: mineJobPosts.length > 0,
+          invites: invitedPrivateJobs.length > 0,
+        });
       }
 
       await refreshMyThumbs(mineAll);
@@ -660,16 +749,26 @@ export default function Dashboard() {
         setMyThumbs({});
         setJobBidMeta({});
       }
+    } finally {
+      if (isMountedRef.current) setProjectsLoading(false);
     }
-  }, [meUser.username, refreshMyThumbs, refreshJobBidMeta]);
+  }, [meUser.username, refreshMyThumbs, refreshJobBidMeta, rememberContentPresence]);
 
   useEffect(() => {
+    if (!meUser.username) return;
     refreshProjects();
-  }, [refreshProjects]);
+  }, [meUser.username, refreshProjects]);
 
   useEffect(() => {
+    if (!meUser.username) return;
     refreshMyBids();
-  }, [refreshMyBids]);
+  }, [meUser.username, refreshMyBids]);
+
+  useEffect(() => {
+    if (meLoading || meUser.username) return;
+    setProjectsLoading(false);
+    setBidsLoading(false);
+  }, [meLoading, meUser.username]);
 
   const list = projects;
 
@@ -1031,7 +1130,7 @@ export default function Dashboard() {
       ? "Post your first project"
       : "Post another project"
     : projects.length === 0
-    ? "No Project"
+    ? "Add your first project"
     : "Add another project";
   const primaryProjectHelper = isHomeownerAccount
     ? homeownerHasNoJobPosts
@@ -1047,6 +1146,47 @@ export default function Dashboard() {
     : "Add Project";
   const primaryProjectIcon = isHomeownerAccount ? "post_add" : "add_home_work";
   const primaryProjectButtonIcon = isHomeownerAccount ? "add" : "add_home_work";
+
+  if (meLoading) {
+    return (
+      <div className="space-y-5">
+        <header className="flex min-h-14 items-center mb-1">
+          <SectionTitle className="!mb-0">Dashboard</SectionTitle>
+        </header>
+        <div className="rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md">
+          <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-8 text-center">
+            <div className="mb-4 h-16 w-16 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-5 w-40 animate-pulse rounded bg-slate-100" />
+            <div className="mt-3 h-4 w-64 max-w-full animate-pulse rounded bg-slate-100" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const showJobPostsLoading =
+    isHomeownerAccount &&
+    projectsLoading &&
+    contentPresence.jobPosts &&
+    myJobPosts.length === 0;
+  const showJobPostsSection = showJobPostsLoading || myJobPosts.length > 0;
+  const showProjectsLoading =
+    projectsLoading && contentPresence.projects && list.length === 0;
+  const showProjectsSection = showProjectsLoading || list.length > 0;
+  const showBidsLoading =
+    !isHomeownerAccount &&
+    bidsLoading &&
+    contentPresence.bids &&
+    myBids.length === 0;
+  const showBidsSection =
+    showBidsLoading || (!isHomeownerAccount && myBids.length > 0);
+  const showInvitesLoading =
+    !isHomeownerAccount &&
+    projectsLoading &&
+    contentPresence.invites &&
+    invitedJobPosts.length === 0;
+  const showInvitesSection =
+    showInvitesLoading || (!isHomeownerAccount && invitedJobPosts.length > 0);
 
   return (
     <div className="space-y-5">
@@ -1081,6 +1221,13 @@ export default function Dashboard() {
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
 
+      {showJobPostsSection ? (
+        showJobPostsLoading ? (
+          <DashboardLoadingSection
+            title="Your Job Posts"
+            helper="Loading your existing job posts..."
+          />
+        ) : (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -1244,8 +1391,16 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+        )
+      ) : null}
 
-      {!isHomeownerAccount ? (
+      {showBidsSection ? (
+        showBidsLoading ? (
+          <DashboardLoadingSection
+            title="Your Bids"
+            helper="Loading your submitted bids..."
+          />
+        ) : (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -1368,6 +1523,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+        )
       ) : null}
 
       {activeBidCard ? (
@@ -1570,6 +1726,13 @@ export default function Dashboard() {
         })()
       ) : null}
 
+      {showProjectsSection ? (
+        showProjectsLoading ? (
+          <DashboardLoadingSection
+            title="Your Projects"
+            helper="Loading your saved project work..."
+          />
+        ) : (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-900">Your Projects</div>
@@ -1683,8 +1846,16 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+        )
+      ) : null}
 
-      {!isHomeownerAccount ? (
+      {showInvitesSection ? (
+        showInvitesLoading ? (
+          <DashboardLoadingSection
+            title="Invited Job Posts"
+            helper="Loading private job invitations..."
+          />
+        ) : (
       <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -1778,6 +1949,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+        )
       ) : null}
 
       {saveToast ? (
