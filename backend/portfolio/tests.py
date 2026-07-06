@@ -8,7 +8,18 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import AIConfiguration, AIUsageEvent, Profile
-from .models import Project, ProjectInvite, MessageThread, PrivateMessage, ProjectPlan, MessageAttachment, FeedbackTicket, FeedbackReply
+from .models import (
+    Project,
+    ProjectInvite,
+    MessageThread,
+    PrivateMessage,
+    ProjectPlan,
+    MessageAttachment,
+    FeedbackTicket,
+    FeedbackReply,
+    PromotionSource,
+    LocalPromotion,
+)
 from apps.bids.models import Bid
 
 
@@ -185,6 +196,93 @@ class FeedbackTicketApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(FeedbackReply.objects.count(), 0)
+
+
+class LocalPromotionTests(APITestCase):
+    def setUp(self):
+        self.source = PromotionSource.objects.create(
+            name="Media Supply",
+            website_url="https://example.com/promos",
+            business_name="Media Supply",
+            category="Materials",
+            city="Media",
+            state="PA",
+            zip_code="19063",
+        )
+
+    def test_public_endpoint_returns_only_approved_active_promotions(self):
+        visible = LocalPromotion.objects.create(
+            source=self.source,
+            title="Deck board sale",
+            business_name="Media Supply",
+            category="Materials",
+            promotion_text="Save 15% on deck boards this week.",
+            product_or_service_name="Deck boards",
+            website_url="https://example.com/promos",
+            city="Media",
+            state="PA",
+            zip_code="19063",
+            admin_approved=True,
+            is_active=True,
+        )
+        LocalPromotion.objects.create(
+            source=self.source,
+            title="Hidden draft",
+            business_name="Media Supply",
+            category="Materials",
+            promotion_text="Draft only.",
+            website_url="https://example.com/promos",
+            admin_approved=False,
+            is_active=True,
+        )
+
+        response = self.client.get("/api/local-promotions/?search=deck&role=homeowner")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data], [visible.id])
+        self.assertEqual(response.data[0]["note"], "Promotion details should be verified with the business.")
+
+    @patch("portfolio.promotion_scraper.fetch_page_text")
+    def test_scrape_source_extracts_promotions_as_unpublished_drafts(self, mock_fetch_page_text):
+        from .promotion_scraper import scrape_source
+
+        mock_fetch_page_text.return_value = [
+            "About our local supply store",
+            "Seasonal special: save 20% on pressure-treated lumber through 12/31/2026. Coupon code DECK20.",
+            "Contact us for regular hours.",
+        ]
+
+        result = scrape_source(self.source, delay=False)
+
+        self.assertEqual(result.status, PromotionSource.STATUS_SUCCESS)
+        self.assertEqual(result.found, 1)
+        promotion = LocalPromotion.objects.get(source=self.source)
+        self.assertFalse(promotion.admin_approved)
+        self.assertFalse(promotion.is_active)
+        self.assertIn("save 20%", promotion.promotion_text.lower())
+        self.assertEqual(promotion.coupon_code, "DECK20")
+
+    @patch("portfolio.promotion_scraper.fetch_page_text")
+    def test_scrape_source_updates_changed_existing_promotion(self, mock_fetch_page_text):
+        from .promotion_scraper import scrape_source
+
+        mock_fetch_page_text.return_value = [
+            "Seasonal special: save 10% on pressure-treated lumber. Coupon code DECK10.",
+        ]
+        first = scrape_source(self.source, delay=False)
+        self.assertEqual(first.added, 1)
+
+        mock_fetch_page_text.return_value = [
+            "Seasonal special: save 20% on pressure-treated lumber. Coupon code DECK20.",
+        ]
+        second = scrape_source(self.source, delay=False)
+
+        self.assertEqual(second.added, 0)
+        self.assertEqual(second.updated, 1)
+        self.assertEqual(LocalPromotion.objects.filter(source=self.source).count(), 1)
+        promotion = LocalPromotion.objects.get(source=self.source)
+        self.assertIn("save 20%", promotion.promotion_text.lower())
+        self.assertEqual(promotion.coupon_code, "DECK20")
 
 
 class PrivateProjectAccessTests(APITestCase):

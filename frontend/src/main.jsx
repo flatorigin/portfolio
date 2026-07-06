@@ -37,6 +37,7 @@ const ProjectMarkupCanvas = lazy(() => import("./pages/ProjectMarkupCanvas.jsx")
 const ProjectCheckGateway = lazy(() => import("./pages/ProjectCheckGateway.jsx"));
 const HomeownerProjectCheck = lazy(() => import("./pages/HomeownerProjectCheck.jsx"));
 const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx"));
+const LocalPromotionsPage = lazy(() => import("./pages/LocalPromotionsPage.jsx"));
 
 function RouteFallback() {
   return (
@@ -68,6 +69,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="homeowners" element={<Navigate to="/homeowner" replace />} />
           <Route path="contractors" element={<Navigate to="/contractor" replace />} />
           <Route path="explore" element={<Explore />} />
+          <Route path="local-promotions" element={<LocalPromotionsPage />} />
           <Route path="guides" element={<ProjectGuides />} />
           <Route path="guides/:audience" element={<ProjectGuides />} />
           <Route path="project-check" element={<ProjectCheckGateway />} />

@@ -118,6 +118,12 @@ function LandingNav() {
             >
               Guides
             </Link>
+            <Link
+              to="/local-promotions"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
+            >
+              Deals
+            </Link>
           </div>
           <div className="ml-auto flex items-center gap-3">
             {authed ? (

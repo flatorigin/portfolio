@@ -44,6 +44,7 @@ from .models import (
     ProjectBid,
     ProjectBidVersion,
     FeedbackTicket,
+    LocalPromotion,
 )
 from apps.bids.models import Bid
 from .access import can_access_job_interactions, can_view_project, visible_projects_q_for_user
@@ -61,6 +62,7 @@ from .serializers import (
     ProjectBidVersionSerializer,
     FeedbackTicketSerializer,
     FeedbackReplySerializer,
+    LocalPromotionSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 from .project_intake import (
@@ -134,6 +136,38 @@ class FeedbackReplyCreateView(generics.CreateAPIView):
         context = super().get_serializer_context()
         context["ticket"] = self.get_ticket()
         return context
+
+
+class LocalPromotionListView(generics.ListAPIView):
+    serializer_class = LocalPromotionSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        queryset = LocalPromotion.objects.filter(admin_approved=True, is_active=True)
+        search = str(self.request.query_params.get("search", "") or "").strip()
+        category = str(self.request.query_params.get("category", "") or "").strip()
+        city = str(self.request.query_params.get("city", "") or "").strip()
+        role = str(self.request.query_params.get("role", "") or "").strip().lower()
+
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search)
+                | Q(business_name__icontains=search)
+                | Q(category__icontains=search)
+                | Q(promotion_text__icontains=search)
+                | Q(product_or_service_name__icontains=search)
+                | Q(website_url__icontains=search)
+            )
+        if category:
+            queryset = queryset.filter(category__iexact=category)
+        if city:
+            queryset = queryset.filter(city__iexact=city)
+        if role == "homeowner":
+            queryset = queryset.filter(applies_to_homeowners=True)
+        elif role == "contractor":
+            queryset = queryset.filter(applies_to_contractors=True)
+
+        return queryset.order_by("-updated_at", "-created_at")
 
 VIDEO_UPLOAD_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 VIDEO_UPLOAD_EXTENSIONS = (".mp4", ".mov", ".webm")

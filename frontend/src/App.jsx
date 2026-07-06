@@ -373,6 +373,9 @@ export default function App() {
               <NavLink to="/explore" compact>
                 Explore
               </NavLink>
+              <NavLink to="/local-promotions" compact>
+                Deals
+              </NavLink>
               {authed ? (
                 <NavLink to="/work" compact>
                   {workNavLabel}
@@ -386,6 +389,7 @@ export default function App() {
             {/* Desktop center: role-aware nav */}
             <div className="ml-2 hidden items-center gap-2 md:flex">
               <NavLink to="/explore">Explore</NavLink>
+              <NavLink to="/local-promotions">Deals</NavLink>
               {authed ? <NavLink to="/work">{workNavLabel}</NavLink> : null}
               <NavLink to="/guides">Guides</NavLink>
             </div>
