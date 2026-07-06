@@ -312,6 +312,9 @@ class LocalPromotionAdmin(admin.ModelAdmin):
     )
     actions = ("approve_and_activate", "deactivate_promotions", "mark_unapproved")
 
+    def has_add_permission(self, request):
+        return False
+
     def safe_website_link(self, obj):
         if not obj.website_url:
             return "-"

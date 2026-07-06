@@ -1289,8 +1289,8 @@ class PromotionSource(models.Model):
     city = models.CharField(max_length=120, blank=True, default="")
     state = models.CharField(max_length=80, blank=True, default="")
     zip_code = models.CharField(max_length=20, blank=True, default="")
-    service_radius_miles = models.PositiveIntegerField(default=25)
-    refresh_interval_hours = models.PositiveIntegerField(default=24)
+    service_radius_miles = models.PositiveIntegerField(default=25, blank=True)
+    refresh_interval_hours = models.PositiveIntegerField(default=24, blank=True)
     is_active = models.BooleanField(default=True)
     paused_due_to_failures = models.BooleanField(default=False)
     consecutive_failures = models.PositiveIntegerField(default=0)
@@ -1314,6 +1314,13 @@ class PromotionSource(models.Model):
 
     def __str__(self):
         return self.business_name or self.name or self.website_url
+
+    def save(self, *args, **kwargs):
+        if not self.service_radius_miles:
+            self.service_radius_miles = 25
+        if not self.refresh_interval_hours:
+            self.refresh_interval_hours = 24
+        super().save(*args, **kwargs)
 
     @property
     def should_scrape(self):
