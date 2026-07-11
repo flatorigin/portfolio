@@ -113,16 +113,16 @@ function LandingNav() {
               How It Works
             </a>
             <Link
-              to="/guides"
-              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
-            >
-              Guides
-            </Link>
-            <Link
               to="/project-helpers"
               className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
             >
               Helpers
+            </Link>
+            <Link
+              to="/guides"
+              className="px-3 py-2 text-sm text-slate-600 transition hover:text-slate-900"
+            >
+              Guides
             </Link>
           </div>
           <div className="ml-auto flex items-center gap-3">

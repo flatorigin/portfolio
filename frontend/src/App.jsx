@@ -378,11 +378,11 @@ export default function App() {
                   {workNavLabel}
                 </NavLink>
               ) : null}
-              <NavLink to="/guides" compact>
-                Guides
-              </NavLink>
               <NavLink to="/project-helpers" compact>
                 Helpers
+              </NavLink>
+              <NavLink to="/guides" compact>
+                Guides
               </NavLink>
             </div>
 
@@ -390,8 +390,8 @@ export default function App() {
             <div className="ml-2 hidden items-center gap-2 md:flex">
               <NavLink to="/explore">Explore</NavLink>
               {authed ? <NavLink to="/work">{workNavLabel}</NavLink> : null}
-              <NavLink to="/guides">Guides</NavLink>
               <NavLink to="/project-helpers">Project Helpers</NavLink>
+              <NavLink to="/guides">Guides</NavLink>
             </div>
 
             {/* Right side */}
