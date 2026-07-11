@@ -112,6 +112,40 @@ const homeownerGuideCategories = [
     ],
   },
   {
+    id: "project-helpers",
+    title: "Using Project Helpers",
+    intro: "Use local extra hands for support work without treating FlatOrigin as the hiring party.",
+    guides: [
+      {
+        title: "When a project helper may be useful",
+        points: [
+          "Consider helpers for cleanup, material moving, demolition support, painting prep, landscaping help, or one-day project support.",
+          "Use helpers for simple extra-hand needs, not work that requires a licensed contractor, permit holder, or professional trade responsibility.",
+          "Keep the main contractor scope separate from helper tasks so responsibilities stay clear.",
+          "Confirm availability, timing, payment, and expectations directly before anyone starts work.",
+        ],
+      },
+      {
+        title: "How to contact helpers responsibly",
+        points: [
+          "Use the phone or email shown on the helper listing and communicate directly outside FlatOrigin.",
+          "Ask what types of work they are comfortable doing and what tools, transportation, or supervision they need.",
+          "Confirm whether the helper is available for weekdays, evenings, weekends, part-time, full-time, or one-day help.",
+          "Do not assume insurance, licensing, background checks, or work quality have been verified by FlatOrigin.",
+        ],
+      },
+      {
+        title: "What to clarify before hiring extra help",
+        points: [
+          "Write down the task, expected hours, location, rate, payment timing, and who provides tools or materials.",
+          "Confirm site access, parking, cleanup expectations, safety limitations, and who is supervising the work.",
+          "If the work touches electrical, plumbing, roofing, structural framing, permits, or hazardous material, confirm whether a licensed professional is required.",
+          "FlatOrigin only displays the directory listing. Hiring, payment, agreements, and disputes happen directly between you and the helper.",
+        ],
+      },
+    ],
+  },
+  {
     id: "examples",
     title: "Example Job Posts",
     intro: "A clear post helps contractors understand the work faster.",
@@ -276,6 +310,40 @@ const contractorGuideCategories = [
       },
     ],
   },
+  {
+    id: "project-helpers",
+    title: "Working With Project Helpers",
+    intro: "Use helpers as extra support while keeping scope, responsibility, and payment clear.",
+    guides: [
+      {
+        title: "When helpers can support your work",
+        points: [
+          "Use helpers for extra hands on cleanup, material moving, prep, demolition support, landscaping help, or other non-specialized support tasks.",
+          "Keep helpers separate from licensed or insured trade work unless you are directly supervising and the arrangement is appropriate for the job.",
+          "Do not use helper listings as a substitute for employees, subcontractor agreements, insurance review, or required licensing.",
+          "Confirm whether the helper is available for the schedule, site conditions, and physical requirements before relying on them.",
+        ],
+      },
+      {
+        title: "Set expectations before bringing someone to a site",
+        points: [
+          "Explain the task, location, expected hours, tools needed, who supervises the work, and how payment will happen.",
+          "Clarify safety rules, site access, parking, cleanup, and what the helper should not touch.",
+          "Keep communication and payment direct between you and the helper. FlatOrigin does not manage scheduling, payroll, contracts, or disputes.",
+          "If a helper will be near active construction work, make sure the site lead understands who is responsible for supervision and safety.",
+        ],
+      },
+      {
+        title: "Protect your reputation",
+        points: [
+          "Only bring helpers onto projects when the homeowner understands their role.",
+          "Do not let helper tasks blur the scope or quality standard of your contractor bid.",
+          "If the work requires a licensed trade, permit, or specialized insurance, use the appropriate professional instead of general help.",
+          "Keep the project owner informed if extra help changes the schedule, access needs, or site expectations.",
+        ],
+      },
+    ],
+  },
 ];
 
 const homeownerQuickChecklists = [
@@ -289,6 +357,8 @@ const homeownerQuickChecklists = [
   "Permit notes",
   "Materials expectation",
   "Cleanup and disposal",
+  "Helper tasks, if extra hands are needed",
+  "Direct contact and payment expectations",
 ];
 
 const contractorQuickChecklists = [
@@ -302,6 +372,8 @@ const contractorQuickChecklists = [
   "Excluded work",
   "Timeline",
   "Payment terms",
+  "Helper support tasks",
+  "Site supervision expectations",
 ];
 
 const guideCopy = {
@@ -328,6 +400,10 @@ const guideCopy = {
       [
         "Match the right specialist",
         "Some projects need a handoff or multiple trades. Clear scope makes it easier for contractors to take the part that fits their skill set and coordinate the rest.",
+      ],
+      [
+        "Use helpers for extra hands",
+        "Project Helpers can support simple tasks like cleanup, moving materials, prep, or one-day help while you keep hiring and payment direct.",
       ],
     ],
     checklistTitle: "Before you ask for bids",
@@ -362,6 +438,10 @@ const guideCopy = {
       [
         "Stay local and relevant",
         "Accurate service areas and specialties help you focus on projects that fit your business.",
+      ],
+      [
+        "Use helpers carefully",
+        "Project Helpers can be useful for extra support, but you remain responsible for scope, safety, payment, and supervision on your jobs.",
       ],
     ],
     checklistTitle: "Before you send a bid",
@@ -488,15 +568,26 @@ export default function ProjectGuides() {
               <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
                 {copy.whyCopy}
               </p>
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
-                {copy.whyCards.map(([title, text]) => (
-                  <div key={title} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
-                    <h3 className="text-base font-semibold text-slate-900">
-                      {title}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {text}
-                    </p>
+              <div className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                {copy.whyCards.map(([title, text], index) => (
+                  <div
+                    key={title}
+                    className="flex gap-4 border-b border-slate-200 p-5 last:border-b-0 sm:items-start"
+                  >
+                    <div className="flex shrink-0 flex-col items-center gap-3">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-950 text-xs font-bold text-white">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="h-full min-h-10 w-px bg-slate-200" />
+                    </div>
+                    <div className="min-w-0 sm:grid sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-6">
+                      <h3 className="text-[15px] font-bold leading-5 text-slate-950">
+                        {title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-600 sm:mt-0">
+                        {text}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -572,6 +663,12 @@ export default function ProjectGuides() {
                   className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
                 >
                   {copy.finalLink}
+                </Link>
+                <Link
+                  to="/project-helpers"
+                  className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                >
+                  View Project Helpers
                 </Link>
               </div>
             </section>
