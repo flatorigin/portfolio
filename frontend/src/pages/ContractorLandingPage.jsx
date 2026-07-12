@@ -44,6 +44,37 @@ const features = [
   ["handshake", "Get Quality Leads", "Bid on projects that match your skills."],
 ];
 
+const contractorUpdates = [
+  [
+    "description",
+    "Clearer project packets",
+    "Homeowners can share photos, notes, measurements, and markups so you can understand the scope faster.",
+    "Browse projects",
+    "/work",
+  ],
+  [
+    "draw",
+    "Markup in messages",
+    "Use image markup when a photo needs a quick explanation, clarification, or visual note for the homeowner.",
+    "Learn more",
+    "/guides/contractor",
+  ],
+  [
+    "groups",
+    "Project Helpers",
+    "Find local extra hands for prep, cleanup, material moving, and support work when a job needs more capacity.",
+    "View helpers",
+    "/project-helpers",
+  ],
+  [
+    "menu_book",
+    "Guides and support",
+    "Use contractor guides for project communication, helper coordination, and smoother homeowner expectations.",
+    "Read guides",
+    "/guides",
+  ],
+];
+
 function toUrl(raw) {
   if (!raw) return "";
   const value = String(raw).trim();
@@ -379,6 +410,50 @@ function FeatureStrip() {
   );
 }
 
+function ContractorUpdates() {
+  return (
+    <section className="py-16">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            New contractor tools
+          </p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+            Better context before you spend time on a lead.
+          </h2>
+        </div>
+        <p className="max-w-xl text-sm leading-6 text-slate-500">
+          FlatOrigin is adding practical tools that help contractors review
+          scope, clarify photos, and coordinate support around real local work.
+        </p>
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {contractorUpdates.map(([icon, title, copy, cta, to]) => (
+          <Link
+            key={title}
+            to={to}
+            className="group rounded-xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
+          >
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-500">
+              <SymbolIcon name={icon} className="text-[19px]" />
+            </span>
+            <h3 className="mt-4 font-semibold text-slate-900">{title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">{copy}</p>
+            <span className="mt-4 inline-flex items-center text-sm font-semibold text-slate-900">
+              {cta}
+              <SymbolIcon
+                name="arrow_forward"
+                className="ml-1 text-[16px] transition group-hover:translate-x-0.5"
+              />
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function WebProfilePreview() {
   const portfolioItems = [
     ["Deck rebuild", "Before / after", profileImages[1]],
@@ -696,6 +771,8 @@ export default function ContractorLandingPage() {
         </section>
 
         <Container>
+          <ContractorUpdates />
+
           <section className="py-16">
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Use FlatOrigin as your public web profile
@@ -798,6 +875,9 @@ export default function ContractorLandingPage() {
                 </Link>
                 <Link to="/work" className="text-slate-600 hover:text-slate-900">
                   Find Work
+                </Link>
+                <Link to="/project-helpers" className="text-slate-600 hover:text-slate-900">
+                  Project Helpers
                 </Link>
               </div>
               <div className="flex flex-col gap-3">

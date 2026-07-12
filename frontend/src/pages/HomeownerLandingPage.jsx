@@ -60,6 +60,30 @@ const guides = [
   ],
 ];
 
+const homeownerUpdates = [
+  [
+    "edit_note",
+    "Project Planner",
+    "Collect photos, notes, measurements, priorities, and markups before you ask contractors for pricing.",
+    "Start planning",
+    "/register?role=homeowner",
+  ],
+  [
+    "groups",
+    "Project Helpers",
+    "Find local help for cleanup, prep work, moving materials, and extra hands when the project needs support.",
+    "View helpers",
+    "/project-helpers",
+  ],
+  [
+    "menu_book",
+    "Guides and support",
+    "Use practical homeowner guides, then send feedback or support requests from your account menu when needed.",
+    "Read guides",
+    "/guides",
+  ],
+];
+
 function toUrl(raw) {
   if (!raw) return "";
   const value = String(raw).trim();
@@ -209,6 +233,50 @@ function FeatureStrip() {
         </div>
       ))}
     </div>
+  );
+}
+
+function HomeownerUpdates({ primaryCtaPath }) {
+  return (
+    <section className="py-16">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            New ways to prepare
+          </p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
+            More useful before the first contractor conversation.
+          </h2>
+        </div>
+        <p className="max-w-xl text-sm leading-6 text-slate-500">
+          FlatOrigin now helps you shape the project, find extra hands, and use
+          clearer guidance before you decide who to contact.
+        </p>
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        {homeownerUpdates.map(([icon, title, copy, cta, to]) => (
+          <Link
+            key={title}
+            to={title === "Project Planner" ? primaryCtaPath : to}
+            className="group rounded-xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
+          >
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-400">
+              <SymbolIcon name={icon} className="text-[19px]" />
+            </span>
+            <h3 className="mt-4 font-semibold text-slate-900">{title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">{copy}</p>
+            <span className="mt-4 inline-flex items-center text-sm font-semibold text-slate-900">
+              {cta}
+              <SymbolIcon
+                name="arrow_forward"
+                className="ml-1 text-[16px] transition group-hover:translate-x-0.5"
+              />
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -472,6 +540,8 @@ export default function HomeownerLandingPage() {
         </section>
 
         <Container>
+          <HomeownerUpdates primaryCtaPath={primaryCtaPath} />
+
           <section className="py-16">
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Projects people hire for
@@ -587,6 +657,12 @@ export default function HomeownerLandingPage() {
                   className="text-slate-600 hover:text-slate-900"
                 >
                   Browse Projects
+                </Link>
+                <Link
+                  to="/project-helpers"
+                  className="text-slate-600 hover:text-slate-900"
+                >
+                  Project Helpers
                 </Link>
               </div>
               <div className="flex flex-col gap-3">
