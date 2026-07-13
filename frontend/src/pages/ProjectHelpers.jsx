@@ -124,20 +124,35 @@ function Field({ label, children }) {
 }
 
 function RatingInput({ label, value, onChange }) {
+  const numericValue = Number(value || 0);
+
   return (
-    <Field label={label}>
-      <select
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
-      >
-        {[5, 4, 3, 2, 1].map((rating) => (
-          <option key={rating} value={rating}>
-            {rating}
-          </option>
+    <div>
+      <div className="mb-1.5 text-sm font-semibold text-slate-800">{label}</div>
+      <div className="flex h-11 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3">
+        {[1, 2, 3, 4, 5].map((rating) => (
+          <button
+            key={rating}
+            type="button"
+            onClick={() => onChange(rating)}
+            className="rounded-md p-0.5 transition hover:scale-110 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            aria-label={`${label}: ${rating} star${rating === 1 ? "" : "s"}`}
+            aria-pressed={numericValue === rating}
+          >
+            <SymbolIcon
+              name="star"
+              fill={numericValue >= rating ? 1 : 0}
+              className={`text-[22px] ${
+                numericValue >= rating ? ratingTone(numericValue) : "text-slate-300"
+              }`}
+            />
+          </button>
         ))}
-      </select>
-    </Field>
+        <span className="ml-auto text-xs font-semibold text-slate-500">
+          {numericValue}/5
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -397,13 +412,17 @@ function HelperCard({ helper, authed, onFeedback }) {
                   <button
                     type="button"
                     onClick={() => setFeedbackOpen(true)}
-                    className="mt-1 inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-left text-sm font-semibold text-slate-800 hover:text-slate-950"
+                    className="mt-1 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-300"
                   >
                     <RatingStars value={averageRating} />
                     <span>
                       {feedbackCount
-                        ? `${averageRating.toFixed(1)}/5 from ${feedbackCount} feedback`
-                        : "View feedback (0)"}
+                        ? `${averageRating.toFixed(1)}/5 · ${feedbackCount} feedback`
+                        : "0 feedback yet"}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 underline underline-offset-2">
+                      View details
+                      <SymbolIcon name="arrow_forward" className="text-[14px]" />
                     </span>
                   </button>
                   <div className="mt-1 text-xs text-slate-500">
