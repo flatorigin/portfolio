@@ -123,34 +123,52 @@ function Field({ label, children }) {
   );
 }
 
-function RatingInput({ label, value, onChange }) {
+function ratingLabel(value) {
+  if (value >= 5) return "Excellent";
+  if (value === 4) return "Good";
+  if (value === 3) return "Okay";
+  if (value === 2) return "Poor";
+  if (value === 1) return "Very poor";
+  return "Not rated";
+}
+
+function RatingInput({ label, description, value, onChange }) {
   const numericValue = Number(value || 0);
 
   return (
-    <div>
-      <div className="mb-1.5 text-sm font-semibold text-slate-800">{label}</div>
-      <div className="flex h-11 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3">
-        {[1, 2, 3, 4, 5].map((rating) => (
-          <button
-            key={rating}
-            type="button"
-            onClick={() => onChange(rating)}
-            className="rounded-md p-0.5 transition hover:scale-110 focus:outline-none focus:ring-2 focus:ring-slate-300"
-            aria-label={`${label}: ${rating} star${rating === 1 ? "" : "s"}`}
-            aria-pressed={numericValue === rating}
-          >
-            <SymbolIcon
-              name="star"
-              fill={numericValue >= rating ? 1 : 0}
-              className={`text-[22px] ${
-                numericValue >= rating ? ratingTone(numericValue) : "text-slate-300"
-              }`}
-            />
-          </button>
-        ))}
-        <span className="ml-auto text-xs font-semibold text-slate-500">
-          {numericValue}/5
-        </span>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-900">{label}</div>
+          {description ? (
+            <div className="mt-1 text-xs leading-5 text-slate-500">{description}</div>
+          ) : null}
+        </div>
+        <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <button
+                key={rating}
+                type="button"
+                onClick={() => onChange(rating)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                aria-label={`${label}: ${rating} star${rating === 1 ? "" : "s"}`}
+                aria-pressed={numericValue === rating}
+              >
+                <SymbolIcon
+                  name="star"
+                  fill={numericValue >= rating ? 1 : 0}
+                  className={`text-[26px] ${
+                    numericValue >= rating ? ratingTone(numericValue) : "text-slate-300"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+          <div className="mt-1 text-center text-xs font-semibold text-slate-600">
+            {numericValue}/5 · {ratingLabel(numericValue)}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1139,11 +1157,13 @@ export default function ProjectHelpers() {
 
       {feedbackHelper ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div>
-                <div className="text-lg font-bold text-slate-950">Structured feedback</div>
-                <div className="text-sm text-slate-500">{feedbackHelper.full_name}</div>
+                <div className="text-lg font-bold text-slate-950">Leave helper feedback</div>
+                <div className="text-sm text-slate-500">
+                  {feedbackHelper.full_name}
+                </div>
               </div>
               <button
                 type="button"
@@ -1164,18 +1184,32 @@ export default function ProjectHelpers() {
                   {feedbackSuccess}
                 </div>
               ) : null}
-              <input
-                required
-                value={feedbackForm.project_type}
-                onChange={(e) =>
-                  setFeedbackForm((prev) => ({ ...prev, project_type: e.target.value }))
-                }
-                placeholder="Project type"
-                className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
-              />
-              <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Project type">
+                <input
+                  required
+                  value={feedbackForm.project_type}
+                  onChange={(e) =>
+                    setFeedbackForm((prev) => ({ ...prev, project_type: e.target.value }))
+                  }
+                  placeholder="Example: deck cleanup, drywall repair, material moving"
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+                />
+              </Field>
+
+              <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                <div className="mb-3">
+                  <div className="text-sm font-bold text-slate-950">
+                    Rate the helper
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    Tap the stars for each area. These ratings help other users
+                    scan feedback quickly after admin approval.
+                  </div>
+                </div>
+                <div className="space-y-3">
                 <RatingInput
                   label="Reliability"
+                  description="Showed up, followed through, and handled agreed work."
                   value={feedbackForm.reliability_rating}
                   onChange={(value) =>
                     setFeedbackForm((prev) => ({ ...prev, reliability_rating: value }))
@@ -1183,6 +1217,7 @@ export default function ProjectHelpers() {
                 />
                 <RatingInput
                   label="Communication"
+                  description="Responded clearly and kept expectations easy to understand."
                   value={feedbackForm.communication_rating}
                   onChange={(value) =>
                     setFeedbackForm((prev) => ({ ...prev, communication_rating: value }))
@@ -1190,11 +1225,13 @@ export default function ProjectHelpers() {
                 />
                 <RatingInput
                   label="Work quality"
+                  description="Completed the helper work carefully and appropriately."
                   value={feedbackForm.work_quality_rating}
                   onChange={(value) =>
                     setFeedbackForm((prev) => ({ ...prev, work_quality_rating: value }))
                   }
                 />
+                </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">

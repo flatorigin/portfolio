@@ -150,11 +150,15 @@ class HelperFeedbackAdmin(admin.ModelAdmin):
         "helper",
         "reviewer",
         "project_type",
+        "reliability_rating",
+        "communication_rating",
+        "work_quality_rating",
         "worked_together",
         "would_hire_again",
         "is_approved",
         "created_at",
     )
+    list_editable = ("is_approved",)
     list_filter = (
         "is_approved",
         "worked_together",
