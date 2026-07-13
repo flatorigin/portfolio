@@ -328,31 +328,23 @@ function HelperFeedbackDialog({ helper, authed, onClose, onLeaveFeedback }) {
   );
 }
 
-function FeedbackSummaryButton({
-  averageRating,
-  feedbackCount,
-  onClick,
-  className = "",
-}) {
+function RatingSummary({ averageRating, feedbackCount, compact = false }) {
   const hasFeedback = feedbackCount > 0 && averageRating > 0;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        "inline-flex max-w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-200 " +
-        className
-      }
-      aria-label="Open helper feedback details"
-    >
-      <RatingStars value={averageRating} />
-      <span className="truncate">
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <RatingStars value={averageRating} size={compact ? "text-[14px]" : "text-[16px]"} />
+        <span className="truncate text-sm font-semibold text-slate-900">
+          {hasFeedback ? averageRating.toFixed(1) : "No rating"}
+        </span>
+      </div>
+      <div className="mt-0.5 truncate text-xs text-slate-500">
         {hasFeedback
-          ? `${averageRating.toFixed(1)}/5 · ${feedbackCount} feedback`
+          ? `${feedbackCount} feedback${feedbackCount === 1 ? "" : "s"}`
           : "No feedback yet"}
-      </span>
-    </button>
+      </div>
+    </div>
   );
 }
 
@@ -371,15 +363,11 @@ function HelperCard({ helper, authed, onFeedback }) {
     <>
       <article
         className={
-          "group rounded-2xl border border-white/70 bg-white/85 shadow-sm backdrop-blur transition hover:border-slate-200 hover:shadow-md " +
-          (expanded ? "ring-1 ring-slate-200" : "")
+          "rounded-xl border border-slate-200 bg-white shadow-sm transition " +
+          (expanded ? "ring-1 ring-slate-200" : "hover:border-slate-300 hover:shadow-md")
         }
-        onMouseEnter={() => setExpanded(true)}
-        onMouseLeave={() => {
-          if (!feedbackOpen) setExpanded(false);
-        }}
       >
-        <div className="grid w-full gap-3 px-4 py-3 text-left sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(170px,auto)_auto] sm:items-center">
+        <div className="grid w-full gap-3 px-4 py-3 text-left md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(140px,auto)_auto] md:items-center">
           <div className="min-w-0">
             <div className="truncate text-sm font-bold text-slate-950">{helper.full_name}</div>
             {helper.contact_verified ? (
@@ -401,20 +389,19 @@ function HelperCard({ helper, authed, onFeedback }) {
           </div>
           <div className="min-w-0">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              Feedback
+              Rating
             </div>
-            <FeedbackSummaryButton
+            <RatingSummary
               averageRating={averageRating}
               feedbackCount={feedbackCount}
-              onClick={() => setFeedbackOpen(true)}
-              className="w-full justify-start"
+              compact
             />
           </div>
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
             onFocus={() => setExpanded(true)}
-            className="flex items-center justify-end gap-2 rounded-xl px-2 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="flex items-center justify-end gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-300"
             aria-expanded={expanded ? "true" : "false"}
           >
             <span>{expanded ? "Show less" : "Show more"}</span>
@@ -469,12 +456,17 @@ function HelperCard({ helper, authed, onFeedback }) {
                   Feedback
                 </dt>
                 <dd>
-                  <FeedbackSummaryButton
+                  <RatingSummary
                     averageRating={averageRating}
                     feedbackCount={feedbackCount}
-                    onClick={() => setFeedbackOpen(true)}
-                    className="mt-1"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackOpen(true)}
+                    className="mt-2 text-xs font-semibold text-slate-700 underline underline-offset-4 hover:text-slate-950"
+                  >
+                    Read feedback
+                  </button>
                   <div className="mt-1 text-xs text-slate-500">
                     {helper.would_hire_again_count || 0} would hire again
                   </div>
