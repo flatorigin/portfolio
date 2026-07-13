@@ -328,6 +328,34 @@ function HelperFeedbackDialog({ helper, authed, onClose, onLeaveFeedback }) {
   );
 }
 
+function FeedbackSummaryButton({
+  averageRating,
+  feedbackCount,
+  onClick,
+  className = "",
+}) {
+  const hasFeedback = feedbackCount > 0 && averageRating > 0;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "inline-flex max-w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-left text-sm font-semibold text-slate-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-200 " +
+        className
+      }
+      aria-label="Open helper feedback details"
+    >
+      <RatingStars value={averageRating} />
+      <span className="truncate">
+        {hasFeedback
+          ? `${averageRating.toFixed(1)}/5 · ${feedbackCount} feedback`
+          : "No feedback yet"}
+      </span>
+    </button>
+  );
+}
+
 function HelperCard({ helper, authed, onFeedback }) {
   const [expanded, setExpanded] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -340,48 +368,62 @@ function HelperCard({ helper, authed, onFeedback }) {
   ].filter(Boolean);
 
   return (
-    <article
-      className={
-        "group rounded-2xl border border-white/70 bg-white/85 shadow-sm backdrop-blur transition hover:border-slate-200 hover:shadow-md " +
-        (expanded ? "ring-1 ring-slate-200" : "")
-      }
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-    >
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        onFocus={() => setExpanded(true)}
-        className="grid w-full gap-3 px-4 py-3 text-left sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center"
-        aria-expanded={expanded ? "true" : "false"}
+    <>
+      <article
+        className={
+          "group rounded-2xl border border-white/70 bg-white/85 shadow-sm backdrop-blur transition hover:border-slate-200 hover:shadow-md " +
+          (expanded ? "ring-1 ring-slate-200" : "")
+        }
+        onMouseEnter={() => setExpanded(true)}
+        onMouseLeave={() => {
+          if (!feedbackOpen) setExpanded(false);
+        }}
       >
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold text-slate-950">{helper.full_name}</div>
-          {helper.contact_verified ? (
-            <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-              <SymbolIcon name="verified" className="text-[13px]" />
-              Verified Contact
+        <div className="grid w-full gap-3 px-4 py-3 text-left sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(170px,auto)_auto] sm:items-center">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold text-slate-950">{helper.full_name}</div>
+            {helper.contact_verified ? (
+              <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                <SymbolIcon name="verified" className="text-[13px]" />
+                Verified Contact
+              </div>
+            ) : null}
+          </div>
+          <div className="min-w-0 text-sm text-slate-600">
+            <span className="font-medium text-slate-700">Location:</span>{" "}
+            <span className="truncate">
+              {helper.city}, {helper.state} · {helper.service_radius_miles} mi
+            </span>
+          </div>
+          <div className="min-w-0 text-sm text-slate-600">
+            <span className="font-medium text-slate-700">Availability:</span>{" "}
+            <span className="line-clamp-1">{availabilityText}</span>
+          </div>
+          <div className="min-w-0">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Feedback
             </div>
-          ) : null}
+            <FeedbackSummaryButton
+              averageRating={averageRating}
+              feedbackCount={feedbackCount}
+              onClick={() => setFeedbackOpen(true)}
+              className="w-full justify-start"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            onFocus={() => setExpanded(true)}
+            className="flex items-center justify-end gap-2 rounded-xl px-2 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            aria-expanded={expanded ? "true" : "false"}
+          >
+            <span>{expanded ? "Show less" : "Show more"}</span>
+            <SymbolIcon
+              name={expanded ? "expand_less" : "expand_more"}
+              className="text-[18px]"
+            />
+          </button>
         </div>
-        <div className="min-w-0 text-sm text-slate-600">
-          <span className="font-medium text-slate-700">Location:</span>{" "}
-          <span className="truncate">
-            {helper.city}, {helper.state} · {helper.service_radius_miles} mi
-          </span>
-        </div>
-        <div className="min-w-0 text-sm text-slate-600">
-          <span className="font-medium text-slate-700">Availability:</span>{" "}
-          <span className="line-clamp-1">{availabilityText}</span>
-        </div>
-        <div className="flex items-center justify-end gap-2 text-xs font-semibold text-slate-500">
-          <span>{expanded ? "Show less" : "Show more"}</span>
-          <SymbolIcon
-            name={expanded ? "expand_less" : "expand_more"}
-            className="text-[18px]"
-          />
-        </div>
-      </button>
 
       <div
         className={
@@ -427,22 +469,12 @@ function HelperCard({ helper, authed, onFeedback }) {
                   Feedback
                 </dt>
                 <dd>
-                  <button
-                    type="button"
+                  <FeedbackSummaryButton
+                    averageRating={averageRating}
+                    feedbackCount={feedbackCount}
                     onClick={() => setFeedbackOpen(true)}
-                    className="mt-1 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                  >
-                    <RatingStars value={averageRating} />
-                    <span>
-                      {feedbackCount
-                        ? `${averageRating.toFixed(1)}/5 · ${feedbackCount} feedback`
-                        : "0 feedback yet"}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 underline underline-offset-2">
-                      View details
-                      <SymbolIcon name="arrow_forward" className="text-[14px]" />
-                    </span>
-                  </button>
+                    className="mt-1"
+                  />
                   <div className="mt-1 text-xs text-slate-500">
                     {helper.would_hire_again_count || 0} would hire again
                   </div>
@@ -504,6 +536,7 @@ function HelperCard({ helper, authed, onFeedback }) {
           </div>
         </div>
       </div>
+      </article>
       {feedbackOpen ? (
         <HelperFeedbackDialog
           helper={helper}
@@ -515,7 +548,7 @@ function HelperCard({ helper, authed, onFeedback }) {
           }}
         />
       ) : null}
-    </article>
+    </>
   );
 }
 
