@@ -230,7 +230,7 @@ class HelperListingSerializer(serializers.ModelSerializer):
         return sum(1 for item in self._approved_feedback(obj) if item.would_hire_again)
 
     def get_approved_feedback(self, obj):
-        feedback = self._approved_feedback(obj)[:3]
+        feedback = self._approved_feedback(obj)
         return HelperFeedbackSerializer(feedback, many=True, context=self.context).data
 
     def validate_full_name(self, value):

@@ -141,9 +141,166 @@ function RatingInput({ label, value, onChange }) {
   );
 }
 
+function feedbackAverage(feedback) {
+  if (!feedback) return 0;
+  const total =
+    Number(feedback.reliability_rating || 0) +
+    Number(feedback.communication_rating || 0) +
+    Number(feedback.work_quality_rating || 0);
+  return total ? total / 3 : 0;
+}
+
+function ratingTone(value) {
+  if (value >= 4) return "text-amber-500";
+  if (value >= 3) return "text-amber-600";
+  if (value > 0) return "text-rose-500";
+  return "text-slate-300";
+}
+
+function RatingStars({ value = 0, size = "text-[15px]" }) {
+  const rounded = Math.round(Number(value || 0));
+  const tone = ratingTone(Number(value || 0));
+
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`${Number(value || 0).toFixed(1)} out of 5`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <SymbolIcon
+          key={star}
+          name="star"
+          fill={rounded >= star ? 1 : 0}
+          className={`${size} ${rounded >= star ? tone : "text-slate-300"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
+function formatFeedbackDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function HelperFeedbackDialog({ helper, authed, onClose, onLeaveFeedback }) {
+  const feedback = Array.isArray(helper.approved_feedback) ? helper.approved_feedback : [];
+  const averageRating = Number(helper.average_rating || 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div>
+            <div className="text-lg font-bold text-slate-950">Helper feedback</div>
+            <div className="mt-0.5 text-sm text-slate-500">{helper.full_name}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="max-h-[72vh] overflow-y-auto p-5">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <RatingStars value={averageRating} size="text-[20px]" />
+              <div className="text-sm font-semibold text-slate-900">
+                {averageRating ? `${averageRating.toFixed(1)} out of 5` : "No approved rating yet"}
+              </div>
+              <div className="text-sm text-slate-500">
+                {helper.feedback_count || 0} feedback
+              </div>
+            </div>
+            <div className="mt-2 text-sm text-slate-500">
+              {helper.would_hire_again_count || 0} would hire again
+            </div>
+          </div>
+
+          {feedback.length ? (
+            <div className="mt-4 space-y-3">
+              {feedback.map((item) => {
+                const itemAverage = feedbackAverage(item);
+                return (
+                  <div key={item.id} className="rounded-xl border border-slate-100 bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-slate-950">
+                          {item.project_type}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          {item.reviewer_username ? <span>{item.reviewer_username}</span> : null}
+                          {item.created_at ? <span>{formatFeedbackDate(item.created_at)}</span> : null}
+                          {item.worked_together ? <span>Worked together</span> : null}
+                          {item.would_hire_again ? <span>Would hire again</span> : null}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <RatingStars value={itemAverage} />
+                        <div className="mt-0.5 text-xs font-semibold text-slate-600">
+                          {itemAverage.toFixed(1)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {item.short_note ? (
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {item.short_note}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                      <div>Reliability: {item.reliability_rating}/5</div>
+                      <div>Communication: {item.communication_rating}/5</div>
+                      <div>Work quality: {item.work_quality_rating}/5</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500">
+              No approved feedback has been posted for this helper yet.
+            </div>
+          )}
+
+          <div className="mt-5 flex justify-end">
+            {authed ? (
+              <button
+                type="button"
+                onClick={onLeaveFeedback}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                <SymbolIcon name="rate_review" className="text-[17px]" />
+                Leave feedback
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Log in to leave feedback
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HelperCard({ helper, authed, onFeedback }) {
   const [expanded, setExpanded] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const availabilityText = (helper.availability_labels || []).join(", ") || "Availability not listed";
+  const feedbackCount = Number(helper.feedback_count || 0);
+  const averageRating = Number(helper.average_rating || 0);
   const contactItems = [
     helper.phone ? ["Phone", helper.phone] : null,
     helper.email ? ["Email", helper.email] : null,
@@ -237,8 +394,21 @@ function HelperCard({ helper, authed, onFeedback }) {
                   Feedback
                 </dt>
                 <dd>
-                  {helper.average_rating ? `${helper.average_rating}/5` : "No rating yet"} ·{" "}
-                  {helper.would_hire_again_count || 0} would hire again
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackOpen(true)}
+                    className="mt-1 inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-left text-sm font-semibold text-slate-800 hover:text-slate-950"
+                  >
+                    <RatingStars value={averageRating} />
+                    <span>
+                      {feedbackCount
+                        ? `${averageRating.toFixed(1)}/5 from ${feedbackCount} feedback`
+                        : "View feedback (0)"}
+                    </span>
+                  </button>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {helper.would_hire_again_count || 0} would hire again
+                  </div>
                 </dd>
               </div>
             </dl>
@@ -297,6 +467,17 @@ function HelperCard({ helper, authed, onFeedback }) {
           </div>
         </div>
       </div>
+      {feedbackOpen ? (
+        <HelperFeedbackDialog
+          helper={helper}
+          authed={authed}
+          onClose={() => setFeedbackOpen(false)}
+          onLeaveFeedback={() => {
+            setFeedbackOpen(false);
+            onFeedback(helper);
+          }}
+        />
+      ) : null}
     </article>
   );
 }
