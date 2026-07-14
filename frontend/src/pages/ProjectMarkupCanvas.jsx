@@ -1275,7 +1275,7 @@ export default function ProjectMarkupCanvas() {
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
   const [sketchBusy, setSketchBusy] = useState(false);
-  const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "" });
+  const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
@@ -1677,19 +1677,22 @@ export default function ProjectMarkupCanvas() {
     event.target.value = "";
     if (!file) return;
     if (!planId) {
-      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "" });
-      setMessage("Open this from a saved project planner before creating a plan from a sketch.");
+      const detail = "Open this from a saved project planner before creating a plan from a sketch.";
+      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "", detail });
+      setMessage(detail);
       return;
     }
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
-      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "" });
-      setMessage("Upload a JPG, PNG, or WebP sketch.");
+      const detail = "Upload a JPG, PNG, or WebP sketch.";
+      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "", detail });
+      setMessage(detail);
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
-      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "" });
-      setMessage("Sketch images must be 15MB or smaller.");
+      const detail = "Sketch images must be 15MB or smaller.";
+      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "", detail });
+      setMessage(detail);
       return;
     }
     if (annotations.length && !window.confirm("Replace the current canvas with an AI rough plan from this sketch? Save first if you need this version.")) {
@@ -1697,7 +1700,7 @@ export default function ProjectMarkupCanvas() {
     }
 
     setSketchBusy(true);
-    setSketchStatus({ phase: "uploading", progress: 0, fileName: file.name || "Sketch image" });
+    setSketchStatus({ phase: "uploading", progress: 0, fileName: file.name || "Sketch image", detail: "" });
     setMessage("");
     try {
       const formData = new FormData();
@@ -1714,10 +1717,11 @@ export default function ProjectMarkupCanvas() {
             phase: progress >= 100 ? "analyzing" : "uploading",
             progress,
             fileName: file.name || "Sketch image",
+            detail: "",
           });
         },
       });
-      setSketchStatus({ phase: "drafting", progress: 100, fileName: file.name || "Sketch image" });
+      setSketchStatus({ phase: "drafting", progress: 100, fileName: file.name || "Sketch image", detail: "" });
       setCanvasMode("rough_plan");
       setBackgroundUrl("");
       setRoughPlan((prev) => ({ ...prev, ...(data.rough_plan || {}), snap: data.rough_plan?.snap ?? true }));
@@ -1728,11 +1732,12 @@ export default function ProjectMarkupCanvas() {
       const notes = Array.isArray(data.uncertainty_notes) && data.uncertainty_notes.length
         ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
         : "";
-      setSketchStatus({ phase: "ready", progress: 100, fileName: file.name || "Sketch image" });
+      setSketchStatus({ phase: "ready", progress: 100, fileName: file.name || "Sketch image", detail: "" });
       setMessage(`AI rough plan created. Review and edit it before saving.${notes}`);
     } catch (err) {
-      setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: file.name || "Sketch image" }));
-      setMessage(normalizeError(err, "Could not create a rough plan from this sketch."));
+      const detail = normalizeError(err, "Could not create a rough plan from this sketch.");
+      setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: file.name || "Sketch image", detail }));
+      setMessage(detail);
     } finally {
       setSketchBusy(false);
     }
@@ -3141,7 +3146,7 @@ export default function ProjectMarkupCanvas() {
                                     ? "Building editable rough-plan elements."
                                     : sketchPhase === "ready"
                                       ? "Editable rough plan is ready."
-                                      : "Could not create the rough plan."}
+                                      : sketchStatus.detail || "Could not create the rough plan."}
                             </div>
                           </div>
                           {sketchBusy ? (
