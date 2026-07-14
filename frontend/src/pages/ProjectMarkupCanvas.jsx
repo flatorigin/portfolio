@@ -1706,8 +1706,8 @@ export default function ProjectMarkupCanvas() {
         name: file.name || "Uploaded sketch",
       };
     });
-    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "Uploaded sketch", detail: "Image selected. Click Create editable plan when ready." });
-    setMessage("Sketch image selected. Confirm the source, then create the editable plan.");
+    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected. Click Create editable plan when ready." });
+    setMessage("New sketch selected for plan creation. It has not been saved as a project image.");
   }
 
   function selectExistingSketchImage(image) {
@@ -3212,9 +3212,11 @@ export default function ProjectMarkupCanvas() {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
-                        No project images are uploaded yet. Upload a new sketch below.
-                      </div>
+                      !sketchSource ? (
+                        <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
+                          No saved project images are attached to this planner yet. Choose a new sketch below.
+                        </div>
+                      ) : null
                     )}
                     <button
                       type="button"
@@ -3223,7 +3225,7 @@ export default function ProjectMarkupCanvas() {
                       className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                     >
                       <SymbolIcon name="upload" className="text-[18px]" />
-                      Upload new sketch
+                      Choose new sketch
                     </button>
                     {sketchSource ? (
                       <div className="mt-3 overflow-hidden rounded-xl border border-blue-200 bg-blue-50">
@@ -3234,7 +3236,7 @@ export default function ProjectMarkupCanvas() {
                           <div className="min-w-0">
                             <div className="truncate text-xs font-semibold text-slate-900">{sketchSource.name || "Selected image"}</div>
                             <div className="mt-0.5 text-[11px] text-slate-500">
-                              {sketchSource.kind === "existing" ? "Existing project image selected" : "New sketch selected"}
+                              {sketchSource.kind === "existing" ? "Saved project image selected" : "New sketch selected for this plan"}
                             </div>
                           </div>
                           <button
