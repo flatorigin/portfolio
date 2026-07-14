@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from accounts.ai import AIServiceError, generate_text
+from accounts.ai import AIServiceError, generate_text, generate_text_with_image
 from accounts.geo_distance import get_request_origin, sort_by_distance
 from accounts.models import (
     AIConfiguration,
@@ -99,6 +99,10 @@ SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (
     ".mov",
     ".webm",
 )
+SUPPORTED_SKETCH_PLAN_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_SKETCH_PLAN_IMAGE_SIZE = 15 * 1024 * 1024
+MARKUP_CANVAS_WIDTH = 1200
+MARKUP_CANVAS_HEIGHT = 760
 
 
 class FeedbackTicketListCreateView(generics.ListCreateAPIView):
@@ -1018,6 +1022,184 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             status=status_value,
             prompt_chars=prompt_chars,
             response_chars=response_chars,
+        )
+
+    def _sketch_float(self, value, default=0, min_value=0, max_value=MARKUP_CANVAS_WIDTH):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = default
+        return max(min_value, min(max_value, number))
+
+    def _normalize_sketch_rough_plan(self, payload):
+        source = payload.get("rough_plan") if isinstance(payload, dict) else {}
+        if not isinstance(source, dict):
+            source = {}
+        width = self._sketch_float(source.get("width"), 20, 1, 500)
+        length = self._sketch_float(source.get("length"), 30, 1, 500)
+        unit = str(source.get("unit") or "ft").strip().lower()
+        if unit not in {"ft", "in", "m"}:
+            unit = "ft"
+        return {
+            "width": str(int(width) if width.is_integer() else round(width, 2)),
+            "length": str(int(length) if length.is_integer() else round(length, 2)),
+            "unit": unit,
+            "snap": True,
+            "zoom": 100,
+        }
+
+    def _normalize_sketch_annotations(self, payload):
+        items = payload.get("annotations") if isinstance(payload, dict) else []
+        if not isinstance(items, list):
+            return []
+        allowed = {"line", "arrow", "rect", "circle", "text", "measure", "door", "window", "tree", "steps", "fence", "pen"}
+        normalized = []
+        for index, raw in enumerate(items[:80]):
+            if not isinstance(raw, dict):
+                continue
+            item_type = str(raw.get("type") or "").strip().lower()
+            if item_type not in allowed:
+                continue
+            item_id = f"ai-sketch-{timezone.now().strftime('%Y%m%d%H%M%S')}-{index}"
+            base = {
+                "id": item_id,
+                "layer": item_id,
+                "type": item_type,
+                "color": "#111827",
+                "strokeColor": "#111827",
+                "fillColor": "#111827",
+                "fillMaterial": "flat",
+                "colorLabel": "AI rough plan",
+                "strokeWidth": self._sketch_float(raw.get("strokeWidth"), 4, 1, 18),
+                "strokeOpacity": self._sketch_float(raw.get("strokeOpacity"), 1, 0, 1),
+                "fillOpacity": self._sketch_float(raw.get("fillOpacity"), 0.12 if item_type in {"rect", "circle"} else 0, 0, 1),
+                "strokeAlign": "center",
+                "startEndpoint": str(raw.get("startEndpoint") or "none") if str(raw.get("startEndpoint") or "none") in {"none", "arrow", "dot"} else "none",
+                "endEndpoint": "arrow" if item_type == "arrow" else (str(raw.get("endEndpoint") or "none") if str(raw.get("endEndpoint") or "none") in {"none", "arrow", "dot"} else "none"),
+                "strokeStyle": "dashed" if str(raw.get("strokeStyle") or "").lower() == "dashed" else "solid",
+                "canvasMode": "rough_plan",
+            }
+
+            if item_type == "pen":
+                points = raw.get("points") if isinstance(raw.get("points"), list) else []
+                clean_points = [
+                    {
+                        "x": self._sketch_float(point.get("x"), 0, 0, MARKUP_CANVAS_WIDTH),
+                        "y": self._sketch_float(point.get("y"), 0, 0, MARKUP_CANVAS_HEIGHT),
+                    }
+                    for point in points
+                    if isinstance(point, dict)
+                ][:40]
+                if len(clean_points) < 2:
+                    continue
+                base.update(
+                    {
+                        "x": clean_points[0]["x"],
+                        "y": clean_points[0]["y"],
+                        "x2": clean_points[-1]["x"],
+                        "y2": clean_points[-1]["y"],
+                        "points": clean_points,
+                        "closed": bool(raw.get("closed")) and len(clean_points) >= 3,
+                        "fillOpacity": self._sketch_float(raw.get("fillOpacity"), 0.1 if raw.get("closed") else 0, 0, 1),
+                        "text": str(raw.get("text") or "").strip()[:120],
+                    }
+                )
+                normalized.append(base)
+                continue
+
+            x = self._sketch_float(raw.get("x"), raw.get("x1", 120), 0, MARKUP_CANVAS_WIDTH)
+            y = self._sketch_float(raw.get("y"), raw.get("y1", 120), 0, MARKUP_CANVAS_HEIGHT)
+            x2 = self._sketch_float(raw.get("x2"), x + self._sketch_float(raw.get("w"), 120, 8, 500), 0, MARKUP_CANVAS_WIDTH)
+            y2 = self._sketch_float(raw.get("y2"), y + self._sketch_float(raw.get("h"), 80, 8, 500), 0, MARKUP_CANVAS_HEIGHT)
+            text = str(raw.get("text") or raw.get("label") or "").strip()[:160]
+
+            if item_type in {"door", "window", "tree", "steps", "fence", "text"}:
+                base.update({"x": x, "y": y, "x2": x, "y2": y, "text": text or ("Add note" if item_type == "text" else "")})
+            else:
+                base.update({"x": x, "y": y, "x2": x2, "y2": y2, "text": text or ("measurement" if item_type == "measure" else "")})
+            normalized.append(base)
+        return normalized
+
+    @action(detail=True, methods=["post"], url_path="sketch-to-rough-plan")
+    def sketch_to_rough_plan(self, request, pk=None):
+        plan = self.get_object()
+        feature = AIUsageEvent.Feature.PLANNER_DRAFT
+        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
+        sketch = request.FILES.get("sketch") or request.FILES.get("image")
+        if not sketch:
+            raise ValidationError({"sketch": "Upload a sketch image."})
+        content_type = str(getattr(sketch, "content_type", "") or "").lower()
+        if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+            raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
+        if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
+            raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
+
+        requested_width = request.data.get("width") or "20"
+        requested_length = request.data.get("length") or "30"
+        requested_unit = request.data.get("unit") or "ft"
+        system_prompt = (
+            "You convert homeowner sketch images into simple editable rough-plan JSON for FlatOrigin. "
+            "This is not CAD, design, engineering, permitting, or construction documentation. "
+            "Return strict JSON only. Do not include markdown. Use approximate homeowner-friendly geometry."
+        )
+        user_prompt = (
+            f"Project title: {plan.title or 'Untitled project'}\n"
+            f"Project type: {plan.project_type or ''}\n"
+            f"Project notes: {plan.issue_summary or plan.notes or ''}\n"
+            f"Preferred rough plan size: {requested_width} x {requested_length} {requested_unit}\n\n"
+            "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
+            "rough_plan: {width, length, unit}. Use ft unless the image clearly specifies another unit.\n"
+            f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
+            "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
+            "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
+            "For line/measure/rect/circle use x,y,x2,y2,text. For text and symbols use x,y,text. "
+            "For pen use points as [{x,y}], closed true only for clear enclosed shapes. "
+            "Use black strokes, simple labels, and approximate measurements only when readable from the sketch. "
+            "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
+        )
+        model_name = ""
+        try:
+            result = generate_text_with_image(
+                feature=feature,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                image_bytes=sketch.read(),
+                image_content_type=content_type,
+            )
+            model_name = result["model"]
+            payload = parse_ai_json(result["text"])
+            rough_plan = self._normalize_sketch_rough_plan(payload)
+            annotations = self._normalize_sketch_annotations(payload)
+            uncertainty_notes = self._clean_string_list(payload.get("uncertainty_notes") if isinstance(payload, dict) else [])
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=len(result["text"]),
+                status_value=AIUsageEvent.Status.SUCCESS,
+            )
+        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=0,
+                status_value=AIUsageEvent.Status.ERROR,
+            )
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        remaining_after, _ = get_ai_remaining_today(request.user)
+        return Response(
+            {
+                "rough_plan": rough_plan,
+                "annotations": annotations,
+                "uncertainty_notes": uncertainty_notes,
+                "remaining_today": remaining_after,
+                "daily_limit": daily_limit,
+                "model": model_name,
+            }
         )
 
     @action(detail=True, methods=["post"], url_path="ai")

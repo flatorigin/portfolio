@@ -370,6 +370,10 @@ export default function ProjectPlanDetail() {
     navigate(`/dashboard/planner/${planId}/markup${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
+  function openSketchPlanBuilder() {
+    navigate(`/dashboard/planner/${planId}/markup?mode=rough_plan&sketch=1`);
+  }
+
   function downloadMarkupSvg(version) {
     downloadBlob(
       markupVersionSvg(version, plan.title),
@@ -908,11 +912,17 @@ export default function ProjectPlanDetail() {
               Upload photos, then mark up each image from its tile.
             </div>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-            <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
-            <SymbolIcon name="upload" className="text-[18px]" />
-            {uploading ? "Uploading..." : "Upload photos"}
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <GhostButton type="button" onClick={openSketchPlanBuilder} className="h-10 px-4">
+              <SymbolIcon name="architecture" className="text-[18px]" />
+              Create Plan from Sketch
+            </GhostButton>
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white">
+              <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
+              <SymbolIcon name="upload" className="text-[18px]" />
+              {uploading ? "Uploading..." : "Upload photos"}
+            </label>
+          </div>
         </div>
 
         {activeTemplate?.photo_suggestions?.length ? (

@@ -1237,8 +1237,10 @@ export default function ProjectMarkupCanvas() {
   const navigate = useNavigate();
   const svgRef = useRef(null);
   const fileRef = useRef(null);
+  const sketchFileRef = useRef(null);
   const textureFileRef = useRef(null);
   const sidebarTextRef = useRef(null);
+  const modeRequestHandledRef = useRef(false);
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
   const [loadingPlan, setLoadingPlan] = useState(Boolean(planId || projectId));
@@ -1272,6 +1274,7 @@ export default function ProjectMarkupCanvas() {
   const [viewportOrigin, setViewportOrigin] = useState({ x: 0, y: 0 });
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
+  const [sketchBusy, setSketchBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
@@ -1283,6 +1286,8 @@ export default function ProjectMarkupCanvas() {
   const isProjectImageMode = Boolean(projectId && imageId);
   const storageKey = `${STORAGE_PREFIX}:${planId ? `plan:${planId}` : isProjectImageMode ? `project:${projectId}:${imageId}` : "standalone"}`;
   const selectedImageId = useMemo(() => new URLSearchParams(location.search).get("image") || "", [location.search]);
+  const requestedCanvasMode = useMemo(() => new URLSearchParams(location.search).get("mode") || "", [location.search]);
+  const sketchUploadRequested = useMemo(() => new URLSearchParams(location.search).get("sketch") === "1", [location.search]);
 
   useEffect(() => {
     try {
@@ -1418,6 +1423,20 @@ export default function ProjectMarkupCanvas() {
       alive = false;
     };
   }, [imageId, isProjectImageMode, projectId]);
+
+  useEffect(() => {
+    if (loadingPlan || requestedCanvasMode !== "rough_plan" || modeRequestHandledRef.current) return;
+    modeRequestHandledRef.current = true;
+    setCanvasMode("rough_plan");
+    setBackgroundUrl("");
+    setOpenSidebarSection("mode");
+    if (sketchUploadRequested) {
+      setAnnotations([]);
+      setSelectedId("");
+      setEditingTextId("");
+      setMessage("Upload a sketch in the Create from sketch panel. AI will create an editable rough plan for review.");
+    }
+  }, [loadingPlan, requestedCanvasMode, sketchUploadRequested]);
 
   const selected = useMemo(
     () => annotations.find((item) => item.id === selectedId) || null,
@@ -1650,6 +1669,56 @@ export default function ProjectMarkupCanvas() {
       return url;
     });
     event.target.value = "";
+  }
+
+  async function handleSketchPlanUpload(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!planId) {
+      setMessage("Open this from a saved project planner before creating a plan from a sketch.");
+      return;
+    }
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage("Upload a JPG, PNG, or WebP sketch.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setMessage("Sketch images must be 15MB or smaller.");
+      return;
+    }
+    if (annotations.length && !window.confirm("Replace the current canvas with an AI rough plan from this sketch? Save first if you need this version.")) {
+      return;
+    }
+
+    setSketchBusy(true);
+    setMessage("");
+    try {
+      const formData = new FormData();
+      formData.append("sketch", file);
+      formData.append("width", roughPlan.width || "20");
+      formData.append("length", roughPlan.length || "30");
+      formData.append("unit", roughPlan.unit || "ft");
+      const { data } = await api.post(`/project-plans/${planId}/sketch-to-rough-plan/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setCanvasMode("rough_plan");
+      setBackgroundUrl("");
+      setRoughPlan((prev) => ({ ...prev, ...(data.rough_plan || {}), snap: data.rough_plan?.snap ?? true }));
+      commitAnnotations(Array.isArray(data.annotations) ? data.annotations : []);
+      setSelectedId("");
+      setEditingTextId("");
+      setOpenSidebarSection("annotations");
+      const notes = Array.isArray(data.uncertainty_notes) && data.uncertainty_notes.length
+        ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
+        : "";
+      setMessage(`AI rough plan created. Review and edit it before saving.${notes}`);
+    } catch (err) {
+      setMessage(normalizeError(err, "Could not create a rough plan from this sketch."));
+    } finally {
+      setSketchBusy(false);
+    }
   }
 
   function sanitizeTextureSvg(svgText) {
@@ -2989,6 +3058,28 @@ export default function ProjectMarkupCanvas() {
               </div>
               {isRoughPlan ? (
                 <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-sm font-semibold text-slate-900">Create from sketch</div>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Upload a simple sketch image and AI will draft editable rough-plan lines, labels, and symbols.
+                    </p>
+                    <input
+                      ref={sketchFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleSketchPlanUpload}
+                    />
+                    <button
+                      type="button"
+                      disabled={sketchBusy}
+                      onClick={() => sketchFileRef.current?.click()}
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      <SymbolIcon name="upload" className="text-[18px]" />
+                      {sketchBusy ? "Creating plan..." : "Upload sketch"}
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block">
                       <span className="mb-1 block text-xs font-medium text-slate-500">Width</span>

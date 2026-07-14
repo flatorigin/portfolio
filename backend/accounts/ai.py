@@ -1,3 +1,4 @@
+import base64
 import json
 from urllib import error, request
 
@@ -70,6 +71,61 @@ def generate_text(*, feature, system_prompt, user_prompt):
 
     try:
         with request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(raw)
+            message = (
+                parsed.get("error", {}).get("message")
+                or parsed.get("message")
+                or raw
+            )
+        except Exception:
+            message = raw or str(exc)
+        raise AIServiceError(message)
+    except Exception as exc:
+        raise AIServiceError(str(exc))
+
+    return {
+        "text": _extract_output_text(payload),
+        "model": payload.get("model") or model,
+    }
+
+
+def generate_text_with_image(*, feature, system_prompt, user_prompt, image_bytes, image_content_type):
+    if not settings.OPENAI_API_KEY:
+        raise AIServiceError("OPENAI_API_KEY is not configured.")
+
+    model = resolve_model_name(feature)
+    image_data = base64.b64encode(image_bytes).decode("ascii")
+    image_url = f"data:{image_content_type};base64,{image_data}"
+    body = {
+        "model": model,
+        "input": [
+            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": user_prompt},
+                    {"type": "input_image", "image_url": image_url},
+                ],
+            },
+        ],
+    }
+
+    req = request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=45) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")

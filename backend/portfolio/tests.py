@@ -1020,3 +1020,55 @@ class ProjectPlannerTests(APITestCase):
             AIUsageEvent.objects.filter(user=self.homeowner, status=AIUsageEvent.Status.SUCCESS).count(),
             1,
         )
+
+    @patch("portfolio.views.generate_text_with_image")
+    def test_sketch_to_rough_plan_returns_editable_annotations(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = {
+            "text": json.dumps(
+                {
+                    "rough_plan": {"width": 12, "length": 18, "unit": "ft"},
+                    "annotations": [
+                        {"type": "line", "x": 100, "y": 120, "x2": 500, "y2": 120, "text": "wall"},
+                        {"type": "door", "x": 160, "y": 120, "text": "entry"},
+                        {"type": "text", "x": 280, "y": 220, "text": "existing patio"},
+                    ],
+                    "uncertainty_notes": ["Measurements are approximate."],
+                }
+            ),
+            "model": "gpt-test",
+        }
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-rough-plan/",
+            {"sketch": sketch, "width": "12", "length": "18", "unit": "ft"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["rough_plan"]["width"], "12")
+        self.assertEqual(response.data["rough_plan"]["length"], "18")
+        self.assertEqual(len(response.data["annotations"]), 3)
+        self.assertEqual(response.data["annotations"][0]["canvasMode"], "rough_plan")
+        self.assertEqual(response.data["annotations"][0]["strokeColor"], "#111827")
+        self.assertEqual(response.data["uncertainty_notes"], ["Measurements are approximate."])
+        self.assertEqual(
+            AIUsageEvent.objects.filter(user=self.homeowner, status=AIUsageEvent.Status.SUCCESS).count(),
+            1,
+        )
+
+    def test_sketch_to_rough_plan_rejects_unsupported_file_type(self):
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        sketch = SimpleUploadedFile("sketch.gif", b"fake-gif", content_type="image/gif")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-rough-plan/",
+            {"sketch": sketch},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("JPG, PNG, or WebP", str(response.data))
