@@ -1546,6 +1546,15 @@ export default function ProjectMarkupCanvas() {
     const markup = safeMarkupData(plan?.markup_data);
     return Array.isArray(markup.versions) ? markup.versions : [];
   }, [plan]);
+  const sketchSourceImages = useMemo(() => {
+    if (isProjectImageMode && projectImage) {
+      const url = projectImage.url || projectImage.image || projectImage.image_url || projectImage.file || "";
+      return url
+        ? [{ id: projectImage.id, image_url: url, caption: projectImage.caption || "Current project image" }]
+        : [];
+    }
+    return Array.isArray(plan?.images) ? plan.images : [];
+  }, [isProjectImageMode, plan?.images, projectImage]);
 
   function makeMarkupPayload(previousMarkup = {}, versionOverrides = {}) {
     const now = new Date().toISOString();
@@ -1741,8 +1750,8 @@ export default function ProjectMarkupCanvas() {
       setMessage("Choose an uploaded image or upload a new sketch first.");
       return;
     }
-    if (!planId) {
-      const detail = "Open this from a saved project planner before creating a plan from a sketch.";
+    if (!planId && !isProjectImageMode) {
+      const detail = "Open this from a saved project planner or project image before creating a plan from a sketch.";
       setSketchStatus({ phase: "error", progress: 0, fileName: sketchSource.name || "", detail });
       setMessage(detail);
       return;
@@ -1755,28 +1764,40 @@ export default function ProjectMarkupCanvas() {
     setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
     setMessage("");
     try {
-      const file = sketchSource.kind === "upload" ? sketchSource.file : await fileFromExistingSketchSource(sketchSource);
-      const validationError = validateSketchFile(file);
-      if (validationError) throw new Error(validationError);
+      const endpoint = planId
+        ? `/project-plans/${planId}/sketch-to-rough-plan/`
+        : `/projects/${projectId}/images/${imageId}/sketch-to-rough-plan/`;
+      const file =
+        sketchSource.kind === "upload"
+          ? sketchSource.file
+          : isProjectImageMode
+            ? null
+            : await fileFromExistingSketchSource(sketchSource);
       const formData = new FormData();
-      formData.append("sketch", file);
+      if (file) {
+        const validationError = validateSketchFile(file);
+        if (validationError) throw new Error(validationError);
+        formData.append("sketch", file);
+      } else if (sketchSource.kind === "existing") {
+        formData.append("source_image_id", sketchSource.imageId);
+      }
       formData.append("width", roughPlan.width || "20");
       formData.append("length", roughPlan.length || "30");
       formData.append("unit", roughPlan.unit || "ft");
-      const { data } = await api.post(`/project-plans/${planId}/sketch-to-rough-plan/`, formData, {
+      const { data } = await api.post(endpoint, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
-          const total = progressEvent.total || file.size || 0;
+          const total = progressEvent.total || file?.size || 0;
           const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
           setSketchStatus({
             phase: progress >= 100 ? "analyzing" : "uploading",
             progress,
-            fileName: sketchSource.name || file.name || "Sketch image",
+            fileName: sketchSource.name || file?.name || "Sketch image",
             detail: "",
           });
         },
       });
-      setSketchStatus({ phase: "drafting", progress: 100, fileName: sketchSource.name || file.name || "Sketch image", detail: "" });
+      setSketchStatus({ phase: "drafting", progress: 100, fileName: sketchSource.name || file?.name || "Sketch image", detail: "" });
       setCanvasMode("rough_plan");
       setBackgroundUrl("");
       setRoughPlan((prev) => ({ ...prev, ...(data.rough_plan || {}), snap: data.rough_plan?.snap ?? true }));
@@ -1787,7 +1808,7 @@ export default function ProjectMarkupCanvas() {
       const notes = Array.isArray(data.uncertainty_notes) && data.uncertainty_notes.length
         ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
         : "";
-      setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || file.name || "Sketch image", detail: "" });
+      setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || file?.name || "Sketch image", detail: "" });
       setMessage(`AI rough plan created. Review and edit it before saving.${notes}`);
     } catch (err) {
       const statusCode = err?.response?.status;
@@ -3185,11 +3206,13 @@ export default function ProjectMarkupCanvas() {
                       className="hidden"
                       onChange={handleSketchSourceUpload}
                     />
-                    {plan?.images?.length ? (
+                    {sketchSourceImages.length ? (
                       <div className="mt-3">
-                        <div className="mb-2 text-xs font-medium text-slate-500">Use an uploaded project image</div>
+                        <div className="mb-2 text-xs font-medium text-slate-500">
+                          {isProjectImageMode ? "Use this project image" : "Use an uploaded project image"}
+                        </div>
                         <div className="grid max-h-40 grid-cols-3 gap-2 overflow-y-auto pr-1">
-                          {plan.images.map((image) => {
+                          {sketchSourceImages.map((image) => {
                             const selectedImage = sketchSource?.kind === "existing" && String(sketchSource.imageId) === String(image.id);
                             return (
                               <button
