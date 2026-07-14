@@ -63,7 +63,7 @@ const LINE_ENDPOINT_OPTIONS = [
 ];
 const ROUGH_GRID_SIZE = 40;
 const ROUGH_SOFT_SNAP_DISTANCE = 9;
-const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100 };
+const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100, showGrid: true, scaleSource: "manual" };
 const ROUGH_PLAN_PADDING = 82;
 
 function clamp(value, min, max) {
@@ -81,6 +81,53 @@ function safeMarkupData(value) {
 
 function isPersistableUrl(value) {
   return !!value && !String(value).startsWith("blob:");
+}
+
+function projectImageUrl(image) {
+  return image?.image_url || image?.url || image?.image || image?.file || "";
+}
+
+function formatPlanNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "";
+  return String(Number.isInteger(number) ? number : Number(number.toFixed(2)));
+}
+
+function readImageDimensions(url) {
+  if (!url) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || 0, height: img.naturalHeight || 0 });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function isMeasuredRoughPlan(roughPlan) {
+  return roughPlan?.grid_visible === true || roughPlan?.showGrid === true || roughPlan?.scale_source === "measured" || roughPlan?.scaleSource === "measured";
+}
+
+function roughPlanFromSketchResponse(responsePlan = {}, source = {}, fallbackPlan = ROUGH_PLAN_DEFAULTS) {
+  const imageWidth = Number(source?.width || source?.sourceWidth || 0);
+  const imageHeight = Number(source?.height || source?.sourceHeight || 0);
+  const measuredScale = isMeasuredRoughPlan(responsePlan);
+  const widthBase = Number(fallbackPlan.width) || Number(responsePlan.width) || 20;
+  const next = {
+    ...fallbackPlan,
+    ...responsePlan,
+    scaleSource: responsePlan.scale_source || responsePlan.scaleSource || (measuredScale ? "measured" : "image_aspect"),
+    showGrid: measuredScale,
+    snap: measuredScale ? (responsePlan.snap ?? true) : false,
+  };
+
+  if (imageWidth > 0 && imageHeight > 0 && !measuredScale) {
+    next.width = formatPlanNumber(widthBase);
+    next.length = formatPlanNumber(Math.max(1, widthBase * (imageHeight / imageWidth)));
+    next.sourceWidth = imageWidth;
+    next.sourceHeight = imageHeight;
+  }
+
+  return next;
 }
 
 function normalizeMarkupText(value) {
@@ -1243,6 +1290,7 @@ export default function ProjectMarkupCanvas() {
   const modeRequestHandledRef = useRef(false);
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
+  const [projectImages, setProjectImages] = useState([]);
   const [loadingPlan, setLoadingPlan] = useState(Boolean(planId || projectId));
   const [backgroundUrl, setBackgroundUrl] = useState("");
   const [annotations, setAnnotations] = useState([]);
@@ -1399,11 +1447,13 @@ export default function ProjectMarkupCanvas() {
         if (!image) {
           setMessage("Could not find this project image.");
           setProjectImage(null);
+          setProjectImages(Array.isArray(data) ? data : []);
           return;
         }
 
+        setProjectImages(Array.isArray(data) ? data : []);
         setProjectImage(image);
-        const url = image.url || image.image || image.image_url || image.file || "";
+        const url = projectImageUrl(image);
         const markupVersion = image.extra_data?.markup_version;
         if (markupVersion && typeof markupVersion === "object") {
           setAnnotations(Array.isArray(markupVersion.annotations) ? markupVersion.annotations : []);
@@ -1512,6 +1562,7 @@ export default function ProjectMarkupCanvas() {
   const isRoughPlan = canvasMode === "rough_plan";
   const modeLabel = isRoughPlan ? "Rough Plan" : "Photo Markup";
   const roughGeometry = useMemo(() => roughPlanGeometry(roughPlan), [roughPlan]);
+  const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const viewport = useMemo(() => {
     const zoom = clamp(viewportZoom, 1, 4);
     const width = CANVAS_W / zoom;
@@ -1547,14 +1598,16 @@ export default function ProjectMarkupCanvas() {
     return Array.isArray(markup.versions) ? markup.versions : [];
   }, [plan]);
   const sketchSourceImages = useMemo(() => {
-    if (isProjectImageMode && projectImage) {
-      const url = projectImage.url || projectImage.image || projectImage.image_url || projectImage.file || "";
-      return url
-        ? [{ id: projectImage.id, image_url: url, caption: projectImage.caption || "Current project image" }]
-        : [];
+    if (isProjectImageMode) {
+      return projectImages
+        .map((image) => {
+          const url = projectImageUrl(image);
+          return url ? { ...image, image_url: url } : null;
+        })
+        .filter(Boolean);
     }
     return Array.isArray(plan?.images) ? plan.images : [];
-  }, [isProjectImageMode, plan?.images, projectImage]);
+  }, [isProjectImageMode, plan?.images, projectImages]);
 
   function makeMarkupPayload(previousMarkup = {}, versionOverrides = {}) {
     const now = new Date().toISOString();
@@ -1715,21 +1768,40 @@ export default function ProjectMarkupCanvas() {
         name: file.name || "Uploaded sketch",
       };
     });
+    readImageDimensions(previewUrl).then((dimensions) => {
+      if (!dimensions?.width || !dimensions?.height) return;
+      setSketchSource((prev) =>
+        prev?.kind === "upload" && prev.previewUrl === previewUrl
+          ? { ...prev, width: dimensions.width, height: dimensions.height }
+          : prev,
+      );
+    });
     setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected. Click Create editable plan when ready." });
     setMessage("New sketch selected for plan creation. It has not been saved as a project image.");
   }
 
   function selectExistingSketchImage(image) {
-    if (!image?.image_url) return;
+    const imageUrl = projectImageUrl(image);
+    if (!imageUrl) return;
     setSketchSource((prev) => {
       if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
       return {
         kind: "existing",
         imageId: image.id,
-        imageUrl: image.image_url,
-        previewUrl: image.image_url,
+        imageUrl,
+        previewUrl: imageUrl,
         name: image.caption || "Project image",
+        width: Number(image.width || image.image_width || image.natural_width || 0) || undefined,
+        height: Number(image.height || image.image_height || image.natural_height || 0) || undefined,
       };
+    });
+    readImageDimensions(imageUrl).then((dimensions) => {
+      if (!dimensions?.width || !dimensions?.height) return;
+      setSketchSource((prev) =>
+        prev?.kind === "existing" && String(prev.imageId) === String(image.id)
+          ? { ...prev, width: dimensions.width, height: dimensions.height }
+          : prev,
+      );
     });
     setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected. Click Create editable plan when ready." });
     setMessage("Project image selected. Confirm the source, then create the editable plan.");
@@ -1784,6 +1856,10 @@ export default function ProjectMarkupCanvas() {
       formData.append("width", roughPlan.width || "20");
       formData.append("length", roughPlan.length || "30");
       formData.append("unit", roughPlan.unit || "ft");
+      if (sketchSource.width && sketchSource.height) {
+        formData.append("source_width", String(sketchSource.width));
+        formData.append("source_height", String(sketchSource.height));
+      }
       const { data } = await api.post(endpoint, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
@@ -1800,7 +1876,8 @@ export default function ProjectMarkupCanvas() {
       setSketchStatus({ phase: "drafting", progress: 100, fileName: sketchSource.name || file?.name || "Sketch image", detail: "" });
       setCanvasMode("rough_plan");
       setBackgroundUrl("");
-      setRoughPlan((prev) => ({ ...prev, ...(data.rough_plan || {}), snap: data.rough_plan?.snap ?? true }));
+      const nextRoughPlan = roughPlanFromSketchResponse(data.rough_plan || {}, sketchSource, roughPlan);
+      setRoughPlan(nextRoughPlan);
       commitAnnotations(Array.isArray(data.annotations) ? data.annotations : []);
       setSelectedId("");
       setEditingTextId("");
@@ -1809,7 +1886,10 @@ export default function ProjectMarkupCanvas() {
         ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
         : "";
       setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || file?.name || "Sketch image", detail: "" });
-      setMessage(`AI rough plan created. Review and edit it before saving.${notes}`);
+      const scaleNote = nextRoughPlan.showGrid === false
+        ? " The plan keeps the source image proportion; grid and snap are off because no measured scale was detected."
+        : "";
+      setMessage(`AI rough plan created. Review and edit it before saving.${scaleNote}${notes}`);
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a rough plan from this sketch.");
@@ -1867,7 +1947,7 @@ export default function ProjectMarkupCanvas() {
 
   function canvasPointFromEvent(event) {
     const point = pointFromEvent(event, svgRef.current, viewport);
-    return softSnapPoint(point, isRoughPlan && roughPlan.snap, roughGeometry);
+    return softSnapPoint(point, showRoughGrid && roughPlan.snap, roughGeometry);
   }
 
   function zoomViewport(direction) {
@@ -3209,9 +3289,9 @@ export default function ProjectMarkupCanvas() {
                     {sketchSourceImages.length ? (
                       <div className="mt-3">
                         <div className="mb-2 text-xs font-medium text-slate-500">
-                          {isProjectImageMode ? "Use this project image" : "Use an uploaded project image"}
+                          {isProjectImageMode ? "Use a project image" : "Use an uploaded project image"}
                         </div>
-                        <div className="grid max-h-40 grid-cols-3 gap-2 overflow-y-auto pr-1">
+                        <div className="grid max-h-48 grid-cols-3 gap-2 overflow-y-auto pr-1">
                           {sketchSourceImages.map((image) => {
                             const selectedImage = sketchSource?.kind === "existing" && String(sketchSource.imageId) === String(image.id);
                             return (
@@ -3227,7 +3307,7 @@ export default function ProjectMarkupCanvas() {
                               >
                                 <img src={image.image_url} alt="" className="h-16 w-full object-cover" />
                                 <span className="block truncate px-2 py-1 text-[10px] font-medium text-slate-600">
-                                  {image.caption || "Project image"}
+                                  {String(image.id) === String(imageId) ? "Current image" : (image.caption || "Project image")}
                                 </span>
                               </button>
                             );
@@ -3253,7 +3333,19 @@ export default function ProjectMarkupCanvas() {
                     {sketchSource ? (
                       <div className="mt-3 overflow-hidden rounded-xl border border-blue-200 bg-blue-50">
                         {sketchSource.previewUrl ? (
-                          <img src={sketchSource.previewUrl} alt="" className="h-28 w-full bg-white object-contain" />
+                          <img
+                            src={sketchSource.previewUrl}
+                            alt=""
+                            className="h-28 w-full bg-white object-contain"
+                            onLoad={(event) => {
+                              const width = event.currentTarget.naturalWidth || 0;
+                              const height = event.currentTarget.naturalHeight || 0;
+                              if (!width || !height) return;
+                              setSketchSource((prev) =>
+                                prev?.previewUrl === sketchSource.previewUrl ? { ...prev, width, height } : prev,
+                              );
+                            }}
+                          />
                         ) : null}
                         <div className="flex items-start justify-between gap-3 px-3 py-2">
                           <div className="min-w-0">
@@ -3261,6 +3353,11 @@ export default function ProjectMarkupCanvas() {
                             <div className="mt-0.5 text-[11px] text-slate-500">
                               {sketchSource.kind === "existing" ? "Saved project image selected" : "New sketch selected for this plan"}
                             </div>
+                            {sketchSource.width && sketchSource.height ? (
+                              <div className="mt-0.5 text-[11px] text-slate-500">
+                                Source proportion: {sketchSource.width} x {sketchSource.height}px
+                              </div>
+                            ) : null}
                           </div>
                           <button
                             type="button"
@@ -3404,7 +3501,8 @@ export default function ProjectMarkupCanvas() {
                     <span>Soft snap</span>
                     <input
                       type="checkbox"
-                      checked={roughPlan.snap}
+                      checked={showRoughGrid && roughPlan.snap}
+                      disabled={!showRoughGrid}
                       onChange={(event) => setRoughPlan((prev) => ({ ...prev, snap: event.target.checked }))}
                       className="h-4 w-4 align-middle accent-blue-600"
                     />
@@ -4041,8 +4139,8 @@ export default function ProjectMarkupCanvas() {
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <span className="font-semibold text-slate-800">{roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}</span>
                 <span>Area: {(Number(roughPlan.width) || 0) * (Number(roughPlan.length) || 0)} sq {roughPlan.unit}</span>
-                <span>Grid scale: 1 square = 1 {roughGeometry.unit}</span>
-                <span>Soft snap: {roughPlan.snap ? "on" : "off"}</span>
+                <span>{showRoughGrid ? `Grid scale: 1 square = 1 ${roughGeometry.unit}` : "Grid: hidden until a measured scale is defined"}</span>
+                <span>Soft snap: {showRoughGrid && roughPlan.snap ? "on" : "off"}</span>
                 <span>Zoom: {Math.round(viewport.zoom * 100)}%</span>
               </div>
             ) : null}
@@ -4201,7 +4299,7 @@ export default function ProjectMarkupCanvas() {
                       stroke="#334155"
                       strokeWidth="3"
                     />
-                    {Array.from({ length: Math.floor(roughGeometry.widthUnits) + 1 }).map((_, index) => {
+                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.widthUnits) + 1 }).map((_, index) => {
                       const x = roughGeometry.x + index * roughGeometry.scale;
                       return (
                         <line
@@ -4214,8 +4312,8 @@ export default function ProjectMarkupCanvas() {
                           strokeWidth={index % 5 === 0 ? "1.5" : "1"}
                         />
                       );
-                    })}
-                    {Array.from({ length: Math.floor(roughGeometry.lengthUnits) + 1 }).map((_, index) => {
+                    }) : null}
+                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.lengthUnits) + 1 }).map((_, index) => {
                       const y = roughGeometry.y + index * roughGeometry.scale;
                       return (
                         <line
@@ -4228,7 +4326,7 @@ export default function ProjectMarkupCanvas() {
                           strokeWidth={index % 5 === 0 ? "1.5" : "1"}
                         />
                       );
-                    })}
+                    }) : null}
                     <text x="36" y="54" fill="#64748b" fontSize="20" fontWeight="700">
                       Plan: {roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}
                     </text>

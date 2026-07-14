@@ -122,12 +122,18 @@ def normalize_sketch_rough_plan_payload(payload):
     unit = str(source.get("unit") or "ft").strip().lower()
     if unit not in {"ft", "in", "m"}:
         unit = "ft"
+    scale_source = str(source.get("scale_source") or source.get("scaleSource") or "image_aspect").strip().lower()
+    if scale_source not in {"measured", "image_aspect", "requested"}:
+        scale_source = "image_aspect"
+    grid_visible = bool(source.get("grid_visible") or source.get("showGrid") or scale_source == "measured")
     return {
         "width": str(int(width) if width.is_integer() else round(width, 2)),
         "length": str(int(length) if length.is_integer() else round(length, 2)),
         "unit": unit,
-        "snap": True,
+        "snap": grid_visible,
         "zoom": 100,
+        "grid_visible": grid_visible,
+        "scale_source": scale_source,
     }
 
 
@@ -827,6 +833,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         requested_width = request.data.get("width") or "20"
         requested_length = request.data.get("length") or "30"
         requested_unit = request.data.get("unit") or "ft"
+        source_width = request.data.get("source_width") or ""
+        source_height = request.data.get("source_height") or ""
         system_prompt = (
             "You convert homeowner project images or sketch images into simple editable rough-plan JSON for FlatOrigin. "
             "This is not CAD, design, engineering, permitting, or construction documentation. "
@@ -839,8 +847,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
             f"Project summary: {project.summary or project.job_summary or ''}\n"
             f"Image source: {image_name}\n"
             f"Preferred rough plan size: {requested_width} x {requested_length} {requested_unit}\n\n"
+            f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
             "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
-            "rough_plan: {width, length, unit}. Use ft unless the image clearly specifies another unit.\n"
+            "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
+            "If the sketch has readable dimensions or a clear scale, set scale_source to measured and grid_visible true. "
+            "If not, preserve the source image aspect ratio, set scale_source to image_aspect, and grid_visible false.\n"
             f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
             "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
@@ -1272,6 +1283,8 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         requested_width = request.data.get("width") or "20"
         requested_length = request.data.get("length") or "30"
         requested_unit = request.data.get("unit") or "ft"
+        source_width = request.data.get("source_width") or ""
+        source_height = request.data.get("source_height") or ""
         system_prompt = (
             "You convert homeowner sketch images into simple editable rough-plan JSON for FlatOrigin. "
             "This is not CAD, design, engineering, permitting, or construction documentation. "
@@ -1282,8 +1295,11 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             f"Project type: {plan.project_type or ''}\n"
             f"Project notes: {plan.issue_summary or plan.notes or ''}\n"
             f"Preferred rough plan size: {requested_width} x {requested_length} {requested_unit}\n\n"
+            f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
             "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
-            "rough_plan: {width, length, unit}. Use ft unless the image clearly specifies another unit.\n"
+            "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
+            "If the sketch has readable dimensions or a clear scale, set scale_source to measured and grid_visible true. "
+            "If not, preserve the source image aspect ratio, set scale_source to image_aspect, and grid_visible false.\n"
             f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
             "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
