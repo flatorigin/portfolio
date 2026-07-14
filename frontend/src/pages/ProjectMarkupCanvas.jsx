@@ -498,6 +498,80 @@ function fitAnnotationsToRoughPlanDesignArea(items, roughPlan) {
   return annotations.map((item) => transformAnnotationToDesignArea(item, transform));
 }
 
+function backgroundImageFrame(imageDimensions = null) {
+  const width = Number(imageDimensions?.width || 0);
+  const height = Number(imageDimensions?.height || 0);
+  if (!width || !height) {
+    return { x: 0, y: 0, width: CANVAS_W, height: CANVAS_H };
+  }
+  const scale = Math.min(CANVAS_W / width, CANVAS_H / height);
+  const renderedWidth = width * scale;
+  const renderedHeight = height * scale;
+  return {
+    x: (CANVAS_W - renderedWidth) / 2,
+    y: (CANVAS_H - renderedHeight) / 2,
+    width: renderedWidth,
+    height: renderedHeight,
+  };
+}
+
+function cleanPlanMeasurementGeometry(roughPlan, imageDimensions = null) {
+  const widthUnits = Math.max(1, Number(roughPlan?.width) || Number(ROUGH_PLAN_DEFAULTS.width) || 20);
+  const lengthUnits = Math.max(1, Number(roughPlan?.length) || Number(ROUGH_PLAN_DEFAULTS.length) || 30);
+  const frame = backgroundImageFrame(imageDimensions);
+  const inset = Math.min(34, Math.max(16, Math.min(frame.width, frame.height) * 0.035));
+  const designWidthPx = Math.max(1, frame.width - inset * 2);
+  const designHeightPx = Math.max(1, frame.height - inset * 2);
+  return {
+    x: frame.x,
+    y: frame.y,
+    widthPx: frame.width,
+    heightPx: frame.height,
+    designX: frame.x + inset,
+    designY: frame.y + inset,
+    designWidthPx,
+    designHeightPx,
+    widthUnits,
+    lengthUnits,
+    scale: Math.min(designWidthPx / widthUnits, designHeightPx / lengthUnits),
+    unit: roughPlan?.unit || "ft",
+  };
+}
+
+function fitAnnotationsToImageBackgroundArea(items, imageDimensions = null) {
+  const annotations = Array.isArray(items) ? items : [];
+  const bounds = allAnnotationBounds(annotations);
+  if (!bounds) return annotations;
+  const frame = backgroundImageFrame(imageDimensions);
+  const inset = Math.min(44, Math.max(18, Math.min(frame.width, frame.height) * 0.045));
+  const sourceWidth = Math.max(1, bounds.x2 - bounds.x1);
+  const sourceHeight = Math.max(1, bounds.y2 - bounds.y1);
+  const targetWidth = Math.max(1, frame.width - inset * 2);
+  const targetHeight = Math.max(1, frame.height - inset * 2);
+  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const renderedWidth = sourceWidth * scale;
+  const renderedHeight = sourceHeight * scale;
+  const transform = {
+    sourceX: bounds.x1,
+    sourceY: bounds.y1,
+    scale,
+    targetX: frame.x + (frame.width - renderedWidth) / 2,
+    targetY: frame.y + (frame.height - renderedHeight) / 2,
+  };
+  return annotations.map((item, index) => {
+    const transformed = transformAnnotationToDesignArea(item, transform);
+    return {
+      ...transformed,
+      id: transformed.id || `ai-clean-plan-overlay-${Date.now()}-${index}`,
+      source: "ai_clean_plan_trace",
+      strokeColor: safeHexColor(transformed.strokeColor || transformed.color || "#111827", "#111827"),
+      color: safeHexColor(transformed.strokeColor || transformed.color || "#111827", "#111827"),
+      strokeWidth: Math.min(Number(transformed.strokeWidth) || 2, 2.5),
+      fillOpacity: transformed.fillOpacity ?? 0.08,
+    };
+  });
+}
+
 function wrappedTextLines(text) {
   const paragraphs = normalizeMarkupText(text)
     .split("\n")
@@ -1459,6 +1533,7 @@ export default function ProjectMarkupCanvas() {
   const [projectImages, setProjectImages] = useState([]);
   const [loadingPlan, setLoadingPlan] = useState(Boolean(planId || projectId));
   const [backgroundUrl, setBackgroundUrl] = useState("");
+  const [backgroundImageDimensions, setBackgroundImageDimensions] = useState(null);
   const [annotations, setAnnotations] = useState([]);
   const [tool, setTool] = useState("select");
   const [canvasMode, setCanvasMode] = useState("photo");
@@ -1543,6 +1618,23 @@ export default function ProjectMarkupCanvas() {
       if (sketchSource?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(sketchSource.previewUrl);
     };
   }, [sketchSource?.previewUrl]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!backgroundUrl || canvasMode === "rough_plan") {
+      setBackgroundImageDimensions(null);
+      return () => {
+        alive = false;
+      };
+    }
+    readImageDimensions(backgroundUrl).then((dimensions) => {
+      if (!alive) return;
+      setBackgroundImageDimensions(dimensions?.width && dimensions?.height ? dimensions : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [backgroundUrl, canvasMode]);
 
   useEffect(() => {
     if (!planId) return;
@@ -1727,8 +1819,15 @@ export default function ProjectMarkupCanvas() {
   }, [history, annotations, selectedId]);
 
   const isRoughPlan = canvasMode === "rough_plan";
-  const modeLabel = isRoughPlan ? "Rough Plan" : "Photo Markup";
   const roughGeometry = useMemo(() => roughPlanGeometry(roughPlan), [roughPlan]);
+  const hasAiCleanPlanOverlay = !isRoughPlan && annotations.some((item) => item?.source === "ai_clean_plan_trace");
+  const cleanPlanGeometry = useMemo(
+    () => cleanPlanMeasurementGeometry(roughPlan, backgroundImageDimensions),
+    [backgroundImageDimensions, roughPlan],
+  );
+  const showPlanSegmentLengths = isRoughPlan || hasAiCleanPlanOverlay;
+  const activeMeasurementGeometry = isRoughPlan ? roughGeometry : hasAiCleanPlanOverlay ? cleanPlanGeometry : null;
+  const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const viewport = useMemo(() => {
     const zoom = clamp(viewportZoom, 1, 4);
@@ -1978,9 +2077,61 @@ export default function ProjectMarkupCanvas() {
     const response = await fetch(source.imageUrl, { credentials: "include" });
     if (!response.ok) throw new Error("Could not load that project image for plan creation.");
     const blob = await response.blob();
-    const contentType = blob.type || "image/jpeg";
+    const lowerUrl = String(source.imageUrl || "").split("?")[0].toLowerCase();
+    const inferredType = lowerUrl.endsWith(".png")
+      ? "image/png"
+      : lowerUrl.endsWith(".webp")
+        ? "image/webp"
+        : lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg")
+          ? "image/jpeg"
+          : "";
+    const contentType = blob.type || inferredType || "image/jpeg";
     const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
     return new File([blob], `project-image-${source.imageId || Date.now()}.${extension}`, { type: contentType });
+  }
+
+  async function requestRoughPlanFromSketchSource(source) {
+    if (!source) throw new Error("Choose an uploaded image or upload a new sketch first.");
+    const endpoint = planId
+      ? `/project-plans/${planId}/sketch-to-rough-plan/`
+      : `/projects/${projectId}/images/${imageId}/sketch-to-rough-plan/`;
+    const file =
+      source.kind === "upload"
+        ? source.file
+        : planId
+          ? await fileFromExistingSketchSource(source)
+          : null;
+    const formData = new FormData();
+    if (file) {
+      const validationError = validateSketchFile(file);
+      if (validationError) throw new Error(validationError);
+      formData.append("sketch", file);
+    } else if (source.kind === "existing") {
+      formData.append("source_image_id", source.imageId);
+    } else {
+      throw new Error("Choose an uploaded image or upload a new sketch first.");
+    }
+    formData.append("width", roughPlan.width || "20");
+    formData.append("length", roughPlan.length || "30");
+    formData.append("unit", roughPlan.unit || "ft");
+    if (source.width && source.height) {
+      formData.append("source_width", String(source.width));
+      formData.append("source_height", String(source.height));
+    }
+    const { data } = await api.post(endpoint, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (progressEvent) => {
+        const total = progressEvent.total || file?.size || 0;
+        const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
+        setSketchStatus({
+          phase: progress >= 100 ? "analyzing" : "uploading",
+          progress,
+          fileName: source.name || file?.name || "Sketch image",
+          detail: "",
+        });
+      },
+    });
+    return data;
   }
 
   async function createPlanFromSketchSource() {
@@ -2003,44 +2154,8 @@ export default function ProjectMarkupCanvas() {
     setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
     setMessage("");
     try {
-      const endpoint = planId
-        ? `/project-plans/${planId}/sketch-to-rough-plan/`
-        : `/projects/${projectId}/images/${imageId}/sketch-to-rough-plan/`;
-      const file =
-        sketchSource.kind === "upload"
-          ? sketchSource.file
-          : isProjectImageMode
-            ? null
-            : await fileFromExistingSketchSource(sketchSource);
-      const formData = new FormData();
-      if (file) {
-        const validationError = validateSketchFile(file);
-        if (validationError) throw new Error(validationError);
-        formData.append("sketch", file);
-      } else if (sketchSource.kind === "existing") {
-        formData.append("source_image_id", sketchSource.imageId);
-      }
-      formData.append("width", roughPlan.width || "20");
-      formData.append("length", roughPlan.length || "30");
-      formData.append("unit", roughPlan.unit || "ft");
-      if (sketchSource.width && sketchSource.height) {
-        formData.append("source_width", String(sketchSource.width));
-        formData.append("source_height", String(sketchSource.height));
-      }
-      const { data } = await api.post(endpoint, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (progressEvent) => {
-          const total = progressEvent.total || file?.size || 0;
-          const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
-          setSketchStatus({
-            phase: progress >= 100 ? "analyzing" : "uploading",
-            progress,
-            fileName: sketchSource.name || file?.name || "Sketch image",
-            detail: "",
-          });
-        },
-      });
-      setSketchStatus({ phase: "drafting", progress: 100, fileName: sketchSource.name || file?.name || "Sketch image", detail: "" });
+      const data = await requestRoughPlanFromSketchSource(sketchSource);
+      setSketchStatus({ phase: "drafting", progress: 100, fileName: sketchSource.name || "Sketch image", detail: "" });
       setCanvasMode("rough_plan");
       setBackgroundUrl("");
       const nextRoughPlan = roughPlanFromSketchResponse(data.rough_plan || {}, sketchSource, roughPlan);
@@ -2056,7 +2171,7 @@ export default function ProjectMarkupCanvas() {
       const notes = Array.isArray(data.uncertainty_notes) && data.uncertainty_notes.length
         ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
         : "";
-      setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || file?.name || "Sketch image", detail: "" });
+      setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || "Sketch image", detail: "" });
       setMessage(`AI rough plan created on a measured grid with a ${ROUGH_PLAN_GRID_MARGIN_UNITS} ${nextRoughPlan.unit} buffer around the design. Review and edit it before saving.${notes}`);
     } catch (err) {
       const statusCode = err?.response?.status;
@@ -2129,6 +2244,7 @@ export default function ProjectMarkupCanvas() {
       });
       const generatedImage = data.image || {};
       const generatedUrl = projectImageUrl(generatedImage);
+      let generatedDimensions = null;
       if (planId) {
         setPlan((prev) =>
           prev
@@ -2139,14 +2255,51 @@ export default function ProjectMarkupCanvas() {
         setProjectImages((prev) => [...prev, generatedImage]);
       }
       if (generatedUrl) {
+        generatedDimensions = await readImageDimensions(generatedUrl);
         setCanvasMode("photo");
         setBackgroundUrl(generatedUrl);
-        setAnnotations([]);
         setSelectedId("");
         setEditingTextId("");
       }
+      const overlaySource = generatedUrl
+        ? {
+            kind: "existing",
+            imageId: generatedImage.id,
+            imageUrl: generatedUrl,
+            previewUrl: generatedUrl,
+            name: generatedImage.caption || "AI clean floor plan",
+            width: generatedDimensions?.width || undefined,
+            height: generatedDimensions?.height || undefined,
+          }
+        : null;
+      let overlayNotes = "";
+      if (overlaySource) {
+        try {
+          setSketchStatus({ phase: "drafting", progress: 100, fileName: overlaySource.name, detail: "Creating editable markup overlay." });
+          const overlayData = await requestRoughPlanFromSketchSource(overlaySource);
+          const nextRoughPlan = roughPlanFromSketchResponse(overlayData.rough_plan || {}, overlaySource, roughPlan);
+          const overlayAnnotations = fitAnnotationsToImageBackgroundArea(
+            Array.isArray(overlayData.annotations) ? overlayData.annotations : [],
+            generatedDimensions,
+          );
+          setRoughPlan(nextRoughPlan);
+          commitAnnotations(overlayAnnotations);
+          setOpenSidebarSection("annotations");
+          const uncertaintyNotes = Array.isArray(overlayData.uncertainty_notes) && overlayData.uncertainty_notes.length
+            ? ` Review note: ${overlayData.uncertainty_notes.slice(0, 2).join(" ")}`
+            : "";
+          overlayNotes = overlayAnnotations.length
+            ? ` Editable markup overlay created on top.${uncertaintyNotes}`
+            : " Clean plan saved, but no editable overlay lines were detected.";
+        } catch (overlayErr) {
+          commitAnnotations([]);
+          overlayNotes = ` Clean plan saved, but the editable overlay could not be created: ${normalizeError(overlayErr, "Try adding markup manually.")}`;
+        }
+      } else {
+        commitAnnotations([]);
+      }
       setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || "AI clean floor plan", detail: "" });
-      setMessage("AI clean floor plan created and saved to the image library. You can mark up on top of it or use the editable schematic option if you need grid-based editing.");
+      setMessage(`AI clean floor plan created and saved to the image library.${overlayNotes} Save when the editable overlay looks right, or export PNG/PDF for a flattened preview.`);
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
@@ -4657,8 +4810,8 @@ export default function ProjectMarkupCanvas() {
                 renderAnnotation(item, {
                   selected: item.id === selectedForEditing?.id,
                   editing: item.id === editingTextId,
-                  roughGeometry,
-                  showSegmentLengths: isRoughPlan,
+                  roughGeometry: activeMeasurementGeometry,
+                  showSegmentLengths: showPlanSegmentLengths,
                   onPointerDown:
                     item.id === penDraftId
                       ? undefined
