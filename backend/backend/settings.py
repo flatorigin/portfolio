@@ -162,6 +162,7 @@ EMAIL_BACKEND = os.environ.get(
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL_PRIMARY = os.environ.get("OPENAI_MODEL_PRIMARY", "gpt-5.4-mini").strip()
 OPENAI_MODEL_LIGHT = os.environ.get("OPENAI_MODEL_LIGHT", "gpt-5.4-nano").strip()
+OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-2").strip()
 AI_ENABLED = parse_bool_env("AI_ENABLED", default=False)
 AI_DAILY_LIMIT_PER_USER = int(os.environ.get("AI_DAILY_LIMIT_PER_USER", "10"))
 

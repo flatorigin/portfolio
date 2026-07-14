@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from io import BytesIO
+import base64
 import json
 from unittest.mock import patch
 
@@ -14,6 +15,7 @@ from .models import (
     MessageThread,
     PrivateMessage,
     ProjectPlan,
+    ProjectPlanImage,
     MessageAttachment,
     FeedbackTicket,
     FeedbackReply,
@@ -24,6 +26,10 @@ from apps.bids.models import Bid
 
 
 User = get_user_model()
+
+TINY_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 def set_profile_type(user, profile_type, **defaults):
@@ -1073,6 +1079,31 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("JPG, PNG, or WebP", str(response.data))
 
+    @patch("portfolio.views.generate_image_from_image")
+    def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_image_from_image):
+        mock_generate_image_from_image.return_value = {
+            "image_bytes": TINY_PNG_BYTES,
+            "content_type": "image/png",
+            "model": "gpt-image-test",
+        }
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
+            {"sketch": sketch, "width": "12", "length": "18", "unit": "ft"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["image"]["caption"], "AI clean floor plan")
+        self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
+        self.assertEqual(
+            AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-image-test", status=AIUsageEvent.Status.SUCCESS).count(),
+            1,
+        )
+
     @patch("portfolio.views.generate_text_with_image")
     def test_project_image_sketch_to_rough_plan_uses_existing_image(self, mock_generate_text_with_image):
         mock_generate_text_with_image.return_value = {
@@ -1109,3 +1140,32 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.data["rough_plan"]["length"], "22")
         self.assertEqual(response.data["annotations"][0]["type"], "rect")
         self.assertEqual(response.data["uncertainty_notes"], ["Confirm final dimensions on site."])
+
+    @patch("portfolio.views.generate_image_from_image")
+    def test_project_image_sketch_to_clean_floor_plan_saves_generated_project_image(self, mock_generate_image_from_image):
+        mock_generate_image_from_image.return_value = {
+            "image_bytes": TINY_PNG_BYTES,
+            "content_type": "image/png",
+            "model": "gpt-image-test",
+        }
+        project = Project.objects.create(
+            owner=self.homeowner,
+            title="Deck project",
+            summary="Back deck layout sketch.",
+            category="deck",
+            location="Back yard",
+        )
+        image = SimpleUploadedFile("deck-plan.png", b"fake-png", content_type="image/png")
+        project_image = project.images.create(image=image, caption="Deck sketch")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/projects/{project.id}/images/{project_image.id}/sketch-to-clean-floor-plan/",
+            {"source_image_id": str(project_image.id), "width": "14", "length": "22", "unit": "ft"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["image"]["caption"], "AI clean floor plan")
+        self.assertEqual(response.data["image"]["extra_data"]["source"], "ai_clean_floor_plan")
+        self.assertEqual(project.images.count(), 2)

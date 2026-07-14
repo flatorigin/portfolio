@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from accounts.ai import AIServiceError, generate_text, generate_text_with_image
+from accounts.ai import AIServiceError, generate_image_from_image, generate_text, generate_text_with_image
 from accounts.geo_distance import get_request_origin, sort_by_distance
 from accounts.models import (
     AIConfiguration,
@@ -208,6 +208,34 @@ def normalize_sketch_annotations_payload(payload):
             base.update({"x": x, "y": y, "x2": x2, "y2": y2, "text": text or ("measurement" if item_type == "measure" else "")})
         normalized.append(base)
     return normalized
+
+
+def infer_supported_image_content_type(file_name):
+    lower_name = str(file_name or "").lower()
+    if lower_name.endswith(".png"):
+        return "image/png"
+    if lower_name.endswith(".webp"):
+        return "image/webp"
+    if lower_name.endswith((".jpg", ".jpeg")):
+        return "image/jpeg"
+    return ""
+
+
+def clean_floor_plan_prompt(*, title, category, location="", notes="", width="", length="", unit="ft"):
+    size_line = f"Known or requested full area size: {width or 'unknown'} x {length or 'unknown'} {unit or 'ft'}."
+    return (
+        "Create a clean, presentation-ready black-and-white top-down floor plan image from the supplied homeowner sketch. "
+        "Keep the overall visual proportion and layout relationship of the original sketch. "
+        "Use crisp thin black walls/lines on a white background, simple room/area labels only when they are legible or obvious, "
+        "and avoid photorealistic rendering, furniture staging, textures, colors, shadows, decorative styling, or 3D perspective. "
+        "This is a contractor communication preview, not a permit, CAD, design, engineering, or construction drawing. "
+        "If measurements are unclear, do not invent exact dimensions in the image. "
+        f"Project title: {title or 'Untitled project'}. "
+        f"Project category/type: {category or 'general project'}. "
+        f"Project location/context: {location or 'not provided'}. "
+        f"Project notes: {notes or 'not provided'}. "
+        f"{size_line}"
+    )
 
 
 class FeedbackTicketListCreateView(generics.ListCreateAPIView):
@@ -906,6 +934,113 @@ class ProjectViewSet(viewsets.ModelViewSet):
             }
         )
 
+    @action(detail=True, methods=["post"], url_path="images/(?P<img_id>[^/.]+)/sketch-to-clean-floor-plan")
+    def image_sketch_to_clean_floor_plan(self, request, pk=None, img_id=None):
+        project = self.get_object()
+        try:
+            source_image = ProjectImage.objects.get(id=img_id, project=project)
+        except ProjectImage.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if project.owner_id != request.user.id:
+            raise PermissionDenied("Only the project owner can create a clean floor plan from this image.")
+
+        feature = AIUsageEvent.Feature.PLANNER_DRAFT
+        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
+        sketch = request.FILES.get("sketch") or request.FILES.get("image")
+        source_image_id = str(request.data.get("source_image_id") or "").strip()
+        image_bytes = None
+        content_type = ""
+        image_name = ""
+
+        if sketch:
+            content_type = str(getattr(sketch, "content_type", "") or "").lower()
+            image_name = getattr(sketch, "name", "") or "uploaded-sketch.png"
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
+            if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
+            image_bytes = sketch.read()
+        else:
+            if source_image_id and source_image_id != str(source_image.id):
+                try:
+                    source_image = ProjectImage.objects.get(id=source_image_id, project=project)
+                except ProjectImage.DoesNotExist:
+                    raise ValidationError({"source_image_id": "Could not find that project image."})
+            image_name = source_image.caption or getattr(source_image.image, "name", "") or "project-sketch.png"
+            content_type = infer_supported_image_content_type(getattr(source_image.image, "name", ""))
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"source_image_id": "Use a JPG, PNG, or WebP project image for floor plan creation."})
+            try:
+                with source_image.image.open("rb") as fh:
+                    image_bytes = fh.read(MAX_SKETCH_PLAN_IMAGE_SIZE + 1)
+            except Exception:
+                raise ValidationError({"source_image_id": "Could not read that project image."})
+            if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
+
+        prompt = clean_floor_plan_prompt(
+            title=project.title,
+            category=project.category,
+            location=project.location,
+            notes=project.summary or project.job_summary or "",
+            width=request.data.get("width") or "",
+            length=request.data.get("length") or "",
+            unit=request.data.get("unit") or "ft",
+        )
+        model_name = ""
+        try:
+            result = generate_image_from_image(
+                feature=feature,
+                prompt=prompt,
+                image_bytes=image_bytes,
+                image_content_type=content_type,
+                image_name=image_name,
+            )
+            model_name = result["model"]
+            generated = ProjectImage.objects.create(
+                project=project,
+                image=ContentFile(result["image_bytes"], name=f"clean-floor-plan-{timezone.now().strftime('%Y%m%d%H%M%S')}.png"),
+                media_type=ProjectImage.MEDIA_TYPE_IMAGE,
+                caption="AI clean floor plan",
+                order=project.images.count(),
+                extra_data={
+                    "source": "ai_clean_floor_plan",
+                    "source_project_image_id": source_image.id,
+                    "source_image_name": image_name,
+                    "ai_model": model_name,
+                },
+            )
+            AIUsageEvent.objects.create(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                status=AIUsageEvent.Status.SUCCESS,
+                prompt_chars=len(prompt),
+                response_chars=0,
+            )
+        except AIServiceError as exc:
+            AIUsageEvent.objects.create(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                status=AIUsageEvent.Status.ERROR,
+                prompt_chars=len(prompt),
+                response_chars=0,
+            )
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        remaining_after, _ = get_ai_remaining_today(request.user)
+        return Response(
+            {
+                "image": ProjectImageSerializer(generated, context={"request": request}).data,
+                "remaining_today": remaining_after,
+                "daily_limit": daily_limit,
+                "model": model_name,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     def _clean_string_list(self, values):
         cleaned = []
         seen = set()
@@ -1227,6 +1362,102 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         image.refresh_from_db()
         self._sync_plan_derived_fields(plan)
         return Response(ProjectPlanImageSerializer(image, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="sketch-to-clean-floor-plan")
+    def sketch_to_clean_floor_plan(self, request, pk=None):
+        plan = self.get_object()
+        feature = AIUsageEvent.Feature.PLANNER_DRAFT
+        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
+        sketch = request.FILES.get("sketch") or request.FILES.get("image")
+        source_image_id = str(request.data.get("source_image_id") or "").strip()
+        image_bytes = None
+        content_type = ""
+        image_name = ""
+        source_plan_image = None
+
+        if sketch:
+            content_type = str(getattr(sketch, "content_type", "") or "").lower()
+            image_name = getattr(sketch, "name", "") or "uploaded-sketch.png"
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
+            if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
+            image_bytes = sketch.read()
+        elif source_image_id:
+            try:
+                source_plan_image = ProjectPlanImage.objects.get(id=source_image_id, project_plan=plan)
+            except ProjectPlanImage.DoesNotExist:
+                raise ValidationError({"source_image_id": "Could not find that planner image."})
+            image_name = source_plan_image.caption or getattr(source_plan_image.image, "name", "") or "planner-sketch.png"
+            content_type = infer_supported_image_content_type(getattr(source_plan_image.image, "name", ""))
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"source_image_id": "Use a JPG, PNG, or WebP planner image for floor plan creation."})
+            try:
+                with source_plan_image.image.open("rb") as fh:
+                    image_bytes = fh.read(MAX_SKETCH_PLAN_IMAGE_SIZE + 1)
+            except Exception:
+                raise ValidationError({"source_image_id": "Could not read that planner image."})
+            if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
+        else:
+            raise ValidationError({"sketch": "Choose an uploaded project image or upload a new sketch first."})
+
+        prompt = clean_floor_plan_prompt(
+            title=plan.title,
+            category=plan.project_type,
+            location=plan.house_location,
+            notes=plan.issue_summary or plan.notes or "",
+            width=request.data.get("width") or "",
+            length=request.data.get("length") or "",
+            unit=request.data.get("unit") or "ft",
+        )
+        model_name = ""
+        try:
+            result = generate_image_from_image(
+                feature=feature,
+                prompt=prompt,
+                image_bytes=image_bytes,
+                image_content_type=content_type,
+                image_name=image_name,
+            )
+            model_name = result["model"]
+            generated = ProjectPlanImage.objects.create(
+                project_plan=plan,
+                image=ContentFile(result["image_bytes"], name=f"clean-floor-plan-{timezone.now().strftime('%Y%m%d%H%M%S')}.png"),
+                caption="AI clean floor plan",
+                order=plan.images.count(),
+                is_cover=not plan.images.filter(is_cover=True).exists(),
+            )
+            AIUsageEvent.objects.create(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                status=AIUsageEvent.Status.SUCCESS,
+                prompt_chars=len(prompt),
+                response_chars=0,
+            )
+        except AIServiceError as exc:
+            AIUsageEvent.objects.create(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                status=AIUsageEvent.Status.ERROR,
+                prompt_chars=len(prompt),
+                response_chars=0,
+            )
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        remaining_after, _ = get_ai_remaining_today(request.user)
+        self._sync_plan_derived_fields(plan)
+        return Response(
+            {
+                "image": ProjectPlanImageSerializer(generated, context={"request": request}).data,
+                "remaining_today": remaining_after,
+                "daily_limit": daily_limit,
+                "model": model_name,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     def _build_plan_text(self, plan):
         image_bits = []

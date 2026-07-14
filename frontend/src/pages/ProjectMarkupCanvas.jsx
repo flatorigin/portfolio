@@ -1491,6 +1491,7 @@ export default function ProjectMarkupCanvas() {
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
+  const [sketchPlanMode, setSketchPlanMode] = useState("clean");
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
@@ -2061,6 +2062,95 @@ export default function ProjectMarkupCanvas() {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a rough plan from this sketch.");
       const detailPrefix = statusCode >= 500 ? "AI processing failed" : "Image upload or API request failed";
+      const detail = `${detailPrefix}${statusCode ? ` (${statusCode})` : ""}: ${providerDetail}`;
+      setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: sketchSource.name || "Sketch image", detail }));
+      setMessage(detail);
+    } finally {
+      setSketchBusy(false);
+    }
+  }
+
+  async function createCleanFloorPlanFromSketchSource() {
+    if (!sketchSource) {
+      setSketchStatus({ phase: "error", progress: 0, fileName: "", detail: "Choose an uploaded image or upload a new sketch first." });
+      setMessage("Choose an uploaded image or upload a new sketch first.");
+      return;
+    }
+    if (!planId && !isProjectImageMode) {
+      const detail = "Open this from a saved project planner or project image before creating a clean floor plan.";
+      setSketchStatus({ phase: "error", progress: 0, fileName: sketchSource.name || "", detail });
+      setMessage(detail);
+      return;
+    }
+
+    setSketchBusy(true);
+    setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
+    setMessage("");
+    try {
+      const endpoint = planId
+        ? `/project-plans/${planId}/sketch-to-clean-floor-plan/`
+        : `/projects/${projectId}/images/${imageId}/sketch-to-clean-floor-plan/`;
+      const file =
+        sketchSource.kind === "upload"
+          ? sketchSource.file
+          : isProjectImageMode
+            ? null
+            : null;
+      const formData = new FormData();
+      if (file) {
+        const validationError = validateSketchFile(file);
+        if (validationError) throw new Error(validationError);
+        formData.append("sketch", file);
+      } else if (sketchSource.kind === "existing") {
+        formData.append("source_image_id", sketchSource.imageId);
+      } else {
+        throw new Error("Choose an uploaded image or upload a new sketch first.");
+      }
+      formData.append("width", roughPlan.width || "20");
+      formData.append("length", roughPlan.length || "30");
+      formData.append("unit", roughPlan.unit || "ft");
+      if (sketchSource.width && sketchSource.height) {
+        formData.append("source_width", String(sketchSource.width));
+        formData.append("source_height", String(sketchSource.height));
+      }
+
+      const { data } = await api.post(endpoint, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          const total = progressEvent.total || file?.size || 0;
+          const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
+          setSketchStatus({
+            phase: progress >= 100 ? "analyzing" : "uploading",
+            progress,
+            fileName: sketchSource.name || file?.name || "Sketch image",
+            detail: "",
+          });
+        },
+      });
+      const generatedImage = data.image || {};
+      const generatedUrl = projectImageUrl(generatedImage);
+      if (planId) {
+        setPlan((prev) =>
+          prev
+            ? { ...prev, images: [...(Array.isArray(prev.images) ? prev.images : []), generatedImage] }
+            : prev,
+        );
+      } else if (isProjectImageMode) {
+        setProjectImages((prev) => [...prev, generatedImage]);
+      }
+      if (generatedUrl) {
+        setCanvasMode("photo");
+        setBackgroundUrl(generatedUrl);
+        setAnnotations([]);
+        setSelectedId("");
+        setEditingTextId("");
+      }
+      setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || "AI clean floor plan", detail: "" });
+      setMessage("AI clean floor plan created and saved to the image library. You can mark up on top of it or use the editable schematic option if you need grid-based editing.");
+    } catch (err) {
+      const statusCode = err?.response?.status;
+      const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
+      const detailPrefix = statusCode >= 500 ? "AI image generation failed" : "Image upload or API request failed";
       const detail = `${detailPrefix}${statusCode ? ` (${statusCode})` : ""}: ${providerDetail}`;
       setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: sketchSource.name || "Sketch image", detail }));
       setMessage(detail);
@@ -3444,8 +3534,36 @@ export default function ProjectMarkupCanvas() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="text-sm font-semibold text-slate-900">Create from sketch</div>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Upload a simple sketch image and AI will draft editable rough-plan lines, labels, and symbols.
+                      Start with a clean AI floor-plan image, or create an editable measured schematic when you have area dimensions.
                     </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={sketchBusy}
+                        onClick={() => setSketchPlanMode("clean")}
+                        className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
+                          sketchPlanMode === "clean"
+                            ? "border-slate-950 bg-white text-slate-950 shadow-sm"
+                            : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white"
+                        } disabled:opacity-60`}
+                      >
+                        <span className="block text-sm font-semibold">Clean floor plan</span>
+                        <span className="mt-0.5 block leading-4">Best visual result, saved as an image.</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={sketchBusy}
+                        onClick={() => setSketchPlanMode("editable")}
+                        className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
+                          sketchPlanMode === "editable"
+                            ? "border-slate-950 bg-white text-slate-950 shadow-sm"
+                            : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white"
+                        } disabled:opacity-60`}
+                      >
+                        <span className="block text-sm font-semibold">Editable schematic</span>
+                        <span className="mt-0.5 block leading-4">Grid-based, best with known dimensions.</span>
+                      </button>
+                    </div>
                     <input
                       ref={sketchFileRef}
                       type="file"
@@ -3546,11 +3664,17 @@ export default function ProjectMarkupCanvas() {
                     <button
                       type="button"
                       disabled={sketchBusy || !sketchSource}
-                      onClick={createPlanFromSketchSource}
+                      onClick={sketchPlanMode === "clean" ? createCleanFloorPlanFromSketchSource : createPlanFromSketchSource}
                       className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                     >
-                      <SymbolIcon name="architecture" className="text-[18px]" />
-                      {sketchBusy ? "Creating editable plan..." : "Create editable plan"}
+                      <SymbolIcon name={sketchPlanMode === "clean" ? "floor_plan" : "architecture"} className="text-[18px]" />
+                      {sketchBusy
+                        ? sketchPlanMode === "clean"
+                          ? "Creating clean floor plan..."
+                          : "Creating editable schematic..."
+                        : sketchPlanMode === "clean"
+                          ? "Create clean floor plan"
+                          : "Create editable schematic"}
                     </button>
                     {sketchPhase !== "idle" ? (
                       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -3561,17 +3685,21 @@ export default function ProjectMarkupCanvas() {
                             </div>
                             <div className="mt-0.5 text-[11px] text-slate-500">
                               {sketchPhase === "selected"
-                                ? sketchStatus.detail || "Image selected. Click Create editable plan when ready."
+                                ? sketchStatus.detail || "Image selected. Choose a plan option when ready."
                                 : sketchPhase === "preparing"
                                   ? "Preparing the selected project image."
                                   : sketchPhase === "uploading"
                                     ? `Uploading ${sketchProgress}%`
                                 : sketchPhase === "analyzing"
-                                  ? "Upload complete. AI is reading the sketch."
+                                  ? sketchPlanMode === "clean"
+                                    ? "AI is creating a clean floor-plan image."
+                                    : "Upload complete. AI is reading the sketch."
                                   : sketchPhase === "drafting"
                                     ? "Building editable rough-plan elements."
                                     : sketchPhase === "ready"
-                                      ? "Editable rough plan is ready."
+                                      ? sketchPlanMode === "clean"
+                                        ? "Clean floor plan is saved to the image library."
+                                        : "Editable schematic is ready."
                                       : sketchStatus.detail || "Could not create the rough plan."}
                             </div>
                           </div>
