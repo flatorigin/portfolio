@@ -1276,6 +1276,7 @@ export default function ProjectMarkupCanvas() {
   const [savingEditable, setSavingEditable] = useState(false);
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
+  const [sketchSource, setSketchSource] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
@@ -1321,6 +1322,12 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
   }, [fillTextureLibrary]);
+
+  useEffect(() => {
+    return () => {
+      if (sketchSource?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(sketchSource.previewUrl);
+    };
+  }, [sketchSource?.previewUrl]);
 
   useEffect(() => {
     if (!planId) return;
@@ -1672,26 +1679,71 @@ export default function ProjectMarkupCanvas() {
     event.target.value = "";
   }
 
-  async function handleSketchPlanUpload(event) {
+  function validateSketchFile(file) {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) return "Use a JPG, PNG, or WebP image.";
+    if (file.size > 15 * 1024 * 1024) return "Sketch images must be 15MB or smaller.";
+    return "";
+  }
+
+  function handleSketchSourceUpload(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    const validationError = validateSketchFile(file);
+    if (validationError) {
+      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "", detail: validationError });
+      setMessage(validationError);
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setSketchSource((prev) => {
+      if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
+      return {
+        kind: "upload",
+        file,
+        previewUrl,
+        name: file.name || "Uploaded sketch",
+      };
+    });
+    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "Uploaded sketch", detail: "Image selected. Click Create editable plan when ready." });
+    setMessage("Sketch image selected. Confirm the source, then create the editable plan.");
+  }
+
+  function selectExistingSketchImage(image) {
+    if (!image?.image_url) return;
+    setSketchSource((prev) => {
+      if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
+      return {
+        kind: "existing",
+        imageId: image.id,
+        imageUrl: image.image_url,
+        previewUrl: image.image_url,
+        name: image.caption || "Project image",
+      };
+    });
+    setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected. Click Create editable plan when ready." });
+    setMessage("Project image selected. Confirm the source, then create the editable plan.");
+  }
+
+  async function fileFromExistingSketchSource(source) {
+    const response = await fetch(source.imageUrl, { credentials: "include" });
+    if (!response.ok) throw new Error("Could not load that project image for plan creation.");
+    const blob = await response.blob();
+    const contentType = blob.type || "image/jpeg";
+    const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+    return new File([blob], `project-image-${source.imageId || Date.now()}.${extension}`, { type: contentType });
+  }
+
+  async function createPlanFromSketchSource() {
+    if (!sketchSource) {
+      setSketchStatus({ phase: "error", progress: 0, fileName: "", detail: "Choose an uploaded image or upload a new sketch first." });
+      setMessage("Choose an uploaded image or upload a new sketch first.");
+      return;
+    }
     if (!planId) {
       const detail = "Open this from a saved project planner before creating a plan from a sketch.";
-      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "", detail });
-      setMessage(detail);
-      return;
-    }
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      const detail = "Upload a JPG, PNG, or WebP sketch.";
-      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "", detail });
-      setMessage(detail);
-      return;
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      const detail = "Sketch images must be 15MB or smaller.";
-      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "", detail });
+      setSketchStatus({ phase: "error", progress: 0, fileName: sketchSource.name || "", detail });
       setMessage(detail);
       return;
     }
@@ -1700,9 +1752,12 @@ export default function ProjectMarkupCanvas() {
     }
 
     setSketchBusy(true);
-    setSketchStatus({ phase: "uploading", progress: 0, fileName: file.name || "Sketch image", detail: "" });
+    setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
     setMessage("");
     try {
+      const file = sketchSource.kind === "upload" ? sketchSource.file : await fileFromExistingSketchSource(sketchSource);
+      const validationError = validateSketchFile(file);
+      if (validationError) throw new Error(validationError);
       const formData = new FormData();
       formData.append("sketch", file);
       formData.append("width", roughPlan.width || "20");
@@ -1716,12 +1771,12 @@ export default function ProjectMarkupCanvas() {
           setSketchStatus({
             phase: progress >= 100 ? "analyzing" : "uploading",
             progress,
-            fileName: file.name || "Sketch image",
+            fileName: sketchSource.name || file.name || "Sketch image",
             detail: "",
           });
         },
       });
-      setSketchStatus({ phase: "drafting", progress: 100, fileName: file.name || "Sketch image", detail: "" });
+      setSketchStatus({ phase: "drafting", progress: 100, fileName: sketchSource.name || file.name || "Sketch image", detail: "" });
       setCanvasMode("rough_plan");
       setBackgroundUrl("");
       setRoughPlan((prev) => ({ ...prev, ...(data.rough_plan || {}), snap: data.rough_plan?.snap ?? true }));
@@ -1732,11 +1787,11 @@ export default function ProjectMarkupCanvas() {
       const notes = Array.isArray(data.uncertainty_notes) && data.uncertainty_notes.length
         ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
         : "";
-      setSketchStatus({ phase: "ready", progress: 100, fileName: file.name || "Sketch image", detail: "" });
+      setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || file.name || "Sketch image", detail: "" });
       setMessage(`AI rough plan created. Review and edit it before saving.${notes}`);
     } catch (err) {
       const detail = normalizeError(err, "Could not create a rough plan from this sketch.");
-      setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: file.name || "Sketch image", detail }));
+      setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: sketchSource.name || "Sketch image", detail }));
       setMessage(detail);
     } finally {
       setSketchBusy(false);
@@ -2960,9 +3015,15 @@ export default function ProjectMarkupCanvas() {
   const sketchProgress = clamp(Number(sketchStatus.progress) || 0, 0, 100);
   const sketchSteps = [
     {
+      key: "source",
+      label: "Choose image source",
+      active: sketchPhase === "selected",
+      done: Boolean(sketchSource) && !["idle", "error"].includes(sketchPhase),
+    },
+    {
       key: "upload",
-      label: "Upload sketch",
-      active: sketchPhase === "uploading",
+      label: "Send image to AI",
+      active: ["preparing", "uploading"].includes(sketchPhase),
       done: sketchProgress >= 100 && ["analyzing", "drafting", "ready"].includes(sketchPhase),
     },
     {
@@ -3119,16 +3180,85 @@ export default function ProjectMarkupCanvas() {
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
                       className="hidden"
-                      onChange={handleSketchPlanUpload}
+                      onChange={handleSketchSourceUpload}
                     />
+                    {plan?.images?.length ? (
+                      <div className="mt-3">
+                        <div className="mb-2 text-xs font-medium text-slate-500">Use an uploaded project image</div>
+                        <div className="grid max-h-40 grid-cols-3 gap-2 overflow-y-auto pr-1">
+                          {plan.images.map((image) => {
+                            const selectedImage = sketchSource?.kind === "existing" && String(sketchSource.imageId) === String(image.id);
+                            return (
+                              <button
+                                key={image.id}
+                                type="button"
+                                disabled={sketchBusy}
+                                onClick={() => selectExistingSketchImage(image)}
+                                className={`overflow-hidden rounded-xl border bg-white text-left transition ${
+                                  selectedImage ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300"
+                                } disabled:opacity-60`}
+                                aria-label={`Use ${image.caption || "project image"} for plan creation`}
+                              >
+                                <img src={image.image_url} alt="" className="h-16 w-full object-cover" />
+                                <span className="block truncate px-2 py-1 text-[10px] font-medium text-slate-600">
+                                  {image.caption || "Project image"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
+                        No project images are uploaded yet. Upload a new sketch below.
+                      </div>
+                    )}
                     <button
                       type="button"
                       disabled={sketchBusy}
                       onClick={() => sketchFileRef.current?.click()}
-                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                     >
                       <SymbolIcon name="upload" className="text-[18px]" />
-                      {sketchBusy ? "Creating plan..." : "Upload sketch"}
+                      Upload new sketch
+                    </button>
+                    {sketchSource ? (
+                      <div className="mt-3 overflow-hidden rounded-xl border border-blue-200 bg-blue-50">
+                        {sketchSource.previewUrl ? (
+                          <img src={sketchSource.previewUrl} alt="" className="h-28 w-full bg-white object-contain" />
+                        ) : null}
+                        <div className="flex items-start justify-between gap-3 px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-semibold text-slate-900">{sketchSource.name || "Selected image"}</div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                              {sketchSource.kind === "existing" ? "Existing project image selected" : "New sketch selected"}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={sketchBusy}
+                            onClick={() => {
+                              setSketchSource((prev) => {
+                                if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
+                                return null;
+                              });
+                              setSketchStatus({ phase: "idle", progress: 0, fileName: "", detail: "" });
+                            }}
+                            className="shrink-0 text-[11px] font-medium text-slate-500 hover:text-slate-900 disabled:opacity-60"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={sketchBusy || !sketchSource}
+                      onClick={createPlanFromSketchSource}
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      <SymbolIcon name="architecture" className="text-[18px]" />
+                      {sketchBusy ? "Creating editable plan..." : "Create editable plan"}
                     </button>
                     {sketchPhase !== "idle" ? (
                       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -3138,8 +3268,12 @@ export default function ProjectMarkupCanvas() {
                               {sketchStatus.fileName || "Sketch image"}
                             </div>
                             <div className="mt-0.5 text-[11px] text-slate-500">
-                              {sketchPhase === "uploading"
-                                ? `Uploading ${sketchProgress}%`
+                              {sketchPhase === "selected"
+                                ? sketchStatus.detail || "Image selected. Click Create editable plan when ready."
+                                : sketchPhase === "preparing"
+                                  ? "Preparing the selected project image."
+                                  : sketchPhase === "uploading"
+                                    ? `Uploading ${sketchProgress}%`
                                 : sketchPhase === "analyzing"
                                   ? "Upload complete. AI is reading the sketch."
                                   : sketchPhase === "drafting"
