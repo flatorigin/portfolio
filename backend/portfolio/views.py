@@ -122,10 +122,10 @@ def normalize_sketch_rough_plan_payload(payload):
     unit = str(source.get("unit") or "ft").strip().lower()
     if unit not in {"ft", "in", "m"}:
         unit = "ft"
-    scale_source = str(source.get("scale_source") or source.get("scaleSource") or "image_aspect").strip().lower()
+    scale_source = str(source.get("scale_source") or source.get("scaleSource") or "measured").strip().lower()
     if scale_source not in {"measured", "image_aspect", "requested"}:
-        scale_source = "image_aspect"
-    grid_visible = bool(source.get("grid_visible") or source.get("showGrid") or scale_source == "measured")
+        scale_source = "measured"
+    grid_visible = True
     return {
         "width": str(int(width) if width.is_integer() else round(width, 2)),
         "length": str(int(length) if length.is_integer() else round(length, 2)),
@@ -159,7 +159,7 @@ def normalize_sketch_annotations_payload(payload):
             "fillColor": "#111827",
             "fillMaterial": "flat",
             "colorLabel": "AI rough plan",
-            "strokeWidth": sketch_float(raw.get("strokeWidth"), 4, 1, 18),
+            "strokeWidth": sketch_float(raw.get("strokeWidth"), 2, 1, 18),
             "strokeOpacity": sketch_float(raw.get("strokeOpacity"), 1, 0, 1),
             "fillOpacity": sketch_float(raw.get("fillOpacity"), 0.12 if item_type in {"rect", "circle"} else 0, 0, 1),
             "strokeAlign": "center",
@@ -850,14 +850,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
             f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
             "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
             "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
-            "If the sketch has readable dimensions or a clear scale, set scale_source to measured and grid_visible true. "
-            "If not, preserve the source image aspect ratio, set scale_source to image_aspect, and grid_visible false.\n"
+            "Treat width and length as the measured full sketch/design area. The interface adds a 4-unit grid margin on every side, "
+            "so keep the actual plan geometry inside the centered design area, not against the outer grid edge. Set grid_visible true.\n"
             f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
             "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
-            "For line/measure/rect/circle use x,y,x2,y2,text. For text and symbols use x,y,text. "
+            "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
+            "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
             "For pen use points as [{x,y}], closed true only for clear enclosed shapes. "
-            "Use black strokes, simple labels, and approximate measurements only when readable from the image. "
+            "Use black strokes, strokeWidth 2, simple labels, and approximate measurements only when readable from the image. "
             "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
         )
         model_name = ""
@@ -1298,14 +1299,15 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
             "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
             "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
-            "If the sketch has readable dimensions or a clear scale, set scale_source to measured and grid_visible true. "
-            "If not, preserve the source image aspect ratio, set scale_source to image_aspect, and grid_visible false.\n"
+            "Treat width and length as the measured full sketch/design area. The interface adds a 4-unit grid margin on every side, "
+            "so keep the actual plan geometry inside the centered design area, not against the outer grid edge. Set grid_visible true.\n"
             f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
             "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
-            "For line/measure/rect/circle use x,y,x2,y2,text. For text and symbols use x,y,text. "
+            "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
+            "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
             "For pen use points as [{x,y}], closed true only for clear enclosed shapes. "
-            "Use black strokes, simple labels, and approximate measurements only when readable from the sketch. "
+            "Use black strokes, strokeWidth 2, simple labels, and approximate measurements only when readable from the sketch. "
             "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
         )
         model_name = ""

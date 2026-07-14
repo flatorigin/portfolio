@@ -63,6 +63,7 @@ const LINE_ENDPOINT_OPTIONS = [
 ];
 const ROUGH_GRID_SIZE = 40;
 const ROUGH_SOFT_SNAP_DISTANCE = 9;
+const ROUGH_PLAN_GRID_MARGIN_UNITS = 4;
 const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100, showGrid: true, scaleSource: "manual" };
 const ROUGH_PLAN_PADDING = 82;
 
@@ -116,8 +117,9 @@ function roughPlanFromSketchResponse(responsePlan = {}, source = {}, fallbackPla
     ...fallbackPlan,
     ...responsePlan,
     scaleSource: responsePlan.scale_source || responsePlan.scaleSource || (measuredScale ? "measured" : "image_aspect"),
-    showGrid: measuredScale,
-    snap: measuredScale ? (responsePlan.snap ?? true) : false,
+    showGrid: true,
+    grid_visible: true,
+    snap: responsePlan.snap ?? true,
   };
 
   if (imageWidth > 0 && imageHeight > 0 && !measuredScale) {
@@ -329,13 +331,20 @@ function nearestPenHit(item, point, tolerance = 18) {
 function roughPlanGeometry(roughPlan) {
   const widthUnits = Math.max(1, Number(roughPlan?.width) || 1);
   const lengthUnits = Math.max(1, Number(roughPlan?.length) || 1);
+  const marginUnits = Math.max(0, Number(roughPlan?.gridMarginUnits ?? ROUGH_PLAN_GRID_MARGIN_UNITS) || 0);
+  const gridWidthUnits = widthUnits + marginUnits * 2;
+  const gridLengthUnits = lengthUnits + marginUnits * 2;
   const availableW = CANVAS_W - ROUGH_PLAN_PADDING * 2;
   const availableH = CANVAS_H - ROUGH_PLAN_PADDING * 2;
-  const scale = Math.min(availableW / widthUnits, availableH / lengthUnits);
-  const widthPx = widthUnits * scale;
-  const heightPx = lengthUnits * scale;
+  const scale = Math.min(availableW / gridWidthUnits, availableH / gridLengthUnits);
+  const widthPx = gridWidthUnits * scale;
+  const heightPx = gridLengthUnits * scale;
   const x = (CANVAS_W - widthPx) / 2;
   const y = (CANVAS_H - heightPx) / 2;
+  const designX = x + marginUnits * scale;
+  const designY = y + marginUnits * scale;
+  const designWidthPx = widthUnits * scale;
+  const designHeightPx = lengthUnits * scale;
   return {
     x,
     y,
@@ -343,6 +352,13 @@ function roughPlanGeometry(roughPlan) {
     heightPx,
     widthUnits,
     lengthUnits,
+    gridWidthUnits,
+    gridLengthUnits,
+    marginUnits,
+    designX,
+    designY,
+    designWidthPx,
+    designHeightPx,
     scale,
     unit: roughPlan?.unit || "ft",
   };
@@ -402,6 +418,86 @@ function annotationBounds(item) {
   return { x1, y1, x2, y2 };
 }
 
+function allAnnotationBounds(items) {
+  const boxes = (items || []).map(annotationBounds).filter((box) => box && Number.isFinite(box.x1) && Number.isFinite(box.y1));
+  if (!boxes.length) return null;
+  return boxes.reduce(
+    (bounds, box) => ({
+      x1: Math.min(bounds.x1, box.x1),
+      y1: Math.min(bounds.y1, box.y1),
+      x2: Math.max(bounds.x2, box.x2),
+      y2: Math.max(bounds.y2, box.y2),
+    }),
+    boxes[0],
+  );
+}
+
+function transformPointToDesignArea(point, transform) {
+  return {
+    x: clamp(Math.round((point.x - transform.sourceX) * transform.scale + transform.targetX), 0, CANVAS_W),
+    y: clamp(Math.round((point.y - transform.sourceY) * transform.scale + transform.targetY), 0, CANVAS_H),
+  };
+}
+
+function transformCurvePointsToDesignArea(curvePoints, transform) {
+  if (!curvePoints || typeof curvePoints !== "object") return curvePoints;
+  return Object.entries(curvePoints).reduce((next, [key, point]) => {
+    if (!point || typeof point !== "object") return next;
+    if (point.type === "cubic" && point.c1 && point.c2) {
+      next[key] = {
+        ...point,
+        c1: transformPointToDesignArea(point.c1, transform),
+        c2: transformPointToDesignArea(point.c2, transform),
+      };
+    } else {
+      next[key] = transformPointToDesignArea(point, transform);
+    }
+    return next;
+  }, {});
+}
+
+function transformAnnotationToDesignArea(item, transform) {
+  const start = transformPointToDesignArea({ x: item.x || 0, y: item.y || 0 }, transform);
+  const end = transformPointToDesignArea({ x: item.x2 ?? item.x ?? 0, y: item.y2 ?? item.y ?? 0 }, transform);
+  const next = { ...item, x: start.x, y: start.y, x2: end.x, y2: end.y };
+  if (Array.isArray(item.points)) {
+    const points = item.points.map((point) => transformPointToDesignArea(point, transform));
+    const first = points[0] || start;
+    const last = points[points.length - 1] || end;
+    next.points = points;
+    next.x = first.x;
+    next.y = first.y;
+    next.x2 = last.x;
+    next.y2 = last.y;
+  }
+  if (item.curvePoint) next.curvePoint = transformPointToDesignArea(item.curvePoint, transform);
+  if (item.curvePoints) next.curvePoints = transformCurvePointsToDesignArea(item.curvePoints, transform);
+  return next;
+}
+
+function fitAnnotationsToRoughPlanDesignArea(items, roughPlan) {
+  const annotations = Array.isArray(items) ? items : [];
+  const bounds = allAnnotationBounds(annotations);
+  if (!bounds) return annotations;
+  const geometry = roughPlanGeometry(roughPlan);
+  const sourceWidth = Math.max(1, bounds.x2 - bounds.x1);
+  const sourceHeight = Math.max(1, bounds.y2 - bounds.y1);
+  const inset = Math.min(geometry.scale * 0.5, 18);
+  const targetWidth = Math.max(1, geometry.designWidthPx - inset * 2);
+  const targetHeight = Math.max(1, geometry.designHeightPx - inset * 2);
+  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const renderedWidth = sourceWidth * scale;
+  const renderedHeight = sourceHeight * scale;
+  const transform = {
+    sourceX: bounds.x1,
+    sourceY: bounds.y1,
+    scale,
+    targetX: geometry.designX + (geometry.designWidthPx - renderedWidth) / 2,
+    targetY: geometry.designY + (geometry.designHeightPx - renderedHeight) / 2,
+  };
+  return annotations.map((item) => transformAnnotationToDesignArea(item, transform));
+}
+
 function wrappedTextLines(text) {
   const paragraphs = normalizeMarkupText(text)
     .split("\n")
@@ -435,6 +531,53 @@ function labelBox(text, fontSize = 18) {
     lineHeight,
     lines,
   };
+}
+
+function formatSegmentLength(pxLength, geometry) {
+  if (!geometry?.scale) return "";
+  const units = pxLength / geometry.scale;
+  if (!Number.isFinite(units) || units <= 0) return "";
+  const rounded = units >= 10 ? Math.round(units * 10) / 10 : Math.round(units * 100) / 100;
+  return `${formatPlanNumber(rounded)} ${geometry.unit}`;
+}
+
+function shouldUseComputedMeasureLabel(text) {
+  const normalized = normalizeMarkupText(text).toLowerCase();
+  return !normalized || normalized === "measurement" || normalized === "measure";
+}
+
+function SegmentLengthLabel({ x, y, label, stroke }) {
+  if (!label) return null;
+  const box = labelBox(label, 14);
+  const labelX = x - box.width / 2;
+  const labelY = y - box.height / 2;
+  return (
+    <g className="pointer-events-none">
+      <rect
+        x={labelX}
+        y={labelY}
+        width={box.width}
+        height={box.height}
+        rx="7"
+        fill="rgba(255,255,255,0.9)"
+        stroke={hexToRgba(stroke, 0.42)}
+        strokeWidth="1"
+      />
+      <text
+        x={labelX + box.paddingX}
+        y={labelY + box.paddingY + 13}
+        fill="#0f172a"
+        fontSize="14"
+        fontWeight="650"
+      >
+        {box.lines.map((line, index) => (
+          <tspan key={`${label}-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
 }
 
 function displayBounds(item) {
@@ -870,10 +1013,13 @@ function applyHandleDrag(drag, item, point) {
   return item;
 }
 
-function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onDoubleClick } = {}) {
+function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onDoubleClick, roughGeometry = null, showSegmentLengths = false } = {}) {
   const style = styleFor(item);
   const stroke = style.strokeColor;
-  const strokeWidth = strokeWidthFor(item);
+  const baseStrokeWidth = strokeWidthFor(item);
+  const strokeWidth = showSegmentLengths && ["line", "measure", "pen", "freehand"].includes(item.type)
+    ? Math.min(baseStrokeWidth, 2.5)
+    : baseStrokeWidth;
   const common = {
     key: item.id,
     onPointerDown,
@@ -954,6 +1100,21 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
           markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
         />
+        {showSegmentLengths && item.type === "pen"
+          ? points.slice(0, -1).map((point, index) => {
+              const nextPoint = points[index + 1];
+              const length = distanceBetween(point, nextPoint);
+              return (
+                <SegmentLengthLabel
+                  key={`${item.id}-segment-label-${index}`}
+                  x={(point.x + nextPoint.x) / 2}
+                  y={(point.y + nextPoint.y) / 2 - 18}
+                  label={formatSegmentLength(length, roughGeometry)}
+                  stroke={stroke}
+                />
+              );
+            })
+          : null}
       </g>
     );
   }
@@ -1003,7 +1164,12 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     const length = Math.hypot(dx, dy) || 1;
     const capX = (-dy / length) * 22;
     const capY = (dx / length) * 22;
-    const label = item.text || "measurement";
+    const computedLabel = formatSegmentLength(length, roughGeometry);
+    const label = item.type === "measure" && showSegmentLengths && shouldUseComputedMeasureLabel(item.text)
+      ? computedLabel
+      : item.type === "line" && showSegmentLengths
+        ? computedLabel || item.text || ""
+        : item.text || "measurement";
     const box = labelBox(label, 18);
     const labelX = midX - box.width / 2;
     const labelY = midY - box.height - 10;
@@ -1046,7 +1212,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
             />
           </>
         ) : null}
-        {item.type === "measure" && !editing ? (
+        {((item.type === "measure") || (item.type === "line" && showSegmentLengths)) && !editing && label ? (
           <g>
             <rect
               x={midX - box.width / 2}
@@ -1878,7 +2044,11 @@ export default function ProjectMarkupCanvas() {
       setBackgroundUrl("");
       const nextRoughPlan = roughPlanFromSketchResponse(data.rough_plan || {}, sketchSource, roughPlan);
       setRoughPlan(nextRoughPlan);
-      commitAnnotations(Array.isArray(data.annotations) ? data.annotations : []);
+      const fittedAnnotations = fitAnnotationsToRoughPlanDesignArea(
+        Array.isArray(data.annotations) ? data.annotations : [],
+        nextRoughPlan,
+      );
+      commitAnnotations(fittedAnnotations);
       setSelectedId("");
       setEditingTextId("");
       setOpenSidebarSection("annotations");
@@ -1886,10 +2056,7 @@ export default function ProjectMarkupCanvas() {
         ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
         : "";
       setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || file?.name || "Sketch image", detail: "" });
-      const scaleNote = nextRoughPlan.showGrid === false
-        ? " The plan keeps the source image proportion; grid and snap are off because no measured scale was detected."
-        : "";
-      setMessage(`AI rough plan created. Review and edit it before saving.${scaleNote}${notes}`);
+      setMessage(`AI rough plan created on a measured grid with a ${ROUGH_PLAN_GRID_MARGIN_UNITS} ${nextRoughPlan.unit} buffer around the design. Review and edit it before saving.${notes}`);
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a rough plan from this sketch.");
@@ -4139,7 +4306,8 @@ export default function ProjectMarkupCanvas() {
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <span className="font-semibold text-slate-800">{roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}</span>
                 <span>Area: {(Number(roughPlan.width) || 0) * (Number(roughPlan.length) || 0)} sq {roughPlan.unit}</span>
-                <span>{showRoughGrid ? `Grid scale: 1 square = 1 ${roughGeometry.unit}` : "Grid: hidden until a measured scale is defined"}</span>
+                <span>{showRoughGrid ? `Grid: ${roughGeometry.gridWidthUnits} x ${roughGeometry.gridLengthUnits} ${roughGeometry.unit}` : "Grid: hidden"}</span>
+                <span>{showRoughGrid ? `${roughGeometry.marginUnits} ${roughGeometry.unit} margin each side` : ""}</span>
                 <span>Soft snap: {showRoughGrid && roughPlan.snap ? "on" : "off"}</span>
                 <span>Zoom: {Math.round(viewport.zoom * 100)}%</span>
               </div>
@@ -4296,10 +4464,10 @@ export default function ProjectMarkupCanvas() {
                       width={roughGeometry.widthPx}
                       height={roughGeometry.heightPx}
                       fill="#f8fafc"
-                      stroke="#334155"
-                      strokeWidth="3"
+                      stroke="#94a3b8"
+                      strokeWidth="1.25"
                     />
-                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.widthUnits) + 1 }).map((_, index) => {
+                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.gridWidthUnits) + 1 }).map((_, index) => {
                       const x = roughGeometry.x + index * roughGeometry.scale;
                       return (
                         <line
@@ -4308,12 +4476,12 @@ export default function ProjectMarkupCanvas() {
                           y1={roughGeometry.y}
                           x2={x}
                           y2={roughGeometry.y + roughGeometry.heightPx}
-                          stroke={index % 5 === 0 ? "#94a3b8" : "#cbd5e1"}
-                          strokeWidth={index % 5 === 0 ? "1.5" : "1"}
+                          stroke={index % 5 === 0 ? "#cbd5e1" : "#e2e8f0"}
+                          strokeWidth={index % 5 === 0 ? "1" : "0.65"}
                         />
                       );
                     }) : null}
-                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.lengthUnits) + 1 }).map((_, index) => {
+                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.gridLengthUnits) + 1 }).map((_, index) => {
                       const y = roughGeometry.y + index * roughGeometry.scale;
                       return (
                         <line
@@ -4322,11 +4490,23 @@ export default function ProjectMarkupCanvas() {
                           y1={y}
                           x2={roughGeometry.x + roughGeometry.widthPx}
                           y2={y}
-                          stroke={index % 5 === 0 ? "#94a3b8" : "#cbd5e1"}
-                          strokeWidth={index % 5 === 0 ? "1.5" : "1"}
+                          stroke={index % 5 === 0 ? "#cbd5e1" : "#e2e8f0"}
+                          strokeWidth={index % 5 === 0 ? "1" : "0.65"}
                         />
                       );
                     }) : null}
+                    {showRoughGrid ? (
+                      <rect
+                        x={roughGeometry.designX}
+                        y={roughGeometry.designY}
+                        width={roughGeometry.designWidthPx}
+                        height={roughGeometry.designHeightPx}
+                        fill="none"
+                        stroke="#334155"
+                        strokeWidth="1.75"
+                        strokeDasharray="8 6"
+                      />
+                    ) : null}
                     <text x="36" y="54" fill="#64748b" fontSize="20" fontWeight="700">
                       Plan: {roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}
                     </text>
@@ -4349,6 +4529,8 @@ export default function ProjectMarkupCanvas() {
                 renderAnnotation(item, {
                   selected: item.id === selectedForEditing?.id,
                   editing: item.id === editingTextId,
+                  roughGeometry,
+                  showSegmentLengths: isRoughPlan,
                   onPointerDown:
                     item.id === penDraftId
                       ? undefined
