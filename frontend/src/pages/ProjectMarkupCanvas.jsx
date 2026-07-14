@@ -1275,6 +1275,7 @@ export default function ProjectMarkupCanvas() {
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
   const [sketchBusy, setSketchBusy] = useState(false);
+  const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "" });
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
@@ -1676,15 +1677,18 @@ export default function ProjectMarkupCanvas() {
     event.target.value = "";
     if (!file) return;
     if (!planId) {
+      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "" });
       setMessage("Open this from a saved project planner before creating a plan from a sketch.");
       return;
     }
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
+      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "" });
       setMessage("Upload a JPG, PNG, or WebP sketch.");
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
+      setSketchStatus({ phase: "error", progress: 0, fileName: file.name || "" });
       setMessage("Sketch images must be 15MB or smaller.");
       return;
     }
@@ -1693,6 +1697,7 @@ export default function ProjectMarkupCanvas() {
     }
 
     setSketchBusy(true);
+    setSketchStatus({ phase: "uploading", progress: 0, fileName: file.name || "Sketch image" });
     setMessage("");
     try {
       const formData = new FormData();
@@ -1702,7 +1707,17 @@ export default function ProjectMarkupCanvas() {
       formData.append("unit", roughPlan.unit || "ft");
       const { data } = await api.post(`/project-plans/${planId}/sketch-to-rough-plan/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          const total = progressEvent.total || file.size || 0;
+          const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
+          setSketchStatus({
+            phase: progress >= 100 ? "analyzing" : "uploading",
+            progress,
+            fileName: file.name || "Sketch image",
+          });
+        },
       });
+      setSketchStatus({ phase: "drafting", progress: 100, fileName: file.name || "Sketch image" });
       setCanvasMode("rough_plan");
       setBackgroundUrl("");
       setRoughPlan((prev) => ({ ...prev, ...(data.rough_plan || {}), snap: data.rough_plan?.snap ?? true }));
@@ -1713,8 +1728,10 @@ export default function ProjectMarkupCanvas() {
       const notes = Array.isArray(data.uncertainty_notes) && data.uncertainty_notes.length
         ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
         : "";
+      setSketchStatus({ phase: "ready", progress: 100, fileName: file.name || "Sketch image" });
       setMessage(`AI rough plan created. Review and edit it before saving.${notes}`);
     } catch (err) {
+      setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: file.name || "Sketch image" }));
       setMessage(normalizeError(err, "Could not create a rough plan from this sketch."));
     } finally {
       setSketchBusy(false);
@@ -2934,6 +2951,35 @@ export default function ProjectMarkupCanvas() {
     });
   }
 
+  const sketchPhase = sketchStatus.phase || "idle";
+  const sketchProgress = clamp(Number(sketchStatus.progress) || 0, 0, 100);
+  const sketchSteps = [
+    {
+      key: "upload",
+      label: "Upload sketch",
+      active: sketchPhase === "uploading",
+      done: sketchProgress >= 100 && ["analyzing", "drafting", "ready"].includes(sketchPhase),
+    },
+    {
+      key: "analyze",
+      label: "AI reading sketch",
+      active: sketchPhase === "analyzing",
+      done: ["drafting", "ready"].includes(sketchPhase),
+    },
+    {
+      key: "draft",
+      label: "Draft editable plan",
+      active: sketchPhase === "drafting",
+      done: sketchPhase === "ready",
+    },
+    {
+      key: "ready",
+      label: "Ready to review",
+      active: sketchPhase === "ready",
+      done: sketchPhase === "ready",
+    },
+  ];
+
   return (
     <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50">
       <div className="border-b border-slate-200 bg-white/95">
@@ -3079,6 +3125,79 @@ export default function ProjectMarkupCanvas() {
                       <SymbolIcon name="upload" className="text-[18px]" />
                       {sketchBusy ? "Creating plan..." : "Upload sketch"}
                     </button>
+                    {sketchPhase !== "idle" ? (
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-semibold text-slate-800">
+                              {sketchStatus.fileName || "Sketch image"}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                              {sketchPhase === "uploading"
+                                ? `Uploading ${sketchProgress}%`
+                                : sketchPhase === "analyzing"
+                                  ? "Upload complete. AI is reading the sketch."
+                                  : sketchPhase === "drafting"
+                                    ? "Building editable rough-plan elements."
+                                    : sketchPhase === "ready"
+                                      ? "Editable rough plan is ready."
+                                      : "Could not create the rough plan."}
+                            </div>
+                          </div>
+                          {sketchBusy ? (
+                            <SymbolIcon name="hourglass_empty" className="shrink-0 animate-spin text-[18px] text-blue-600" />
+                          ) : sketchPhase === "ready" ? (
+                            <SymbolIcon name="check_circle" className="shrink-0 text-[18px] text-emerald-600" />
+                          ) : sketchPhase === "error" ? (
+                            <SymbolIcon name="error" className="shrink-0 text-[18px] text-rose-600" />
+                          ) : null}
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              sketchPhase === "error" ? "bg-rose-500" : sketchPhase === "ready" ? "bg-emerald-500" : "bg-blue-600"
+                            }`}
+                            style={{ width: `${sketchPhase === "error" ? Math.max(8, sketchProgress) : sketchProgress}%` }}
+                          />
+                        </div>
+                        <div className="mt-3 grid gap-2">
+                          {sketchSteps.map((step) => (
+                            <div key={step.key} className="flex items-center gap-2 text-xs">
+                              <span
+                                className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                                  step.done
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : step.active
+                                      ? "border-blue-200 bg-blue-50 text-blue-700"
+                                      : sketchPhase === "error"
+                                        ? "border-slate-200 bg-slate-50 text-slate-400"
+                                        : "border-slate-200 bg-white text-slate-400"
+                                }`}
+                              >
+                                {step.done ? (
+                                  <SymbolIcon name="check" className="text-[14px]" />
+                                ) : step.active ? (
+                                  <SymbolIcon name="hourglass_empty" className="animate-spin text-[13px]" />
+                                ) : (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                )}
+                              </span>
+                              <span
+                                className={
+                                  step.done
+                                    ? "font-medium text-emerald-700"
+                                    : step.active
+                                      ? "font-medium text-blue-700"
+                                      : "text-slate-500"
+                                }
+                              >
+                                {step.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block">
