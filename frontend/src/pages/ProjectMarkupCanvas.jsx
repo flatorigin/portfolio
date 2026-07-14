@@ -1790,7 +1790,10 @@ export default function ProjectMarkupCanvas() {
       setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || file.name || "Sketch image", detail: "" });
       setMessage(`AI rough plan created. Review and edit it before saving.${notes}`);
     } catch (err) {
-      const detail = normalizeError(err, "Could not create a rough plan from this sketch.");
+      const statusCode = err?.response?.status;
+      const providerDetail = normalizeError(err, "Could not create a rough plan from this sketch.");
+      const detailPrefix = statusCode >= 500 ? "AI processing failed" : "Image upload or API request failed";
+      const detail = `${detailPrefix}${statusCode ? ` (${statusCode})` : ""}: ${providerDetail}`;
       setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: sketchSource.name || "Sketch image", detail }));
       setMessage(detail);
     } finally {
