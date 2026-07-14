@@ -1072,3 +1072,40 @@ class ProjectPlannerTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("JPG, PNG, or WebP", str(response.data))
+
+    @patch("portfolio.views.generate_text_with_image")
+    def test_project_image_sketch_to_rough_plan_uses_existing_image(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = {
+            "text": json.dumps(
+                {
+                    "rough_plan": {"width": 14, "length": 22, "unit": "ft"},
+                    "annotations": [
+                        {"type": "rect", "x": 120, "y": 140, "x2": 620, "y2": 440, "text": "deck area"},
+                    ],
+                    "uncertainty_notes": ["Confirm final dimensions on site."],
+                }
+            ),
+            "model": "gpt-test",
+        }
+        project = Project.objects.create(
+            owner=self.homeowner,
+            title="Deck project",
+            summary="Back deck layout sketch.",
+            category="deck",
+            location="Back yard",
+        )
+        image = SimpleUploadedFile("deck-plan.png", b"fake-png", content_type="image/png")
+        project_image = project.images.create(image=image, caption="Deck sketch")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/projects/{project.id}/images/{project_image.id}/sketch-to-rough-plan/",
+            {"source_image_id": str(project_image.id), "width": "14", "length": "22", "unit": "ft"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["rough_plan"]["width"], "14")
+        self.assertEqual(response.data["rough_plan"]["length"], "22")
+        self.assertEqual(response.data["annotations"][0]["type"], "rect")
+        self.assertEqual(response.data["uncertainty_notes"], ["Confirm final dimensions on site."])
