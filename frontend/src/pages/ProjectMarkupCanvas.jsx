@@ -1846,7 +1846,7 @@ export default function ProjectMarkupCanvas() {
   );
 
   useEffect(() => {
-    if (selected?.type === "text" || selected?.type === "measure") {
+    if (selected?.type === "text") {
       setOpenSidebarSection("annotations");
       const frame = requestAnimationFrame(() => {
         sidebarTextRef.current?.focus();
@@ -2521,15 +2521,7 @@ export default function ProjectMarkupCanvas() {
     setAnnotations((prev) =>
       prev.map((item) => {
         if (item.id !== penDraftId || !Array.isArray(item.points)) return item;
-        const last = item.points[item.points.length - 1];
-        const beforeLast = item.points[item.points.length - 2];
-        const hasPreviewPoint =
-          item.points.length > 1 &&
-          last &&
-          beforeLast &&
-          last.x === beforeLast.x &&
-          last.y === beforeLast.y;
-        const points = hasPreviewPoint ? item.points.slice(0, -1) : item.points;
+        const points = item.points.length > 1 ? item.points.slice(0, -1) : item.points;
         const finalPoint = points[points.length - 1] || item;
         const canClose = closed && points.length >= 3;
         return {
@@ -4597,10 +4589,10 @@ export default function ProjectMarkupCanvas() {
               </button>
               {selected ? (
                 <div className="mt-4 border-t border-slate-100 pt-4">
-                  {selected.type === "text" || selected.type === "measure" ? (
+                  {selected.type === "text" ? (
                     <label className="mb-4 block">
                       <span className="mb-2 flex items-center justify-between gap-2 text-xs font-medium text-slate-500">
-                        <span>{selected.type === "measure" ? "Measurement text" : "Note text"}</span>
+                        <span>Note text</span>
                         {sidebarTextEditorActive ? (
                           <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                             Editing
@@ -4623,11 +4615,8 @@ export default function ProjectMarkupCanvas() {
                             ? "border-blue-500 ring-4 ring-blue-500/20"
                             : "border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15")
                         }
-                        placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
+                        placeholder="Add note"
                       />
-                      <span className="mt-1 block text-[11px] leading-4 text-slate-400">
-                        You can also double-click the label on the image to edit it in place.
-                      </span>
                     </label>
                   ) : null}
                   {selected.type === "priority" ? (
@@ -4710,6 +4699,9 @@ export default function ProjectMarkupCanvas() {
                         </button>
                       </div>
                       <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                        This sets a new reference measure for the entire document.
+                      </p>
+                      <p className="mt-1 text-[11px] leading-4 text-slate-500">
                         Selected line: {Math.round(selectedCalibrationLineLength)} px
                         {calibratedMeasurementGeometry
                           ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
