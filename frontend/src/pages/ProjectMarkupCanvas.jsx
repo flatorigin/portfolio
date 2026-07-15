@@ -1567,6 +1567,7 @@ export default function ProjectMarkupCanvas() {
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
   const [sketchPlanMode, setSketchPlanMode] = useState("clean");
+  const [hideTextAndMeasurements, setHideTextAndMeasurements] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState({ past: [], future: [] });
@@ -1597,6 +1598,7 @@ export default function ProjectMarkupCanvas() {
       if (saved.activeStrokeOpacity != null) setActiveStrokeOpacity(clamp(Number(saved.activeStrokeOpacity), 0, 1));
       if (saved.activeFillOpacity != null) setActiveFillOpacity(clamp(Number(saved.activeFillOpacity), 0, 1));
       if (saved.visibleLayers && typeof saved.visibleLayers === "object") setVisibleLayers(saved.visibleLayers);
+      if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
       // Ignore broken session drafts.
     }
@@ -1605,9 +1607,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -1825,7 +1827,7 @@ export default function ProjectMarkupCanvas() {
     () => cleanPlanMeasurementGeometry(roughPlan, backgroundImageDimensions),
     [backgroundImageDimensions, roughPlan],
   );
-  const showPlanSegmentLengths = isRoughPlan || hasAiCleanPlanOverlay;
+  const showPlanSegmentLengths = !hideTextAndMeasurements && (isRoughPlan || hasAiCleanPlanOverlay);
   const activeMeasurementGeometry = isRoughPlan ? roughGeometry : hasAiCleanPlanOverlay ? cleanPlanGeometry : null;
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
@@ -3377,7 +3379,11 @@ export default function ProjectMarkupCanvas() {
     }
   }
 
-  const visibleAnnotations = annotations.filter((item) => visibleLayers[item.id] !== false);
+  const visibleAnnotations = annotations.filter((item) => {
+    if (visibleLayers[item.id] === false) return false;
+    if (hideTextAndMeasurements && (item.type === "text" || item.type === "measure")) return false;
+    return true;
+  });
   const layeredAnnotations = visibleAnnotations;
   const annotationLayers = annotations
     .map((item, index) => ({
@@ -4374,6 +4380,19 @@ export default function ProjectMarkupCanvas() {
               onToggle={toggleSidebarSection}
               onPin={toggleSidebarPin}
             >
+              <button
+                type="button"
+                onClick={() => setHideTextAndMeasurements((value) => !value)}
+                disabled={!annotations.length}
+                className={`mb-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border text-sm font-medium disabled:opacity-50 ${
+                  hideTextAndMeasurements
+                    ? "border-slate-950 bg-slate-950 text-white hover:bg-slate-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <SymbolIcon name={hideTextAndMeasurements ? "visibility" : "visibility_off"} className="text-[18px]" />
+                {hideTextAndMeasurements ? "Show text & measurements" : "Hide text & measurements"}
+              </button>
               <button
                 type="button"
                 onClick={clearCanvas}
