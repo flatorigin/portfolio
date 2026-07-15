@@ -55,9 +55,9 @@ const DEFAULT_MARKUP_COLOR = "#2563eb";
 const DEFAULT_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_OPACITY = 1;
 const DEFAULT_FILL_OPACITY = 0.18;
-const MARKUP_LABEL_FONT_SIZE = 12;
-const MARKUP_MEASURE_FONT_SIZE = 12;
-const MARKUP_SEGMENT_FONT_SIZE = 11;
+const MARKUP_LABEL_FONT_SIZE = 10;
+const MARKUP_MEASURE_FONT_SIZE = 10;
+const MARKUP_SEGMENT_FONT_SIZE = 9;
 const CURVE_HANDLE_OFFSET = 34;
 const LINE_ENDPOINT_OPTIONS = [
   { key: "none", label: "None" },
@@ -1090,7 +1090,7 @@ function applyHandleDrag(drag, item, point) {
   return item;
 }
 
-function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onDoubleClick, roughGeometry = null, showSegmentLengths = false } = {}) {
+function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false } = {}) {
   const style = styleFor(item);
   const stroke = style.strokeColor;
   const baseStrokeWidth = strokeWidthFor(item);
@@ -1100,6 +1100,8 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
   const common = {
     key: item.id,
     onPointerDown,
+    onPointerEnter,
+    onPointerLeave,
     onDoubleClick,
     className: selected ? "cursor-move" : "cursor-pointer",
   };
@@ -1252,6 +1254,14 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     const labelY = midY - box.height - 5;
     return (
       <g {...common}>
+        <path
+          d={linePathD(item)}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={Math.max(10, strokeWidth + 8)}
+          strokeLinecap="round"
+          pointerEvents="stroke"
+        />
         <path
           d={linePathD(item)}
           fill="none"
@@ -1557,6 +1567,7 @@ export default function ProjectMarkupCanvas() {
   const [visibleLayers, setVisibleLayers] = useState({});
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [hoveredAnnotationId, setHoveredAnnotationId] = useState("");
   const [draft, setDraft] = useState(null);
   const [penDraftId, setPenDraftId] = useState("");
   const [drag, setDrag] = useState(null);
@@ -2093,7 +2104,7 @@ export default function ProjectMarkupCanvas() {
     return new File([blob], `project-image-${source.imageId || Date.now()}.${extension}`, { type: contentType });
   }
 
-  async function requestRoughPlanFromSketchSource(source) {
+  async function requestRoughPlanFromSketchSource(source, options = {}) {
     if (!source) throw new Error("Choose an uploaded image or upload a new sketch first.");
     const endpoint = planId
       ? `/project-plans/${planId}/sketch-to-rough-plan/`
@@ -2117,6 +2128,7 @@ export default function ProjectMarkupCanvas() {
     formData.append("width", roughPlan.width || "20");
     formData.append("length", roughPlan.length || "30");
     formData.append("unit", roughPlan.unit || "ft");
+    if (options.overlayMode) formData.append("overlay_mode", options.overlayMode);
     if (source.width && source.height) {
       formData.append("source_width", String(source.width));
       formData.append("source_height", String(source.height));
@@ -2279,7 +2291,9 @@ export default function ProjectMarkupCanvas() {
       if (overlaySource) {
         try {
           setSketchStatus({ phase: "drafting", progress: 100, fileName: overlaySource.name, detail: "Creating editable markup overlay." });
-          const overlayData = await requestRoughPlanFromSketchSource(overlaySource);
+          const overlayData = await requestRoughPlanFromSketchSource(overlaySource, {
+            overlayMode: "trace_clean_floor_plan",
+          });
           const nextRoughPlan = roughPlanFromSketchResponse(overlayData.rough_plan || {}, overlaySource, roughPlan);
           const overlayAnnotations = fitAnnotationsToImageBackgroundArea(
             Array.isArray(overlayData.annotations) ? overlayData.annotations : [],
@@ -3410,7 +3424,10 @@ export default function ProjectMarkupCanvas() {
               : false,
         )
       : selectedControlHandles;
-  const selectedDeletePosition = selectedDisplayBounds
+  const showEditingControls =
+    !!selectedForEditing &&
+    (hoveredAnnotationId === selectedForEditing.id || drag?.id === selectedForEditing.id);
+  const selectedDeletePosition = showEditingControls && selectedDisplayBounds
     ? {
         left: `${((clamp(selectedDisplayBounds.x2 + 18, viewport.x + 18, viewport.x + viewport.width - 18) - viewport.x) / viewport.width) * 100}%`,
         top: `${((clamp(selectedDisplayBounds.y1 - 18, viewport.y + 18, viewport.y + viewport.height - 18) - viewport.y) / viewport.height) * 100}%`,
@@ -4849,6 +4866,10 @@ export default function ProjectMarkupCanvas() {
                       : tool === "pen" && item.type === "pen"
                         ? (event) => continuePenFromExisting(event, item)
                         : (event) => startMove(event, item),
+                  onPointerEnter: () => setHoveredAnnotationId(item.id),
+                  onPointerLeave: () => {
+                    if (drag?.id !== item.id) setHoveredAnnotationId((current) => (current === item.id ? "" : current));
+                  },
                   onDoubleClick: item.id === penDraftId ? undefined : (event) => {
                     event.stopPropagation();
                     if (item.type === "text" || item.type === "measure") {
@@ -4869,19 +4890,19 @@ export default function ProjectMarkupCanvas() {
                         <circle
                           cx={point.x}
                           cy={point.y}
-                          r={isStart ? 10 : 7}
+                          r={isStart ? 6 : 4}
                           fill={isPreview && !isStart ? "#ffffff" : "#2563eb"}
                           stroke={isStart ? "#ffffff" : "#2563eb"}
-                          strokeWidth={isStart ? "4" : "2"}
+                          strokeWidth={isStart ? "2" : "1.5"}
                         />
                         {isStart ? (
                           <circle
                             cx={point.x}
                             cy={point.y}
-                            r="14"
+                            r="8"
                             fill="none"
                             stroke="#2563eb"
-                            strokeWidth="2"
+                            strokeWidth="1.25"
                             strokeDasharray="5 5"
                           />
                         ) : null}
@@ -4891,20 +4912,28 @@ export default function ProjectMarkupCanvas() {
                 </g>
               ) : null}
 
-              {selectedForEditing ? (() => {
+              {showEditingControls ? (() => {
                 const { x1, y1, x2, y2 } = displayBounds(selectedForEditing);
                 return (
-                  <g className="editing-only">
+                  <g
+                    className="editing-only"
+                    onPointerEnter={() => setHoveredAnnotationId(selectedForEditing.id)}
+                    onPointerLeave={() => {
+                      if (drag?.id !== selectedForEditing.id) {
+                        setHoveredAnnotationId((current) => (current === selectedForEditing.id ? "" : current));
+                      }
+                    }}
+                  >
                     <rect
                       className="pointer-events-none"
-                      x={x1 - 8}
-                      y={y1 - 8}
-                      width={Math.max(16, x2 - x1 + 16)}
-                      height={Math.max(16, y2 - y1 + 16)}
-                      fill="rgba(37,99,235,0.06)"
+                      x={x1 - 4}
+                      y={y1 - 4}
+                      width={Math.max(8, x2 - x1 + 8)}
+                      height={Math.max(8, y2 - y1 + 8)}
+                      fill="rgba(37,99,235,0.025)"
                       stroke="#2563eb"
-                      strokeDasharray="12 8"
-                      strokeWidth="3"
+                      strokeDasharray="8 7"
+                      strokeWidth="1.25"
                     />
                     {visibleControlHandles.map((handle) => (
                       <g key={handle.key}>
@@ -4926,9 +4955,9 @@ export default function ProjectMarkupCanvas() {
                               x2={handle.x}
                               y2={handle.y}
                               stroke="#2563eb"
-                              strokeWidth="2"
+                              strokeWidth="1"
                               strokeDasharray="6 5"
-                              opacity="0.75"
+                              opacity="0.5"
                             />
                           );
                         })() : null}
@@ -4936,10 +4965,10 @@ export default function ProjectMarkupCanvas() {
                           className="cursor-pointer"
                           cx={handle.x}
                           cy={handle.y}
-                          r={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "14" : handle.kind === "cornerRadius" ? "10" : "11"}
+                          r={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "7" : handle.kind === "cornerRadius" ? "5" : "5.5"}
                           fill={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "#eff6ff" : handle.kind === "cornerRadius" ? "#fef3c7" : "#ffffff"}
                           stroke={handle.kind === "cornerRadius" ? "#d97706" : "#2563eb"}
-                          strokeWidth={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "4" : "3"}
+                          strokeWidth={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "2" : "1.5"}
                           aria-label={["penCurve", "penCubic"].includes(handle.kind) ? "Curve handle. Hold Shift for semicircle curve." : handle.label}
                           onPointerDown={(event) =>
                             tool === "curve" && ["endpoint", "corner"].includes(handle.kind)
@@ -4957,7 +4986,7 @@ export default function ProjectMarkupCanvas() {
                           className="pointer-events-none"
                           cx={handle.x}
                           cy={handle.y}
-                          r="3"
+                          r="1.75"
                           fill={handle.kind === "cornerRadius" ? "#d97706" : "#2563eb"}
                         />
                       </g>
