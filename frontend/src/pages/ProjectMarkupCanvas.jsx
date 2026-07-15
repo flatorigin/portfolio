@@ -615,7 +615,8 @@ function labelBox(text, fontSize = MARKUP_LABEL_FONT_SIZE) {
 }
 
 function formatSegmentLength(pxLength, geometry) {
-  if (!geometry?.scale) return "";
+  if (!Number.isFinite(pxLength) || pxLength <= 0) return "";
+  if (!geometry?.scale) return `${Math.round(pxLength)} px`;
   const units = pxLength / geometry.scale;
   if (!Number.isFinite(units) || units <= 0) return "";
   const rounded = units >= 10 ? Math.round(units * 10) / 10 : Math.round(units * 100) / 100;
@@ -1094,7 +1095,7 @@ function applyHandleDrag(drag, item, point) {
   return item;
 }
 
-function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false } = {}) {
+function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false, liveLength = false } = {}) {
   const style = styleFor(item);
   const stroke = style.strokeColor;
   const baseStrokeWidth = strokeWidthFor(item);
@@ -1277,9 +1278,10 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     const capX = (-dy / length) * 22;
     const capY = (dx / length) * 22;
     const computedLabel = formatSegmentLength(length, roughGeometry);
-    const label = item.type === "measure" && showSegmentLengths && shouldUseComputedMeasureLabel(item.text)
+    const shouldShowLineLength = showSegmentLengths || liveLength;
+    const label = item.type === "measure" && shouldShowLineLength && shouldUseComputedMeasureLabel(item.text)
       ? computedLabel
-      : item.type === "line" && showSegmentLengths
+      : item.type === "line" && shouldShowLineLength
         ? computedLabel || item.text || ""
         : item.text || "measurement";
     const box = labelBox(label, MARKUP_MEASURE_FONT_SIZE);
@@ -1332,7 +1334,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
             />
           </>
         ) : null}
-        {((item.type === "measure") || (item.type === "line" && showSegmentLengths)) && !editing && label ? (
+        {((item.type === "measure" && (liveLength || item.text || showSegmentLengths)) || (item.type === "line" && shouldShowLineLength)) && !editing && label ? (
           <g>
             <rect
               x={midX - box.width / 2}
@@ -4206,24 +4208,6 @@ export default function ProjectMarkupCanvas() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => moveAnnotationLayer(item.id, "up")}
-                          disabled={topLayer || locked}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-35"
-                          aria-label={`Move ${label} up`}
-                        >
-                          <SymbolIcon name="keyboard_arrow_up" className="text-[18px]" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveAnnotationLayer(item.id, "down")}
-                          disabled={bottomLayer || locked}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-35"
-                          aria-label={`Move ${label} down`}
-                        >
-                          <SymbolIcon name="keyboard_arrow_down" className="text-[18px]" />
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => toggleAnnotationLayerVisibility(item.id)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
                           aria-label={`${visible ? "Hide" : "Show"} ${label} layer`}
@@ -5037,6 +5021,7 @@ export default function ProjectMarkupCanvas() {
                   editing: item.id === editingTextId,
                   roughGeometry: activeMeasurementGeometry,
                   showSegmentLengths: showPlanSegmentLengths,
+                  liveLength: !hideTextAndMeasurements && (item.id === draft || item.type === "line" || item.type === "measure"),
                   onPointerDown:
                     tool === "hand"
                       ? undefined
