@@ -863,6 +863,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         requested_unit = request.data.get("unit") or "ft"
         source_width = request.data.get("source_width") or ""
         source_height = request.data.get("source_height") or ""
+        trace_clean_floor_plan = str(request.data.get("overlay_mode") or "").strip() == "trace_clean_floor_plan"
         system_prompt = (
             "You convert homeowner project images or sketch images into simple editable rough-plan JSON for FlatOrigin. "
             "This is not CAD, design, engineering, permitting, or construction documentation. "
@@ -889,6 +890,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
             "Use black strokes, strokeWidth 2, simple labels, and approximate measurements only when readable from the image. "
             "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
         )
+        if trace_clean_floor_plan:
+            user_prompt += (
+                "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
+                "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
+                "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
+                "Prefer pen annotations with multiple points for continuous connected linework and line annotations for straight independent segments. "
+                "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
+                "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
+                "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "
+                "Coordinates should match the supplied image layout closely in the full canvas, preserving the plan proportions and relative positions."
+            )
         model_name = ""
         try:
             result = generate_text_with_image(
@@ -1517,6 +1529,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         requested_unit = request.data.get("unit") or "ft"
         source_width = request.data.get("source_width") or ""
         source_height = request.data.get("source_height") or ""
+        trace_clean_floor_plan = str(request.data.get("overlay_mode") or "").strip() == "trace_clean_floor_plan"
         system_prompt = (
             "You convert homeowner sketch images into simple editable rough-plan JSON for FlatOrigin. "
             "This is not CAD, design, engineering, permitting, or construction documentation. "
@@ -1541,6 +1554,17 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             "Use black strokes, strokeWidth 2, simple labels, and approximate measurements only when readable from the sketch. "
             "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
         )
+        if trace_clean_floor_plan:
+            user_prompt += (
+                "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
+                "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
+                "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
+                "Prefer pen annotations with multiple points for continuous connected linework and line annotations for straight independent segments. "
+                "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
+                "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
+                "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "
+                "Coordinates should match the supplied image layout closely in the full canvas, preserving the plan proportions and relative positions."
+            )
         model_name = ""
         try:
             result = generate_text_with_image(
