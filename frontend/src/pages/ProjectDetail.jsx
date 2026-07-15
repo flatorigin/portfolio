@@ -93,6 +93,17 @@ function normalizeImageExtraData(extraData, sourcePlanById = {}) {
   return markupVersion ? { ...extra, markup_version: markupVersion } : extra;
 }
 
+function mediaBadgeForImage(img) {
+  const extraData = img?.extra_data && typeof img.extra_data === "object" ? img.extra_data : {};
+  if (extraData.is_markup_snapshot) {
+    return { label: "Saved markup", className: "bg-blue-600 text-white" };
+  }
+  if (getMarkupVersion(img)) {
+    return { label: "Active markup", className: "bg-emerald-600 text-white" };
+  }
+  return { label: "Image only", className: "bg-white/90 text-slate-700 ring-1 ring-slate-200" };
+}
+
 function Stars({ value = 0, onChange, disabled = false, titlePrefix = "Rate" }) {
   return (
     <div className="inline-flex items-center gap-0">
@@ -2293,8 +2304,8 @@ export default function ProjectDetail() {
 	                  const mediaType = mediaTypeFor(img);
 	                  const thumbUrl = img.thumbnail || img.url;
 	                  const isProcessing = img.processing_status && img.processing_status !== "ready";
-	                  const markupVersion = getMarkupVersion(img);
 	                  const markupAnnotations = getMarkupAnnotations(img);
+	                  const imageBadge = mediaType === "image" ? mediaBadgeForImage(img) : null;
 
 	                  return (
                     <div
@@ -2337,9 +2348,9 @@ export default function ProjectDetail() {
 	                          {mediaType === "image" && markupAnnotations.length > 0 ? (
 	                            <MarkupPresetOverlay annotations={markupAnnotations} />
 	                          ) : null}
-	                          {markupVersion && mediaType === "image" ? (
-	                            <div className="absolute right-2 top-2 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
-	                              Marked up
+	                          {imageBadge ? (
+	                            <div className={`absolute left-2 top-2 rounded-md px-2 py-1 text-[10px] font-semibold shadow-sm ${imageBadge.className}`}>
+	                              {imageBadge.label}
 	                            </div>
 	                          ) : null}
 	                          {isProcessing ? (

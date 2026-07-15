@@ -13,6 +13,7 @@ const BASE_TOOLS = {
   hand: { key: "hand", label: "Hand", icon: "pan_tool" },
   zoomIn: { key: "zoom_in", label: "Zoom in", icon: "zoom_in" },
   zoomOut: { key: "zoom_out", label: "Zoom out", icon: "zoom_out" },
+  backgroundEraser: { key: "background_eraser", label: "Eraser", icon: "ink_eraser" },
   text: { key: "text", label: "Text", icon: "title" },
   arrow: { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
@@ -53,6 +54,7 @@ const TEXTURE_LIBRARY_STORAGE_KEY = "flatorigin_fill_texture_library";
 
 const DEFAULT_MARKUP_COLOR = "#2563eb";
 const DEFAULT_STROKE_WIDTH = 4;
+const DEFAULT_ERASER_WIDTH = 34;
 const DEFAULT_STROKE_OPACITY = 1;
 const DEFAULT_FILL_OPACITY = 0.18;
 const MARKUP_LABEL_FONT_SIZE = 10;
@@ -182,6 +184,7 @@ function styleFor(item) {
 }
 
 function strokeWidthFor(item) {
+  if (item?.type === "background_eraser") return clamp(Number(item?.strokeWidth) || DEFAULT_ERASER_WIDTH, 8, 96);
   const fallback = item?.type === "measure" ? 5 : DEFAULT_STROKE_WIDTH;
   return clamp(Number(item?.strokeWidth) || fallback, 1, 18);
 }
@@ -248,6 +251,7 @@ function annotationLayerLabel(item, index) {
   if (item.type === "measure") return normalizeMarkupText(item.text) || "Measurement";
   if (item.type === "pen") return item.closed ? "Pen shape" : "Pen path";
   if (item.type === "freehand") return "Pencil drawing";
+  if (item.type === "background_eraser") return "Background eraser";
   if (item.type === "rect") return "Rectangle";
   if (item.type === "circle") return "Circle";
   if (item.type === "arrow") return "Arrow";
@@ -368,7 +372,7 @@ function roughPlanGeometry(roughPlan) {
 }
 
 function annotationBounds(item) {
-  if ((item.type === "freehand" || item.type === "pen") && Array.isArray(item.points) && item.points.length) {
+  if ((item.type === "freehand" || item.type === "pen" || item.type === "background_eraser") && Array.isArray(item.points) && item.points.length) {
     const curvePoints =
       item.type === "pen" && item.curvePoints && typeof item.curvePoints === "object"
         ? Object.values(item.curvePoints).flatMap((point) =>
@@ -1145,6 +1149,35 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     );
   }
 
+  if (item.type === "background_eraser") {
+    const points = Array.isArray(item.points) ? item.points : [];
+    const d = points
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+      .join(" ");
+    return (
+      <g {...common}>
+        <path
+          d={d}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={Math.max(18, strokeWidth + 10)}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pointerEvents="stroke"
+        />
+        <path
+          d={d}
+          fill="none"
+          stroke="#ffffff"
+          strokeOpacity={item.strokeOpacity ?? 1}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    );
+  }
+
   if (item.type === "freehand" || item.type === "pen") {
     const points = Array.isArray(item.points) ? item.points : [];
     const d =
@@ -1863,6 +1896,7 @@ export default function ProjectMarkupCanvas() {
       { key: "view", tools: [BASE_TOOLS.hand] },
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
+      ...(isRoughPlan ? [] : [{ key: "background", tools: [BASE_TOOLS.backgroundEraser] }]),
       { key: "geometry", tools: [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
       ...(isRoughPlan ? [{ key: "symbols", tools: SYMBOL_TOOLS }] : []),
       { key: "delete", tools: [BASE_TOOLS.delete] },
@@ -2777,14 +2811,14 @@ export default function ProjectMarkupCanvas() {
       fillColor: activeFillColor,
       fillMaterial: activeFillMaterial,
       colorLabel: selectedColorMeta.label,
-      strokeWidth: activeStrokeWidth,
-      strokeOpacity: activeStrokeOpacity,
+      strokeWidth: tool === "background_eraser" ? DEFAULT_ERASER_WIDTH : activeStrokeWidth,
+      strokeOpacity: tool === "background_eraser" ? 1 : activeStrokeOpacity,
       fillOpacity: tool === "pen" ? 0 : activeFillOpacity,
       strokeAlign: "center",
       startEndpoint: "none",
       endEndpoint: tool === "arrow" ? "arrow" : "none",
       strokeStyle: "solid",
-      points: tool === "freehand" ? [point] : tool === "pen" ? [point, point] : undefined,
+      points: tool === "freehand" || tool === "background_eraser" ? [point] : tool === "pen" ? [point, point] : undefined,
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
       canvasMode,
@@ -2845,7 +2879,7 @@ export default function ProjectMarkupCanvas() {
       setAnnotations((prev) =>
         prev.map((item) =>
           item.id === draft
-            ? item.type === "freehand"
+            ? item.type === "freehand" || item.type === "background_eraser"
               ? { ...item, points: [...(item.points || []), point], x2: point.x, y2: point.y }
               : { ...item, x2: point.x, y2: point.y }
             : item,
@@ -3408,7 +3442,8 @@ export default function ProjectMarkupCanvas() {
     if (hideTextAndMeasurements && (item.type === "text" || item.type === "measure")) return false;
     return true;
   });
-  const layeredAnnotations = visibleAnnotations;
+  const backgroundEraserAnnotations = visibleAnnotations.filter((item) => item.type === "background_eraser");
+  const layeredAnnotations = visibleAnnotations.filter((item) => item.type !== "background_eraser");
   const annotationLayers = annotations
     .map((item, index) => ({
       item,
@@ -3477,7 +3512,9 @@ export default function ProjectMarkupCanvas() {
     !selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type);
 
   function changeStrokeWidth(nextWidth) {
-    const width = clamp(Number(nextWidth) || DEFAULT_STROKE_WIDTH, 1, 18);
+    const maxWidth = selectedForEditing?.type === "background_eraser" ? 96 : 18;
+    const fallbackWidth = selectedForEditing?.type === "background_eraser" ? DEFAULT_ERASER_WIDTH : DEFAULT_STROKE_WIDTH;
+    const width = clamp(Number(nextWidth) || fallbackWidth, 1, maxWidth);
     setActiveStrokeWidth(width);
     if (selectedForEditing) updateSelected({ strokeWidth: width });
   }
@@ -4159,14 +4196,14 @@ export default function ProjectMarkupCanvas() {
 
                 <label className="block">
                   <span className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
-                    <span>Stroke</span>
+                    <span>{selectedForEditing?.type === "background_eraser" ? "Eraser width" : "Stroke"}</span>
                     <span className="text-slate-700">{currentStrokeWidth}px</span>
                   </span>
                   <div className="grid grid-cols-[1fr_64px] gap-2">
                     <input
                       type="range"
                       min="1"
-                      max="18"
+                      max={selectedForEditing?.type === "background_eraser" ? "96" : "18"}
                       step="1"
                       value={currentStrokeWidth}
                       onChange={(event) => changeStrokeWidth(event.target.value)}
@@ -4176,7 +4213,7 @@ export default function ProjectMarkupCanvas() {
                     <input
                       type="number"
                       min="1"
-                      max="18"
+                      max={selectedForEditing?.type === "background_eraser" ? "96" : "18"}
                       value={currentStrokeWidth}
                       onChange={(event) => changeStrokeWidth(event.target.value)}
                       className="h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
@@ -4888,17 +4925,36 @@ export default function ProjectMarkupCanvas() {
                   </g>
 	              ) : backgroundUrl ? (
 	                <image href={backgroundUrl} x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="xMidYMid meet" />
-	              ) : (
-	                <g>
-	                  <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
+		              ) : (
+		                <g>
+		                  <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
 	                  <text x="600" y="355" textAnchor="middle" fill="#64748b" fontSize="30" fontWeight="700">
 	                    Upload a photo, floor plan, or sketch
 	                  </text>
                   <text x="600" y="395" textAnchor="middle" fill="#94a3b8" fontSize="20">
                     Then draw boxes, arrows, notes, and measurements over it.
 	                  </text>
-	                </g>
-	              )}
+		                </g>
+		              )}
+
+	              {backgroundEraserAnnotations.map((item) =>
+                renderAnnotation(item, {
+                  selected: item.id === selectedForEditing?.id,
+                  editing: item.id === editingTextId,
+                  roughGeometry: activeMeasurementGeometry,
+                  showSegmentLengths: false,
+                  onPointerDown:
+                    tool === "hand"
+                      ? undefined
+                      : item.id === penDraftId
+                        ? undefined
+                        : (event) => startMove(event, item),
+                  onPointerEnter: () => setHoveredAnnotationId(item.id),
+                  onPointerLeave: () => {
+                    if (drag?.id !== item.id) setHoveredAnnotationId((current) => (current === item.id ? "" : current));
+                  },
+                }),
+              )}
 
 	              {layeredAnnotations.map((item) =>
                 renderAnnotation(item, {

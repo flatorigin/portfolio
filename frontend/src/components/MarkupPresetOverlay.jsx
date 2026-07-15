@@ -40,7 +40,11 @@ export function getMarkupAnnotations(item) {
 }
 
 export default function MarkupPresetOverlay({ annotations = [], className = "" }) {
-  const items = Array.isArray(annotations) ? annotations.filter(Boolean) : [];
+  const rawItems = Array.isArray(annotations) ? annotations.filter(Boolean) : [];
+  const items = [
+    ...rawItems.filter((item) => item.type === "background_eraser"),
+    ...rawItems.filter((item) => item.type !== "background_eraser"),
+  ];
   if (!items.length) return null;
 
   return (
@@ -94,7 +98,7 @@ export default function MarkupPresetOverlay({ annotations = [], className = "" }
           );
         }
 
-        if (item.type === "freehand") {
+        if (item.type === "freehand" || item.type === "background_eraser") {
           const d = (Array.isArray(item.points) ? item.points : [])
             .map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"} ${point.x} ${point.y}`)
             .join(" ");
@@ -103,8 +107,8 @@ export default function MarkupPresetOverlay({ annotations = [], className = "" }
               key={key}
               d={d}
               fill="none"
-              stroke={stroke}
-              strokeWidth="8"
+              stroke={item.type === "background_eraser" ? "#ffffff" : stroke}
+              strokeWidth={item.type === "background_eraser" ? Math.max(18, Number(item.strokeWidth || 34)) : 8}
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeDasharray={dash}
