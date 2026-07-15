@@ -55,6 +55,9 @@ const DEFAULT_MARKUP_COLOR = "#2563eb";
 const DEFAULT_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_OPACITY = 1;
 const DEFAULT_FILL_OPACITY = 0.18;
+const MARKUP_LABEL_FONT_SIZE = 12;
+const MARKUP_MEASURE_FONT_SIZE = 12;
+const MARKUP_SEGMENT_FONT_SIZE = 11;
 const CURVE_HANDLE_OFFSET = 34;
 const LINE_ENDPOINT_OPTIONS = [
   { key: "none", label: "None" },
@@ -591,14 +594,14 @@ function wrappedTextLines(text) {
   return lines.length ? lines : ["Note"];
 }
 
-function labelBox(text, fontSize = 18) {
+function labelBox(text, fontSize = MARKUP_LABEL_FONT_SIZE) {
   const lines = wrappedTextLines(text);
   const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
-  const paddingX = 14;
-  const paddingY = 9;
+  const paddingX = Math.max(6, Math.round(fontSize * 0.58));
+  const paddingY = Math.max(4, Math.round(fontSize * 0.38));
   const lineHeight = Math.round(fontSize * 1.28);
   return {
-    width: Math.max(56, longest * fontSize * 0.52 + paddingX * 2),
+    width: Math.max(34, longest * fontSize * 0.52 + paddingX * 2),
     height: lines.length * lineHeight + paddingY * 2,
     paddingX,
     paddingY,
@@ -622,7 +625,7 @@ function shouldUseComputedMeasureLabel(text) {
 
 function SegmentLengthLabel({ x, y, label, stroke }) {
   if (!label) return null;
-  const box = labelBox(label, 14);
+  const box = labelBox(label, MARKUP_SEGMENT_FONT_SIZE);
   const labelX = x - box.width / 2;
   const labelY = y - box.height / 2;
   return (
@@ -632,17 +635,17 @@ function SegmentLengthLabel({ x, y, label, stroke }) {
         y={labelY}
         width={box.width}
         height={box.height}
-        rx="7"
-        fill="rgba(255,255,255,0.9)"
-        stroke={hexToRgba(stroke, 0.42)}
-        strokeWidth="1"
+        rx="4"
+        fill="rgba(255,255,255,0.78)"
+        stroke={hexToRgba(stroke, 0.28)}
+        strokeWidth="0.75"
       />
       <text
         x={labelX + box.paddingX}
-        y={labelY + box.paddingY + 13}
+        y={labelY + box.paddingY + MARKUP_SEGMENT_FONT_SIZE}
         fill="#0f172a"
-        fontSize="14"
-        fontWeight="650"
+        fontSize={MARKUP_SEGMENT_FONT_SIZE}
+        fontWeight="550"
       >
         {box.lines.map((line, index) => (
           <tspan key={`${label}-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>
@@ -657,7 +660,7 @@ function SegmentLengthLabel({ x, y, label, stroke }) {
 function displayBounds(item) {
   if (!item) return { x1: 0, y1: 0, x2: 0, y2: 0 };
   if (item.type === "text") {
-    const box = labelBox(item.text || "Note", 18);
+    const box = labelBox(item.text || "Note", MARKUP_LABEL_FONT_SIZE);
     const labelX = (item.x || 0) - box.paddingX;
     const labelY = (item.y || 0) - box.height + 7;
     return {
@@ -670,7 +673,7 @@ function displayBounds(item) {
   if (item.type === "measure") {
     const base = annotationBounds(item);
     const label = labelPosition(item);
-    const box = labelBox(item.text || "measurement", 18);
+    const box = labelBox(item.text || "measurement", MARKUP_MEASURE_FONT_SIZE);
     return {
       x1: Math.min(base.x1, label.x - box.width / 2),
       y1: Math.min(base.y1, label.y - box.height / 2),
@@ -685,7 +688,7 @@ function labelPosition(item) {
   if (!item) return null;
   if (item.type === "measure") {
     const point = quadraticPoint(item, 0.5);
-    return { x: point.x, y: point.y - 40 };
+    return { x: point.x, y: point.y - 24 };
   }
   if (item.type === "text") {
     return { x: item.x || 0, y: (item.y || 0) - 18 };
@@ -1244,9 +1247,9 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
       : item.type === "line" && showSegmentLengths
         ? computedLabel || item.text || ""
         : item.text || "measurement";
-    const box = labelBox(label, 18);
+    const box = labelBox(label, MARKUP_MEASURE_FONT_SIZE);
     const labelX = midX - box.width / 2;
-    const labelY = midY - box.height - 10;
+    const labelY = midY - box.height - 5;
     return (
       <g {...common}>
         <path
@@ -1293,18 +1296,17 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               y={labelY}
               width={box.width}
               height={box.height}
-              rx="8"
-              fill="rgba(255,255,255,0.88)"
-              stroke={hexToRgba(stroke, 0.52)}
-              strokeWidth="1.5"
-              filter="url(#label-shadow)"
+              rx="5"
+              fill="rgba(255,255,255,0.76)"
+              stroke={hexToRgba(stroke, 0.34)}
+              strokeWidth="0.85"
             />
             <text
               x={labelX + box.paddingX}
-              y={labelY + box.paddingY + 16}
+              y={labelY + box.paddingY + MARKUP_MEASURE_FONT_SIZE}
               fill="#0f172a"
-              fontSize="18"
-              fontWeight="600"
+              fontSize={MARKUP_MEASURE_FONT_SIZE}
+              fontWeight="550"
             >
               {box.lines.map((line, index) => (
                 <tspan key={`${item.id}-line-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>
@@ -1366,7 +1368,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
   }
 
   const label = item.text || "Note";
-  const box = labelBox(label, 18);
+  const box = labelBox(label, MARKUP_LABEL_FONT_SIZE);
   const labelX = (item.x || 0) - box.paddingX;
   const labelY = (item.y || 0) - box.height + 7;
   if (editing) {
@@ -1386,19 +1388,18 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
         y={labelY}
         width={box.width}
         height={box.height}
-        rx="8"
-        fill="rgba(255,255,255,0.88)"
-        stroke={hexToRgba(stroke, 0.52)}
-        strokeWidth="1.5"
+        rx="5"
+        fill="rgba(255,255,255,0.76)"
+        stroke={hexToRgba(stroke, 0.34)}
+        strokeWidth="0.85"
         strokeDasharray={style.strokeDasharray}
-        filter="url(#label-shadow)"
       />
       <text
         x={labelX + box.paddingX}
-        y={labelY + box.paddingY + 16}
+        y={labelY + box.paddingY + MARKUP_LABEL_FONT_SIZE}
         fill="#0f172a"
-        fontSize="18"
-        fontWeight="600"
+        fontSize={MARKUP_LABEL_FONT_SIZE}
+        fontWeight="550"
       >
         {box.lines.map((line, index) => (
           <tspan key={`${item.id}-line-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>
@@ -3422,7 +3423,12 @@ export default function ProjectMarkupCanvas() {
     (selectedForEditing.type === "text" || selectedForEditing.type === "measure");
   const sidebarTextEditorActive =
     !!selectedForEditing && (editingTextId === selectedForEditing.id || focusedSidebarInputId === selectedForEditing.id);
-  const selectedTextBox = selectedForEditing ? labelBox(selectedForEditing.text || (selectedForEditing.type === "measure" ? "measurement" : "Note"), 18) : null;
+  const selectedTextBox = selectedForEditing
+    ? labelBox(
+        selectedForEditing.text || (selectedForEditing.type === "measure" ? "measurement" : "Note"),
+        selectedForEditing.type === "measure" ? MARKUP_MEASURE_FONT_SIZE : MARKUP_LABEL_FONT_SIZE,
+      )
+    : null;
   const selectedStyle = selectedForEditing ? styleFor(selectedForEditing) : null;
   const currentStrokeWidth = selectedForEditing ? strokeWidthFor(selectedForEditing) : activeStrokeWidth;
   const currentStrokeColor = safeHexColor(selectedStyle?.strokeColor || activeColor);
@@ -4984,14 +4990,14 @@ export default function ProjectMarkupCanvas() {
                   value={selected.text || ""}
                   onChange={(event) => updateSelected({ text: event.target.value })}
                   rows={selected.type === "text" ? 3 : 1}
-                  className="absolute z-30 min-h-9 w-48 resize rounded-lg border border-blue-300 bg-white/95 px-3 py-2 text-left text-sm font-semibold leading-snug text-slate-950 shadow-xl outline-none ring-4 ring-blue-500/15 placeholder:text-slate-400"
+                  className="absolute z-30 min-h-8 w-40 resize rounded-lg border border-blue-300 bg-white/95 px-2 py-1.5 text-left text-xs font-semibold leading-snug text-slate-950 shadow-xl outline-none ring-4 ring-blue-500/15 placeholder:text-slate-400"
                   placeholder={selected.type === "measure" ? "12 ft" : "Add note"}
                   style={{
                     left: `${((selectedLabelPosition.x - viewport.x) / viewport.width) * 100}%`,
                     top: `${((selectedLabelPosition.y - viewport.y) / viewport.height) * 100}%`,
                     transform: "translate(-50%, -50%)",
-                    width: selectedTextBox ? `${Math.max(160, selectedTextBox.width + 22)}px` : undefined,
-                    minHeight: selectedTextBox ? `${Math.max(38, selectedTextBox.height + 12)}px` : undefined,
+                    width: selectedTextBox ? `${Math.max(120, selectedTextBox.width + 18)}px` : undefined,
+                    minHeight: selectedTextBox ? `${Math.max(32, selectedTextBox.height + 10)}px` : undefined,
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onPointerMove={(event) => event.stopPropagation()}
