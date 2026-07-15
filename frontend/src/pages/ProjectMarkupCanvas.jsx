@@ -1099,7 +1099,8 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
   const style = styleFor(item);
   const stroke = style.strokeColor;
   const baseStrokeWidth = strokeWidthFor(item);
-  const strokeWidth = showSegmentLengths && ["line", "measure", "pen", "freehand"].includes(item.type)
+  const shouldShowLengths = showSegmentLengths || liveLength;
+  const strokeWidth = shouldShowLengths && ["line", "measure", "pen", "freehand"].includes(item.type)
     ? Math.min(baseStrokeWidth, 2.5)
     : baseStrokeWidth;
   const common = {
@@ -1213,7 +1214,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
           markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
           markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
         />
-        {showSegmentLengths && item.type === "pen"
+        {shouldShowLengths && item.type === "pen"
           ? points.slice(0, -1).map((point, index) => {
               const nextPoint = points[index + 1];
               const length = distanceBetween(point, nextPoint);
@@ -1278,10 +1279,9 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     const capX = (-dy / length) * 22;
     const capY = (dx / length) * 22;
     const computedLabel = formatSegmentLength(length, roughGeometry);
-    const shouldShowLineLength = showSegmentLengths || liveLength;
-    const label = item.type === "measure" && shouldShowLineLength && shouldUseComputedMeasureLabel(item.text)
+    const label = item.type === "measure" && shouldShowLengths && shouldUseComputedMeasureLabel(item.text)
       ? computedLabel
-      : item.type === "line" && shouldShowLineLength
+      : item.type === "line" && shouldShowLengths
         ? computedLabel || item.text || ""
         : item.text || "measurement";
     const box = labelBox(label, MARKUP_MEASURE_FONT_SIZE);
@@ -1334,7 +1334,7 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
             />
           </>
         ) : null}
-        {((item.type === "measure" && (liveLength || item.text || showSegmentLengths)) || (item.type === "line" && shouldShowLineLength)) && !editing && label ? (
+        {((item.type === "measure" && (liveLength || item.text || showSegmentLengths)) || (item.type === "line" && shouldShowLengths)) && !editing && label ? (
           <g>
             <rect
               x={midX - box.width / 2}
@@ -4161,7 +4161,11 @@ export default function ProjectMarkupCanvas() {
                       }}
                       onDragEnd={() => setDraggingLayerId("")}
                       className={`flex min-h-14 items-center gap-2 rounded-xl border px-2 py-2 ${
-                        active ? "border-slate-950 bg-slate-50" : "border-slate-200 bg-white"
+                        locked
+                          ? "border-amber-200 bg-amber-50/70"
+                          : active
+                            ? "border-slate-950 bg-slate-50"
+                            : "border-slate-200 bg-white"
                       }`}
                     >
                       <button
@@ -4185,11 +4189,6 @@ export default function ProjectMarkupCanvas() {
                       {active ? (
                         <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
                           Editing
-                        </span>
-                      ) : null}
-                      {locked ? (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
-                          Locked
                         </span>
                       ) : null}
                       <div className="flex shrink-0 items-center gap-1">
@@ -5021,7 +5020,10 @@ export default function ProjectMarkupCanvas() {
                   editing: item.id === editingTextId,
                   roughGeometry: activeMeasurementGeometry,
                   showSegmentLengths: showPlanSegmentLengths,
-                  liveLength: !hideTextAndMeasurements && (item.id === draft || item.type === "line" || item.type === "measure"),
+                  liveLength:
+                    item.id === draft ||
+                    item.id === penDraftId ||
+                    (!hideTextAndMeasurements && ["line", "measure", "pen"].includes(item.type)),
                   onPointerDown:
                     tool === "hand"
                       ? undefined
