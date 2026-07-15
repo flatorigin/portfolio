@@ -1843,6 +1843,7 @@ export default function ProjectMarkupCanvas() {
   const activeMeasurementGeometry = isRoughPlan ? roughGeometry : hasAiCleanPlanOverlay ? cleanPlanGeometry : null;
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
+  const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
   const viewport = useMemo(() => {
     const zoom = clamp(viewportZoom, 1, 4);
     const width = CANVAS_W / zoom;
@@ -1859,7 +1860,7 @@ export default function ProjectMarkupCanvas() {
   const toolGroups = useMemo(
     () => [
       { key: "select", tools: [BASE_TOOLS.select, BASE_TOOLS.curve] },
-      { key: "view", tools: [BASE_TOOLS.hand, BASE_TOOLS.zoomIn, BASE_TOOLS.zoomOut] },
+      { key: "view", tools: [BASE_TOOLS.hand] },
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
       { key: "geometry", tools: [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
@@ -2374,7 +2375,7 @@ export default function ProjectMarkupCanvas() {
 
   function canvasPointFromEvent(event) {
     const point = pointFromEvent(event, svgRef.current, viewport);
-    return softSnapPoint(point, showRoughGrid && roughPlan.snap, roughGeometry);
+    return softSnapPoint(point, canSnapRoughPlan, roughGeometry);
   }
 
   function zoomViewport(direction) {
@@ -2393,6 +2394,11 @@ export default function ProjectMarkupCanvas() {
       });
       return nextZoom;
     });
+  }
+
+  function resetViewport() {
+    setViewportZoom(1);
+    setViewportOrigin({ x: 0, y: 0 });
   }
 
   function handleToolSelect(toolKey) {
@@ -3429,6 +3435,7 @@ export default function ProjectMarkupCanvas() {
       : selectedControlHandles;
   const showEditingControls =
     !!selectedForEditing &&
+    tool !== "hand" &&
     (selectedId === selectedForEditing.id || hoveredAnnotationId === selectedForEditing.id || drag?.id === selectedForEditing.id);
   const selectedDeletePosition = showEditingControls && selectedDisplayBounds
     ? {
@@ -3981,8 +3988,7 @@ export default function ProjectMarkupCanvas() {
                     <span>Soft snap</span>
                     <input
                       type="checkbox"
-                      checked={showRoughGrid && roughPlan.snap}
-                      disabled={!showRoughGrid}
+                      checked={canSnapRoughPlan}
                       onChange={(event) => setRoughPlan((prev) => ({ ...prev, snap: event.target.checked }))}
                       className="h-4 w-4 align-middle accent-blue-600"
                     />
@@ -4633,8 +4639,9 @@ export default function ProjectMarkupCanvas() {
                 <span className="font-semibold text-slate-800">{roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}</span>
                 <span>Area: {(Number(roughPlan.width) || 0) * (Number(roughPlan.length) || 0)} sq {roughPlan.unit}</span>
                 <span>{showRoughGrid ? `Grid: ${roughGeometry.gridWidthUnits} x ${roughGeometry.gridLengthUnits} ${roughGeometry.unit}` : "Grid: hidden"}</span>
+                <span>{showRoughGrid ? `Interval: 1 ${roughGeometry.unit}` : ""}</span>
                 <span>{showRoughGrid ? `${roughGeometry.marginUnits} ${roughGeometry.unit} margin each side` : ""}</span>
-                <span>Soft snap: {showRoughGrid && roughPlan.snap ? "on" : "off"}</span>
+                <span>Soft snap: {canSnapRoughPlan ? "on" : "off"}</span>
                 <span>Zoom: {Math.round(viewport.zoom * 100)}%</span>
               </div>
             ) : null}
@@ -4693,6 +4700,42 @@ export default function ProjectMarkupCanvas() {
                     </div>
                   );
                 })}
+              </div>
+              <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-xl bg-slate-950/95 p-1 text-white shadow-xl ring-1 ring-white/10">
+                <span className="inline-flex h-9 min-w-9 items-center justify-center gap-1 px-2 text-xs font-semibold" title="Canvas zoom">
+                  <SymbolIcon name="zoom_in" className="text-[19px]" />
+                  {Math.round(viewport.zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => zoomViewport("out")}
+                  disabled={viewport.zoom <= 1}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/85 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                >
+                  <SymbolIcon name="remove" className="text-[20px]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => zoomViewport("in")}
+                  disabled={viewport.zoom >= 4}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/85 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                >
+                  <SymbolIcon name="add" className="text-[20px]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={resetViewport}
+                  disabled={viewport.zoom === 1 && viewport.x === 0 && viewport.y === 0}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Reset zoom"
+                  title="Reset zoom"
+                >
+                  <SymbolIcon name="fit_screen" className="text-[19px]" />
+                </button>
               </div>
               <svg
                 ref={svgRef}
@@ -4789,12 +4832,14 @@ export default function ProjectMarkupCanvas() {
                       y={roughGeometry.y}
                       width={roughGeometry.widthPx}
                       height={roughGeometry.heightPx}
-                      fill="#f8fafc"
+                      fill="#fbfdff"
                       stroke="#94a3b8"
                       strokeWidth="1.25"
+                      strokeOpacity="0.28"
                     />
                     {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.gridWidthUnits) + 1 }).map((_, index) => {
                       const x = roughGeometry.x + index * roughGeometry.scale;
+                      const isMajor = index % 5 === 0;
                       return (
                         <line
                           key={`rough-grid-x-${index}`}
@@ -4802,13 +4847,15 @@ export default function ProjectMarkupCanvas() {
                           y1={roughGeometry.y}
                           x2={x}
                           y2={roughGeometry.y + roughGeometry.heightPx}
-                          stroke={index % 5 === 0 ? "#cbd5e1" : "#e2e8f0"}
-                          strokeWidth={index % 5 === 0 ? "1" : "0.65"}
+                          stroke={isMajor ? "#64748b" : "#94a3b8"}
+                          strokeOpacity={isMajor ? "0.24" : "0.1"}
+                          strokeWidth={isMajor ? "1" : "0.65"}
                         />
                       );
                     }) : null}
                     {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.gridLengthUnits) + 1 }).map((_, index) => {
                       const y = roughGeometry.y + index * roughGeometry.scale;
+                      const isMajor = index % 5 === 0;
                       return (
                         <line
                           key={`rough-grid-y-${index}`}
@@ -4816,8 +4863,9 @@ export default function ProjectMarkupCanvas() {
                           y1={y}
                           x2={roughGeometry.x + roughGeometry.widthPx}
                           y2={y}
-                          stroke={index % 5 === 0 ? "#cbd5e1" : "#e2e8f0"}
-                          strokeWidth={index % 5 === 0 ? "1" : "0.65"}
+                          stroke={isMajor ? "#64748b" : "#94a3b8"}
+                          strokeOpacity={isMajor ? "0.24" : "0.1"}
+                          strokeWidth={isMajor ? "1" : "0.65"}
                         />
                       );
                     }) : null}
@@ -4829,11 +4877,12 @@ export default function ProjectMarkupCanvas() {
                         height={roughGeometry.designHeightPx}
                         fill="none"
                         stroke="#334155"
-                        strokeWidth="1.75"
+                        strokeOpacity="0.46"
+                        strokeWidth="1.5"
                         strokeDasharray="8 6"
                       />
                     ) : null}
-                    <text x="36" y="54" fill="#64748b" fontSize="20" fontWeight="700">
+                    <text x="36" y="54" fill="#64748b" fillOpacity="0.72" fontSize="20" fontWeight="700">
                       Plan: {roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}
                     </text>
                   </g>
@@ -4858,7 +4907,9 @@ export default function ProjectMarkupCanvas() {
                   roughGeometry: activeMeasurementGeometry,
                   showSegmentLengths: showPlanSegmentLengths,
                   onPointerDown:
-                    item.id === penDraftId
+                    tool === "hand"
+                      ? undefined
+                    : item.id === penDraftId
                       ? undefined
                       : tool === "curve"
                         ? (event) => startCurveEdit(event, item)
