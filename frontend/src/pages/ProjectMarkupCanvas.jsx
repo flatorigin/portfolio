@@ -1598,6 +1598,7 @@ export default function ProjectMarkupCanvas() {
   const [roughPlan, setRoughPlan] = useState(ROUGH_PLAN_DEFAULTS);
   const [expanded, setExpanded] = useState(false);
   const [visibleLayers, setVisibleLayers] = useState({});
+  const [lockedLayers, setLockedLayers] = useState({});
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState("");
@@ -1643,6 +1644,7 @@ export default function ProjectMarkupCanvas() {
       if (saved.activeStrokeOpacity != null) setActiveStrokeOpacity(clamp(Number(saved.activeStrokeOpacity), 0, 1));
       if (saved.activeFillOpacity != null) setActiveFillOpacity(clamp(Number(saved.activeFillOpacity), 0, 1));
       if (saved.visibleLayers && typeof saved.visibleLayers === "object") setVisibleLayers(saved.visibleLayers);
+      if (saved.lockedLayers && typeof saved.lockedLayers === "object") setLockedLayers(saved.lockedLayers);
       if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
       // Ignore broken session drafts.
@@ -1652,9 +1654,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -1714,6 +1716,9 @@ export default function ProjectMarkupCanvas() {
           if (selectedImageVersion.visible_layers && typeof selectedImageVersion.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...selectedImageVersion.visible_layers }));
           }
+          if (selectedImageVersion.locked_layers && typeof selectedImageVersion.locked_layers === "object") {
+            setLockedLayers((prev) => ({ ...prev, ...selectedImageVersion.locked_layers }));
+          }
         } else if (selectedImage) {
           setAnnotations([]);
           setBackgroundUrl(selectedImage.image_url || "");
@@ -1727,6 +1732,9 @@ export default function ProjectMarkupCanvas() {
           }
           if (markup.visible_layers && typeof markup.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
+          }
+          if (markup.locked_layers && typeof markup.locked_layers === "object") {
+            setLockedLayers((prev) => ({ ...prev, ...markup.locked_layers }));
           }
         }
       })
@@ -1770,6 +1778,9 @@ export default function ProjectMarkupCanvas() {
           }
           if (markupVersion.visible_layers && typeof markupVersion.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...markupVersion.visible_layers }));
+          }
+          if (markupVersion.locked_layers && typeof markupVersion.locked_layers === "object") {
+            setLockedLayers((prev) => ({ ...prev, ...markupVersion.locked_layers }));
           }
         } else {
           setAnnotations([]);
@@ -1950,6 +1961,7 @@ export default function ProjectMarkupCanvas() {
       annotations: normalizedAnnotations,
       rough_plan: isRoughPlan ? roughPlan : undefined,
       visible_layers: visibleLayers,
+      locked_layers: lockedLayers,
       annotation_count: normalizedAnnotations.length,
     };
 
@@ -1962,6 +1974,7 @@ export default function ProjectMarkupCanvas() {
       background_url: isRoughPlan ? "" : background_url,
       annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
+      locked_layers: lockedLayers,
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
     };
@@ -1978,7 +1991,12 @@ export default function ProjectMarkupCanvas() {
     setVisibleLayers((prev) => ({ ...prev, [annotationId]: prev[annotationId] === false }));
   }
 
+  function toggleAnnotationLayerLock(annotationId) {
+    setLockedLayers((prev) => ({ ...prev, [annotationId]: !prev[annotationId] }));
+  }
+
   function moveAnnotationLayer(annotationId, direction) {
+    if (lockedLayers[annotationId]) return;
     setAnnotations((prev) => {
       const index = prev.findIndex((item) => item.id === annotationId);
       if (index < 0) return prev;
@@ -1992,6 +2010,7 @@ export default function ProjectMarkupCanvas() {
 
   function moveAnnotationLayerTo(annotationId, targetId) {
     if (!annotationId || !targetId || annotationId === targetId) return;
+    if (lockedLayers[annotationId]) return;
     setAnnotations((prev) => {
       const draggedIndex = prev.findIndex((item) => item.id === annotationId);
       const targetIndex = prev.findIndex((item) => item.id === targetId);
@@ -2963,6 +2982,12 @@ export default function ProjectMarkupCanvas() {
   function startMove(event, item) {
     event.stopPropagation();
     if (!svgRef.current) return;
+    if (lockedLayers[item.id]) {
+      setSelectedId(item.id);
+      setEditingTextId("");
+      setMessage("Layer is locked. Unlock it from the layer list or canvas lock button before moving it.");
+      return;
+    }
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     finishPenPath();
@@ -2976,6 +3001,12 @@ export default function ProjectMarkupCanvas() {
   function startCurveEdit(event, item) {
     event.stopPropagation();
     if (!svgRef.current) return;
+    if (lockedLayers[item.id]) {
+      setSelectedId(item.id);
+      setEditingTextId("");
+      setMessage("Layer is locked. Unlock it before editing its shape.");
+      return;
+    }
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     finishPenPath();
@@ -3062,6 +3093,11 @@ export default function ProjectMarkupCanvas() {
   function startHandleMove(event, handle, options = {}) {
     event.stopPropagation();
     if (!svgRef.current || !selected) return;
+    if (lockedLayers[selected.id]) {
+      setSelectedId(selected.id);
+      setMessage("Layer is locked. Unlock it before editing its shape.");
+      return;
+    }
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     finishPenPath();
@@ -3072,6 +3108,10 @@ export default function ProjectMarkupCanvas() {
 
   function deleteSelected() {
     if (!selectedId) return;
+    if (lockedLayers[selectedId]) {
+      setMessage("Layer is locked. Unlock it before deleting.");
+      return;
+    }
     commitAnnotations(annotations.filter((item) => item.id !== selectedId));
     setSelectedId("");
     setEditingTextId("");
@@ -3324,6 +3364,7 @@ export default function ProjectMarkupCanvas() {
           annotations: normalizedAnnotations,
           rough_plan: isRoughPlan ? roughPlan : undefined,
           visible_layers: visibleLayers,
+          locked_layers: lockedLayers,
           annotation_count: normalizedAnnotations.length,
         };
         const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
@@ -3391,6 +3432,9 @@ export default function ProjectMarkupCanvas() {
     if (version.visible_layers && typeof version.visible_layers === "object") {
       setVisibleLayers((prev) => ({ ...prev, ...version.visible_layers }));
     }
+    if (version.locked_layers && typeof version.locked_layers === "object") {
+      setLockedLayers((prev) => ({ ...prev, ...version.locked_layers }));
+    }
     setSelectedId("");
     setEditingTextId("");
     setMessage("Version restored locally. Save editable canvas to keep it as the current version.");
@@ -3453,6 +3497,7 @@ export default function ProjectMarkupCanvas() {
     .reverse();
   const penDraft = penDraftId ? annotations.find((item) => item.id === penDraftId) || null : null;
   const selectedForEditing = selected?.id === penDraftId ? null : selected;
+  const selectedLocked = !!(selectedForEditing && lockedLayers[selectedForEditing.id]);
   const selectedLabelPosition = labelPosition(selectedForEditing);
   const selectedDisplayBounds = selectedForEditing ? displayBounds(selectedForEditing) : null;
   const selectedControlHandles = selectedForEditing ? controlHandlesFor(selectedForEditing, tool) : [];
@@ -3476,6 +3521,12 @@ export default function ProjectMarkupCanvas() {
     ? {
         left: `${((clamp(selectedDisplayBounds.x2 + 18, viewport.x + 18, viewport.x + viewport.width - 18) - viewport.x) / viewport.width) * 100}%`,
         top: `${((clamp(selectedDisplayBounds.y1 - 18, viewport.y + 18, viewport.y + viewport.height - 18) - viewport.y) / viewport.height) * 100}%`,
+      }
+    : null;
+  const selectedLockPosition = showEditingControls && selectedDisplayBounds
+    ? {
+        left: `${((clamp(selectedDisplayBounds.x2 + 18, viewport.x + 18, viewport.x + viewport.width - 18) - viewport.x) / viewport.width) * 100}%`,
+        top: `${((clamp(selectedDisplayBounds.y1 + 20, viewport.y + 18, viewport.y + viewport.height - 18) - viewport.y) / viewport.height) * 100}%`,
       }
     : null;
   const editingSelectedText =
@@ -4080,13 +4131,18 @@ export default function ProjectMarkupCanvas() {
                 {annotationLayers.length ? annotationLayers.map(({ item, index, label }, stackIndex) => {
                   const active = selectedId === item.id;
                   const visible = visibleLayers[item.id] !== false;
+                  const locked = !!lockedLayers[item.id];
                   const topLayer = stackIndex === 0;
                   const bottomLayer = stackIndex === annotationLayers.length - 1;
                   return (
                     <div
                       key={item.id}
-                      draggable
+                      draggable={!locked}
                       onDragStart={(event) => {
+                        if (locked) {
+                          event.preventDefault();
+                          return;
+                        }
                         setDraggingLayerId(item.id);
                         event.dataTransfer.effectAllowed = "move";
                         event.dataTransfer.setData("text/plain", item.id);
@@ -4108,7 +4164,8 @@ export default function ProjectMarkupCanvas() {
                     >
                       <button
                         type="button"
-                        className="inline-flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
+                        disabled={locked}
+                        className="inline-flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35"
                         aria-label={`Drag ${label} layer`}
                       >
                         <SymbolIcon name="drag_indicator" className="text-[18px]" />
@@ -4128,11 +4185,29 @@ export default function ProjectMarkupCanvas() {
                           Editing
                         </span>
                       ) : null}
+                      {locked ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+                          Locked
+                        </span>
+                      ) : null}
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
+                          onClick={() => toggleAnnotationLayerLock(item.id)}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${
+                            locked
+                              ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                              : "text-slate-500 hover:bg-slate-100"
+                          }`}
+                          aria-label={`${locked ? "Unlock" : "Lock"} ${label} layer`}
+                          title={locked ? "Unlock layer" : "Lock layer"}
+                        >
+                          <SymbolIcon name={locked ? "lock" : "lock_open"} className="text-[18px]" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => moveAnnotationLayer(item.id, "up")}
-                          disabled={topLayer}
+                          disabled={topLayer || locked}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-35"
                           aria-label={`Move ${label} up`}
                         >
@@ -4141,7 +4216,7 @@ export default function ProjectMarkupCanvas() {
                         <button
                           type="button"
                           onClick={() => moveAnnotationLayer(item.id, "down")}
-                          disabled={bottomLayer}
+                          disabled={bottomLayer || locked}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-35"
                           aria-label={`Move ${label} down`}
                         >
@@ -5045,7 +5120,7 @@ export default function ProjectMarkupCanvas() {
                       strokeDasharray="8 7"
                       strokeWidth="1.25"
                     />
-                    {visibleControlHandles.map((handle) => (
+                    {selectedLocked ? null : visibleControlHandles.map((handle) => (
                       <g key={handle.key}>
                         {(handle.kind === "curve" && isLineLike(selectedForEditing)) || (["penCurve", "penCubic"].includes(handle.kind) && selectedForEditing?.type === "pen") ? (() => {
                           const penPoints = Array.isArray(selectedForEditing?.points) ? selectedForEditing.points : [];
@@ -5105,10 +5180,11 @@ export default function ProjectMarkupCanvas() {
                 );
               })() : null}
               </svg>
-              {selectedDeletePosition ? (
+              {selectedLockPosition && selectedForEditing ? (
                 <button
                   type="button"
-                  aria-label="Delete selected element"
+                  aria-label={selectedLocked ? "Unlock selected layer" : "Lock selected layer"}
+                  title={selectedLocked ? "Unlock selected layer" : "Lock selected layer"}
                   onPointerDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -5116,9 +5192,34 @@ export default function ProjectMarkupCanvas() {
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    toggleAnnotationLayerLock(selectedForEditing.id);
+                  }}
+                  className={`absolute z-30 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-xl ring-1 ring-white/20 transition ${
+                    selectedLocked
+                      ? "bg-amber-500 text-white hover:bg-amber-600"
+                      : "bg-slate-950/85 text-white hover:bg-slate-800"
+                  }`}
+                  style={selectedLockPosition}
+                >
+                  <SymbolIcon name={selectedLocked ? "lock" : "lock_open"} className="text-[18px]" />
+                </button>
+              ) : null}
+              {selectedDeletePosition ? (
+                <button
+                  type="button"
+                  aria-label="Delete selected element"
+                  disabled={selectedLocked}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (selectedLocked) return;
                     deleteSelected();
                   }}
-                  className="absolute z-30 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/85 text-white shadow-xl ring-1 ring-white/20 transition hover:bg-red-600"
+                  className="absolute z-30 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/85 text-white shadow-xl ring-1 ring-white/20 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-slate-950/85"
                   style={selectedDeletePosition}
                 >
                   <SymbolIcon name="delete" className="text-[18px]" />
