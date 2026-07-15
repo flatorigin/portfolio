@@ -71,6 +71,7 @@ const ROUGH_SOFT_SNAP_DISTANCE = 9;
 const ROUGH_PLAN_GRID_MARGIN_UNITS = 4;
 const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100, showGrid: true, scaleSource: "manual" };
 const ROUGH_PLAN_PADDING = 82;
+const DEFAULT_MEASUREMENT_CALIBRATION = { length: "36", unit: "in", scale: 0 };
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -298,6 +299,17 @@ function softSnapPoint(point, enabled, geometry = null) {
 function distanceBetween(pointA, pointB) {
   if (!pointA || !pointB) return Infinity;
   return Math.hypot((pointA.x || 0) - (pointB.x || 0), (pointA.y || 0) - (pointB.y || 0));
+}
+
+function lineLengthPx(item) {
+  if (!item) return 0;
+  if (isLineLike(item)) {
+    return distanceBetween(
+      { x: item.x || 0, y: item.y || 0 },
+      { x: item.x2 ?? item.x ?? 0, y: item.y2 ?? item.y ?? 0 },
+    );
+  }
+  return 0;
 }
 
 function distanceToSegment(point, start, end) {
@@ -1601,6 +1613,7 @@ export default function ProjectMarkupCanvas() {
   const [expanded, setExpanded] = useState(false);
   const [visibleLayers, setVisibleLayers] = useState({});
   const [lockedLayers, setLockedLayers] = useState({});
+  const [measurementCalibration, setMeasurementCalibration] = useState(DEFAULT_MEASUREMENT_CALIBRATION);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState("");
@@ -1647,6 +1660,9 @@ export default function ProjectMarkupCanvas() {
       if (saved.activeFillOpacity != null) setActiveFillOpacity(clamp(Number(saved.activeFillOpacity), 0, 1));
       if (saved.visibleLayers && typeof saved.visibleLayers === "object") setVisibleLayers(saved.visibleLayers);
       if (saved.lockedLayers && typeof saved.lockedLayers === "object") setLockedLayers(saved.lockedLayers);
+      if (saved.measurementCalibration && typeof saved.measurementCalibration === "object") {
+        setMeasurementCalibration((prev) => ({ ...prev, ...saved.measurementCalibration }));
+      }
       if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
       // Ignore broken session drafts.
@@ -1656,9 +1672,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -1721,6 +1737,9 @@ export default function ProjectMarkupCanvas() {
           if (selectedImageVersion.locked_layers && typeof selectedImageVersion.locked_layers === "object") {
             setLockedLayers((prev) => ({ ...prev, ...selectedImageVersion.locked_layers }));
           }
+          if (selectedImageVersion.measurement_calibration && typeof selectedImageVersion.measurement_calibration === "object") {
+            setMeasurementCalibration((prev) => ({ ...prev, ...selectedImageVersion.measurement_calibration }));
+          }
         } else if (selectedImage) {
           setAnnotations([]);
           setBackgroundUrl(selectedImage.image_url || "");
@@ -1737,6 +1756,9 @@ export default function ProjectMarkupCanvas() {
           }
           if (markup.locked_layers && typeof markup.locked_layers === "object") {
             setLockedLayers((prev) => ({ ...prev, ...markup.locked_layers }));
+          }
+          if (markup.measurement_calibration && typeof markup.measurement_calibration === "object") {
+            setMeasurementCalibration((prev) => ({ ...prev, ...markup.measurement_calibration }));
           }
         }
       })
@@ -1783,6 +1805,9 @@ export default function ProjectMarkupCanvas() {
           }
           if (markupVersion.locked_layers && typeof markupVersion.locked_layers === "object") {
             setLockedLayers((prev) => ({ ...prev, ...markupVersion.locked_layers }));
+          }
+          if (markupVersion.measurement_calibration && typeof markupVersion.measurement_calibration === "object") {
+            setMeasurementCalibration((prev) => ({ ...prev, ...markupVersion.measurement_calibration }));
           }
         } else {
           setAnnotations([]);
@@ -1885,8 +1910,16 @@ export default function ProjectMarkupCanvas() {
     () => cleanPlanMeasurementGeometry(roughPlan, backgroundImageDimensions),
     [backgroundImageDimensions, roughPlan],
   );
+  const calibratedMeasurementGeometry = useMemo(() => {
+    const scale = Number(measurementCalibration?.scale || 0);
+    return scale > 0
+      ? { scale, unit: measurementCalibration.unit || "in" }
+      : null;
+  }, [measurementCalibration?.scale, measurementCalibration?.unit]);
   const showPlanSegmentLengths = !hideTextAndMeasurements && (isRoughPlan || hasAiCleanPlanOverlay);
-  const activeMeasurementGeometry = isRoughPlan ? roughGeometry : hasAiCleanPlanOverlay ? cleanPlanGeometry : null;
+  const activeMeasurementGeometry = isRoughPlan
+    ? roughGeometry
+    : calibratedMeasurementGeometry || (hasAiCleanPlanOverlay ? cleanPlanGeometry : null);
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
@@ -1964,6 +1997,7 @@ export default function ProjectMarkupCanvas() {
       rough_plan: isRoughPlan ? roughPlan : undefined,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
+      measurement_calibration: measurementCalibration,
       annotation_count: normalizedAnnotations.length,
     };
 
@@ -1977,6 +2011,7 @@ export default function ProjectMarkupCanvas() {
       annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
+      measurement_calibration: measurementCalibration,
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
     };
@@ -3367,6 +3402,7 @@ export default function ProjectMarkupCanvas() {
           rough_plan: isRoughPlan ? roughPlan : undefined,
           visible_layers: visibleLayers,
           locked_layers: lockedLayers,
+          measurement_calibration: measurementCalibration,
           annotation_count: normalizedAnnotations.length,
         };
         const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
@@ -3436,6 +3472,9 @@ export default function ProjectMarkupCanvas() {
     }
     if (version.locked_layers && typeof version.locked_layers === "object") {
       setLockedLayers((prev) => ({ ...prev, ...version.locked_layers }));
+    }
+    if (version.measurement_calibration && typeof version.measurement_calibration === "object") {
+      setMeasurementCalibration((prev) => ({ ...prev, ...version.measurement_calibration }));
     }
     setSelectedId("");
     setEditingTextId("");
@@ -3555,6 +3594,10 @@ export default function ProjectMarkupCanvas() {
   const currentStrokeAlign = selectedForEditing?.strokeAlign || "center";
   const currentStartEndpoint = selectedForEditing?.startEndpoint || "none";
   const currentEndEndpoint = selectedForEditing?.endEndpoint || (selectedForEditing?.type === "arrow" ? "arrow" : "none");
+  const selectedCalibrationLineLength = selectedForEditing && isLineLike(selectedForEditing)
+    ? lineLengthPx(selectedForEditing)
+    : 0;
+  const calibrationReady = selectedCalibrationLineLength > 0 && Number(measurementCalibration.length) > 0;
   const fillMaterialLibrary = useMemo(
     () => [...FILL_MATERIALS, ...fillTextureLibrary],
     [fillTextureLibrary],
@@ -3622,6 +3665,29 @@ export default function ProjectMarkupCanvas() {
     const opacity = clamp(Number(nextOpacity), 0, 1);
     setActiveFillOpacity(opacity);
     if (selectedForEditing) updateSelected({ fillOpacity: opacity });
+  }
+
+  function setMeasurementScaleFromSelected() {
+    if (!selectedCalibrationLineLength) {
+      setMessage("Select a line or measurement that matches a known real-world length.");
+      return;
+    }
+    const realLength = Number(measurementCalibration.length);
+    if (!Number.isFinite(realLength) || realLength <= 0) {
+      setMessage("Enter the real length for the selected calibration line.");
+      return;
+    }
+    setMeasurementCalibration((prev) => ({
+      ...prev,
+      length: String(realLength),
+      scale: selectedCalibrationLineLength / realLength,
+    }));
+    setMessage(`Measurement scale set from selected line: ${formatPlanNumber(realLength)} ${measurementCalibration.unit}.`);
+  }
+
+  function clearMeasurementScale() {
+    setMeasurementCalibration((prev) => ({ ...prev, scale: 0 }));
+    setMessage("Measurement calibration cleared. Labels will use pixels until a scale is set.");
   }
 
   function changeStrokeStyle(nextStyle) {
@@ -4581,6 +4647,75 @@ export default function ProjectMarkupCanvas() {
                         className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                       />
                     </label>
+                  ) : null}
+
+                  {isLineLike(selected) ? (
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-700">Measurement calibration</span>
+                        {calibratedMeasurementGeometry ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                            Active
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 grid grid-cols-[1fr_76px] gap-2">
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] text-slate-500">Known length</span>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={measurementCalibration.length}
+                            onChange={(event) =>
+                              setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
+                            }
+                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
+                          <select
+                            value={measurementCalibration.unit}
+                            onChange={(event) =>
+                              setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
+                            }
+                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                          >
+                            <option value="in">in</option>
+                            <option value="ft">ft</option>
+                            <option value="m">m</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                        <button
+                          type="button"
+                          onClick={setMeasurementScaleFromSelected}
+                          disabled={!calibrationReady}
+                          className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                        >
+                          <SymbolIcon name="straighten" className="text-[16px]" />
+                          Set scale from selected line
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearMeasurementScale}
+                          disabled={!calibratedMeasurementGeometry}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                          aria-label="Clear measurement calibration"
+                          title="Clear calibration"
+                        >
+                          <SymbolIcon name="close" className="text-[16px]" />
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                        Selected line: {Math.round(selectedCalibrationLineLength)} px
+                        {calibratedMeasurementGeometry
+                          ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
+                          : ""}
+                      </p>
+                    </div>
                   ) : null}
 
                 </div>
