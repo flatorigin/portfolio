@@ -2698,6 +2698,7 @@ export default function ProjectMarkupCanvas() {
     if (tool === "select") {
       finishPenPath();
       setSelectedId("");
+      setHoveredAnnotationId("");
       setEditingTextId("");
       return;
     }
@@ -2705,6 +2706,7 @@ export default function ProjectMarkupCanvas() {
     if (tool === "curve") {
       finishPenPath();
       setSelectedId("");
+      setHoveredAnnotationId("");
       setEditingTextId("");
       return;
     }
@@ -2712,6 +2714,7 @@ export default function ProjectMarkupCanvas() {
     if (tool === "pen_add" || tool === "pen_remove") {
       finishPenPath();
       setSelectedId("");
+      setHoveredAnnotationId("");
       setEditingTextId("");
       return;
     }
@@ -3426,7 +3429,7 @@ export default function ProjectMarkupCanvas() {
       : selectedControlHandles;
   const showEditingControls =
     !!selectedForEditing &&
-    (hoveredAnnotationId === selectedForEditing.id || drag?.id === selectedForEditing.id);
+    (selectedId === selectedForEditing.id || hoveredAnnotationId === selectedForEditing.id || drag?.id === selectedForEditing.id);
   const selectedDeletePosition = showEditingControls && selectedDisplayBounds
     ? {
         left: `${((clamp(selectedDisplayBounds.x2 + 18, viewport.x + 18, viewport.x + viewport.width - 18) - viewport.x) / viewport.width) * 100}%`,
