@@ -72,13 +72,13 @@ export default function Login() {
           </Button>
         </form>
 
-        {/* Optionally add a second link down here too */}
         <div className="mt-3 text-center text-xs text-slate-500">
+          Don't have an account?{" "}
           <Link
-            to="/forgot-password"
+            to="/register"
             className="text-xs font-medium text-slate-600 hover:text-slate-900"
           >
-            Forgot password?
+            Sign up
           </Link>
         </div>
       </Card>
