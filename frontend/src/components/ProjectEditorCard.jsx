@@ -750,13 +750,14 @@ export default function ProjectEditorCard({
 	                          </div>
 	                        )}
 
-	                        {/* Hover actions overlay */}
-	                        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+	                        {/* Media actions stay visible on touch devices. */}
+	                        <div className="touch-action-overlay absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
 	                          {mediaType === "image" && it.id && (
 	                            <a
 	                              href={`/dashboard/projects/${projectId}/images/${it.id}/markup`}
-	                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+	                              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 sm:h-9 sm:w-9"
 	                              title="Markup image"
+	                              aria-label="Markup image"
 	                            >
 	                              <SymbolIcon name="draw" className="text-[18px]" />
 	                            </a>
@@ -766,8 +767,9 @@ export default function ProjectEditorCard({
 	                              href={markupSnapshotUrl}
 	                              target="_blank"
 	                              rel="noreferrer"
-	                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm transition hover:bg-emerald-50"
+	                              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm transition hover:bg-emerald-50 sm:h-9 sm:w-9"
 	                              title="Open markup preview"
+	                              aria-label="Open markup preview"
 	                            >
 	                              <SymbolIcon name="visibility" className="text-[18px]" />
 	                            </a>
@@ -776,8 +778,9 @@ export default function ProjectEditorCard({
 	                            <button
 	                              type="button"
 	                              onClick={() => handleMakeCover(it)}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+                              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 sm:h-9 sm:w-9"
                               title="Set as cover"
+                              aria-label="Set as cover"
                             >
                               <SymbolIcon name="photo_camera" className="text-[18px]" />
                             </button>
@@ -786,8 +789,9 @@ export default function ProjectEditorCard({
                             type="button"
                             onClick={() => it.id && onDeleteImage?.(it)}
                             disabled={!it.id || busy}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-red-600 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-red-600 shadow-sm transition hover:bg-red-50 disabled:opacity-50 sm:h-9 sm:w-9"
                             title="Delete"
+                            aria-label="Delete media"
                           >
                             <SymbolIcon name="delete" className="text-[18px]" />
                           </button>

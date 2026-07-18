@@ -1585,6 +1585,8 @@ export default function ProjectMarkupCanvas() {
   const sketchFileRef = useRef(null);
   const textureFileRef = useRef(null);
   const sidebarTextRef = useRef(null);
+  const toolPaletteRef = useRef(null);
+  const lastToolPointerTypeRef = useRef("");
   const modeRequestHandledRef = useRef(false);
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
@@ -1636,6 +1638,7 @@ export default function ProjectMarkupCanvas() {
   const [focusedSidebarInputId, setFocusedSidebarInputId] = useState("");
   const [openSidebarSection, setOpenSidebarSection] = useState("mode");
   const [pinnedSidebarSections, setPinnedSidebarSections] = useState(() => new Set());
+  const [openToolGroup, setOpenToolGroup] = useState("");
 
   const isProjectImageMode = Boolean(projectId && imageId);
   const storageKey = `${STORAGE_PREFIX}:${planId ? `plan:${planId}` : isProjectImageMode ? `project:${projectId}:${imageId}` : "standalone"}`;
@@ -1871,6 +1874,21 @@ export default function ProjectMarkupCanvas() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [penDraftId]);
+
+  useEffect(() => {
+    if (!openToolGroup) return undefined;
+    const closeToolGroup = (event) => {
+      if (event.type === "keydown" && event.key !== "Escape") return;
+      if (event.type === "pointerdown" && toolPaletteRef.current?.contains(event.target)) return;
+      setOpenToolGroup("");
+    };
+    window.addEventListener("pointerdown", closeToolGroup);
+    window.addEventListener("keydown", closeToolGroup);
+    return () => {
+      window.removeEventListener("pointerdown", closeToolGroup);
+      window.removeEventListener("keydown", closeToolGroup);
+    };
+  }, [openToolGroup]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -4868,16 +4886,30 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-              <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-row flex-wrap gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl lg:bottom-auto lg:left-3 lg:top-1/2 lg:max-w-none lg:-translate-y-1/2 lg:flex-col">
-                {toolGroups.map((group) => {
+              <div
+                ref={toolPaletteRef}
+                className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-row flex-wrap gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl lg:bottom-auto lg:left-3 lg:top-1/2 lg:max-w-none lg:-translate-y-1/2 lg:flex-col"
+              >
+                {toolGroups.map((group, groupIndex) => {
                   const activeItem = group.tools.find((item) => item.key === tool) || group.tools[0];
                   const groupActive = group.tools.some((item) => item.key === tool);
                   const hasFlyout = group.tools.length > 1;
+                  const flyoutOpen = openToolGroup === group.key;
                   return (
                     <div key={group.key} className="group/tool relative">
                       <button
                         type="button"
-                        onClick={() => {
+                        onPointerDown={(event) => {
+                          lastToolPointerTypeRef.current = event.pointerType;
+                        }}
+                        onClick={(event) => {
+                          const openedByTouch = ["touch", "pen"].includes(lastToolPointerTypeRef.current);
+                          lastToolPointerTypeRef.current = "";
+                          if (hasFlyout && (openedByTouch || event.detail === 0)) {
+                            setOpenToolGroup((current) => current === group.key ? "" : group.key);
+                            return;
+                          }
+                          setOpenToolGroup("");
                           if (activeItem.key === "delete") {
                             deleteSelected();
                             return;
@@ -4886,6 +4918,8 @@ export default function ProjectMarkupCanvas() {
                         }}
                         title={activeItem.label}
                         aria-label={activeItem.label}
+                        aria-expanded={hasFlyout ? flyoutOpen : undefined}
+                        aria-haspopup={hasFlyout ? "menu" : undefined}
                         className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
                           groupActive
                             ? "bg-blue-600 shadow-sm"
@@ -4900,15 +4934,23 @@ export default function ProjectMarkupCanvas() {
                         ) : null}
                       </button>
                       {hasFlyout ? (
-                        <div className="pointer-events-none absolute left-8 top-0 z-30 min-w-max pl-2 opacity-0 transition group-hover/tool:pointer-events-auto group-hover/tool:opacity-100 lg:left-8">
-                          <div className="flex gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl ring-1 ring-white/10">
+                        <div
+                          className={`absolute top-8 z-30 min-w-max pt-2 transition group-hover/tool:pointer-events-auto group-hover/tool:opacity-100 group-focus-within/tool:pointer-events-auto group-focus-within/tool:opacity-100 lg:left-8 lg:right-auto lg:top-0 lg:pl-2 lg:pt-0 ${
+                            groupIndex >= 4 ? "right-0" : "left-0"
+                          } ${flyoutOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+                        >
+                          <div className="flex gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl ring-1 ring-white/10" role="menu" aria-label={`${group.key} tools`}>
                             {group.tools.map((item) => (
                               <button
                                 key={item.key}
                                 type="button"
-                                onClick={() => handleToolSelect(item.key)}
+                                onClick={() => {
+                                  handleToolSelect(item.key);
+                                  setOpenToolGroup("");
+                                }}
                                 title={item.label}
                                 aria-label={item.label}
+                                role="menuitem"
                                 className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
                                   tool === item.key ? "bg-blue-600" : "text-white/80 hover:bg-white/10 hover:text-white"
                                 }`}
