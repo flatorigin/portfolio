@@ -18,7 +18,7 @@ const QuickMessageDrawer = lazy(() => import("../components/QuickMessageDrawer")
 
 function DisabledActionWithTooltip({ label, message }) {
   return (
-    <div className="group relative">
+    <div className="group relative" tabIndex={0}>
       <button
         type="button"
         disabled
@@ -27,7 +27,7 @@ function DisabledActionWithTooltip({ label, message }) {
         {label}
       </button>
 
-      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+      <div className="touch-static-hint pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
         {message}
       </div>
     </div>
@@ -188,6 +188,11 @@ export default function PublicProfile() {
     return (profile?.username || "").toLowerCase() === meUsernameLower;
   }, [profile?.username, meUsernameLower]);
   const disableDirectMessage = !profile?.allow_direct_messages || (authed && isMine);
+  const directMessageDisabledReason = !profile?.allow_direct_messages
+    ? "This user has not opted in to receive direct messages."
+    : authed && isMine
+      ? "You can’t message your own profile."
+      : "";
 
   const memberSince = useMemo(() => {
     return (
@@ -505,7 +510,7 @@ export default function PublicProfile() {
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-3">
-                  <div className="group relative">
+                  <div className="group relative" tabIndex={disableDirectMessage ? 0 : undefined}>
                     <button
                       type="button"
                       onClick={openDirectThread}
@@ -520,13 +525,9 @@ export default function PublicProfile() {
                       {messageBusy ? "Opening..." : "Message"}
                     </button>
 
-                    {!profile.allow_direct_messages ? (
-                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                        This user has not opted in to receive direct messages.
-                      </div>
-                    ) : authed && isMine ? (
-                      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                        You can’t message your own profile.
+                    {directMessageDisabledReason ? (
+                      <div className="touch-static-hint pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                        {directMessageDisabledReason}
                       </div>
                     ) : null}
                   </div>
@@ -951,7 +952,7 @@ export default function PublicProfile() {
               </div>
 
               <div className="mt-4 grid min-w-0 grid-cols-1 gap-2.5">
-                <div className="group relative min-w-0">
+                <div className="group relative min-w-0" tabIndex={disableDirectMessage ? 0 : undefined}>
                   <button
                     type="button"
                     onClick={openDirectThread}
@@ -970,16 +971,11 @@ export default function PublicProfile() {
                     <p className="mt-1 text-xs text-red-600">{messageError}</p>
                   ) : null}
 
-                  {!profile.allow_direct_messages && (
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                      This user has not opted in to receive direct messages.
+                  {directMessageDisabledReason ? (
+                    <div className="touch-static-hint pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                      {directMessageDisabledReason}
                     </div>
-                  )}
-                  {profile.allow_direct_messages && authed && isMine && (
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-xl bg-slate-950 p-3 text-center text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-                      You can&apos;t message your own profile.
-                    </div>
-                  )}
+                  ) : null}
                 </div>
 
                 {publicContactMethods.length ? (

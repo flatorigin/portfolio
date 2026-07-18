@@ -24,6 +24,21 @@ input, textarea, select, button {
   max-width: 100%;
 }
 
+@media (hover: none), (pointer: coarse) {
+  .touch-action-overlay {
+    background-color: rgb(15 23 42 / 0.22);
+    opacity: 1 !important;
+  }
+
+  .touch-static-hint {
+    position: static !important;
+    width: 100% !important;
+    margin-top: 0.5rem !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 .material-symbols-rounded {
   display: inline-block;
   font-family: "Material Symbols Rounded";
