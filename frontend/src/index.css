@@ -24,6 +24,15 @@ input, textarea, select, button {
   max-width: 100%;
 }
 
+.profile-skills-strip {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.profile-skills-strip::-webkit-scrollbar {
+  display: none;
+}
+
 @media (hover: none), (pointer: coarse) {
   .touch-action-overlay {
     background-color: rgb(15 23 42 / 0.22);
