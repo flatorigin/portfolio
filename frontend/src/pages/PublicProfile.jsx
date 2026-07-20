@@ -8,7 +8,7 @@
 // Contact card uses member-since + languages + filtered public contact info
 // =======================================
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import { Card, SymbolIcon } from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
@@ -141,6 +141,10 @@ export default function PublicProfile() {
   const isHomeownerProfile = profile?.profile_type === "homeowner";
   const profileRoleLabel = isHomeownerProfile ? "homeowner" : "contractor";
   const categoryBadges = useMemo(() => normalizeCategoryBadges(profile), [profile]);
+  const skillsStripRef = useRef(null);
+  const [skillsCarouselActive, setSkillsCarouselActive] = useState(false);
+  const [canScrollSkillsLeft, setCanScrollSkillsLeft] = useState(false);
+  const [canScrollSkillsRight, setCanScrollSkillsRight] = useState(false);
 
   const displayName = useMemo(() => {
     return profile?.display_name || profile?.username || "";
@@ -242,6 +246,42 @@ export default function PublicProfile() {
     return methods;
   }, [profile?.contact_email, profile?.contact_phone]);
 
+  function syncSkillsNavigation() {
+    const strip = skillsStripRef.current;
+    if (!strip) return;
+
+    const maxScrollLeft = Math.max(0, strip.scrollWidth - strip.clientWidth);
+    setCanScrollSkillsLeft(strip.scrollLeft > 2);
+    setCanScrollSkillsRight(strip.scrollLeft < maxScrollLeft - 2);
+  }
+
+  function revealMoreSkills() {
+    setSkillsCarouselActive(true);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const strip = skillsStripRef.current;
+        if (!strip) return;
+        const maxScrollLeft = Math.max(0, strip.scrollWidth - strip.clientWidth);
+        const nextPosition = Math.min(
+          maxScrollLeft,
+          Math.max(160, strip.clientWidth * 0.65)
+        );
+        strip.scrollTo({ left: nextPosition, behavior: "smooth" });
+        syncSkillsNavigation();
+      });
+    });
+  }
+
+  function scrollSkills(direction) {
+    const strip = skillsStripRef.current;
+    if (!strip) return;
+    strip.scrollBy({
+      left: direction * Math.max(160, strip.clientWidth * 0.7),
+      behavior: "smooth",
+    });
+  }
+
   // Load profile + projects
   useEffect(() => {
     let alive = true;
@@ -297,6 +337,22 @@ export default function PublicProfile() {
       alive = false;
     };
   }, [username]);
+
+  useEffect(() => {
+    setSkillsCarouselActive(false);
+    setCanScrollSkillsLeft(false);
+    setCanScrollSkillsRight(false);
+    skillsStripRef.current?.scrollTo({ left: 0 });
+  }, [username]);
+
+  useEffect(() => {
+    if (!skillsCarouselActive) return undefined;
+
+    const handleResize = () => syncSkillsNavigation();
+    window.addEventListener("resize", handleResize);
+    handleResize();
+    return () => window.removeEventListener("resize", handleResize);
+  }, [skillsCarouselActive, categoryBadges.length]);
 
   // Fetch "liked by me" state (auth-only endpoint) when authed + not my profile
   useEffect(() => {
@@ -899,21 +955,68 @@ export default function PublicProfile() {
             {!isHomeownerProfile && categoryBadges.length ? (
               <div className="mt-5 border-t border-slate-200 pt-4">
                 <div className="flex items-center gap-2 overflow-hidden">
-                  <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                    {categoryBadges.slice(0, 4).map((category) => (
+                  {skillsCarouselActive ? (
+                    <button
+                      type="button"
+                      onClick={() => scrollSkills(-1)}
+                      disabled={!canScrollSkillsLeft}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-default disabled:opacity-30"
+                      aria-label="Previous skills"
+                      title="Previous skills"
+                    >
+                      <SymbolIcon name="chevron_left" className="text-[20px]" />
+                    </button>
+                  ) : null}
+
+                  <div
+                    ref={skillsStripRef}
+                    role="list"
+                    aria-label="Contractor skills"
+                    onScroll={syncSkillsNavigation}
+                    className={[
+                      "profile-skills-strip flex min-w-0 flex-1 items-center gap-2",
+                      skillsCarouselActive
+                        ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth touch-pan-x"
+                        : "overflow-hidden",
+                    ].join(" ")}
+                  >
+                    {(skillsCarouselActive
+                      ? categoryBadges
+                      : categoryBadges.slice(0, 4)
+                    ).map((category) => (
                       <span
                         key={category}
-                        className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
+                        role="listitem"
+                        className="inline-flex shrink-0 snap-start whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
                       >
                         {category}
                       </span>
                     ))}
                   </div>
-                  {categoryBadges.length > 4 && (
-                    <span className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-500">
+
+                  {!skillsCarouselActive && categoryBadges.length > 4 ? (
+                    <button
+                      type="button"
+                      onClick={revealMoreSkills}
+                      className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                      aria-label={`Show ${categoryBadges.length - 4} more skills`}
+                    >
                       +{categoryBadges.length - 4} more
-                    </span>
-                  )}
+                    </button>
+                  ) : null}
+
+                  {skillsCarouselActive ? (
+                    <button
+                      type="button"
+                      onClick={() => scrollSkills(1)}
+                      disabled={!canScrollSkillsRight}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-default disabled:opacity-30"
+                      aria-label="Next skills"
+                      title="Next skills"
+                    >
+                      <SymbolIcon name="chevron_right" className="text-[20px]" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
