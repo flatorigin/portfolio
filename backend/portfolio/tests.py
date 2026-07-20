@@ -864,6 +864,33 @@ class MessagePrefillTests(APITestCase):
         self.assertTrue(thread.user_is_participant(self.contractor))
         self.assertTrue(thread.user_is_participant(self.homeowner))
 
+    def test_sender_can_delete_message_before_recipient_accepts_thread(self):
+        self.client.force_authenticate(user=self.other_homeowner)
+        start_response = self.client.post(
+            "/api/messages/start/",
+            {"username": self.contractor.username},
+            format="json",
+        )
+
+        self.assertEqual(start_response.status_code, status.HTTP_200_OK)
+        thread = MessageThread.objects.get(id=start_response.data["thread_id"])
+        self.assertTrue(thread.user_has_accepted(self.other_homeowner))
+        self.assertFalse(thread.user_has_accepted(self.contractor))
+
+        message_response = self.client.post(
+            f"/api/messages/threads/{thread.id}/messages/",
+            {"text": "Are you available for this project?"},
+            format="json",
+        )
+
+        self.assertEqual(message_response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(message_response.data["can_delete"])
+
+        delete_response = self.client.delete(
+            f"/api/messages/{message_response.data['id']}/"
+        )
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+
 
 class ProjectPlannerTests(APITestCase):
     def setUp(self):

@@ -21,13 +21,7 @@ import api from "../api";
 import { Card, Button, Badge } from "../ui";
 import MessageComposer from "../components/MessageComposer";
 import ReportContentButton from "../components/ReportContentButton";
-
-function isWithinDeleteWindow(createdAt) {
-  if (!createdAt) return false;
-  const created = new Date(createdAt).getTime();
-  if (!Number.isFinite(created)) return false;
-  return Date.now() - created <= 60 * 1000;
-}
+import { canDeletePersistedMessage } from "../lib/messages";
 
 function toSafeUrl(raw) {
   if (!raw) return "";
@@ -1042,8 +1036,7 @@ export default function MessagesThread() {
                         ? messages.find((x) => x.id === m.parent_message_id)
                         : null);
 
-                    const canDelete =
-                      m.can_delete ?? isWithinDeleteWindow(m.created_at);
+                    const canDelete = canDeletePersistedMessage(m, fromMe);
 
                     return (
                       <div key={m.id} className={`mb-2 flex ${alignClass}`}>
@@ -1133,7 +1126,7 @@ export default function MessagesThread() {
                               </button>
                             ) : null}
 
-                            {fromMe && canDelete && m.id ? (
+                            {canDelete ? (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteMessage(m.id)}
