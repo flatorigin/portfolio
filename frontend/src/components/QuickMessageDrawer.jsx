@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import MessageComposer from "./MessageComposer";
 import { SymbolIcon } from "../ui";
+import { canDeletePersistedMessage } from "../lib/messages";
 
 function toInitial(nameOrUsername) {
   const s = (nameOrUsername || "").trim();
@@ -46,13 +47,6 @@ function markInboxThreadLatestRead(threadId, latestMessageId) {
   localStorage.setItem("inbox_read_map", JSON.stringify(map));
   window.dispatchEvent(new CustomEvent("inbox:read-map-changed"));
   return true;
-}
-
-function isWithinDeleteWindow(createdAt) {
-  if (!createdAt) return false;
-  const created = new Date(createdAt).getTime();
-  if (!Number.isFinite(created)) return false;
-  return Date.now() - created <= 60 * 1000;
 }
 
 function MessageAttachments({
@@ -467,8 +461,7 @@ export default function QuickMessageDrawer({
                       ? messages.find((x) => x.id === m.parent_message_id)
                       : null);
 
-                  const canDelete =
-                    m.can_delete ?? isWithinDeleteWindow(m.created_at);
+                  const canDelete = canDeletePersistedMessage(m, mine);
 
                   return (
                     <div
@@ -531,7 +524,7 @@ export default function QuickMessageDrawer({
                             Reply
                           </button>
 
-                          {mine && canDelete && m.id ? (
+                          {canDelete ? (
                             <button
                               type="button"
                               onClick={() => handleDeleteMessage(m.id)}

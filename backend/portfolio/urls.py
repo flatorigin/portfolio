@@ -65,7 +65,7 @@ urlpatterns = [
         name="unpublish-testimonial",
     ),
 
-    # Project-tied private threads (existing system)
+    # Legacy project-scoped aliases backed by the shared private message system.
     path("projects/<int:pk>/threads/", ProjectThreadCreateView.as_view(), name="project-thread"),
     path(
         "projects/<int:pk>/threads/<int:thread_id>/messages/",
