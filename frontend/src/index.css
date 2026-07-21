@@ -33,6 +33,47 @@ input, textarea, select, button {
   display: none;
 }
 
+.markup-mobile-settings-bar {
+  scrollbar-width: none;
+}
+
+.markup-mobile-settings-bar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .markup-mobile-settings [data-markup-section] {
+    display: none;
+  }
+
+  .markup-mobile-settings[data-mobile-panel="canvas"] [data-markup-section="mode"],
+  .markup-mobile-settings[data-mobile-panel="canvas"] [data-markup-section="background"],
+  .markup-mobile-settings[data-mobile-panel="layers"] [data-markup-section="layers"],
+  .markup-mobile-settings[data-mobile-panel="style"] [data-markup-section="stroke"],
+  .markup-mobile-settings[data-mobile-panel="style"] [data-markup-section="fill"],
+  .markup-mobile-settings[data-mobile-panel="annotations"] [data-markup-section="annotations"],
+  .markup-mobile-settings[data-mobile-panel="files"] [data-markup-section="versions"],
+  .markup-mobile-settings[data-mobile-panel="files"] [data-markup-section="planner-images"],
+  .markup-mobile-settings[data-mobile-panel="files"] [data-markup-section="project-planner"] {
+    display: block;
+  }
+}
+
+@media (max-width: 1023px) and (max-height: 560px) {
+  .markup-editor-header {
+    height: 48px;
+  }
+
+  .markup-mobile-settings-bar {
+    height: 44px;
+  }
+
+  .markup-tool-button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 @media (hover: none), (pointer: coarse) {
   .touch-action-overlay {
     background-color: rgb(15 23 42 / 0.22);

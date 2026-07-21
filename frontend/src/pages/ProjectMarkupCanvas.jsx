@@ -1480,7 +1480,10 @@ function CollapsibleSection({
   children,
 }) {
   return (
-    <section className={`rounded-2xl border bg-white shadow-sm ${danger ? "border-rose-100" : "border-slate-200"}`}>
+    <section
+      data-markup-section={id}
+      className={`rounded-2xl border bg-white shadow-sm ${danger ? "border-rose-100" : "border-slate-200"}`}
+    >
       <div className="flex items-center gap-2 px-4 py-3">
         <button
           type="button"
@@ -1507,7 +1510,7 @@ function CollapsibleSection({
             event.stopPropagation();
             onPin(id);
           }}
-          className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition ${
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition max-lg:hidden ${
             pinned ? "bg-slate-950 text-white" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           }`}
           aria-label={pinned ? `Unpin ${title}` : `Pin ${title}`}
@@ -1586,8 +1589,13 @@ export default function ProjectMarkupCanvas() {
   const textureFileRef = useRef(null);
   const sidebarTextRef = useRef(null);
   const toolPaletteRef = useRef(null);
+  const canvasFrameRef = useRef(null);
   const lastToolPointerTypeRef = useRef("");
   const modeRequestHandledRef = useRef(false);
+  const activeTouchPointersRef = useRef(new Map());
+  const pinchGestureRef = useRef(null);
+  const touchDrawingSnapshotRef = useRef(null);
+  const suppressTouchDrawingRef = useRef(false);
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
   const [projectImages, setProjectImages] = useState([]);
@@ -1624,6 +1632,7 @@ export default function ProjectMarkupCanvas() {
   const [drag, setDrag] = useState(null);
   const [viewportZoom, setViewportZoom] = useState(1);
   const [viewportOrigin, setViewportOrigin] = useState({ x: 0, y: 0 });
+  const [canvasFrameAspect, setCanvasFrameAspect] = useState(CANVAS_W / CANVAS_H);
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
   const [sketchBusy, setSketchBusy] = useState(false);
@@ -1639,12 +1648,76 @@ export default function ProjectMarkupCanvas() {
   const [openSidebarSection, setOpenSidebarSection] = useState("mode");
   const [pinnedSidebarSections, setPinnedSidebarSections] = useState(() => new Set());
   const [openToolGroup, setOpenToolGroup] = useState("");
+  const [mobileSettingsPanel, setMobileSettingsPanel] = useState("");
+  const [compactViewport, setCompactViewport] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 1023px)").matches : false,
+  );
 
   const isProjectImageMode = Boolean(projectId && imageId);
   const storageKey = `${STORAGE_PREFIX}:${planId ? `plan:${planId}` : isProjectImageMode ? `project:${projectId}:${imageId}` : "standalone"}`;
   const selectedImageId = useMemo(() => new URLSearchParams(location.search).get("image") || "", [location.search]);
   const requestedCanvasMode = useMemo(() => new URLSearchParams(location.search).get("mode") || "", [location.search]);
   const sketchUploadRequested = useMemo(() => new URLSearchParams(location.search).get("sketch") === "1", [location.search]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)");
+    const updateViewportMode = () => setCompactViewport(media.matches);
+    updateViewportMode();
+    media.addEventListener?.("change", updateViewportMode);
+    return () => media.removeEventListener?.("change", updateViewportMode);
+  }, []);
+
+  useEffect(() => {
+    if (!compactViewport) return undefined;
+
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    const previousViewportContent = viewportMeta?.getAttribute("content") || "";
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+    const preventGestureZoom = (event) => event.preventDefault();
+
+    viewportMeta?.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
+    );
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    document.documentElement.style.overscrollBehavior = "none";
+    document.addEventListener("gesturestart", preventGestureZoom, { passive: false });
+
+    return () => {
+      if (viewportMeta) viewportMeta.setAttribute("content", previousViewportContent);
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+      document.removeEventListener("gesturestart", preventGestureZoom);
+    };
+  }, [compactViewport]);
+
+  useEffect(() => {
+    if (!compactViewport) {
+      setCanvasFrameAspect(CANVAS_W / CANVAS_H);
+      return undefined;
+    }
+
+    const frame = canvasFrameRef.current;
+    if (!frame || typeof ResizeObserver === "undefined") return undefined;
+
+    const updateAspect = () => {
+      const rect = frame.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const nextAspect = rect.width / rect.height;
+        setCanvasFrameAspect((currentAspect) => (
+          Math.abs(currentAspect - nextAspect) < 0.002 ? currentAspect : nextAspect
+        ));
+      }
+    };
+    const observer = new ResizeObserver(updateAspect);
+    observer.observe(frame);
+    updateAspect();
+    return () => observer.disconnect();
+  }, [compactViewport]);
 
   useEffect(() => {
     try {
@@ -1941,10 +2014,16 @@ export default function ProjectMarkupCanvas() {
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
+  const viewportBase = useMemo(() => {
+    const aspect = clamp(canvasFrameAspect, 0.35, 3);
+    const width = Math.min(CANVAS_W, CANVAS_H * aspect);
+    const height = Math.min(CANVAS_H, CANVAS_W / aspect);
+    return { width, height };
+  }, [canvasFrameAspect]);
   const viewport = useMemo(() => {
     const zoom = clamp(viewportZoom, 1, 4);
-    const width = CANVAS_W / zoom;
-    const height = CANVAS_H / zoom;
+    const width = viewportBase.width / zoom;
+    const height = viewportBase.height / zoom;
     return {
       x: clamp(viewportOrigin.x, 0, Math.max(0, CANVAS_W - width)),
       y: clamp(viewportOrigin.y, 0, Math.max(0, CANVAS_H - height)),
@@ -1952,7 +2031,19 @@ export default function ProjectMarkupCanvas() {
       height,
       zoom,
     };
-  }, [viewportOrigin.x, viewportOrigin.y, viewportZoom]);
+  }, [viewportBase.height, viewportBase.width, viewportOrigin.x, viewportOrigin.y, viewportZoom]);
+
+  useEffect(() => {
+    if (viewportZoom !== 1) return;
+    setViewportOrigin({
+      x: Math.max(0, (CANVAS_W - viewportBase.width) / 2),
+      y: Math.max(0, (CANVAS_H - viewportBase.height) / 2),
+    });
+  }, [viewportBase.height, viewportBase.width, viewportZoom]);
+  const viewportIsDefault =
+    viewport.zoom === 1 &&
+    Math.abs(viewport.x - Math.max(0, (CANVAS_W - viewportBase.width) / 2)) < 1 &&
+    Math.abs(viewport.y - Math.max(0, (CANVAS_H - viewportBase.height) / 2)) < 1;
   const selectedColorMeta = MARKUP_COLORS.find((item) => item.color === activeColor) || MARKUP_COLORS[0];
   const toolGroups = useMemo(
     () => [
@@ -2490,12 +2581,10 @@ export default function ProjectMarkupCanvas() {
     const factor = direction === "in" ? 1.25 : 0.8;
     setViewportZoom((prevZoom) => {
       const nextZoom = clamp(prevZoom * factor, 1, 4);
-      const currentWidth = CANVAS_W / prevZoom;
-      const currentHeight = CANVAS_H / prevZoom;
-      const centerX = viewportOrigin.x + currentWidth / 2;
-      const centerY = viewportOrigin.y + currentHeight / 2;
-      const nextWidth = CANVAS_W / nextZoom;
-      const nextHeight = CANVAS_H / nextZoom;
+      const centerX = viewport.x + viewport.width / 2;
+      const centerY = viewport.y + viewport.height / 2;
+      const nextWidth = viewportBase.width / nextZoom;
+      const nextHeight = viewportBase.height / nextZoom;
       setViewportOrigin({
         x: clamp(centerX - nextWidth / 2, 0, Math.max(0, CANVAS_W - nextWidth)),
         y: clamp(centerY - nextHeight / 2, 0, Math.max(0, CANVAS_H - nextHeight)),
@@ -2506,7 +2595,10 @@ export default function ProjectMarkupCanvas() {
 
   function resetViewport() {
     setViewportZoom(1);
-    setViewportOrigin({ x: 0, y: 0 });
+    setViewportOrigin({
+      x: Math.max(0, (CANVAS_W - viewportBase.width) / 2),
+      y: Math.max(0, (CANVAS_H - viewportBase.height) / 2),
+    });
   }
 
   function handleToolSelect(toolKey) {
@@ -2777,6 +2869,126 @@ export default function ProjectMarkupCanvas() {
         };
       }),
     );
+  }
+
+  function handleCanvasPointerDownCapture(event) {
+    if (event.pointerType !== "touch" || !svgRef.current) return;
+    event.preventDefault();
+    activeTouchPointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    try {
+      svgRef.current.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture may be unavailable during browser gesture negotiation.
+    }
+
+    if (activeTouchPointersRef.current.size === 1) {
+      touchDrawingSnapshotRef.current = {
+        annotations,
+        history,
+        draft,
+        penDraftId,
+        drag,
+        selectedId,
+        editingTextId,
+        tool,
+      };
+      return;
+    }
+
+    event.stopPropagation();
+    suppressTouchDrawingRef.current = true;
+
+    const snapshot = touchDrawingSnapshotRef.current;
+    if (snapshot) {
+      setAnnotations(snapshot.annotations);
+      setHistory(snapshot.history);
+      setDraft(snapshot.draft);
+      setPenDraftId(snapshot.penDraftId);
+      setDrag(snapshot.drag);
+      setSelectedId(snapshot.selectedId);
+      setEditingTextId(snapshot.editingTextId);
+      setTool(snapshot.tool);
+    }
+
+    const points = Array.from(activeTouchPointersRef.current.values()).slice(0, 2);
+    if (points.length < 2) return;
+    const [first, second] = points;
+    const midpoint = {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    };
+    const rect = svgRef.current.getBoundingClientRect();
+    pinchGestureRef.current = {
+      startDistance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+      startZoom: viewport.zoom,
+      anchorX: viewport.x + ((midpoint.x - rect.left) / Math.max(1, rect.width)) * viewport.width,
+      anchorY: viewport.y + ((midpoint.y - rect.top) / Math.max(1, rect.height)) * viewport.height,
+    };
+  }
+
+  function handleCanvasPointerMoveCapture(event) {
+    if (event.pointerType !== "touch" || !activeTouchPointersRef.current.has(event.pointerId)) return;
+    activeTouchPointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+
+    const pinch = pinchGestureRef.current;
+    if (!pinch || activeTouchPointersRef.current.size < 2) {
+      if (suppressTouchDrawingRef.current) event.stopPropagation();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const points = Array.from(activeTouchPointersRef.current.values()).slice(0, 2);
+    const [first, second] = points;
+    const midpoint = {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    };
+    const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+    const nextZoom = clamp(pinch.startZoom * (distance / pinch.startDistance), 1, 4);
+    const nextWidth = viewportBase.width / nextZoom;
+    const nextHeight = viewportBase.height / nextZoom;
+    const rect = svgRef.current.getBoundingClientRect();
+    const relativeX = clamp((midpoint.x - rect.left) / Math.max(1, rect.width), 0, 1);
+    const relativeY = clamp((midpoint.y - rect.top) / Math.max(1, rect.height), 0, 1);
+
+    setViewportZoom(nextZoom);
+    setViewportOrigin({
+      x: clamp(pinch.anchorX - relativeX * nextWidth, 0, Math.max(0, CANVAS_W - nextWidth)),
+      y: clamp(pinch.anchorY - relativeY * nextHeight, 0, Math.max(0, CANVAS_H - nextHeight)),
+    });
+  }
+
+  function handleCanvasPointerEndCapture(event) {
+    if (event.pointerType !== "touch") return;
+    const gestureWasActive = suppressTouchDrawingRef.current;
+    activeTouchPointersRef.current.delete(event.pointerId);
+
+    if (!gestureWasActive) {
+      if (activeTouchPointersRef.current.size === 0) touchDrawingSnapshotRef.current = null;
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (activeTouchPointersRef.current.size < 2) pinchGestureRef.current = null;
+    if (activeTouchPointersRef.current.size === 0) {
+      suppressTouchDrawingRef.current = false;
+      touchDrawingSnapshotRef.current = null;
+      setDrag(null);
+    }
+
+    try {
+      svgRef.current?.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer may already be released by the browser.
+    }
   }
 
   function startDrawing(event) {
@@ -3717,6 +3929,20 @@ export default function ProjectMarkupCanvas() {
     return openSidebarSection === sectionId || pinnedSidebarSections.has(sectionId);
   }
 
+  const mobileSettingsItems = [
+    { key: "canvas", label: "Canvas", icon: "dashboard", section: "mode" },
+    { key: "layers", label: "Layers", icon: "layers", section: "layers", count: annotations.length },
+    { key: "style", label: "Style", icon: "palette", section: "stroke" },
+    { key: "annotations", label: "Details", icon: "edit_note", section: "annotations" },
+    { key: "files", label: "Files", icon: "history", section: savedVersions.length ? "versions" : "planner-images" },
+  ];
+
+  function openMobileSettings(item) {
+    setOpenSidebarSection(item.section);
+    setMobileSettingsPanel(item.key);
+    setOpenToolGroup("");
+  }
+
   function toggleSidebarSection(sectionId) {
     setOpenSidebarSection((prev) => (prev === sectionId && !pinnedSidebarSections.has(sectionId) ? "" : sectionId));
   }
@@ -3766,26 +3992,26 @@ export default function ProjectMarkupCanvas() {
   ];
 
   return (
-    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50">
-      <div className="border-b border-slate-200 bg-white/95">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
-          <div className="flex items-center gap-4">
+    <div data-markup-editor className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50 max-lg:fixed max-lg:inset-0 max-lg:left-0 max-lg:right-0 max-lg:z-[100] max-lg:m-0 max-lg:flex max-lg:h-[100dvh] max-lg:min-h-0 max-lg:w-full max-lg:flex-col max-lg:overflow-hidden">
+      <div className="shrink-0 border-b border-slate-200 bg-white/95">
+        <div className="markup-editor-header mx-auto flex max-w-7xl items-center justify-between gap-2 px-6 py-3 max-lg:h-14 max-lg:px-2 max-lg:py-1.5">
+          <div className="flex min-w-0 items-center gap-4 max-lg:gap-1">
             <Link
               to={isProjectImageMode ? `/projects/${projectId}` : planId ? `/dashboard/planner/${planId}` : "/dashboard"}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               aria-label={isProjectImageMode ? "Back to project" : "Back to planner"}
             >
               <SymbolIcon name="arrow_back" className="text-[22px]" />
             </Link>
-            <div>
-              <h1 className="text-base font-semibold text-slate-950">Markup canvas</h1>
-              <p className="text-xs text-slate-500">
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">Markup canvas</h1>
+              <p className="text-xs text-slate-500 max-lg:hidden">
                 {isProjectImageMode ? "Markup will stay on this project image" : `${modeLabel}: mark the area that needs work`}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-2 max-lg:gap-1">
             <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
               <button
                 type="button"
@@ -3809,7 +4035,7 @@ export default function ProjectMarkupCanvas() {
             <button
               type="button"
               onClick={downloadSvg}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex"
             >
               <SymbolIcon name="download" className="text-[18px]" />
               SVG
@@ -3817,7 +4043,7 @@ export default function ProjectMarkupCanvas() {
             <button
               type="button"
               onClick={downloadPng}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex"
             >
               <SymbolIcon name="image" className="text-[18px]" />
               PNG
@@ -3826,39 +4052,69 @@ export default function ProjectMarkupCanvas() {
               type="button"
               onClick={handleSave}
               disabled={savingEditable || saving}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 max-lg:w-10 max-lg:justify-center max-lg:px-0"
+              aria-label="Save markup"
+              title="Save"
             >
               <SymbolIcon name="save" className="text-[18px]" />
-              {savingEditable || saving ? "Saving..." : "Save"}
+              <span className="max-lg:hidden">{savingEditable || saving ? "Saving..." : "Save"}</span>
             </button>
             <button
               type="button"
               onClick={saveAndBack}
               disabled={saving || savingEditable}
-              className="inline-flex h-9 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60 max-lg:w-10 max-lg:justify-center max-lg:px-0"
+              aria-label="Save and return"
+              title="Save and return"
             >
               <SymbolIcon name="check" className="text-[18px]" />
-              {saving || savingEditable ? "Saving..." : "Save & back"}
+              <span className="max-lg:hidden">{saving || savingEditable ? "Saving..." : "Save & back"}</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div className={`${expanded ? "fixed inset-0 z-50 overflow-auto bg-slate-50 px-4 py-4" : "mx-auto max-w-7xl px-6 py-4"}`}>
+      <div className={`${expanded ? "fixed inset-0 z-50 overflow-auto bg-slate-50 px-4 py-4" : "mx-auto max-w-7xl px-6 py-4"} max-lg:relative max-lg:flex max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:flex-col max-lg:overflow-hidden max-lg:p-0`}>
         {loadingPlan ? (
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm max-lg:absolute max-lg:left-14 max-lg:right-2 max-lg:top-14 max-lg:z-[70] max-lg:mb-0">
             Loading planner...
           </div>
         ) : null}
 
         {message ? (
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm max-lg:absolute max-lg:left-14 max-lg:right-2 max-lg:top-14 max-lg:z-[70] max-lg:mb-0 max-lg:max-h-20 max-lg:overflow-y-auto">
             {message}
           </div>
         ) : null}
 
-        <div className="grid items-start gap-4 lg:grid-cols-[286px_minmax(0,1fr)]">
-          <div className="space-y-4">
+        <div className="grid items-start gap-4 max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col max-lg:gap-0 max-lg:overflow-hidden lg:grid-cols-[286px_minmax(0,1fr)]">
+          {mobileSettingsPanel ? (
+            <button
+              type="button"
+              className="fixed inset-0 z-[78] bg-slate-950/35 lg:hidden"
+              onClick={() => setMobileSettingsPanel("")}
+              aria-label="Close settings"
+            />
+          ) : null}
+          <div
+            data-mobile-panel={mobileSettingsPanel || "closed"}
+            className={`markup-mobile-settings space-y-4 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-[80] max-lg:max-h-[72dvh] max-lg:overflow-y-auto max-lg:rounded-t-2xl max-lg:bg-slate-50 max-lg:p-3 max-lg:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-lg:shadow-2xl max-lg:transition-transform ${
+              mobileSettingsPanel ? "max-lg:translate-y-0" : "max-lg:pointer-events-none max-lg:translate-y-full"
+            }`}
+          >
+            <div className="sticky -top-3 z-10 -mx-3 -mt-3 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
+              <span className="text-sm font-semibold text-slate-900">
+                {mobileSettingsItems.find((item) => item.key === mobileSettingsPanel)?.label || "Settings"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMobileSettingsPanel("")}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+                aria-label="Close settings"
+              >
+                <SymbolIcon name="close" className="text-[22px]" />
+              </button>
+            </div>
             <CollapsibleSection
               id="mode"
               title="Markup mode"
@@ -4858,8 +5114,62 @@ export default function ProjectMarkupCanvas() {
             ) : null}
           </div>
 
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-sm text-slate-500">
+          <div className="markup-mobile-settings-bar flex h-12 w-full shrink-0 items-center gap-1 overflow-x-auto border-b border-slate-200 bg-white px-2 lg:hidden">
+            {mobileSettingsItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => openMobileSettings(item)}
+                className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
+                  mobileSettingsPanel === item.key
+                    ? "bg-slate-950 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <SymbolIcon name={item.icon} className="text-[18px]" />
+                {item.label}
+                {item.count ? (
+                  <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">
+                    {item.count}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+            <div className="mx-1 h-6 w-px shrink-0 bg-slate-200" />
+            <button
+              type="button"
+              onClick={() => zoomViewport("out")}
+              disabled={viewport.zoom <= 1}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+              aria-label="Zoom out"
+            >
+              <SymbolIcon name="remove" className="text-[20px]" />
+            </button>
+            <span className="inline-flex h-10 min-w-12 shrink-0 items-center justify-center text-xs font-semibold text-slate-700">
+              {Math.round(viewport.zoom * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => zoomViewport("in")}
+              disabled={viewport.zoom >= 4}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+              aria-label="Zoom in"
+            >
+              <SymbolIcon name="add" className="text-[20px]" />
+            </button>
+            <button
+              type="button"
+              onClick={resetViewport}
+              disabled={viewportIsDefault}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+              aria-label="Reset canvas zoom"
+            >
+              <SymbolIcon name="fit_screen" className="text-[19px]" />
+            </button>
+          </div>
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm max-lg:flex max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:flex-col max-lg:rounded-none max-lg:border-0 max-lg:p-0 max-lg:shadow-none">
+            <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-sm text-slate-500 max-lg:hidden">
               <span>Planner: <span className="text-slate-700">{plan?.title || "Untitled issue"}</span></span>
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{Math.round(viewport.zoom * 100)}%</span>
@@ -4867,7 +5177,7 @@ export default function ProjectMarkupCanvas() {
                 <button
                   type="button"
                   onClick={() => setExpanded((prev) => !prev)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 max-lg:hidden"
                   aria-label={expanded ? "Exit expanded canvas" : "Expand canvas"}
                 >
                   <SymbolIcon name={expanded ? "close_fullscreen" : "open_in_full"} className="text-[18px]" />
@@ -4875,7 +5185,7 @@ export default function ProjectMarkupCanvas() {
               </div>
             </div>
             {isRoughPlan ? (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 max-lg:hidden">
                 <span className="font-semibold text-slate-800">{roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}</span>
                 <span>Area: {(Number(roughPlan.width) || 0) * (Number(roughPlan.length) || 0)} sq {roughPlan.unit}</span>
                 <span>{showRoughGrid ? `Grid: ${roughGeometry.gridWidthUnits} x ${roughGeometry.gridLengthUnits} ${roughGeometry.unit}` : "Grid: hidden"}</span>
@@ -4885,12 +5195,13 @@ export default function ProjectMarkupCanvas() {
                 <span>Zoom: {Math.round(viewport.zoom * 100)}%</span>
               </div>
             ) : null}
-            <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+            <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
               <div
                 ref={toolPaletteRef}
-                className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-row flex-wrap gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl lg:bottom-auto lg:left-3 lg:top-1/2 lg:max-w-none lg:-translate-y-1/2 lg:flex-col"
+                data-markup-tool-palette
+                className="absolute bottom-auto left-2 top-2 z-20 flex flex-col gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl lg:left-3 lg:top-1/2 lg:-translate-y-1/2"
               >
-                {toolGroups.map((group, groupIndex) => {
+                {toolGroups.map((group) => {
                   const activeItem = group.tools.find((item) => item.key === tool) || group.tools[0];
                   const groupActive = group.tools.some((item) => item.key === tool);
                   const hasFlyout = group.tools.length > 1;
@@ -4920,7 +5231,7 @@ export default function ProjectMarkupCanvas() {
                         aria-label={activeItem.label}
                         aria-expanded={hasFlyout ? flyoutOpen : undefined}
                         aria-haspopup={hasFlyout ? "menu" : undefined}
-                        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
+                        className={`markup-tool-button relative inline-flex h-11 w-11 items-center justify-center rounded-lg text-white transition lg:h-9 lg:w-9 ${
                           groupActive
                             ? "bg-blue-600 shadow-sm"
                             : activeItem.key === "delete"
@@ -4935,9 +5246,9 @@ export default function ProjectMarkupCanvas() {
                       </button>
                       {hasFlyout ? (
                         <div
-                          className={`absolute top-8 z-30 min-w-max pt-2 transition group-hover/tool:pointer-events-auto group-hover/tool:opacity-100 group-focus-within/tool:pointer-events-auto group-focus-within/tool:opacity-100 lg:left-8 lg:right-auto lg:top-0 lg:pl-2 lg:pt-0 ${
-                            groupIndex >= 4 ? "right-0" : "left-0"
-                          } ${flyoutOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+                          className={`absolute left-10 top-0 z-30 min-w-max pl-2 transition group-hover/tool:pointer-events-auto group-hover/tool:opacity-100 group-focus-within/tool:pointer-events-auto group-focus-within/tool:opacity-100 lg:left-8 ${
+                            flyoutOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+                          }`}
                         >
                           <div className="flex gap-1 rounded-xl bg-slate-950/95 p-1 shadow-xl ring-1 ring-white/10" role="menu" aria-label={`${group.key} tools`}>
                             {group.tools.map((item) => (
@@ -4951,7 +5262,7 @@ export default function ProjectMarkupCanvas() {
                                 title={item.label}
                                 aria-label={item.label}
                                 role="menuitem"
-                                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition ${
+                                className={`inline-flex h-11 w-11 items-center justify-center rounded-lg text-white transition lg:h-9 lg:w-9 ${
                                   tool === item.key ? "bg-blue-600" : "text-white/80 hover:bg-white/10 hover:text-white"
                                 }`}
                               >
@@ -4965,7 +5276,7 @@ export default function ProjectMarkupCanvas() {
                   );
                 })}
               </div>
-              <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-xl bg-slate-950/95 p-1 text-white shadow-xl ring-1 ring-white/10">
+              <div className="absolute right-3 top-3 z-20 hidden items-center gap-1 rounded-xl bg-slate-950/95 p-1 text-white shadow-xl ring-1 ring-white/10 lg:flex">
                 <span className="inline-flex h-9 min-w-9 items-center justify-center gap-1 px-2 text-xs font-semibold" title="Canvas zoom">
                   <SymbolIcon name="zoom_in" className="text-[19px]" />
                   {Math.round(viewport.zoom * 100)}%
@@ -4993,7 +5304,7 @@ export default function ProjectMarkupCanvas() {
                 <button
                   type="button"
                   onClick={resetViewport}
-                  disabled={viewport.zoom === 1 && viewport.x === 0 && viewport.y === 0}
+                  disabled={viewportIsDefault}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
                   aria-label="Reset zoom"
                   title="Reset zoom"
@@ -5003,8 +5314,13 @@ export default function ProjectMarkupCanvas() {
               </div>
               <svg
                 ref={svgRef}
+                data-markup-canvas
                 viewBox={`${viewport.x} ${viewport.y} ${viewport.width} ${viewport.height}`}
-                className={`block h-auto w-full touch-none select-none bg-white ${tool === "hand" ? "cursor-grab active:cursor-grabbing" : ""} ${expanded ? "min-h-[calc(100vh-190px)]" : "min-h-[560px]"}`}
+                className={`block h-full min-h-0 w-full touch-none select-none bg-white lg:h-auto ${tool === "hand" ? "cursor-grab active:cursor-grabbing" : ""} ${expanded ? "lg:min-h-[calc(100vh-190px)]" : "lg:min-h-[560px]"}`}
+                onPointerDownCapture={handleCanvasPointerDownCapture}
+                onPointerMoveCapture={handleCanvasPointerMoveCapture}
+                onPointerUpCapture={handleCanvasPointerEndCapture}
+                onPointerCancelCapture={handleCanvasPointerEndCapture}
                 onPointerDown={startDrawing}
                 onPointerMove={moveDrawing}
                 onPointerUp={stopPointer}
