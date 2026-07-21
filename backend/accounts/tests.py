@@ -55,8 +55,13 @@ class RegistrationFlowTests(APITestCase):
         self.assertEqual(user.profile.profile_type, Profile.ProfileType.HOMEOWNER)
 
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("activation", mail.outbox[0].subject.lower())
-        self.assertIn("/activate/", mail.outbox[0].body)
+        activation_email = mail.outbox[0]
+        self.assertIn("confirm", activation_email.subject.lower())
+        self.assertIn("/activate/", activation_email.body)
+        self.assertEqual(len(activation_email.alternatives), 1)
+        html_body = activation_email.alternatives[0][0]
+        self.assertIn("Confirm email address", html_body)
+        self.assertIn("/activate/", html_body)
 
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="test-key")
