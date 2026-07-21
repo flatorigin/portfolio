@@ -72,6 +72,9 @@ const ROUGH_PLAN_GRID_MARGIN_UNITS = 4;
 const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100, showGrid: true, scaleSource: "manual" };
 const ROUGH_PLAN_PADDING = 82;
 const DEFAULT_MEASUREMENT_CALIBRATION = { length: "36", unit: "in", scale: 0 };
+const MARKUP_SELECTION_COLOR = "#2563eb";
+const MARKUP_SELECTION_SOFT_FILL = "#eff6ff";
+const SELECTABLE_NODE_HANDLE_KINDS = new Set(["point", "endpoint", "corner"]);
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -1107,6 +1110,63 @@ function applyHandleDrag(drag, item, point) {
   return item;
 }
 
+function applySelectedNodeDrag(drag, item, point) {
+  const handles = Array.isArray(drag.nodeHandles) ? drag.nodeHandles : [];
+  if (!handles.length) return applyHandleDrag(drag, item, point);
+
+  const original = drag.item;
+  const dx = point.x - drag.startX;
+  const dy = point.y - drag.startY;
+
+  if (isLineLike(original)) {
+    const targets = new Set(handles.map((handle) => handle.target));
+    return {
+      ...item,
+      x: targets.has("start") ? original.x + dx : original.x,
+      y: targets.has("start") ? original.y + dy : original.y,
+      x2: targets.has("end") ? original.x2 + dx : original.x2,
+      y2: targets.has("end") ? original.y2 + dy : original.y2,
+    };
+  }
+
+  if (original.type === "rect" || original.type === "circle") {
+    const bounds = annotationBounds(original);
+    const targets = handles.map((handle) => handle.target || "");
+    return {
+      ...item,
+      x: targets.some((target) => target.includes("w")) ? bounds.x1 + dx : bounds.x1,
+      y: targets.some((target) => target.includes("n")) ? bounds.y1 + dy : bounds.y1,
+      x2: targets.some((target) => target.includes("e")) ? bounds.x2 + dx : bounds.x2,
+      y2: targets.some((target) => target.includes("s")) ? bounds.y2 + dy : bounds.y2,
+    };
+  }
+
+  if (Array.isArray(original.points)) {
+    const selectedIndices = new Set(
+      handles
+        .map((handle) => handle.index)
+        .filter((index) => Number.isInteger(index)),
+    );
+    const points = original.points.map((pointItem, index) =>
+      selectedIndices.has(index)
+        ? { x: pointItem.x + dx, y: pointItem.y + dy }
+        : pointItem,
+    );
+    const first = points[0] || original;
+    const last = original.closed ? first : points[points.length - 1] || original;
+    return {
+      ...item,
+      points,
+      x: first.x ?? item.x,
+      y: first.y ?? item.y,
+      x2: last.x ?? item.x2,
+      y2: last.y ?? item.y2,
+    };
+  }
+
+  return applyHandleDrag(drag, item, point);
+}
+
 function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false, liveLength = false } = {}) {
   const style = styleFor(item);
   const stroke = style.strokeColor;
@@ -1626,6 +1686,7 @@ export default function ProjectMarkupCanvas() {
   const [measurementCalibration, setMeasurementCalibration] = useState(DEFAULT_MEASUREMENT_CALIBRATION);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [selectedNodes, setSelectedNodes] = useState({ annotationId: "", handleKeys: [] });
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState("");
   const [draft, setDraft] = useState(null);
   const [penDraftId, setPenDraftId] = useState("");
@@ -1920,6 +1981,12 @@ export default function ProjectMarkupCanvas() {
     () => annotations.find((item) => item.id === selectedId) || null,
     [annotations, selectedId],
   );
+
+  useEffect(() => {
+    if (selectedNodes.annotationId && selectedNodes.annotationId !== selectedId) {
+      setSelectedNodes({ annotationId: "", handleKeys: [] });
+    }
+  }, [selectedId, selectedNodes.annotationId]);
 
   useEffect(() => {
     if (selected?.type === "text") {
@@ -2892,6 +2959,7 @@ export default function ProjectMarkupCanvas() {
         penDraftId,
         drag,
         selectedId,
+        selectedNodes,
         editingTextId,
         tool,
       };
@@ -2909,6 +2977,7 @@ export default function ProjectMarkupCanvas() {
       setPenDraftId(snapshot.penDraftId);
       setDrag(snapshot.drag);
       setSelectedId(snapshot.selectedId);
+      setSelectedNodes(snapshot.selectedNodes || { annotationId: "", handleKeys: [] });
       setEditingTextId(snapshot.editingTextId);
       setTool(snapshot.tool);
     }
@@ -2996,6 +3065,7 @@ export default function ProjectMarkupCanvas() {
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     setMessage("");
+    setSelectedNodes({ annotationId: "", handleKeys: [] });
 
     if (tool === "hand") {
       finishPenPath();
@@ -3170,7 +3240,7 @@ export default function ProjectMarkupCanvas() {
       setAnnotations((prev) =>
         prev.map((item) =>
           item.id === drag.id
-            ? applyHandleDrag(
+            ? applySelectedNodeDrag(
                 {
                   ...drag,
                   deepCurve: ["penCurve", "penCubic"].includes(drag.handle?.kind) && event.shiftKey,
@@ -3241,6 +3311,9 @@ export default function ProjectMarkupCanvas() {
   function startMove(event, item) {
     event.stopPropagation();
     if (!svgRef.current) return;
+    if (selectedNodes.annotationId && selectedNodes.annotationId !== item.id) {
+      setSelectedNodes({ annotationId: "", handleKeys: [] });
+    }
     if (lockedLayers[item.id]) {
       setSelectedId(item.id);
       setEditingTextId("");
@@ -3362,7 +3435,48 @@ export default function ProjectMarkupCanvas() {
     finishPenPath();
     if (!options.preserveTool) setTool("select");
     setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
-    setDrag({ id: selected.id, startX: point.x, startY: point.y, item: selected, handle });
+    let nodeHandles = [];
+    if (!options.preserveTool && SELECTABLE_NODE_HANDLE_KINDS.has(handle.kind)) {
+      const existingKeys = selectedNodes.annotationId === selected.id
+        ? selectedNodes.handleKeys
+        : [];
+      const nextKeys = existingKeys.includes(handle.key)
+        ? existingKeys
+        : [...existingKeys, handle.key];
+      setSelectedNodes({ annotationId: selected.id, handleKeys: nextKeys });
+      const nextKeySet = new Set(nextKeys);
+      nodeHandles = selectedControlHandles.filter(
+        (controlHandle) =>
+          SELECTABLE_NODE_HANDLE_KINDS.has(controlHandle.kind)
+          && nextKeySet.has(controlHandle.key),
+      );
+    } else {
+      setSelectedNodes({ annotationId: "", handleKeys: [] });
+    }
+    setDrag({
+      id: selected.id,
+      startX: point.x,
+      startY: point.y,
+      item: selected,
+      handle,
+      nodeHandles,
+    });
+  }
+
+  function startControlHandleInteraction(event, handle) {
+    if (tool === "curve" && ["endpoint", "corner"].includes(handle.kind)) {
+      startCurveHandleActivation(event, handle);
+      return;
+    }
+    if (tool === "pen_remove" && selectedForEditing?.type === "pen" && handle.kind === "point") {
+      removePenNode(event, selectedForEditing, handle.index);
+      return;
+    }
+    if (tool === "pen" && selectedForEditing?.type === "pen" && handle.kind === "point") {
+      continuePenFromNode(event, selectedForEditing, handle.index);
+      return;
+    }
+    startHandleMove(event, handle, { preserveTool: tool === "curve" });
   }
 
   function deleteSelected() {
@@ -3764,6 +3878,9 @@ export default function ProjectMarkupCanvas() {
   const selectedLabelPosition = labelPosition(selectedForEditing);
   const selectedDisplayBounds = selectedForEditing ? displayBounds(selectedForEditing) : null;
   const selectedControlHandles = selectedForEditing ? controlHandlesFor(selectedForEditing, tool) : [];
+  const selectedNodeKeySet = new Set(
+    selectedNodes.annotationId === selectedForEditing?.id ? selectedNodes.handleKeys : [],
+  );
   const visibleControlHandles =
     tool === "curve"
       ? selectedControlHandles.filter((handle) =>
@@ -5324,7 +5441,7 @@ export default function ProjectMarkupCanvas() {
                 onPointerDown={startDrawing}
                 onPointerMove={moveDrawing}
                 onPointerUp={stopPointer}
-                onPointerLeave={stopPointer}
+                onPointerCancel={stopPointer}
                 onDoubleClick={finishPenPathFromDoubleClick}
               >
               <defs>
@@ -5588,7 +5705,7 @@ export default function ProjectMarkupCanvas() {
                       width={Math.max(8, x2 - x1 + 8)}
                       height={Math.max(8, y2 - y1 + 8)}
                       fill="rgba(37,99,235,0.025)"
-                      stroke="#2563eb"
+                      stroke={MARKUP_SELECTION_COLOR}
                       strokeDasharray="8 7"
                       strokeWidth="1.25"
                     />
@@ -5611,7 +5728,7 @@ export default function ProjectMarkupCanvas() {
                               y1={anchor.y}
                               x2={handle.x}
                               y2={handle.y}
-                              stroke="#2563eb"
+                              stroke={MARKUP_SELECTION_COLOR}
                               strokeWidth="1"
                               strokeDasharray="6 5"
                               opacity="0.5"
@@ -5622,29 +5739,36 @@ export default function ProjectMarkupCanvas() {
                           className="cursor-pointer"
                           cx={handle.x}
                           cy={handle.y}
-                          r={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "7" : handle.kind === "cornerRadius" ? "5" : "5.5"}
-                          fill={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "#eff6ff" : handle.kind === "cornerRadius" ? "#fef3c7" : "#ffffff"}
-                          stroke={handle.kind === "cornerRadius" ? "#d97706" : "#2563eb"}
-                          strokeWidth={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "2" : "1.5"}
+                          r={compactViewport ? "18" : "11"}
+                          fill="transparent"
+                          stroke="transparent"
                           aria-label={["penCurve", "penCubic"].includes(handle.kind) ? "Curve handle. Hold Shift for semicircle curve." : handle.label}
-                          onPointerDown={(event) =>
-                            tool === "curve" && ["endpoint", "corner"].includes(handle.kind)
-                              ? startCurveHandleActivation(event, handle)
-                              : tool === "pen_remove" && selectedForEditing?.type === "pen" && handle.kind === "point"
-                              ? removePenNode(event, selectedForEditing, handle.index)
-                              : tool === "pen" && selectedForEditing?.type === "pen" && handle.kind === "point"
-                              ? continuePenFromNode(event, selectedForEditing, handle.index)
-                              : startHandleMove(event, handle, {
-                                  preserveTool: tool === "curve",
-                                })
+                          data-selected-node={selectedNodeKeySet.has(handle.key) ? "true" : undefined}
+                          onPointerDown={(event) => startControlHandleInteraction(event, handle)}
+                        />
+                        <circle
+                          className="pointer-events-none"
+                          cx={handle.x}
+                          cy={handle.y}
+                          r={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "7" : handle.kind === "cornerRadius" ? "5" : "5.5"}
+                          fill={
+                            selectedNodeKeySet.has(handle.key)
+                              ? MARKUP_SELECTION_COLOR
+                              : handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic"
+                                ? MARKUP_SELECTION_SOFT_FILL
+                                : handle.kind === "cornerRadius"
+                                  ? "#fef3c7"
+                                  : "#ffffff"
                           }
+                          stroke={handle.kind === "cornerRadius" ? "#d97706" : MARKUP_SELECTION_COLOR}
+                          strokeWidth={handle.kind === "curve" || handle.kind === "penCurve" || handle.kind === "penCubic" ? "2" : "1.5"}
                         />
                         <circle
                           className="pointer-events-none"
                           cx={handle.x}
                           cy={handle.y}
                           r="1.75"
-                          fill={handle.kind === "cornerRadius" ? "#d97706" : "#2563eb"}
+                          fill={selectedNodeKeySet.has(handle.key) ? "#ffffff" : handle.kind === "cornerRadius" ? "#d97706" : MARKUP_SELECTION_COLOR}
                         />
                       </g>
                     ))}
