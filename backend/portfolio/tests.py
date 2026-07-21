@@ -682,6 +682,73 @@ class PrivateProjectAccessTests(APITestCase):
         self.assertIn("compliance_confirmed", response.data)
 
 
+class MessagingPrivacyTests(APITestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pw123456")
+        self.bob = User.objects.create_user(username="bob", password="pw123456")
+        self.carol = User.objects.create_user(username="carol", password="pw123456")
+
+        set_profile_type(self.alice, Profile.ProfileType.HOMEOWNER)
+        set_profile_type(self.bob, Profile.ProfileType.CONTRACTOR)
+        set_profile_type(self.carol, Profile.ProfileType.CONTRACTOR)
+
+        self.alice_bob_thread, _ = MessageThread.get_or_create_dm(
+            self.alice,
+            self.bob,
+            initiated_by=self.alice,
+        )
+        self.bob_carol_thread, _ = MessageThread.get_or_create_dm(
+            self.bob,
+            self.carol,
+            initiated_by=self.bob,
+        )
+        self.valid_message = PrivateMessage.objects.create(
+            thread=self.alice_bob_thread,
+            sender=self.bob,
+            text="Message for Alice",
+        )
+        PrivateMessage.objects.create(
+            thread=self.bob_carol_thread,
+            sender=self.carol,
+            text="Message for Bob only",
+        )
+
+        # Simulate malformed legacy data that predates participant validation.
+        self.invalid_message = PrivateMessage.objects.create(
+            thread=self.alice_bob_thread,
+            sender=self.carol,
+            text="Not part of this conversation",
+        )
+
+    def test_inbox_only_returns_threads_for_current_user(self):
+        self.client.force_authenticate(user=self.alice)
+
+        response = self.client.get("/api/inbox/threads/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row["id"] for row in response.data], [self.alice_bob_thread.id])
+        self.assertEqual(response.data[0]["latest_message"]["id"], self.valid_message.id)
+
+    def test_thread_messages_only_include_the_two_participants(self):
+        self.client.force_authenticate(user=self.alice)
+
+        response = self.client.get(
+            f"/api/messages/threads/{self.alice_bob_thread.id}/messages/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([message["id"] for message in response.data], [self.valid_message.id])
+
+    def test_non_participant_cannot_open_thread(self):
+        self.client.force_authenticate(user=self.carol)
+
+        response = self.client.get(
+            f"/api/messages/threads/{self.alice_bob_thread.id}/messages/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class MessagePrefillTests(APITestCase):
     def setUp(self):
         self.homeowner = User.objects.create_user(username="homeowner", password="pw123456")

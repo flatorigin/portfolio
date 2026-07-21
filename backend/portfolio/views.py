@@ -2351,7 +2351,15 @@ class InboxThreadListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        latest_messages = PrivateMessage.objects.filter(thread=OuterRef("pk")).order_by("-created_at")
+        latest_messages = (
+            PrivateMessage.objects
+            .filter(thread=OuterRef("pk"))
+            .filter(
+                Q(sender_id=OuterRef("owner_id"))
+                | Q(sender_id=OuterRef("client_id"))
+            )
+            .order_by("-created_at")
+        )
         return (
             MessageThread.objects
             .filter(Q(owner=user) | Q(client=user))
@@ -2437,7 +2445,10 @@ class ThreadMessagesView(generics.ListCreateAPIView):
         thread = self.get_thread()
         return (
             PrivateMessage.objects
-            .filter(thread=thread)
+            .filter(
+                thread=thread,
+                sender_id__in=(thread.owner_id, thread.client_id),
+            )
             .select_related("sender", "parent_message", "context_project")
             .prefetch_related("attachments")
         )
@@ -2561,7 +2572,10 @@ class MessageDetailView(APIView):
             id=message_id,
         )
 
-        if msg.sender_id != request.user.id:
+        if (
+            not msg.thread.user_is_participant(request.user)
+            or msg.sender_id != request.user.id
+        ):
             return Response(
                 {"detail": "You can only delete your own messages."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -2591,8 +2605,12 @@ class MessageAttachmentDeleteView(APIView):
         )
 
         msg = attachment.message
+        thread = msg.thread
 
-        if msg.sender_id != request.user.id:
+        if (
+            not thread.user_is_participant(request.user)
+            or msg.sender_id != request.user.id
+        ):
             return Response(
                 {"detail": "You can only delete your own attachments."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -2604,7 +2622,6 @@ class MessageAttachmentDeleteView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        thread = msg.thread
         attachment.delete()
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
