@@ -300,6 +300,8 @@ export default function MessagesThread() {
   const { threadId: threadIdParam } = useParams();
   const navigate = useNavigate();
   const isMountedRef = useRef(false);
+  const activeThreadIdRef = useRef(null);
+  const messageFetchSequenceRef = useRef(0);
 
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
@@ -507,30 +509,56 @@ export default function MessagesThread() {
     };
   }, [fetchThreads]);
 
+  useEffect(() => {
+    activeThreadIdRef.current = activeThread?.id || null;
+    messageFetchSequenceRef.current += 1;
+    setMessages([]);
+    setReplyTo(null);
+    setLoadingMessages(false);
+  }, [activeThread?.id]);
+
   const fetchMessages = useCallback(
     async ({ silent = false } = {}) => {
-      if (!activeThread?.id) {
+      const requestedThreadId = activeThread?.id;
+      if (!requestedThreadId) {
         if (isMountedRef.current) setMessages([]);
         return;
       }
 
+      const requestSequence = ++messageFetchSequenceRef.current;
       if (!silent) setLoadingMessages(true);
 
       try {
         const { data } = await api.get(
-          `/messages/threads/${activeThread.id}/messages/`
+          `/messages/threads/${requestedThreadId}/messages/`
         );
-        const arr = Array.isArray(data) ? data : [];
-        if (!isMountedRef.current) return;
+        const arr = (Array.isArray(data) ? data : []).filter(
+          (message) => String(message?.thread) === String(requestedThreadId)
+        );
+        if (
+          !isMountedRef.current
+          || requestSequence !== messageFetchSequenceRef.current
+          || String(activeThreadIdRef.current) !== String(requestedThreadId)
+        ) return;
         setMessages(arr);
       } catch (err) {
         console.error(
           "[MessagesThread] failed to load messages",
           err?.response || err
         );
-        if (!silent && isMountedRef.current) setMessages([]);
+        if (
+          !silent
+          && isMountedRef.current
+          && requestSequence === messageFetchSequenceRef.current
+          && String(activeThreadIdRef.current) === String(requestedThreadId)
+        ) setMessages([]);
       } finally {
-        if (!silent && isMountedRef.current) setLoadingMessages(false);
+        if (
+          !silent
+          && isMountedRef.current
+          && requestSequence === messageFetchSequenceRef.current
+          && String(activeThreadIdRef.current) === String(requestedThreadId)
+        ) setLoadingMessages(false);
       }
     },
     [activeThread?.id]
