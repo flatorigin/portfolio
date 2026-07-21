@@ -191,18 +191,54 @@ export default function Register() {
             </div>
 
             {registeredEmail ? (
-              <div className="space-y-5 px-6 py-6 sm:px-8">
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-900">
-                  We sent a confirmation link to <span className="font-semibold">{registeredEmail}</span>. Open that email and confirm your account before logging in.
+              <div className="px-6 py-7 sm:px-8 sm:py-8">
+                <div className="flex items-start gap-4 border-b border-slate-200 pb-6">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                    <SymbolIcon name="mark_email_unread" className="text-[25px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-blue-700">
+                      Account created
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold text-slate-950">Check your email</h2>
+                    <p className="mt-2 break-words text-sm leading-6 text-slate-600">
+                      We sent a confirmation link to <span className="font-semibold text-slate-900">{registeredEmail}</span>.
+                    </p>
+                  </div>
                 </div>
-                <p className="text-sm leading-6 text-slate-600">
-                  After confirmation, you can log in and finish your public profile or start a job post.
+
+                <div className="mt-6 border-l-4 border-blue-600 bg-blue-50 px-4 py-4">
+                  <p className="text-sm font-semibold text-blue-950">Confirm before signing in</p>
+                  <p className="mt-1 text-sm leading-6 text-blue-900">
+                    Open the email and select <span className="font-semibold">Confirm email address</span>. Your account cannot be used until this step is complete.
+                  </p>
+                </div>
+
+                <ol className="mt-6 space-y-3">
+                  {[
+                    "Open the confirmation email from FlatOrigin.",
+                    "Select the confirmation button in the email.",
+                    "Return here and sign in to your account.",
+                  ].map((step, index) => (
+                    <li key={step} className="flex items-start gap-3 text-sm leading-6 text-slate-600">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+                        {index + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                <p className="mt-6 text-sm leading-6 text-slate-500">
+                  The email may take a minute to arrive. Check your spam or promotions folder if you do not see it.
                 </p>
+
                 <Link
                   to="/login"
-                  className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
                 >
-                  Go to login
+                  I confirmed my email - sign in
+                  <SymbolIcon name="arrow_forward" className="text-[18px]" />
                 </Link>
               </div>
             ) : (
@@ -306,6 +342,16 @@ export default function Register() {
                       {error}
                     </div>
                   ) : null}
+
+                  <div className="flex gap-3 border-l-4 border-blue-500 bg-blue-50 px-4 py-3 text-blue-950">
+                    <SymbolIcon name="outgoing_mail" className="mt-0.5 shrink-0 text-[21px] text-blue-700" />
+                    <div>
+                      <p className="text-sm font-semibold">Email confirmation required</p>
+                      <p className="mt-0.5 text-xs leading-5 text-blue-900">
+                        After creating your account, check your email and confirm your address before signing in.
+                      </p>
+                    </div>
+                  </div>
 
                   <Button type="submit" className="h-11 w-full rounded-xl bg-slate-900 text-sm font-medium hover:bg-slate-800">
                     {loading ? "Creating..." : "Create account"}
