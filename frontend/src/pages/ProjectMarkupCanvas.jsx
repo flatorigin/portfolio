@@ -1661,6 +1661,7 @@ export default function ProjectMarkupCanvas() {
   const nodeMultiSelectReadyRef = useRef(false);
   const activeNodeSelectionRef = useRef(null);
   const measurementCalibrationPromptShownRef = useRef(false);
+  const measurementCalibrationSelectionRef = useRef("");
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
   const [projectImages, setProjectImages] = useState([]);
@@ -4009,6 +4010,10 @@ export default function ProjectMarkupCanvas() {
     ? lineLengthPx(selectedForEditing)
     : 0;
   const calibrationReady = selectedCalibrationLineLength > 0 && Number(measurementCalibration.length) > 0;
+  const selectedCalibrationInputKey =
+    selectedForEditing && isLineLike(selectedForEditing)
+      ? `${selectedForEditing.id}:${Math.round(selectedCalibrationLineLength * 100) / 100}:${measurementCalibration.scale || 0}:${measurementCalibration.unit || "in"}`
+      : "";
   const fillMaterialLibrary = useMemo(
     () => [...FILL_MATERIALS, ...fillTextureLibrary],
     [fillTextureLibrary],
@@ -4017,6 +4022,23 @@ export default function ProjectMarkupCanvas() {
     fillMaterialLibrary.find((material) => material.key === currentFillMaterial) || FILL_MATERIALS[0];
   const selectedSupportsEndpoints =
     !selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type);
+
+  useEffect(() => {
+    if (!selectedCalibrationInputKey || selectedCalibrationLineLength <= 0) {
+      measurementCalibrationSelectionRef.current = "";
+      return;
+    }
+    if (measurementCalibrationSelectionRef.current === selectedCalibrationInputKey) return;
+    measurementCalibrationSelectionRef.current = selectedCalibrationInputKey;
+    const scale = Number(measurementCalibration.scale || 0);
+    const displayedLength = scale > 0
+      ? selectedCalibrationLineLength / scale
+      : selectedCalibrationLineLength;
+    setMeasurementCalibration((prev) => ({
+      ...prev,
+      length: formatPlanNumber(displayedLength),
+    }));
+  }, [measurementCalibration.scale, selectedCalibrationInputKey, selectedCalibrationLineLength]);
 
   function changeStrokeWidth(nextWidth) {
     const maxWidth = selectedForEditing?.type === "background_eraser" ? 96 : 18;
