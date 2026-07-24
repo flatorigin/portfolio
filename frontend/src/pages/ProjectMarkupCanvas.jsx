@@ -1661,7 +1661,6 @@ export default function ProjectMarkupCanvas() {
   const nodeMultiSelectReadyRef = useRef(false);
   const activeNodeSelectionRef = useRef(null);
   const measurementCalibrationPromptShownRef = useRef(false);
-  const measurementCalibrationSelectionRef = useRef("");
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
   const [projectImages, setProjectImages] = useState([]);
@@ -4009,11 +4008,16 @@ export default function ProjectMarkupCanvas() {
   const selectedCalibrationLineLength = selectedForEditing && isLineLike(selectedForEditing)
     ? lineLengthPx(selectedForEditing)
     : 0;
-  const calibrationReady = selectedCalibrationLineLength > 0 && Number(measurementCalibration.length) > 0;
-  const selectedCalibrationInputKey =
-    selectedForEditing && isLineLike(selectedForEditing)
-      ? `${selectedForEditing.id}:${Math.round(selectedCalibrationLineLength * 100) / 100}:${measurementCalibration.scale || 0}:${measurementCalibration.unit || "in"}`
-      : "";
+  const selectedCalibrationDisplayLength = selectedCalibrationLineLength > 0
+    ? Number(measurementCalibration.scale || 0) > 0
+      ? selectedCalibrationLineLength / Number(measurementCalibration.scale || 0)
+      : selectedCalibrationLineLength
+    : 0;
+  const measurementCalibrationInputValue =
+    selectedCalibrationLineLength > 0 && measurementCalibration.length !== ""
+      ? formatPlanNumber(selectedCalibrationDisplayLength)
+      : measurementCalibration.length;
+  const calibrationReady = selectedCalibrationLineLength > 0 && Number(measurementCalibrationInputValue) > 0;
   const fillMaterialLibrary = useMemo(
     () => [...FILL_MATERIALS, ...fillTextureLibrary],
     [fillTextureLibrary],
@@ -4022,23 +4026,6 @@ export default function ProjectMarkupCanvas() {
     fillMaterialLibrary.find((material) => material.key === currentFillMaterial) || FILL_MATERIALS[0];
   const selectedSupportsEndpoints =
     !selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type);
-
-  useEffect(() => {
-    if (!selectedCalibrationInputKey || selectedCalibrationLineLength <= 0) {
-      measurementCalibrationSelectionRef.current = "";
-      return;
-    }
-    if (measurementCalibrationSelectionRef.current === selectedCalibrationInputKey) return;
-    measurementCalibrationSelectionRef.current = selectedCalibrationInputKey;
-    const scale = Number(measurementCalibration.scale || 0);
-    const displayedLength = scale > 0
-      ? selectedCalibrationLineLength / scale
-      : selectedCalibrationLineLength;
-    setMeasurementCalibration((prev) => ({
-      ...prev,
-      length: formatPlanNumber(displayedLength),
-    }));
-  }, [measurementCalibration.scale, selectedCalibrationInputKey, selectedCalibrationLineLength]);
 
   function changeStrokeWidth(nextWidth) {
     const maxWidth = selectedForEditing?.type === "background_eraser" ? 96 : 18;
@@ -4137,7 +4124,7 @@ export default function ProjectMarkupCanvas() {
       setMessage("Select a line or measurement that matches a known real-world length.");
       return;
     }
-    const realLength = Number(measurementCalibration.length);
+    const realLength = Number(measurementCalibrationInputValue);
     if (!Number.isFinite(realLength) || realLength <= 0) {
       setMessage("Enter the real length for the selected calibration line.");
       return;
@@ -4376,7 +4363,7 @@ export default function ProjectMarkupCanvas() {
                     type="number"
                     min="0.01"
                     step="0.01"
-                    value={measurementCalibration.length}
+                    value={measurementCalibrationInputValue}
                     onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                   />
@@ -4495,7 +4482,7 @@ export default function ProjectMarkupCanvas() {
                         type="number"
                         min="0.01"
                         step="0.01"
-                        value={measurementCalibration.length}
+                        value={measurementCalibrationInputValue}
                         onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                         className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                       />
@@ -5127,7 +5114,7 @@ export default function ProjectMarkupCanvas() {
                           type="number"
                           min="0.01"
                           step="0.01"
-                          value={measurementCalibration.length}
+                          value={measurementCalibrationInputValue}
                           onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                           className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                         />
@@ -5400,7 +5387,7 @@ export default function ProjectMarkupCanvas() {
                             type="number"
                             min="0.01"
                             step="0.01"
-                            value={measurementCalibration.length}
+                            value={measurementCalibrationInputValue}
                             onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                             className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                           />
