@@ -1712,6 +1712,7 @@ export default function ProjectMarkupCanvas() {
   const [measurementCalibration, setMeasurementCalibration] = useState(DEFAULT_MEASUREMENT_CALIBRATION);
   const [measurementCalibrationInputLength, setMeasurementCalibrationInputLength] = useState(DEFAULT_MEASUREMENT_CALIBRATION.length);
   const [showMeasurementCalibrationPrompt, setShowMeasurementCalibrationPrompt] = useState(false);
+  const [measurementCalibrationPromptComplete, setMeasurementCalibrationPromptComplete] = useState(false);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [selectedNodes, setSelectedNodes] = useState({ annotationId: "", handleKeys: [] });
@@ -4181,12 +4182,12 @@ export default function ProjectMarkupCanvas() {
   function setMeasurementScaleFromSelected() {
     if (!selectedReferencePixelLength) {
       setMessage("Select a measure that matches a known real-world length.");
-      return;
+      return false;
     }
     const realLength = Number(measurementCalibrationInputValue);
     if (!Number.isFinite(realLength) || realLength <= 0) {
       setMessage("Enter the real length for the selected calibration line.");
-      return;
+      return false;
     }
     const nextCalibration = calibrationWithReference(measurementCalibration, {
       length: String(realLength),
@@ -4196,6 +4197,7 @@ export default function ProjectMarkupCanvas() {
     setMeasurementCalibration(nextCalibration);
     setMeasurementCalibrationInputLength(nextCalibration.length);
     setMessage(`Scale calibrated from selected ${selectedReferenceLabel}: ${Math.round(selectedReferencePixelLength)} px = ${formatPlanNumber(realLength)} ${nextCalibration.unit}.`);
+    return true;
   }
 
   function clearMeasurementScale() {
@@ -4206,6 +4208,15 @@ export default function ProjectMarkupCanvas() {
 
   function dismissMeasurementCalibrationPrompt() {
     setShowMeasurementCalibrationPrompt(false);
+    setMeasurementCalibrationPromptComplete(false);
+  }
+
+  function openMeasurementCalibrationPrompt() {
+    setTool("measure");
+    setOpenToolGroup("");
+    setMobileSettingsPanel("");
+    setMeasurementCalibrationPromptComplete(false);
+    setShowMeasurementCalibrationPrompt(true);
   }
 
   function openMeasurementCalibrationSettings() {
@@ -4403,10 +4414,12 @@ export default function ProjectMarkupCanvas() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 id="measurement-calibration-title" className="text-base font-semibold text-slate-950">
-                    Calibrate measurements
+                    {measurementCalibrationPromptComplete ? "Scale calibrated" : "Calibrate scene"}
                   </h2>
                   <p className="mt-1 text-sm leading-5 text-slate-500">
-                    Draw a Measure over a known distance, enter its real length, then use it as the plan scale.
+                    {measurementCalibrationPromptComplete
+                      ? "You can reopen calibration from the Measure icon when distances need adjustment."
+                      : "Draw a Measure over a known distance, enter its real length, then use it as the plan scale."}
                   </p>
                 </div>
                 <button
@@ -4455,13 +4468,20 @@ export default function ProjectMarkupCanvas() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (calibrationReady) setMeasurementScaleFromSelected();
-                    dismissMeasurementCalibrationPrompt();
+                    if (measurementCalibrationPromptComplete) {
+                      dismissMeasurementCalibrationPrompt();
+                      return;
+                    }
+                    if (calibrationReady && setMeasurementScaleFromSelected()) {
+                      setMeasurementCalibrationPromptComplete(true);
+                    } else {
+                      dismissMeasurementCalibrationPrompt();
+                    }
                   }}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
-                  <SymbolIcon name="straighten" className="text-[18px]" />
-                  {calibrationReady ? "Use selected measure" : "Draw measure"}
+                  <SymbolIcon name={measurementCalibrationPromptComplete ? "check" : "straighten"} className="text-[18px]" />
+                  {measurementCalibrationPromptComplete ? "Got it" : calibrationReady ? "Use selected measure" : "Draw measure"}
                 </button>
               </div>
             </div>
@@ -5723,6 +5743,18 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
+              {!isRoughPlan && !calibratedMeasurementGeometry ? (
+                <button
+                  type="button"
+                  onClick={openMeasurementCalibrationPrompt}
+                  className="absolute left-16 top-2 z-20 inline-flex h-11 items-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-slate-800 shadow-xl ring-1 ring-slate-200 hover:bg-slate-50 lg:left-16 lg:top-3 lg:h-10"
+                  aria-label="Calibrate scene"
+                  title="Calibrate scene"
+                >
+                  <SymbolIcon name="straighten" className="text-[20px] text-blue-600" />
+                  <span className="max-sm:hidden">Calibrate scene</span>
+                </button>
+              ) : null}
               <div
                 ref={toolPaletteRef}
                 data-markup-tool-palette
