@@ -4425,6 +4425,79 @@ export default function ProjectMarkupCanvas() {
                   Create Plan
                 </button>
               </div>
+              {!isRoughPlan ? (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-700">Measurement reference</span>
+                    {calibratedMeasurementGeometry ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                        Active
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                    Draw or select one known line to set the scale for this plan.
+                  </p>
+                  <div className="mt-3 grid grid-cols-[1fr_76px] gap-2">
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] text-slate-500">Known length</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={measurementCalibration.length}
+                        onChange={(event) =>
+                          setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
+                        }
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
+                      <select
+                        value={measurementCalibration.unit}
+                        onChange={(event) =>
+                          setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
+                        }
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                      >
+                        <option value="in">in</option>
+                        <option value="ft">ft</option>
+                        <option value="m">m</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                    <button
+                      type="button"
+                      onClick={setMeasurementScaleFromSelected}
+                      disabled={!calibrationReady}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      <SymbolIcon name="straighten" className="text-[16px]" />
+                      Set scale from selected line
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearMeasurementScale}
+                      disabled={!calibratedMeasurementGeometry}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                      aria-label="Clear measurement calibration"
+                      title="Clear calibration"
+                    >
+                      <SymbolIcon name="close" className="text-[16px]" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                    {selectedCalibrationLineLength
+                      ? `Selected line: ${Math.round(selectedCalibrationLineLength)} px`
+                      : "No reference line selected yet."}
+                    {calibratedMeasurementGeometry
+                      ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
+                      : ""}
+                  </p>
+                </div>
+              ) : null}
               {isRoughPlan ? (
                 <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
