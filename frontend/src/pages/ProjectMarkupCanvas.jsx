@@ -73,7 +73,7 @@ const ROUGH_SOFT_SNAP_DISTANCE = 9;
 const ROUGH_PLAN_GRID_MARGIN_UNITS = 4;
 const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100, showGrid: true, scaleSource: "manual" };
 const ROUGH_PLAN_PADDING = 82;
-const DEFAULT_MEASUREMENT_CALIBRATION = { length: "36", unit: "in", scale: 0 };
+const DEFAULT_MEASUREMENT_CALIBRATION = { referenceLineId: "", length: "36", unit: "in", referencePx: 0, scale: 0 };
 const MARKUP_SELECTION_COLOR = "#2563eb";
 const MARKUP_SELECTION_SOFT_FILL = "#eff6ff";
 const SELECTABLE_NODE_HANDLE_KINDS = new Set(["point", "endpoint", "corner"]);
@@ -1169,7 +1169,7 @@ function applySelectedNodeDrag(drag, item, point) {
   return applyHandleDrag(drag, item, point);
 }
 
-function renderAnnotation(item, { selected = false, editing = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false, liveLength = false } = {}) {
+function renderAnnotation(item, { selected = false, editing = false, calibratedReference = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false, liveLength = false } = {}) {
   const style = styleFor(item);
   const stroke = style.strokeColor;
   const baseStrokeWidth = strokeWidthFor(item);
@@ -1363,6 +1363,18 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
     const labelY = midY - box.height - 5;
     return (
       <g {...common}>
+        {calibratedReference ? (
+          <path
+            d={linePathD(item)}
+            fill="none"
+            stroke="#10b981"
+            strokeOpacity="0.95"
+            strokeWidth={Math.max(strokeWidth + 7, 10)}
+            strokeLinecap="round"
+            strokeDasharray="8 6"
+            pointerEvents="none"
+          />
+        ) : null}
         <path
           d={linePathD(item)}
           fill="none"
@@ -1434,6 +1446,14 @@ function renderAnnotation(item, { selected = false, editing = false, onPointerDo
               ))}
             </text>
           </g>
+        ) : null}
+        {calibratedReference ? (
+          <SegmentLengthLabel
+            x={midX}
+            y={labelY - 18}
+            label="Reference"
+            stroke="#059669"
+          />
         ) : null}
       </g>
     );
@@ -1661,6 +1681,7 @@ export default function ProjectMarkupCanvas() {
   const nodeMultiSelectReadyRef = useRef(false);
   const activeNodeSelectionRef = useRef(null);
   const measurementCalibrationPromptShownRef = useRef(false);
+  const lastCalibrationSelectionKeyRef = useRef("");
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
   const [projectImages, setProjectImages] = useState([]);
@@ -1689,6 +1710,7 @@ export default function ProjectMarkupCanvas() {
   const [visibleLayers, setVisibleLayers] = useState({});
   const [lockedLayers, setLockedLayers] = useState({});
   const [measurementCalibration, setMeasurementCalibration] = useState(DEFAULT_MEASUREMENT_CALIBRATION);
+  const [measurementCalibrationInputLength, setMeasurementCalibrationInputLength] = useState(DEFAULT_MEASUREMENT_CALIBRATION.length);
   const [showMeasurementCalibrationPrompt, setShowMeasurementCalibrationPrompt] = useState(false);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -1805,6 +1827,9 @@ export default function ProjectMarkupCanvas() {
       if (saved.lockedLayers && typeof saved.lockedLayers === "object") setLockedLayers(saved.lockedLayers);
       if (saved.measurementCalibration && typeof saved.measurementCalibration === "object") {
         setMeasurementCalibration((prev) => ({ ...prev, ...saved.measurementCalibration }));
+        if (saved.measurementCalibration.length != null) {
+          setMeasurementCalibrationInputLength(String(saved.measurementCalibration.length));
+        }
       }
       if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
@@ -1882,6 +1907,9 @@ export default function ProjectMarkupCanvas() {
           }
           if (selectedImageVersion.measurement_calibration && typeof selectedImageVersion.measurement_calibration === "object") {
             setMeasurementCalibration((prev) => ({ ...prev, ...selectedImageVersion.measurement_calibration }));
+            if (selectedImageVersion.measurement_calibration.length != null) {
+              setMeasurementCalibrationInputLength(String(selectedImageVersion.measurement_calibration.length));
+            }
           }
         } else if (selectedImage) {
           setAnnotations([]);
@@ -1902,6 +1930,9 @@ export default function ProjectMarkupCanvas() {
           }
           if (markup.measurement_calibration && typeof markup.measurement_calibration === "object") {
             setMeasurementCalibration((prev) => ({ ...prev, ...markup.measurement_calibration }));
+            if (markup.measurement_calibration.length != null) {
+              setMeasurementCalibrationInputLength(String(markup.measurement_calibration.length));
+            }
           }
         }
       })
@@ -1951,6 +1982,9 @@ export default function ProjectMarkupCanvas() {
           }
           if (markupVersion.measurement_calibration && typeof markupVersion.measurement_calibration === "object") {
             setMeasurementCalibration((prev) => ({ ...prev, ...markupVersion.measurement_calibration }));
+            if (markupVersion.measurement_calibration.length != null) {
+              setMeasurementCalibrationInputLength(String(markupVersion.measurement_calibration.length));
+            }
           }
         } else {
           setAnnotations([]);
@@ -2078,9 +2112,13 @@ export default function ProjectMarkupCanvas() {
   const calibratedMeasurementGeometry = useMemo(() => {
     const scale = Number(measurementCalibration?.scale || 0);
     return scale > 0
-      ? { scale, unit: measurementCalibration.unit || "in" }
+      ? {
+          scale,
+          unit: measurementCalibration.unit || "in",
+          referenceLineId: measurementCalibration.referenceLineId || "",
+        }
       : null;
-  }, [measurementCalibration?.scale, measurementCalibration?.unit]);
+  }, [measurementCalibration?.referenceLineId, measurementCalibration?.scale, measurementCalibration?.unit]);
   const showPlanSegmentLengths = !hideTextAndMeasurements && (isRoughPlan || hasAiCleanPlanOverlay);
   const activeMeasurementGeometry = isRoughPlan
     ? roughGeometry
@@ -4005,19 +4043,23 @@ export default function ProjectMarkupCanvas() {
   const currentStrokeAlign = selectedForEditing?.strokeAlign || "center";
   const currentStartEndpoint = selectedForEditing?.startEndpoint || "none";
   const currentEndEndpoint = selectedForEditing?.endEndpoint || (selectedForEditing?.type === "arrow" ? "arrow" : "none");
-  const selectedCalibrationLineLength = selectedForEditing && isLineLike(selectedForEditing)
-    ? lineLengthPx(selectedForEditing)
-    : 0;
-  const selectedCalibrationDisplayLength = selectedCalibrationLineLength > 0
+  const selectedReferenceLine = selectedForEditing && isLineLike(selectedForEditing) ? selectedForEditing : null;
+  const selectedReferenceLineId = selectedReferenceLine?.id || "";
+  const selectedReferencePixelLength = selectedReferenceLine ? lineLengthPx(selectedReferenceLine) : 0;
+  const selectedCalibrationLineLength = selectedReferencePixelLength;
+  const activeReferencePixelLength = selectedReferencePixelLength || Number(measurementCalibration.referencePx || 0);
+  const selectedCalibrationDisplayLength = selectedReferencePixelLength > 0
     ? Number(measurementCalibration.scale || 0) > 0
-      ? selectedCalibrationLineLength / Number(measurementCalibration.scale || 0)
-      : selectedCalibrationLineLength
+      ? selectedReferencePixelLength / Number(measurementCalibration.scale || 0)
+      : selectedReferencePixelLength
     : 0;
-  const measurementCalibrationInputValue =
-    selectedCalibrationLineLength > 0 && measurementCalibration.length !== ""
-      ? formatPlanNumber(selectedCalibrationDisplayLength)
-      : measurementCalibration.length;
-  const calibrationReady = selectedCalibrationLineLength > 0 && Number(measurementCalibrationInputValue) > 0;
+  const measurementCalibrationInputValue = measurementCalibrationInputLength;
+  const calibrationReady = selectedReferencePixelLength > 0 && Number(measurementCalibrationInputValue) > 0;
+  const calibrationDisabledReason = selectedReferencePixelLength <= 0
+    ? "Select one line or measurement on the canvas first."
+    : Number(measurementCalibrationInputValue) > 0
+      ? ""
+      : "Enter a known length greater than 0.";
   const fillMaterialLibrary = useMemo(
     () => [...FILL_MATERIALS, ...fillTextureLibrary],
     [fillTextureLibrary],
@@ -4026,6 +4068,17 @@ export default function ProjectMarkupCanvas() {
     fillMaterialLibrary.find((material) => material.key === currentFillMaterial) || FILL_MATERIALS[0];
   const selectedSupportsEndpoints =
     !selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type);
+
+  useEffect(() => {
+    if (selectedReferencePixelLength <= 0) {
+      lastCalibrationSelectionKeyRef.current = "";
+      return;
+    }
+    const selectionKey = `${selectedReferenceLineId}:${Math.round(selectedReferencePixelLength * 100) / 100}`;
+    if (lastCalibrationSelectionKeyRef.current === selectionKey) return;
+    lastCalibrationSelectionKeyRef.current = selectionKey;
+    setMeasurementCalibrationInputLength(formatPlanNumber(selectedCalibrationDisplayLength));
+  }, [selectedReferenceLineId, selectedReferencePixelLength, selectedCalibrationDisplayLength]);
 
   function changeStrokeWidth(nextWidth) {
     const maxWidth = selectedForEditing?.type === "background_eraser" ? 96 : 18;
@@ -4094,6 +4147,7 @@ export default function ProjectMarkupCanvas() {
     const realLength = Number(length);
     return {
       ...prev,
+      referenceLineId: overrides.referenceLineId ?? prev.referenceLineId ?? "",
       length,
       unit,
       referencePx,
@@ -4102,10 +4156,12 @@ export default function ProjectMarkupCanvas() {
   }
 
   function changeMeasurementCalibrationLength(nextLength) {
+    setMeasurementCalibrationInputLength(nextLength);
     setMeasurementCalibration((prev) =>
       calibrationWithReference(prev, {
         length: nextLength,
-        referencePx: selectedCalibrationLineLength || prev.referencePx || 0,
+        referenceLineId: selectedReferenceLineId || prev.referenceLineId || "",
+        referencePx: selectedReferencePixelLength || prev.referencePx || 0,
       }),
     );
   }
@@ -4113,14 +4169,16 @@ export default function ProjectMarkupCanvas() {
   function changeMeasurementCalibrationUnit(nextUnit) {
     setMeasurementCalibration((prev) =>
       calibrationWithReference(prev, {
+        length: measurementCalibrationInputValue,
         unit: nextUnit,
-        referencePx: selectedCalibrationLineLength || prev.referencePx || 0,
+        referenceLineId: selectedReferenceLineId || prev.referenceLineId || "",
+        referencePx: selectedReferencePixelLength || prev.referencePx || 0,
       }),
     );
   }
 
   function setMeasurementScaleFromSelected() {
-    if (!selectedCalibrationLineLength) {
+    if (!selectedReferencePixelLength) {
       setMessage("Select a line or measurement that matches a known real-world length.");
       return;
     }
@@ -4131,14 +4189,17 @@ export default function ProjectMarkupCanvas() {
     }
     const nextCalibration = calibrationWithReference(measurementCalibration, {
       length: String(realLength),
-      referencePx: selectedCalibrationLineLength,
+      referenceLineId: selectedReferenceLineId,
+      referencePx: selectedReferencePixelLength,
     });
     setMeasurementCalibration(nextCalibration);
-    setMessage(`Measurement reference set: ${Math.round(selectedCalibrationLineLength)} px = ${formatPlanNumber(realLength)} ${nextCalibration.unit}.`);
+    setMeasurementCalibrationInputLength(nextCalibration.length);
+    setMessage(`Scale calibrated: ${Math.round(selectedReferencePixelLength)} px = ${formatPlanNumber(realLength)} ${nextCalibration.unit}.`);
   }
 
   function clearMeasurementScale() {
-    setMeasurementCalibration((prev) => ({ ...prev, referencePx: 0, scale: 0 }));
+    setMeasurementCalibration((prev) => ({ ...prev, referenceLineId: "", referencePx: 0, scale: 0 }));
+    setMeasurementCalibrationInputLength(measurementCalibration.length || DEFAULT_MEASUREMENT_CALIBRATION.length);
     setMessage("Measurement calibration cleared. Labels will use pixels until a reference line is set.");
   }
 
@@ -4505,6 +4566,7 @@ export default function ProjectMarkupCanvas() {
                       type="button"
                       onClick={setMeasurementScaleFromSelected}
                       disabled={!calibrationReady}
+                      title={calibrationReady ? "Use this line as the measurement reference" : calibrationDisabledReason}
                       className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                     >
                       <SymbolIcon name="straighten" className="text-[16px]" />
@@ -4522,10 +4584,10 @@ export default function ProjectMarkupCanvas() {
                     </button>
                   </div>
                   <p className="mt-2 text-[11px] leading-4 text-slate-500">
-                    {selectedCalibrationLineLength
-                      ? `Selected line: ${Math.round(selectedCalibrationLineLength)} px`
+                    {selectedReferencePixelLength
+                      ? `Selected line: ${Math.round(selectedReferencePixelLength)} px`
                       : Number(measurementCalibration.referencePx || 0) > 0
-                        ? `Reference line: ${Math.round(Number(measurementCalibration.referencePx))} px`
+                        ? `Active reference: ${Math.round(Number(measurementCalibration.referencePx))} px`
                       : "Draw/select a reference line, then apply it."}
                     {calibratedMeasurementGeometry
                       ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
@@ -5137,6 +5199,7 @@ export default function ProjectMarkupCanvas() {
                         type="button"
                         onClick={setMeasurementScaleFromSelected}
                         disabled={!calibrationReady}
+                        title={calibrationReady ? "Use this line as the measurement reference" : calibrationDisabledReason}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                       >
                         <SymbolIcon name="straighten" className="text-[16px]" />
@@ -5154,10 +5217,14 @@ export default function ProjectMarkupCanvas() {
                       </button>
                     </div>
                     <p className="mt-2 text-[11px] leading-4 text-slate-500">
-                      This sets a new reference measure for the entire document.
+                      {calibrationReady ? "Use the selected line as the reference for the entire canvas." : calibrationDisabledReason}
                     </p>
                     <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                      Selected line: {Math.round(selectedCalibrationLineLength)} px
+                      {selectedReferencePixelLength
+                        ? `Selected line: ${Math.round(selectedReferencePixelLength)} px`
+                        : Number(measurementCalibration.referencePx || 0) > 0
+                          ? `Active reference: ${Math.round(Number(measurementCalibration.referencePx))} px`
+                          : "No reference line selected."}
                       {calibratedMeasurementGeometry
                         ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
                         : ""}
@@ -5410,6 +5477,7 @@ export default function ProjectMarkupCanvas() {
                           type="button"
                           onClick={setMeasurementScaleFromSelected}
                           disabled={!calibrationReady}
+                          title={calibrationReady ? "Use this line as the measurement reference" : calibrationDisabledReason}
                           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                         >
                           <SymbolIcon name="straighten" className="text-[16px]" />
@@ -5427,10 +5495,14 @@ export default function ProjectMarkupCanvas() {
                         </button>
                       </div>
                       <p className="mt-2 text-[11px] leading-4 text-slate-500">
-                        This sets a new reference measure for the entire document.
+                        {calibrationReady ? "Use the selected line as the reference for the entire canvas." : calibrationDisabledReason}
                       </p>
                       <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                        Selected line: {Math.round(selectedCalibrationLineLength)} px
+                        {selectedReferencePixelLength
+                          ? `Selected line: ${Math.round(selectedReferencePixelLength)} px`
+                          : Number(measurementCalibration.referencePx || 0) > 0
+                            ? `Active reference: ${Math.round(Number(measurementCalibration.referencePx))} px`
+                            : "No reference line selected."}
                         {calibratedMeasurementGeometry
                           ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
                           : ""}
@@ -5938,6 +6010,7 @@ export default function ProjectMarkupCanvas() {
                 renderAnnotation(item, {
                   selected: item.id === selectedForEditing?.id,
                   editing: item.id === editingTextId,
+                  calibratedReference: item.id === measurementCalibration.referenceLineId,
                   roughGeometry: activeMeasurementGeometry,
                   showSegmentLengths: false,
                   onPointerDown:
@@ -5957,6 +6030,7 @@ export default function ProjectMarkupCanvas() {
                 renderAnnotation(item, {
                   selected: item.id === selectedForEditing?.id,
                   editing: item.id === editingTextId,
+                  calibratedReference: item.id === measurementCalibration.referenceLineId,
                   roughGeometry: activeMeasurementGeometry,
                   showSegmentLengths: showPlanSegmentLengths,
                   liveLength:
