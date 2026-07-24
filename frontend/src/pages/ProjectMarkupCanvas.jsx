@@ -1688,6 +1688,8 @@ export default function ProjectMarkupCanvas() {
   const [visibleLayers, setVisibleLayers] = useState({});
   const [lockedLayers, setLockedLayers] = useState({});
   const [measurementCalibration, setMeasurementCalibration] = useState(DEFAULT_MEASUREMENT_CALIBRATION);
+  const [measurementCalibrationPromptDismissed, setMeasurementCalibrationPromptDismissed] = useState(false);
+  const [showMeasurementCalibrationPrompt, setShowMeasurementCalibrationPrompt] = useState(false);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [selectedNodes, setSelectedNodes] = useState({ annotationId: "", handleKeys: [] });
@@ -1804,6 +1806,9 @@ export default function ProjectMarkupCanvas() {
       if (saved.measurementCalibration && typeof saved.measurementCalibration === "object") {
         setMeasurementCalibration((prev) => ({ ...prev, ...saved.measurementCalibration }));
       }
+      if (typeof saved.measurementCalibrationPromptDismissed === "boolean") {
+        setMeasurementCalibrationPromptDismissed(saved.measurementCalibrationPromptDismissed);
+      }
       if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
       // Ignore broken session drafts.
@@ -1813,9 +1818,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, measurementCalibrationPromptDismissed, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, measurementCalibrationPromptDismissed, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -2745,6 +2750,9 @@ export default function ProjectMarkupCanvas() {
   function selectTool(nextTool) {
     resetNodeMultiSelectSequence();
     if (nextTool !== "pen") finishPenPath();
+    if (nextTool === "line" && !measurementCalibrationPromptDismissed && !Number(measurementCalibration?.scale || 0)) {
+      setShowMeasurementCalibrationPrompt(true);
+    }
     setTool(nextTool);
   }
 
@@ -4090,6 +4098,17 @@ export default function ProjectMarkupCanvas() {
     setMessage("Measurement calibration cleared. Labels will use pixels until a scale is set.");
   }
 
+  function dismissMeasurementCalibrationPrompt() {
+    setMeasurementCalibrationPromptDismissed(true);
+    setShowMeasurementCalibrationPrompt(false);
+  }
+
+  function openMeasurementCalibrationSettings() {
+    dismissMeasurementCalibrationPrompt();
+    setOpenSidebarSection("stroke");
+    if (compactViewport) setMobileSettingsPanel("style");
+  }
+
   function changeStrokeStyle(nextStyle) {
     if (selectedForEditing) updateSelected({ strokeStyle: nextStyle });
   }
@@ -4262,6 +4281,89 @@ export default function ProjectMarkupCanvas() {
         {message ? (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm max-lg:absolute max-lg:left-14 max-lg:right-2 max-lg:top-14 max-lg:z-[70] max-lg:mb-0 max-lg:max-h-20 max-lg:overflow-y-auto">
             {message}
+          </div>
+        ) : null}
+
+        {showMeasurementCalibrationPrompt ? (
+          <div
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="measurement-calibration-title"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) dismissMeasurementCalibrationPrompt();
+            }}
+          >
+            <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 id="measurement-calibration-title" className="text-base font-semibold text-slate-950">
+                    Calibrate measurements
+                  </h2>
+                  <p className="mt-1 text-sm leading-5 text-slate-500">
+                    Calibration turns one known line into the scale for all measurement labels.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissMeasurementCalibrationPrompt}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                  aria-label="Close calibration prompt"
+                >
+                  <SymbolIcon name="close" className="text-[20px]" />
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-[1fr_76px] gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-500">Known length</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={measurementCalibration.length}
+                    onChange={(event) =>
+                      setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
+                    }
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-500">Unit</span>
+                  <select
+                    value={measurementCalibration.unit}
+                    onChange={(event) =>
+                      setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
+                    }
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                  >
+                    <option value="in">in</option>
+                    <option value="ft">ft</option>
+                    <option value="m">m</option>
+                  </select>
+                </label>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={openMeasurementCalibrationSettings}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <SymbolIcon name="palette" className="text-[18px]" />
+                  Open settings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (calibrationReady) setMeasurementScaleFromSelected();
+                    dismissMeasurementCalibrationPrompt();
+                  }}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  <SymbolIcon name="straighten" className="text-[18px]" />
+                  {calibrationReady ? "Set scale" : "Start drawing"}
+                </button>
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -4882,6 +4984,78 @@ export default function ProjectMarkupCanvas() {
                         </select>
                       </label>
                     </div>
+                  </div>
+                ) : null}
+
+                {selectedForEditing && isLineLike(selectedForEditing) ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-700">Measurement calibration</span>
+                      {calibratedMeasurementGeometry ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+                          Active
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 grid grid-cols-[1fr_76px] gap-2">
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] text-slate-500">Known length</span>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={measurementCalibration.length}
+                          onChange={(event) =>
+                            setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
+                          }
+                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
+                        <select
+                          value={measurementCalibration.unit}
+                          onChange={(event) =>
+                            setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
+                          }
+                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        >
+                          <option value="in">in</option>
+                          <option value="ft">ft</option>
+                          <option value="m">m</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                      <button
+                        type="button"
+                        onClick={setMeasurementScaleFromSelected}
+                        disabled={!calibrationReady}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+                      >
+                        <SymbolIcon name="straighten" className="text-[16px]" />
+                        Set scale from selected line
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearMeasurementScale}
+                        disabled={!calibratedMeasurementGeometry}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                        aria-label="Clear measurement calibration"
+                        title="Clear calibration"
+                      >
+                        <SymbolIcon name="close" className="text-[16px]" />
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                      This sets a new reference measure for the entire document.
+                    </p>
+                    <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                      Selected line: {Math.round(selectedCalibrationLineLength)} px
+                      {calibratedMeasurementGeometry
+                        ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
+                        : ""}
+                    </p>
                   </div>
                 ) : null}
 
