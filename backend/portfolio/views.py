@@ -1014,7 +1014,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 project=project,
                 image=ContentFile(result["image_bytes"], name=f"clean-floor-plan-{timezone.now().strftime('%Y%m%d%H%M%S')}.png"),
                 media_type=ProjectImage.MEDIA_TYPE_IMAGE,
-                caption="AI clean floor plan",
+                caption="clean-floor-plan",
                 order=project.images.count(),
                 extra_data={
                     "source": "ai_clean_floor_plan",
@@ -1436,7 +1436,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             generated = ProjectPlanImage.objects.create(
                 project_plan=plan,
                 image=ContentFile(result["image_bytes"], name=f"clean-floor-plan-{timezone.now().strftime('%Y%m%d%H%M%S')}.png"),
-                caption="AI clean floor plan",
+                caption="clean-floor-plan",
                 order=plan.images.count(),
                 is_cover=not plan.images.filter(is_cover=True).exists(),
             )
@@ -1950,7 +1950,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                     "source": "project_planner",
                     "source_plan_id": plan.id,
                     "source_plan_image_id": image.id,
-                    "is_markup_snapshot": image.caption == "Project markup canvas",
+                    "is_markup_snapshot": image.caption in {"Project markup canvas", "markup-floor-plan"},
                 }
                 if markup_version:
                     image_extra_data["markup_version"] = {
