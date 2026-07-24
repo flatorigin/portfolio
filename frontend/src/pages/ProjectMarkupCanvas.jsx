@@ -1702,7 +1702,6 @@ export default function ProjectMarkupCanvas() {
   const [canvasFrameAspect, setCanvasFrameAspect] = useState(CANVAS_W / CANVAS_H);
   const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
-  const [savingMeasurementCalibration, setSavingMeasurementCalibration] = useState(false);
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
@@ -4079,124 +4078,59 @@ export default function ProjectMarkupCanvas() {
     if (selectedForEditing) updateSelected({ fillOpacity: opacity });
   }
 
-  async function saveMeasurementCalibration(nextCalibration = measurementCalibration, successMessage = "Measurement reference saved.") {
-    if (isProjectImageMode) {
-      if (!projectImage?.id) {
-        setMessage("Open this canvas from a project image before saving the measurement reference.");
-        return null;
-      }
-      setSavingMeasurementCalibration(true);
-      setMessage("");
-      try {
-        const previousExtraData =
-          projectImage.extra_data && typeof projectImage.extra_data === "object"
-            ? projectImage.extra_data
-            : {};
-        const previousMarkupVersion =
-          previousExtraData.markup_version && typeof previousExtraData.markup_version === "object"
-            ? previousExtraData.markup_version
-            : {};
-        const now = new Date().toISOString();
-        const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
-          extra_data: {
-            ...previousExtraData,
-            source: previousExtraData.source || "project_image_markup",
-            markup_version: {
-              ...previousMarkupVersion,
-              id: previousMarkupVersion.id || `project-image-markup-${Date.now()}`,
-              name: previousMarkupVersion.name || MARKUP_FLOOR_PLAN_NAME,
-              version_type: previousMarkupVersion.version_type || (isRoughPlan ? "rough_plan" : "photo_markup"),
-              type_label: previousMarkupVersion.type_label || modeLabel,
-              created_at: previousMarkupVersion.created_at || now,
-              updated_at: now,
-              source_image_id: projectImage.id,
-              measurement_calibration: nextCalibration,
-            },
-          },
-        });
-        setProjectImage(data);
-        setMessage(successMessage);
-        return data;
-      } catch (err) {
-        setMessage(normalizeError(err, "Could not save the measurement reference."));
-        return null;
-      } finally {
-        setSavingMeasurementCalibration(false);
-      }
-    }
-
-    if (!planId) {
-      setMessage("Open this canvas from a project planner before saving the measurement reference.");
-      return null;
-    }
-    setSavingMeasurementCalibration(true);
-    setMessage("");
-    try {
-      const previousMarkup = safeMarkupData(plan?.markup_data);
-      const data = await patchMarkupData(
-        {
-          ...previousMarkup,
-          schema_version: previousMarkup.schema_version || 1,
-          canvas: previousMarkup.canvas || { width: CANVAS_W, height: CANVAS_H },
-          canvas_mode: previousMarkup.canvas_mode || canvasMode,
-          version_type: previousMarkup.version_type || (isRoughPlan ? "rough_plan" : "photo_markup"),
-          measurement_calibration: nextCalibration,
-          updated_at: new Date().toISOString(),
-        },
-        successMessage,
-      );
-      return data;
-    } catch (err) {
-      setMessage(normalizeError(err, "Could not save the measurement reference."));
-      return null;
-    } finally {
-      setSavingMeasurementCalibration(false);
-    }
+  function calibrationWithReference(prev, overrides = {}) {
+    const length = overrides.length ?? prev.length;
+    const unit = overrides.unit ?? prev.unit ?? "in";
+    const referencePx = Number(overrides.referencePx ?? prev.referencePx ?? 0);
+    const realLength = Number(length);
+    return {
+      ...prev,
+      length,
+      unit,
+      referencePx,
+      scale: referencePx > 0 && Number.isFinite(realLength) && realLength > 0 ? referencePx / realLength : 0,
+    };
   }
 
-  function nextMeasurementCalibrationFromSelected() {
+  function changeMeasurementCalibrationLength(nextLength) {
+    setMeasurementCalibration((prev) =>
+      calibrationWithReference(prev, {
+        length: nextLength,
+        referencePx: selectedCalibrationLineLength || prev.referencePx || 0,
+      }),
+    );
+  }
+
+  function changeMeasurementCalibrationUnit(nextUnit) {
+    setMeasurementCalibration((prev) =>
+      calibrationWithReference(prev, {
+        unit: nextUnit,
+        referencePx: selectedCalibrationLineLength || prev.referencePx || 0,
+      }),
+    );
+  }
+
+  function setMeasurementScaleFromSelected() {
     if (!selectedCalibrationLineLength) {
       setMessage("Select a line or measurement that matches a known real-world length.");
-      return null;
+      return;
     }
     const realLength = Number(measurementCalibration.length);
     if (!Number.isFinite(realLength) || realLength <= 0) {
       setMessage("Enter the real length for the selected calibration line.");
-      return null;
+      return;
     }
-    return {
-      ...measurementCalibration,
+    const nextCalibration = calibrationWithReference(measurementCalibration, {
       length: String(realLength),
-      scale: selectedCalibrationLineLength / realLength,
-    };
-  }
-
-  function setMeasurementScaleFromSelected() {
-    const nextCalibration = nextMeasurementCalibrationFromSelected();
-    if (!nextCalibration) return;
+      referencePx: selectedCalibrationLineLength,
+    });
     setMeasurementCalibration(nextCalibration);
-    setMessage(`Measurement scale set from selected line: ${formatPlanNumber(nextCalibration.length)} ${nextCalibration.unit}.`);
-  }
-
-  async function applyAndSaveMeasurementScaleFromSelected() {
-    const nextCalibration = nextMeasurementCalibrationFromSelected();
-    if (!nextCalibration) return;
-    setMeasurementCalibration(nextCalibration);
-    await saveMeasurementCalibration(
-      nextCalibration,
-      `Measurement scale saved from selected line: ${formatPlanNumber(nextCalibration.length)} ${nextCalibration.unit}.`,
-    );
+    setMessage(`Measurement reference set: ${Math.round(selectedCalibrationLineLength)} px = ${formatPlanNumber(realLength)} ${nextCalibration.unit}.`);
   }
 
   function clearMeasurementScale() {
-    setMeasurementCalibration((prev) => ({ ...prev, scale: 0 }));
-    setMessage("Measurement calibration cleared. Labels will use pixels until a scale is set.");
-  }
-
-  async function clearAndSaveMeasurementScale() {
-    const nextCalibration = { ...measurementCalibration, scale: 0 };
-    setMeasurementCalibration(nextCalibration);
-    await saveMeasurementCalibration(nextCalibration, "Measurement calibration cleared.");
+    setMeasurementCalibration((prev) => ({ ...prev, referencePx: 0, scale: 0 }));
+    setMessage("Measurement calibration cleared. Labels will use pixels until a reference line is set.");
   }
 
   function dismissMeasurementCalibrationPrompt() {
@@ -4421,9 +4355,7 @@ export default function ProjectMarkupCanvas() {
                     min="0.01"
                     step="0.01"
                     value={measurementCalibration.length}
-                    onChange={(event) =>
-                      setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
-                    }
+                    onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                   />
                 </label>
@@ -4431,9 +4363,7 @@ export default function ProjectMarkupCanvas() {
                   <span className="mb-1 block text-xs font-medium text-slate-500">Unit</span>
                   <select
                     value={measurementCalibration.unit}
-                    onChange={(event) =>
-                      setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
-                    }
+                    onChange={(event) => changeMeasurementCalibrationUnit(event.target.value)}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                   >
                     <option value="in">in</option>
@@ -4454,14 +4384,13 @@ export default function ProjectMarkupCanvas() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (calibrationReady) applyAndSaveMeasurementScaleFromSelected();
+                    if (calibrationReady) setMeasurementScaleFromSelected();
                     dismissMeasurementCalibrationPrompt();
                   }}
-                  disabled={savingMeasurementCalibration}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
                   <SymbolIcon name="straighten" className="text-[18px]" />
-                  {calibrationReady ? "Apply scale" : "Start drawing"}
+                  {calibrationReady ? "Use selected line" : "Start drawing"}
                 </button>
               </div>
             </div>
@@ -4545,9 +4474,7 @@ export default function ProjectMarkupCanvas() {
                         min="0.01"
                         step="0.01"
                         value={measurementCalibration.length}
-                        onChange={(event) =>
-                          setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
-                        }
+                        onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                         className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                       />
                     </label>
@@ -4555,9 +4482,7 @@ export default function ProjectMarkupCanvas() {
                       <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
                       <select
                         value={measurementCalibration.unit}
-                        onChange={(event) =>
-                          setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
-                        }
+                        onChange={(event) => changeMeasurementCalibrationUnit(event.target.value)}
                         className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                       >
                         <option value="in">in</option>
@@ -4566,41 +4491,32 @@ export default function ProjectMarkupCanvas() {
                       </select>
                     </label>
                   </div>
-                  <div className="mt-3 grid gap-2">
+                  <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
                     <button
                       type="button"
-                      onClick={() => saveMeasurementCalibration()}
-                      disabled={savingMeasurementCalibration}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                      onClick={setMeasurementScaleFromSelected}
+                      disabled={!calibrationReady}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                     >
-                      <SymbolIcon name="save" className="text-[16px]" />
-                      {savingMeasurementCalibration ? "Saving..." : "Save reference"}
+                      <SymbolIcon name="straighten" className="text-[16px]" />
+                      Use selected line
                     </button>
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
-                      <button
-                        type="button"
-                        onClick={applyAndSaveMeasurementScaleFromSelected}
-                        disabled={!calibrationReady || savingMeasurementCalibration}
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-                      >
-                        <SymbolIcon name="straighten" className="text-[16px]" />
-                        Apply selected line
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearAndSaveMeasurementScale}
-                        disabled={!calibratedMeasurementGeometry || savingMeasurementCalibration}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                        aria-label="Clear measurement calibration"
-                        title="Clear calibration"
-                      >
-                        <SymbolIcon name="close" className="text-[16px]" />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={clearMeasurementScale}
+                      disabled={!calibratedMeasurementGeometry}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                      aria-label="Clear measurement calibration"
+                      title="Clear calibration"
+                    >
+                      <SymbolIcon name="close" className="text-[16px]" />
+                    </button>
                   </div>
                   <p className="mt-2 text-[11px] leading-4 text-slate-500">
                     {selectedCalibrationLineLength
                       ? `Selected line: ${Math.round(selectedCalibrationLineLength)} px`
+                      : Number(measurementCalibration.referencePx || 0) > 0
+                        ? `Reference line: ${Math.round(Number(measurementCalibration.referencePx))} px`
                       : "Draw/select a reference line, then apply it."}
                     {calibratedMeasurementGeometry
                       ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
@@ -5190,9 +5106,7 @@ export default function ProjectMarkupCanvas() {
                           min="0.01"
                           step="0.01"
                           value={measurementCalibration.length}
-                          onChange={(event) =>
-                            setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
-                          }
+                          onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                           className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                         />
                       </label>
@@ -5200,9 +5114,7 @@ export default function ProjectMarkupCanvas() {
                         <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
                         <select
                           value={measurementCalibration.unit}
-                          onChange={(event) =>
-                            setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
-                          }
+                          onChange={(event) => changeMeasurementCalibrationUnit(event.target.value)}
                           className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                         >
                           <option value="in">in</option>
@@ -5214,17 +5126,17 @@ export default function ProjectMarkupCanvas() {
                     <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
                       <button
                         type="button"
-                        onClick={applyAndSaveMeasurementScaleFromSelected}
-                        disabled={!calibrationReady || savingMeasurementCalibration}
+                        onClick={setMeasurementScaleFromSelected}
+                        disabled={!calibrationReady}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                       >
                         <SymbolIcon name="straighten" className="text-[16px]" />
-                        Apply selected line
+                        Use selected line
                       </button>
                       <button
                         type="button"
-                        onClick={clearAndSaveMeasurementScale}
-                        disabled={!calibratedMeasurementGeometry || savingMeasurementCalibration}
+                        onClick={clearMeasurementScale}
+                        disabled={!calibratedMeasurementGeometry}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                         aria-label="Clear measurement calibration"
                         title="Clear calibration"
@@ -5467,9 +5379,7 @@ export default function ProjectMarkupCanvas() {
                             min="0.01"
                             step="0.01"
                             value={measurementCalibration.length}
-                            onChange={(event) =>
-                              setMeasurementCalibration((prev) => ({ ...prev, length: event.target.value }))
-                            }
+                            onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                             className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                           />
                         </label>
@@ -5477,9 +5387,7 @@ export default function ProjectMarkupCanvas() {
                           <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
                           <select
                             value={measurementCalibration.unit}
-                            onChange={(event) =>
-                              setMeasurementCalibration((prev) => ({ ...prev, unit: event.target.value }))
-                            }
+                            onChange={(event) => changeMeasurementCalibrationUnit(event.target.value)}
                             className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
                           >
                             <option value="in">in</option>
@@ -5491,17 +5399,17 @@ export default function ProjectMarkupCanvas() {
                       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
                         <button
                           type="button"
-                          onClick={applyAndSaveMeasurementScaleFromSelected}
-                          disabled={!calibrationReady || savingMeasurementCalibration}
+                          onClick={setMeasurementScaleFromSelected}
+                          disabled={!calibrationReady}
                           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                         >
                           <SymbolIcon name="straighten" className="text-[16px]" />
-                          Apply selected line
+                          Use selected line
                         </button>
                         <button
                           type="button"
-                          onClick={clearAndSaveMeasurementScale}
-                          disabled={!calibratedMeasurementGeometry || savingMeasurementCalibration}
+                          onClick={clearMeasurementScale}
+                          disabled={!calibratedMeasurementGeometry}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                           aria-label="Clear measurement calibration"
                           title="Clear calibration"
