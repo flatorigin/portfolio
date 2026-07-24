@@ -1660,6 +1660,7 @@ export default function ProjectMarkupCanvas() {
   const suppressTouchDrawingRef = useRef(false);
   const nodeMultiSelectReadyRef = useRef(false);
   const activeNodeSelectionRef = useRef(null);
+  const measurementCalibrationPromptShownRef = useRef(false);
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
   const [projectImages, setProjectImages] = useState([]);
@@ -1688,7 +1689,6 @@ export default function ProjectMarkupCanvas() {
   const [visibleLayers, setVisibleLayers] = useState({});
   const [lockedLayers, setLockedLayers] = useState({});
   const [measurementCalibration, setMeasurementCalibration] = useState(DEFAULT_MEASUREMENT_CALIBRATION);
-  const [measurementCalibrationPromptDismissed, setMeasurementCalibrationPromptDismissed] = useState(false);
   const [showMeasurementCalibrationPrompt, setShowMeasurementCalibrationPrompt] = useState(false);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -1806,9 +1806,6 @@ export default function ProjectMarkupCanvas() {
       if (saved.measurementCalibration && typeof saved.measurementCalibration === "object") {
         setMeasurementCalibration((prev) => ({ ...prev, ...saved.measurementCalibration }));
       }
-      if (typeof saved.measurementCalibrationPromptDismissed === "boolean") {
-        setMeasurementCalibrationPromptDismissed(saved.measurementCalibrationPromptDismissed);
-      }
       if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
       // Ignore broken session drafts.
@@ -1818,9 +1815,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, measurementCalibrationPromptDismissed, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, measurementCalibrationPromptDismissed, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -2750,10 +2747,16 @@ export default function ProjectMarkupCanvas() {
   function selectTool(nextTool) {
     resetNodeMultiSelectSequence();
     if (nextTool !== "pen") finishPenPath();
-    if (nextTool === "line" && !measurementCalibrationPromptDismissed && !Number(measurementCalibration?.scale || 0)) {
-      setShowMeasurementCalibrationPrompt(true);
-    }
+    maybeShowMeasurementCalibrationPrompt(nextTool);
     setTool(nextTool);
+  }
+
+  function maybeShowMeasurementCalibrationPrompt(nextTool) {
+    if (!["line", "measure"].includes(nextTool)) return;
+    if (measurementCalibrationPromptShownRef.current) return;
+    if (Number(measurementCalibration?.scale || 0) > 0) return;
+    measurementCalibrationPromptShownRef.current = true;
+    setShowMeasurementCalibrationPrompt(true);
   }
 
   function resetNodeMultiSelectSequence() {
@@ -4099,7 +4102,6 @@ export default function ProjectMarkupCanvas() {
   }
 
   function dismissMeasurementCalibrationPrompt() {
-    setMeasurementCalibrationPromptDismissed(true);
     setShowMeasurementCalibrationPrompt(false);
   }
 
@@ -4987,7 +4989,7 @@ export default function ProjectMarkupCanvas() {
                   </div>
                 ) : null}
 
-                {selectedForEditing && isLineLike(selectedForEditing) ? (
+                {(selectedForEditing && isLineLike(selectedForEditing)) || ["line", "measure"].includes(tool) ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-slate-700">Measurement calibration</span>
