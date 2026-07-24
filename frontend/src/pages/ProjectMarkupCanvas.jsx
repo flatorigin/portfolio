@@ -2790,7 +2790,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   function maybeShowMeasurementCalibrationPrompt(nextTool) {
-    if (!["line", "measure"].includes(nextTool)) return;
+    if (nextTool !== "measure") return;
     if (measurementCalibrationPromptShownRef.current) return;
     if (Number(measurementCalibration?.scale || 0) > 0) return;
     measurementCalibrationPromptShownRef.current = true;
@@ -4046,6 +4046,7 @@ export default function ProjectMarkupCanvas() {
   const selectedReferenceLine = selectedForEditing && isLineLike(selectedForEditing) ? selectedForEditing : null;
   const selectedReferenceLineId = selectedReferenceLine?.id || "";
   const selectedReferencePixelLength = selectedReferenceLine ? lineLengthPx(selectedReferenceLine) : 0;
+  const selectedReferenceLabel = selectedReferenceLine?.type === "measure" ? "measure" : "line";
   const selectedCalibrationLineLength = selectedReferencePixelLength;
   const activeReferencePixelLength = selectedReferencePixelLength || Number(measurementCalibration.referencePx || 0);
   const selectedCalibrationDisplayLength = selectedReferencePixelLength > 0
@@ -4056,7 +4057,7 @@ export default function ProjectMarkupCanvas() {
   const measurementCalibrationInputValue = measurementCalibrationInputLength;
   const calibrationReady = selectedReferencePixelLength > 0 && Number(measurementCalibrationInputValue) > 0;
   const calibrationDisabledReason = selectedReferencePixelLength <= 0
-    ? "Select one line or measurement on the canvas first."
+    ? "Select one measure on the canvas first."
     : Number(measurementCalibrationInputValue) > 0
       ? ""
       : "Enter a known length greater than 0.";
@@ -4179,7 +4180,7 @@ export default function ProjectMarkupCanvas() {
 
   function setMeasurementScaleFromSelected() {
     if (!selectedReferencePixelLength) {
-      setMessage("Select a line or measurement that matches a known real-world length.");
+      setMessage("Select a measure that matches a known real-world length.");
       return;
     }
     const realLength = Number(measurementCalibrationInputValue);
@@ -4194,13 +4195,13 @@ export default function ProjectMarkupCanvas() {
     });
     setMeasurementCalibration(nextCalibration);
     setMeasurementCalibrationInputLength(nextCalibration.length);
-    setMessage(`Scale calibrated: ${Math.round(selectedReferencePixelLength)} px = ${formatPlanNumber(realLength)} ${nextCalibration.unit}.`);
+    setMessage(`Scale calibrated from selected ${selectedReferenceLabel}: ${Math.round(selectedReferencePixelLength)} px = ${formatPlanNumber(realLength)} ${nextCalibration.unit}.`);
   }
 
   function clearMeasurementScale() {
     setMeasurementCalibration((prev) => ({ ...prev, referenceLineId: "", referencePx: 0, scale: 0 }));
     setMeasurementCalibrationInputLength(measurementCalibration.length || DEFAULT_MEASUREMENT_CALIBRATION.length);
-    setMessage("Measurement calibration cleared. Labels will use pixels until a reference line is set.");
+    setMessage("Measurement calibration cleared. Labels will use pixels until a reference is set.");
   }
 
   function dismissMeasurementCalibrationPrompt() {
@@ -4405,7 +4406,7 @@ export default function ProjectMarkupCanvas() {
                     Calibrate measurements
                   </h2>
                   <p className="mt-1 text-sm leading-5 text-slate-500">
-                    Calibration turns one known line into the scale for all measurement labels.
+                    Draw a Measure over a known distance, enter its real length, then use it as the plan scale.
                   </p>
                 </div>
                 <button
@@ -4460,7 +4461,7 @@ export default function ProjectMarkupCanvas() {
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
                   <SymbolIcon name="straighten" className="text-[18px]" />
-                  {calibrationReady ? "Use selected line" : "Start drawing"}
+                  {calibrationReady ? "Use selected measure" : "Draw measure"}
                 </button>
               </div>
             </div>
@@ -4534,7 +4535,7 @@ export default function ProjectMarkupCanvas() {
                     ) : null}
                   </div>
                   <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                    Draw or select one known line to set the scale for this plan.
+                    Draw a Measure over a known distance, then enter the real length to set the plan scale.
                   </p>
                   <div className="mt-3 grid grid-cols-[1fr_76px] gap-2">
                     <label className="block">
@@ -4566,11 +4567,11 @@ export default function ProjectMarkupCanvas() {
                       type="button"
                       onClick={setMeasurementScaleFromSelected}
                       disabled={!calibrationReady}
-                      title={calibrationReady ? "Use this line as the measurement reference" : calibrationDisabledReason}
+                      title={calibrationReady ? `Use this ${selectedReferenceLabel} as the measurement reference` : calibrationDisabledReason}
                       className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                     >
                       <SymbolIcon name="straighten" className="text-[16px]" />
-                      Use selected line
+                      Use selected {selectedReferenceLabel}
                     </button>
                     <button
                       type="button"
@@ -4585,10 +4586,10 @@ export default function ProjectMarkupCanvas() {
                   </div>
                   <p className="mt-2 text-[11px] leading-4 text-slate-500">
                     {selectedReferencePixelLength
-                      ? `Selected line: ${Math.round(selectedReferencePixelLength)} px`
+                      ? `Selected ${selectedReferenceLabel}: ${Math.round(selectedReferencePixelLength)} px`
                       : Number(measurementCalibration.referencePx || 0) > 0
                         ? `Active reference: ${Math.round(Number(measurementCalibration.referencePx))} px`
-                      : "Draw/select a reference line, then apply it."}
+                      : "Draw/select a measure, then apply it."}
                     {calibratedMeasurementGeometry
                       ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
                       : ""}
@@ -5199,11 +5200,11 @@ export default function ProjectMarkupCanvas() {
                         type="button"
                         onClick={setMeasurementScaleFromSelected}
                         disabled={!calibrationReady}
-                        title={calibrationReady ? "Use this line as the measurement reference" : calibrationDisabledReason}
+                        title={calibrationReady ? `Use this ${selectedReferenceLabel} as the measurement reference` : calibrationDisabledReason}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                       >
                         <SymbolIcon name="straighten" className="text-[16px]" />
-                        Use selected line
+                        Use selected {selectedReferenceLabel}
                       </button>
                       <button
                         type="button"
@@ -5217,14 +5218,14 @@ export default function ProjectMarkupCanvas() {
                       </button>
                     </div>
                     <p className="mt-2 text-[11px] leading-4 text-slate-500">
-                      {calibrationReady ? "Use the selected line as the reference for the entire canvas." : calibrationDisabledReason}
+                      {calibrationReady ? `Use the selected ${selectedReferenceLabel} as the reference for the entire canvas.` : calibrationDisabledReason}
                     </p>
                     <p className="mt-1 text-[11px] leading-4 text-slate-500">
                       {selectedReferencePixelLength
-                        ? `Selected line: ${Math.round(selectedReferencePixelLength)} px`
+                        ? `Selected ${selectedReferenceLabel}: ${Math.round(selectedReferencePixelLength)} px`
                         : Number(measurementCalibration.referencePx || 0) > 0
                           ? `Active reference: ${Math.round(Number(measurementCalibration.referencePx))} px`
-                          : "No reference line selected."}
+                          : "No measure selected."}
                       {calibratedMeasurementGeometry
                         ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
                         : ""}
@@ -5477,11 +5478,11 @@ export default function ProjectMarkupCanvas() {
                           type="button"
                           onClick={setMeasurementScaleFromSelected}
                           disabled={!calibrationReady}
-                          title={calibrationReady ? "Use this line as the measurement reference" : calibrationDisabledReason}
+                          title={calibrationReady ? `Use this ${selectedReferenceLabel} as the measurement reference` : calibrationDisabledReason}
                           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
                         >
                           <SymbolIcon name="straighten" className="text-[16px]" />
-                          Use selected line
+                          Use selected {selectedReferenceLabel}
                         </button>
                         <button
                           type="button"
@@ -5495,14 +5496,14 @@ export default function ProjectMarkupCanvas() {
                         </button>
                       </div>
                       <p className="mt-2 text-[11px] leading-4 text-slate-500">
-                        {calibrationReady ? "Use the selected line as the reference for the entire canvas." : calibrationDisabledReason}
+                        {calibrationReady ? `Use the selected ${selectedReferenceLabel} as the reference for the entire canvas.` : calibrationDisabledReason}
                       </p>
                       <p className="mt-1 text-[11px] leading-4 text-slate-500">
                         {selectedReferencePixelLength
-                          ? `Selected line: ${Math.round(selectedReferencePixelLength)} px`
+                          ? `Selected ${selectedReferenceLabel}: ${Math.round(selectedReferencePixelLength)} px`
                           : Number(measurementCalibration.referencePx || 0) > 0
                             ? `Active reference: ${Math.round(Number(measurementCalibration.referencePx))} px`
-                            : "No reference line selected."}
+                            : "No measure selected."}
                         {calibratedMeasurementGeometry
                           ? ` · 1 ${calibratedMeasurementGeometry.unit} = ${formatPlanNumber(calibratedMeasurementGeometry.scale)} px`
                           : ""}
