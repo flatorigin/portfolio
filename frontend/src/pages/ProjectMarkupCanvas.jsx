@@ -6,6 +6,8 @@ import { SymbolIcon } from "../ui";
 const CANVAS_W = 1200;
 const CANVAS_H = 760;
 const STORAGE_PREFIX = "flatorigin_project_markup";
+const CLEAN_FLOOR_PLAN_NAME = "clean-floor-plan";
+const MARKUP_FLOOR_PLAN_NAME = "markup-floor-plan";
 
 const BASE_TOOLS = {
   select: { key: "select", label: "Select", icon: "near_me" },
@@ -1656,6 +1658,8 @@ export default function ProjectMarkupCanvas() {
   const pinchGestureRef = useRef(null);
   const touchDrawingSnapshotRef = useRef(null);
   const suppressTouchDrawingRef = useRef(false);
+  const nodeMultiSelectReadyRef = useRef(false);
+  const activeNodeSelectionRef = useRef(null);
   const [plan, setPlan] = useState(null);
   const [projectImage, setProjectImage] = useState(null);
   const [projectImages, setProjectImages] = useState([]);
@@ -1985,6 +1989,7 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     if (selectedNodes.annotationId && selectedNodes.annotationId !== selectedId) {
       setSelectedNodes({ annotationId: "", handleKeys: [] });
+      resetNodeMultiSelectSequence();
     }
   }, [selectedId, selectedNodes.annotationId]);
 
@@ -2161,7 +2166,7 @@ export default function ProjectMarkupCanvas() {
     }));
     const version = {
       id: `version-${Date.now()}`,
-      name: versionOverrides.name || `${modeLabel} ${nextVersionNumber}`,
+      name: versionOverrides.name || MARKUP_FLOOR_PLAN_NAME,
       version_type: isRoughPlan ? "rough_plan" : "photo_markup",
       type_label: modeLabel,
       created_at: now,
@@ -2195,6 +2200,7 @@ export default function ProjectMarkupCanvas() {
 
   function updateSelected(patch) {
     if (!selectedId) return;
+    resetNodeMultiSelectSequence();
     setAnnotations((prev) =>
       prev.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)),
     );
@@ -2549,7 +2555,7 @@ export default function ProjectMarkupCanvas() {
             imageId: generatedImage.id,
             imageUrl: generatedUrl,
             previewUrl: generatedUrl,
-            name: generatedImage.caption || "AI clean floor plan",
+            name: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME,
             width: generatedDimensions?.width || undefined,
             height: generatedDimensions?.height || undefined,
           }
@@ -2582,7 +2588,7 @@ export default function ProjectMarkupCanvas() {
       } else {
         commitAnnotations([]);
       }
-      setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || "AI clean floor plan", detail: "" });
+      setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME, detail: "" });
       setMessage(`AI clean floor plan created and saved to the image library.${overlayNotes} Save when the editable overlay looks right, or export PNG/PDF for a flattened preview.`);
     } catch (err) {
       const statusCode = err?.response?.status;
@@ -2737,8 +2743,24 @@ export default function ProjectMarkupCanvas() {
   }
 
   function selectTool(nextTool) {
+    resetNodeMultiSelectSequence();
     if (nextTool !== "pen") finishPenPath();
     setTool(nextTool);
+  }
+
+  function resetNodeMultiSelectSequence() {
+    nodeMultiSelectReadyRef.current = false;
+    activeNodeSelectionRef.current = null;
+  }
+
+  function markActiveNodeInteractionMoved(event) {
+    const active = activeNodeSelectionRef.current;
+    if (!active || active.moved) return;
+    const dx = Math.abs((event?.clientX || 0) - active.startClientX);
+    const dy = Math.abs((event?.clientY || 0) - active.startClientY);
+    if (Math.max(dx, dy) < 3) return;
+    activeNodeSelectionRef.current = { ...active, moved: true };
+    nodeMultiSelectReadyRef.current = false;
   }
 
   function continuePenFromExisting(event, item) {
@@ -3066,6 +3088,7 @@ export default function ProjectMarkupCanvas() {
     const point = canvasPointFromEvent(event);
     setMessage("");
     setSelectedNodes({ annotationId: "", handleKeys: [] });
+    resetNodeMultiSelectSequence();
 
     if (tool === "hand") {
       finishPenPath();
@@ -3237,6 +3260,7 @@ export default function ProjectMarkupCanvas() {
     }
 
     if (drag?.id && drag.handle) {
+      markActiveNodeInteractionMoved(event);
       setAnnotations((prev) =>
         prev.map((item) =>
           item.id === drag.id
@@ -3305,13 +3329,19 @@ export default function ProjectMarkupCanvas() {
       }
     }
     if (!penDraftId && tool !== "pen") setDraft(null);
+    const activeNodeSelection = activeNodeSelectionRef.current;
+    if (activeNodeSelection) {
+      nodeMultiSelectReadyRef.current = !activeNodeSelection.moved;
+      activeNodeSelectionRef.current = null;
+    }
     setDrag(null);
   }
 
   function startMove(event, item) {
     event.stopPropagation();
     if (!svgRef.current) return;
-    if (selectedNodes.annotationId && selectedNodes.annotationId !== item.id) {
+    resetNodeMultiSelectSequence();
+    if (selectedNodes.handleKeys.length) {
       setSelectedNodes({ annotationId: "", handleKeys: [] });
     }
     if (lockedLayers[item.id]) {
@@ -3333,6 +3363,7 @@ export default function ProjectMarkupCanvas() {
   function startCurveEdit(event, item) {
     event.stopPropagation();
     if (!svgRef.current) return;
+    resetNodeMultiSelectSequence();
     if (lockedLayers[item.id]) {
       setSelectedId(item.id);
       setEditingTextId("");
@@ -3384,6 +3415,7 @@ export default function ProjectMarkupCanvas() {
   function startCurveHandleActivation(event, handle) {
     event.stopPropagation();
     if (!selected) return;
+    resetNodeMultiSelectSequence();
     finishPenPath();
     setTool("curve");
     setSelectedId(selected.id);
@@ -3430,20 +3462,48 @@ export default function ProjectMarkupCanvas() {
       setMessage("Layer is locked. Unlock it before editing its shape.");
       return;
     }
+    const isSelectableNode = !options.preserveTool && SELECTABLE_NODE_HANDLE_KINDS.has(handle.kind);
+    if (
+      isSelectableNode &&
+      event.detail >= 2 &&
+      selectedNodes.annotationId === selected.id &&
+      selectedNodes.handleKeys.includes(handle.key)
+    ) {
+      event.preventDefault();
+      const nextKeys = selectedNodes.handleKeys.filter((key) => key !== handle.key);
+      if (nextKeys.length) {
+        setSelectedNodes({ annotationId: selected.id, handleKeys: nextKeys });
+        nodeMultiSelectReadyRef.current = true;
+      } else {
+        setSelectedNodes({ annotationId: "", handleKeys: [] });
+        resetNodeMultiSelectSequence();
+      }
+      activeNodeSelectionRef.current = null;
+      return;
+    }
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     finishPenPath();
     if (!options.preserveTool) setTool("select");
     setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
     let nodeHandles = [];
-    if (!options.preserveTool && SELECTABLE_NODE_HANDLE_KINDS.has(handle.kind)) {
-      const existingKeys = selectedNodes.annotationId === selected.id
+    if (isSelectableNode) {
+      const canAppendToNodeSelection =
+        nodeMultiSelectReadyRef.current && selectedNodes.annotationId === selected.id;
+      const existingKeys = canAppendToNodeSelection
         ? selectedNodes.handleKeys
         : [];
       const nextKeys = existingKeys.includes(handle.key)
         ? existingKeys
         : [...existingKeys, handle.key];
       setSelectedNodes({ annotationId: selected.id, handleKeys: nextKeys });
+      activeNodeSelectionRef.current = {
+        annotationId: selected.id,
+        handleKey: handle.key,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        moved: false,
+      };
       const nextKeySet = new Set(nextKeys);
       nodeHandles = selectedControlHandles.filter(
         (controlHandle) =>
@@ -3452,6 +3512,7 @@ export default function ProjectMarkupCanvas() {
       );
     } else {
       setSelectedNodes({ annotationId: "", handleKeys: [] });
+      resetNodeMultiSelectSequence();
     }
     setDrag({
       id: selected.id,
@@ -3544,7 +3605,7 @@ export default function ProjectMarkupCanvas() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `flatorigin-markup-${planId || "canvas"}.svg`;
+    link.download = `${MARKUP_FLOOR_PLAN_NAME}.svg`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -3555,7 +3616,7 @@ export default function ProjectMarkupCanvas() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `flatorigin-markup-${planId || "canvas"}.png`;
+      link.download = `${MARKUP_FLOOR_PLAN_NAME}.png`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -3601,8 +3662,8 @@ export default function ProjectMarkupCanvas() {
       try {
         const blob = await svgToPngBlob();
         const formData = new FormData();
-        formData.append("images", new File([blob], `project-markup-${Date.now()}.png`, { type: "image/png" }));
-        formData.append("captions", `Marked up: ${projectImage.caption || "Project image"}`);
+        formData.append("images", new File([blob], `${MARKUP_FLOOR_PLAN_NAME}-${Date.now()}.png`, { type: "image/png" }));
+        formData.append("captions", MARKUP_FLOOR_PLAN_NAME);
         const { data: uploadedImages } = await api.post(`/projects/${projectId}/images/`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -3643,8 +3704,8 @@ export default function ProjectMarkupCanvas() {
     try {
       const blob = await svgToPngBlob();
       const formData = new FormData();
-      formData.append("images", new File([blob], `markup-${Date.now()}.png`, { type: "image/png" }));
-      formData.append("captions", "Project markup canvas");
+      formData.append("images", new File([blob], `${MARKUP_FLOOR_PLAN_NAME}-${Date.now()}.png`, { type: "image/png" }));
+      formData.append("captions", MARKUP_FLOOR_PLAN_NAME);
       const { data: uploadedImages } = await api.post(`/project-plans/${planId}/images/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -3725,7 +3786,7 @@ export default function ProjectMarkupCanvas() {
             : {};
         const markupVersion = {
           id: previousExtraData.markup_version?.id || `project-image-markup-${Date.now()}`,
-          name: previousExtraData.markup_version?.name || modeLabel,
+          name: previousExtraData.markup_version?.name || MARKUP_FLOOR_PLAN_NAME,
           version_type: isRoughPlan ? "rough_plan" : "photo_markup",
           type_label: modeLabel,
           created_at: previousExtraData.markup_version?.created_at || now,

@@ -138,6 +138,8 @@ function downloadBlob(content, filename, type) {
   URL.revokeObjectURL(url);
 }
 
+const MARKUP_FLOOR_PLAN_NAME = "markup-floor-plan";
+
 export default function ProjectPlanDetail() {
   const { planId } = useParams();
   const navigate = useNavigate();
@@ -377,7 +379,7 @@ export default function ProjectPlanDetail() {
   function downloadMarkupSvg(version) {
     downloadBlob(
       markupVersionSvg(version, plan.title),
-      `${String(version?.name || plan.title || "project-markup").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.svg`,
+      `${MARKUP_FLOOR_PLAN_NAME}.svg`,
       "image/svg+xml;charset=utf-8",
     );
   }
@@ -389,7 +391,7 @@ export default function ProjectPlanDetail() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${String(version?.name || plan.title || "project-markup").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
+    link.download = `${MARKUP_FLOOR_PLAN_NAME}.png`;
     link.click();
     URL.revokeObjectURL(url);
   }
