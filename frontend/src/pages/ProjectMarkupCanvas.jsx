@@ -1174,9 +1174,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
   const stroke = style.strokeColor;
   const baseStrokeWidth = strokeWidthFor(item);
   const shouldShowLengths = showSegmentLengths || liveLength;
-  const strokeWidth = shouldShowLengths && ["line", "measure", "pen", "freehand"].includes(item.type)
-    ? Math.min(baseStrokeWidth, 2.5)
-    : baseStrokeWidth;
+  const strokeWidth = baseStrokeWidth;
   const common = {
     key: item.id,
     onPointerDown,
