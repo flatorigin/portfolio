@@ -18,9 +18,91 @@ import {
   locationParams,
   requestLocationOrigin,
 } from "../utils/locationOrigin";
+import pressureTreatedImage from "../assets/explore/deck-materials/pressure-treated.webp";
+import compositeImage from "../assets/explore/deck-materials/composite.webp";
+import pvcVinylImage from "../assets/explore/deck-materials/pvc-vinyl.webp";
+import cedarRedwoodImage from "../assets/explore/deck-materials/cedar-redwood.webp";
+import hardwoodImage from "../assets/explore/deck-materials/hardwood.webp";
+import aluminumImage from "../assets/explore/deck-materials/aluminum.webp";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 const DIRECTORY_BATCH_SIZE = 6;
+const DECK_SEARCH_PATTERN = /\b(?:deck|decks|decking)\b/i;
+
+const DECK_MATERIALS = [
+  {
+    id: "pressure-treated",
+    label: "Pressure-treated wood",
+    image: pressureTreatedImage,
+    keywords: ["pressure treated", "treated lumber", "treated pine"],
+    description:
+      "Good for wood decks because treatment helps resist decay.",
+  },
+  {
+    id: "composite",
+    label: "Composite",
+    image: compositeImage,
+    keywords: ["composite", "wood plastic", "trex"],
+    description:
+      "Good for lower-upkeep decks because the boards resist splinters.",
+  },
+  {
+    id: "pvc-vinyl",
+    label: "PVC / vinyl",
+    image: pvcVinylImage,
+    keywords: ["pvc", "vinyl", "plastic decking"],
+    description:
+      "Good for wet areas because the boards do not absorb water.",
+  },
+  {
+    id: "cedar-redwood",
+    label: "Cedar / redwood",
+    image: cedarRedwoodImage,
+    keywords: ["cedar", "redwood"],
+    description:
+      "Good for a natural look because the color and grain stay visible.",
+  },
+  {
+    id: "hardwood",
+    label: "Hardwood",
+    image: hardwoodImage,
+    keywords: ["hardwood", "ipe", "mahogany", "cumaru", "tigerwood"],
+    description:
+      "Good for high-traffic decks because dense wood resists wear.",
+  },
+  {
+    id: "aluminum",
+    label: "Aluminum",
+    image: aluminumImage,
+    keywords: ["aluminum", "aluminium", "metal decking"],
+    description:
+      "Good for exposed sites because it resists corrosion and weathering.",
+  },
+];
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function matchesSearchQuery(values, query) {
+  const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  if (!terms.length) return true;
+
+  const haystack = normalizeSearchText(values.filter(Boolean).join(" "));
+  return terms.every((term) => haystack.includes(term));
+}
+
+function matchesDeckMaterial(values, material) {
+  if (!material) return true;
+  const haystack = normalizeSearchText(values.filter(Boolean).join(" "));
+  return material.keywords.some((keyword) =>
+    haystack.includes(normalizeSearchText(keyword)),
+  );
+}
 
 // Sample data for preview (remove in production)
 const SAMPLE_PROJECTS = [
@@ -272,6 +354,15 @@ export default function Explore() {
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeSearchField, setActiveSearchField] = useState("name");
+  const [selectedDeckMaterialId, setSelectedDeckMaterialId] = useState(null);
+
+  const isDeckSearch = DECK_SEARCH_PATTERN.test(filters.name.trim());
+  const selectedDeckMaterial = useMemo(
+    () =>
+      DECK_MATERIALS.find((material) => material.id === selectedDeckMaterialId) ||
+      null,
+    [selectedDeckMaterialId],
+  );
 
   // ✅ reactive auth snapshot
   const [{ authed, username: me }, setAuthSnap] = useState(readAuthSnapshot);
@@ -304,6 +395,35 @@ export default function Explore() {
       window.clearTimeout(timer);
     };
   }, [filters.location]);
+
+  useEffect(() => {
+    if (!isDeckSearch) {
+      setSelectedDeckMaterialId(null);
+      return;
+    }
+
+    setFiltersOpen(false);
+    setFilters((prev) => {
+      if (
+        !prev.location &&
+        !prev.minSqf &&
+        !prev.maxSqf &&
+        !prev.minBudget &&
+        !prev.maxBudget
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        location: "",
+        minSqf: "",
+        maxSqf: "",
+        minBudget: "",
+        maxBudget: "",
+      };
+    });
+  }, [isDeckSearch]);
 
   // Listen for auth changes (same tab and other tabs)
   useEffect(() => {
@@ -658,15 +778,20 @@ export default function Explore() {
   // 🔍 filter logic
   const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
-      const name = (p.title || "").toLowerCase();
       const loc = (p.location || "").toLowerCase();
       const sqf = Number(p.sqf ?? 0) || 0;
       const budget = Number(p.budget ?? 0) || 0;
+      const searchableValues = [
+        p.title,
+        p.summary,
+        p.category,
+        p.location,
+        p.owner_username,
+        ...(Array.isArray(p.service_categories) ? p.service_categories : []),
+      ];
 
-      if (
-        filters.name.trim() &&
-        !name.includes(filters.name.toLowerCase().trim())
-      )
+      if (!matchesSearchQuery(searchableValues, filters.name)) return false;
+      if (!matchesDeckMaterial(searchableValues, selectedDeckMaterial))
         return false;
 
       if (
@@ -685,7 +810,7 @@ export default function Explore() {
 
       return true;
     });
-  }, [projects, filters]);
+  }, [projects, filters, selectedDeckMaterial]);
 
   const filteredDirectoryListings = useMemo(() => {
     return directoryListings.filter((listing) => {
@@ -719,12 +844,14 @@ export default function Explore() {
         ...specialties,
       ]
         .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+        .join(" ");
 
-      return haystack.includes(nameQuery);
+      return (
+        matchesSearchQuery([haystack], nameQuery) &&
+        matchesDeckMaterial([haystack], selectedDeckMaterial)
+      );
     });
-  }, [directoryListings, filters]);
+  }, [directoryListings, filters, selectedDeckMaterial]);
 
   useEffect(() => {
     setVisibleDirectoryCount((prev) =>
@@ -740,6 +867,7 @@ export default function Explore() {
     visibleDirectoryCount >= filteredDirectoryListings.length;
 
   const clearFilters = () => {
+    setSelectedDeckMaterialId(null);
     setFilters({
       name: "",
       location: "",
@@ -858,27 +986,32 @@ export default function Explore() {
               <input
                 type="text"
                 value={filters.name}
-                onChange={(e) => setFilters((prev) => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => {
+                  setSelectedDeckMaterialId(null);
+                  setFilters((prev) => ({ ...prev, name: e.target.value }));
+                }}
                 placeholder="Search projects by name, category, or location..."
                 className="h-11 w-full rounded-xl border-0 bg-white/80 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               />
             </div>
-            <button
-              type="button"
-              onClick={() => setFiltersOpen((open) => !open)}
-              aria-expanded={filtersOpen}
-              className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium shadow-sm transition ${
-                filtersOpen || hasActiveFilters
-                  ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
-                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <SymbolIcon name="tune" className="text-[18px]" />
-              Filters
-            </button>
+            {!isDeckSearch ? (
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((open) => !open)}
+                aria-expanded={filtersOpen}
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium shadow-sm transition ${
+                  filtersOpen || hasActiveFilters
+                    ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <SymbolIcon name="tune" className="text-[18px]" />
+                Filters
+              </button>
+            ) : null}
           </div>
 
-          {filtersOpen ? (
+          {!isDeckSearch && filtersOpen ? (
             <div className="mb-6 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <label className="block">
@@ -996,36 +1129,107 @@ export default function Explore() {
             </div>
           ) : null}
 
-          {/* Category pills - translucent container */}
-          <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={clearFilters}
-                className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
-                  !hasActiveFilters
-                    ? "bg-slate-900 text-white shadow-sm"
-                    : "bg-white/80 text-slate-600 hover:bg-white"
-                }`}
-              >
-                All
-              </button>
-              {["Flooring", "Building", "Painting", "Concrete", "Landscaping", "Plumbing", "Electrical", "Cleaning"].map((cat) => (
+          {isDeckSearch ? (
+            <section aria-labelledby="deck-materials-heading">
+              <div className="mb-3 flex min-h-9 items-center justify-between gap-3">
+                <h2
+                  id="deck-materials-heading"
+                  className="text-base font-semibold text-slate-900"
+                >
+                  Deck materials
+                </h2>
+                {selectedDeckMaterial ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDeckMaterialId(null)}
+                    className="inline-flex size-9 items-center justify-center rounded-full bg-white/80 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900"
+                    aria-label="Show all deck materials"
+                    title="Show all deck materials"
+                  >
+                    <SymbolIcon name="close" className="text-[18px]" />
+                  </button>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {DECK_MATERIALS.map((material) => {
+                  const selected = material.id === selectedDeckMaterialId;
+                  return (
+                    <button
+                      key={material.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedDeckMaterialId(selected ? null : material.id)
+                      }
+                      aria-pressed={selected}
+                      className={`group relative aspect-[4/5] overflow-hidden rounded-lg border bg-white text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
+                        selected
+                          ? "border-slate-900 ring-2 ring-slate-900"
+                          : "border-white/80 hover:border-slate-300 hover:shadow-md"
+                      }`}
+                    >
+                      <span className="absolute inset-0 block overflow-hidden bg-slate-100">
+                        <img
+                          src={material.image}
+                          alt={`${material.label} decking material`}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                        />
+                      </span>
+                      <span
+                        className={`absolute inset-x-0 bottom-0 flex flex-col overflow-hidden bg-white px-3 py-2 transition-[height] duration-200 ease-out ${
+                          selected
+                            ? "h-[116px]"
+                            : "h-14 group-hover:h-[116px] group-focus-visible:h-[116px]"
+                        }`}
+                      >
+                        <span className="shrink-0 text-sm font-medium leading-5 text-slate-800">
+                          {material.label}
+                        </span>
+                        <span
+                          className={`mt-1 block text-xs leading-4 text-slate-600 transition-opacity duration-150 ${
+                            selected
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                          }`}
+                        >
+                          {material.description}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : (
+            <div className="rounded-2xl border border-white/60 bg-white/50 p-3 backdrop-blur-md">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  key={cat}
                   type="button"
-                  onClick={() => setFilters((prev) => ({ ...prev, name: cat }))}
+                  onClick={clearFilters}
                   className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
-                    filters.name.toLowerCase() === cat.toLowerCase()
+                    !hasActiveFilters
                       ? "bg-slate-900 text-white shadow-sm"
                       : "bg-white/80 text-slate-600 hover:bg-white"
                   }`}
                 >
-                  {cat}
+                  All
                 </button>
-              ))}
+                {["Flooring", "Building", "Painting", "Concrete", "Landscaping", "Plumbing", "Electrical", "Cleaning"].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setFilters((prev) => ({ ...prev, name: cat }))}
+                    className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium transition ${
+                      filters.name.toLowerCase() === cat.toLowerCase()
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "bg-white/80 text-slate-600 hover:bg-white"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
