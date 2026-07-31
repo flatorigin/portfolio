@@ -24,10 +24,62 @@ import pvcVinylImage from "../assets/explore/deck-materials/pvc-vinyl.webp";
 import cedarRedwoodImage from "../assets/explore/deck-materials/cedar-redwood.webp";
 import hardwoodImage from "../assets/explore/deck-materials/hardwood.webp";
 import aluminumImage from "../assets/explore/deck-materials/aluminum.webp";
+import fiberCementImage from "../assets/explore/siding-materials/fiber-cement.webp";
+import sidingVinylImage from "../assets/explore/siding-materials/vinyl.webp";
+import sidingAluminumImage from "../assets/explore/siding-materials/aluminum.webp";
+import stuccoImage from "../assets/explore/siding-materials/stucco.webp";
+import stoneVeneerImage from "../assets/explore/siding-materials/stone-veneer.webp";
+import engineeredWoodImage from "../assets/explore/siding-materials/engineered-wood.webp";
+import asphaltShinglesImage from "../assets/explore/roofing-materials/asphalt-shingles.webp";
+import standingSeamMetalImage from "../assets/explore/roofing-materials/standing-seam-metal.webp";
+import cedarShakeImage from "../assets/explore/roofing-materials/cedar-shake.webp";
+import clayConcreteTileImage from "../assets/explore/roofing-materials/clay-concrete-tile.webp";
+import slateRoofImage from "../assets/explore/roofing-materials/slate.webp";
+import flatRoofMembraneImage from "../assets/explore/roofing-materials/flat-roof-membrane.webp";
+import solidHardwoodFloorImage from "../assets/explore/flooring-materials/solid-hardwood.webp";
+import engineeredWoodFloorImage from "../assets/explore/flooring-materials/engineered-wood.webp";
+import luxuryVinylPlankImage from "../assets/explore/flooring-materials/luxury-vinyl-plank.webp";
+import laminateFloorImage from "../assets/explore/flooring-materials/laminate.webp";
+import porcelainCeramicTileImage from "../assets/explore/flooring-materials/porcelain-ceramic-tile.webp";
+import carpetImage from "../assets/explore/flooring-materials/carpet.webp";
+import asphaltHardscapeImage from "../assets/explore/hardscape-materials/asphalt.webp";
+import pouredConcreteImage from "../assets/explore/hardscape-materials/poured-concrete.webp";
+import concretePaversImage from "../assets/explore/hardscape-materials/concrete-pavers.webp";
+import brickPaversImage from "../assets/explore/hardscape-materials/brick-pavers.webp";
+import naturalStoneImage from "../assets/explore/hardscape-materials/natural-stone.webp";
+import gravelImage from "../assets/explore/hardscape-materials/gravel.webp";
+import shakerCabinetImage from "../assets/explore/cabinet-styles/shaker.webp";
+import flatPanelCabinetImage from "../assets/explore/cabinet-styles/flat-panel.webp";
+import raisedPanelCabinetImage from "../assets/explore/cabinet-styles/raised-panel.webp";
+import insetCabinetImage from "../assets/explore/cabinet-styles/inset.webp";
+import glassFrontCabinetImage from "../assets/explore/cabinet-styles/glass-front.webp";
+import beadboardCabinetImage from "../assets/explore/cabinet-styles/beadboard.webp";
+import woodPrivacyFenceImage from "../assets/explore/fencing-materials/wood-privacy.webp";
+import vinylFenceImage from "../assets/explore/fencing-materials/vinyl.webp";
+import aluminumFenceImage from "../assets/explore/fencing-materials/aluminum.webp";
+import chainLinkFenceImage from "../assets/explore/fencing-materials/chain-link.webp";
+import compositeFenceImage from "../assets/explore/fencing-materials/composite.webp";
+import steelWroughtIronFenceImage from "../assets/explore/fencing-materials/steel-wrought-iron.webp";
+import bathroomPorcelainCeramicImage from "../assets/explore/bathroom-surfaces/porcelain-ceramic-tile.webp";
+import bathroomNaturalStoneImage from "../assets/explore/bathroom-surfaces/natural-stone.webp";
+import bathroomGlassMosaicImage from "../assets/explore/bathroom-surfaces/glass-mosaic.webp";
+import bathroomSolidSurfaceImage from "../assets/explore/bathroom-surfaces/solid-surface-panels.webp";
+import bathroomAcrylicFiberglassImage from "../assets/explore/bathroom-surfaces/acrylic-fiberglass.webp";
+import bathroomMicrocementImage from "../assets/explore/bathroom-surfaces/microcement.webp";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
 const DIRECTORY_BATCH_SIZE = 6;
 const DECK_SEARCH_PATTERN = /\b(?:deck|decks|decking)\b/i;
+const SIDING_SEARCH_PATTERN = /\b(?:siding|sidings)\b/i;
+const ROOFING_SEARCH_PATTERN = /\b(?:roof|roofs|roofing)\b/i;
+const FLOORING_SEARCH_PATTERN = /\b(?:floor|floors|flooring)\b/i;
+const HARDSCAPE_SEARCH_PATTERN =
+  /\b(?:driveway|driveways|hardscape|hardscapes|hardscaping|walkway|walkways|patio|patios|pavement|paving)\b/i;
+const CABINET_SEARCH_PATTERN =
+  /\b(?:cabinet|cabinets|cabinetry|kitchen\s+cupboard|kitchen\s+cupboards)\b/i;
+const FENCING_SEARCH_PATTERN = /\b(?:fence|fences|fencing)\b/i;
+const BATHROOM_SURFACE_SEARCH_PATTERN =
+  /\b(?:shower|showers|bath|baths|bathroom|bathrooms|wet\s+room|wet\s+rooms|bath\s+surface|bath\s+surfaces)\b/i;
 
 const DECK_MATERIALS = [
   {
@@ -80,6 +132,422 @@ const DECK_MATERIALS = [
   },
 ];
 
+const SIDING_MATERIALS = [
+  {
+    id: "fiber-cement",
+    label: "James Hardie / fiber cement",
+    image: fiberCementImage,
+    keywords: ["fiber cement", "fibre cement", "james hardie", "hardie board"],
+    description:
+      "Good for walls because it resists moisture and pests.",
+  },
+  {
+    id: "vinyl",
+    label: "Vinyl",
+    image: sidingVinylImage,
+    keywords: ["vinyl"],
+    description:
+      "Good for lower-upkeep exteriors because it does not need repainting.",
+  },
+  {
+    id: "aluminum",
+    label: "Aluminum",
+    image: sidingAluminumImage,
+    keywords: ["aluminum", "aluminium", "metal siding"],
+    description:
+      "Good for wet climates because it resists rust and moisture.",
+  },
+  {
+    id: "stucco",
+    label: "Stucco",
+    image: stuccoImage,
+    keywords: ["stucco", "plaster"],
+    description:
+      "Good for seamless exterior walls because it forms one solid surface.",
+  },
+  {
+    id: "stone-veneer",
+    label: "Stone veneer",
+    image: stoneVeneerImage,
+    keywords: ["stone", "stone veneer", "rock", "masonry veneer"],
+    description:
+      "Good for accent walls because it adds natural texture and depth.",
+  },
+  {
+    id: "engineered-wood",
+    label: "Engineered wood",
+    image: engineeredWoodImage,
+    keywords: ["engineered wood", "wood siding", "lp smartside"],
+    description:
+      "Good for a wood look because the panels stay dimensionally stable.",
+  },
+];
+
+const ROOFING_MATERIALS = [
+  {
+    id: "asphalt-shingles",
+    label: "Asphalt shingles",
+    image: asphaltShinglesImage,
+    keywords: ["asphalt", "asphalt shingles", "architectural shingles"],
+    description:
+      "Good for sloped roofs because layered shingles shed rain.",
+  },
+  {
+    id: "standing-seam-metal",
+    label: "Standing-seam metal",
+    image: standingSeamMetalImage,
+    keywords: ["standing seam", "metal roof", "steel roof"],
+    description:
+      "Locked seams resist wind and water on exposed roofs.",
+  },
+  {
+    id: "cedar-shake",
+    label: "Cedar shake",
+    image: cedarShakeImage,
+    keywords: ["cedar", "cedar shake", "wood shake", "wood shingles"],
+    description:
+      "Good for a natural look because split wood adds texture.",
+  },
+  {
+    id: "clay-concrete-tile",
+    label: "Clay / concrete tile",
+    image: clayConcreteTileImage,
+    keywords: ["clay tile", "concrete tile", "roof tile", "terracotta"],
+    description:
+      "Handles heat and sun well on sloped roofs.",
+  },
+  {
+    id: "slate",
+    label: "Slate",
+    image: slateRoofImage,
+    keywords: ["slate", "stone roof"],
+    description:
+      "Good for long service because dense stone resists weathering.",
+  },
+  {
+    id: "flat-roof-membrane",
+    label: "Flat-roof membrane",
+    image: flatRoofMembraneImage,
+    keywords: ["flat roof", "membrane", "tpo", "epdm", "single ply"],
+    description:
+      "Sealed sheets protect low-slope roofs from water.",
+  },
+];
+
+const FLOORING_MATERIALS = [
+  {
+    id: "solid-hardwood",
+    label: "Solid hardwood",
+    image: solidHardwoodFloorImage,
+    keywords: ["solid hardwood", "hardwood floor", "oak floor", "wood floor"],
+    description:
+      "Good for living areas because solid wood can be refinished.",
+  },
+  {
+    id: "engineered-wood",
+    label: "Engineered wood",
+    image: engineeredWoodFloorImage,
+    keywords: ["engineered wood", "engineered hardwood"],
+    description:
+      "Good through humidity changes because layered boards stay stable.",
+  },
+  {
+    id: "luxury-vinyl-plank",
+    label: "Luxury vinyl plank",
+    image: luxuryVinylPlankImage,
+    keywords: ["luxury vinyl", "vinyl plank", "lvp"],
+    description:
+      "Easy to clean in busy or damp rooms.",
+  },
+  {
+    id: "laminate",
+    label: "Laminate",
+    image: laminateFloorImage,
+    keywords: ["laminate", "laminate floor"],
+    description:
+      "Good for active rooms because its wear layer resists scratches.",
+  },
+  {
+    id: "porcelain-ceramic-tile",
+    label: "Porcelain / ceramic tile",
+    image: porcelainCeramicTileImage,
+    keywords: ["porcelain", "ceramic", "floor tile", "tile floor"],
+    description:
+      "Handles water well in kitchens and baths.",
+  },
+  {
+    id: "carpet",
+    label: "Carpet",
+    image: carpetImage,
+    keywords: ["carpet", "carpeting"],
+    description:
+      "Good for bedrooms because soft fibers add warmth and quiet.",
+  },
+];
+
+const HARDSCAPE_MATERIALS = [
+  {
+    id: "asphalt",
+    label: "Asphalt",
+    image: asphaltHardscapeImage,
+    keywords: ["asphalt", "blacktop"],
+    description:
+      "Good for driveways because the continuous surface handles traffic.",
+  },
+  {
+    id: "poured-concrete",
+    label: "Poured concrete",
+    image: pouredConcreteImage,
+    keywords: ["poured concrete", "concrete slab", "concrete driveway"],
+    description:
+      "Good for heavy loads because solid slabs form a firm surface.",
+  },
+  {
+    id: "concrete-pavers",
+    label: "Concrete pavers",
+    image: concretePaversImage,
+    keywords: ["concrete paver", "concrete pavers", "interlocking pavers"],
+    description:
+      "Good for patterns because individual units can be replaced.",
+  },
+  {
+    id: "brick-pavers",
+    label: "Brick pavers",
+    image: brickPaversImage,
+    keywords: ["brick paver", "brick pavers", "clay pavers"],
+    description:
+      "Good for traditional paths because fired clay keeps its color.",
+  },
+  {
+    id: "natural-stone",
+    label: "Natural stone",
+    image: naturalStoneImage,
+    keywords: ["natural stone", "flagstone", "bluestone", "stone patio"],
+    description:
+      "Good for patios because every piece has natural variation.",
+  },
+  {
+    id: "gravel",
+    label: "Gravel",
+    image: gravelImage,
+    keywords: ["gravel", "crushed stone", "pea gravel"],
+    description:
+      "Good for drainage because loose stone lets water pass through.",
+  },
+];
+
+const CABINET_STYLES = [
+  {
+    id: "shaker",
+    label: "Shaker",
+    image: shakerCabinetImage,
+    keywords: ["shaker", "shaker cabinet", "recessed panel cabinet"],
+    description:
+      "Good for flexible styles because the simple frame suits many kitchens.",
+  },
+  {
+    id: "flat-panel",
+    label: "Flat-panel",
+    image: flatPanelCabinetImage,
+    keywords: ["flat panel", "slab cabinet", "modern cabinet"],
+    description:
+      "Good for modern kitchens because smooth fronts keep lines clean.",
+  },
+  {
+    id: "raised-panel",
+    label: "Raised-panel",
+    image: raisedPanelCabinetImage,
+    keywords: ["raised panel", "traditional cabinet"],
+    description:
+      "Good for traditional kitchens because molded panels add depth.",
+  },
+  {
+    id: "inset",
+    label: "Inset",
+    image: insetCabinetImage,
+    keywords: ["inset cabinet", "flush inset", "framed cabinet"],
+    description:
+      "Good for tailored cabinetry because doors sit flush with the frame.",
+  },
+  {
+    id: "glass-front",
+    label: "Glass-front",
+    image: glassFrontCabinetImage,
+    keywords: ["glass front", "glass cabinet", "display cabinet"],
+    description:
+      "Good for display storage because contents stay visible.",
+  },
+  {
+    id: "beadboard",
+    label: "Beadboard",
+    image: beadboardCabinetImage,
+    keywords: ["beadboard", "grooved panel cabinet", "cottage cabinet"],
+    description:
+      "Good for cottage character because vertical grooves add texture.",
+  },
+];
+
+const FENCING_MATERIALS = [
+  {
+    id: "wood-privacy",
+    label: "Wood privacy",
+    image: woodPrivacyFenceImage,
+    keywords: ["wood fence", "privacy fence", "pressure treated fence", "cedar fence"],
+    description:
+      "Good for privacy because boards can be sized and stained.",
+  },
+  {
+    id: "vinyl",
+    label: "Vinyl",
+    image: vinylFenceImage,
+    keywords: ["vinyl fence", "pvc fence", "white privacy fence"],
+    description:
+      "Good for low upkeep because panels resist moisture and rot.",
+  },
+  {
+    id: "aluminum",
+    label: "Aluminum",
+    image: aluminumFenceImage,
+    keywords: ["aluminum fence", "metal fence", "pool fence"],
+    description:
+      "Good around pools because it resists corrosion and preserves views.",
+  },
+  {
+    id: "chain-link",
+    label: "Chain-link",
+    image: chainLinkFenceImage,
+    keywords: ["chain link", "chain-link fence", "wire fence"],
+    description:
+      "Good for practical boundaries because open mesh keeps sightlines.",
+  },
+  {
+    id: "composite",
+    label: "Composite",
+    image: compositeFenceImage,
+    keywords: ["composite fence", "wood plastic fence"],
+    description:
+      "Good for modern privacy because boards resist fading and decay.",
+  },
+  {
+    id: "ornamental-steel",
+    label: "Ornamental steel",
+    image: steelWroughtIronFenceImage,
+    keywords: ["steel fence", "wrought iron", "ornamental iron", "iron fence"],
+    description:
+      "Good for security because rigid bars stay open to view.",
+  },
+];
+
+const BATHROOM_SURFACES = [
+  {
+    id: "porcelain-ceramic-tile",
+    label: "Porcelain / ceramic",
+    image: bathroomPorcelainCeramicImage,
+    keywords: ["porcelain tile", "ceramic tile", "shower tile", "bathroom tile"],
+    description:
+      "Fired tile handles water and wear in wet areas.",
+  },
+  {
+    id: "natural-stone",
+    label: "Natural stone",
+    image: bathroomNaturalStoneImage,
+    keywords: ["natural stone", "marble shower", "stone tile", "stone slab"],
+    description:
+      "Good for natural variation because every slab has unique veining.",
+  },
+  {
+    id: "glass-mosaic",
+    label: "Glass mosaic",
+    image: bathroomGlassMosaicImage,
+    keywords: ["glass mosaic", "mosaic tile", "glass tile"],
+    description:
+      "Good for shower accents because small tiles follow curves.",
+  },
+  {
+    id: "solid-surface-panels",
+    label: "Solid-surface panels",
+    image: bathroomSolidSurfaceImage,
+    keywords: ["solid surface", "shower panels", "wall panels", "corian shower"],
+    description:
+      "Large panels reduce seams across shower walls.",
+  },
+  {
+    id: "acrylic-fiberglass",
+    label: "Acrylic / fiberglass",
+    image: bathroomAcrylicFiberglassImage,
+    keywords: ["acrylic shower", "fiberglass shower", "shower surround"],
+    description:
+      "Good for simple surrounds because molded panels clean easily.",
+  },
+  {
+    id: "microcement",
+    label: "Microcement",
+    image: bathroomMicrocementImage,
+    keywords: ["microcement", "micro concrete", "cement shower", "seamless plaster"],
+    description:
+      "Good for seamless rooms because the coating has no grout lines.",
+  },
+];
+
+const MATERIAL_GROUPS = [
+  {
+    id: "deck",
+    title: "Deck materials",
+    pattern: DECK_SEARCH_PATTERN,
+    imageAltSuffix: "decking material",
+    materials: DECK_MATERIALS,
+  },
+  {
+    id: "siding",
+    title: "Siding materials",
+    pattern: SIDING_SEARCH_PATTERN,
+    imageAltSuffix: "siding material",
+    materials: SIDING_MATERIALS,
+  },
+  {
+    id: "roofing",
+    title: "Roofing materials",
+    pattern: ROOFING_SEARCH_PATTERN,
+    imageAltSuffix: "roofing material",
+    materials: ROOFING_MATERIALS,
+  },
+  {
+    id: "flooring",
+    title: "Flooring materials",
+    pattern: FLOORING_SEARCH_PATTERN,
+    imageAltSuffix: "flooring material",
+    materials: FLOORING_MATERIALS,
+  },
+  {
+    id: "hardscape",
+    title: "Driveway & hardscape materials",
+    pattern: HARDSCAPE_SEARCH_PATTERN,
+    imageAltSuffix: "driveway and hardscape material",
+    materials: HARDSCAPE_MATERIALS,
+  },
+  {
+    id: "cabinets",
+    title: "Kitchen cabinet styles",
+    pattern: CABINET_SEARCH_PATTERN,
+    imageAltSuffix: "kitchen cabinet style",
+    materials: CABINET_STYLES,
+  },
+  {
+    id: "fencing",
+    title: "Fencing materials",
+    pattern: FENCING_SEARCH_PATTERN,
+    imageAltSuffix: "fencing material",
+    materials: FENCING_MATERIALS,
+  },
+  {
+    id: "bathroom-surfaces",
+    title: "Shower & bathroom surfaces",
+    pattern: BATHROOM_SURFACE_SEARCH_PATTERN,
+    imageAltSuffix: "shower and bathroom surface",
+    materials: BATHROOM_SURFACES,
+  },
+];
+
 function normalizeSearchText(value) {
   return String(value || "")
     .normalize("NFKD")
@@ -96,7 +564,7 @@ function matchesSearchQuery(values, query) {
   return terms.every((term) => haystack.includes(term));
 }
 
-function matchesDeckMaterial(values, material) {
+function matchesMaterial(values, material) {
   if (!material) return true;
   const haystack = normalizeSearchText(values.filter(Boolean).join(" "));
   return material.keywords.some((keyword) =>
@@ -354,14 +822,20 @@ export default function Explore() {
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeSearchField, setActiveSearchField] = useState("name");
-  const [selectedDeckMaterialId, setSelectedDeckMaterialId] = useState(null);
+  const [selectedMaterialId, setSelectedMaterialId] = useState(null);
 
-  const isDeckSearch = DECK_SEARCH_PATTERN.test(filters.name.trim());
-  const selectedDeckMaterial = useMemo(
+  const activeMaterialGroup = useMemo(
     () =>
-      DECK_MATERIALS.find((material) => material.id === selectedDeckMaterialId) ||
+      MATERIAL_GROUPS.find((group) => group.pattern.test(filters.name.trim())) ||
       null,
-    [selectedDeckMaterialId],
+    [filters.name],
+  );
+  const selectedMaterial = useMemo(
+    () =>
+      activeMaterialGroup?.materials.find(
+        (material) => material.id === selectedMaterialId,
+      ) || null,
+    [activeMaterialGroup, selectedMaterialId],
   );
 
   // ✅ reactive auth snapshot
@@ -397,10 +871,8 @@ export default function Explore() {
   }, [filters.location]);
 
   useEffect(() => {
-    if (!isDeckSearch) {
-      setSelectedDeckMaterialId(null);
-      return;
-    }
+    setSelectedMaterialId(null);
+    if (!activeMaterialGroup) return;
 
     setFiltersOpen(false);
     setFilters((prev) => {
@@ -423,7 +895,7 @@ export default function Explore() {
         maxBudget: "",
       };
     });
-  }, [isDeckSearch]);
+  }, [activeMaterialGroup]);
 
   // Listen for auth changes (same tab and other tabs)
   useEffect(() => {
@@ -791,7 +1263,7 @@ export default function Explore() {
       ];
 
       if (!matchesSearchQuery(searchableValues, filters.name)) return false;
-      if (!matchesDeckMaterial(searchableValues, selectedDeckMaterial))
+      if (!matchesMaterial(searchableValues, selectedMaterial))
         return false;
 
       if (
@@ -810,7 +1282,7 @@ export default function Explore() {
 
       return true;
     });
-  }, [projects, filters, selectedDeckMaterial]);
+  }, [projects, filters, selectedMaterial]);
 
   const filteredDirectoryListings = useMemo(() => {
     return directoryListings.filter((listing) => {
@@ -848,10 +1320,10 @@ export default function Explore() {
 
       return (
         matchesSearchQuery([haystack], nameQuery) &&
-        matchesDeckMaterial([haystack], selectedDeckMaterial)
+        matchesMaterial([haystack], selectedMaterial)
       );
     });
-  }, [directoryListings, filters, selectedDeckMaterial]);
+  }, [directoryListings, filters, selectedMaterial]);
 
   useEffect(() => {
     setVisibleDirectoryCount((prev) =>
@@ -867,7 +1339,7 @@ export default function Explore() {
     visibleDirectoryCount >= filteredDirectoryListings.length;
 
   const clearFilters = () => {
-    setSelectedDeckMaterialId(null);
+    setSelectedMaterialId(null);
     setFilters({
       name: "",
       location: "",
@@ -987,14 +1459,14 @@ export default function Explore() {
                 type="text"
                 value={filters.name}
                 onChange={(e) => {
-                  setSelectedDeckMaterialId(null);
+                  setSelectedMaterialId(null);
                   setFilters((prev) => ({ ...prev, name: e.target.value }));
                 }}
                 placeholder="Search projects by name, category, or location..."
                 className="h-11 w-full rounded-xl border-0 bg-white/80 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
               />
             </div>
-            {!isDeckSearch ? (
+            {!activeMaterialGroup ? (
               <button
                 type="button"
                 onClick={() => setFiltersOpen((open) => !open)}
@@ -1011,7 +1483,7 @@ export default function Explore() {
             ) : null}
           </div>
 
-          {!isDeckSearch && filtersOpen ? (
+          {!activeMaterialGroup && filtersOpen ? (
             <div className="mb-6 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <label className="block">
@@ -1129,36 +1601,36 @@ export default function Explore() {
             </div>
           ) : null}
 
-          {isDeckSearch ? (
-            <section aria-labelledby="deck-materials-heading">
+          {activeMaterialGroup ? (
+            <section aria-labelledby={`${activeMaterialGroup.id}-materials-heading`}>
               <div className="mb-3 flex min-h-9 items-center justify-between gap-3">
                 <h2
-                  id="deck-materials-heading"
+                  id={`${activeMaterialGroup.id}-materials-heading`}
                   className="text-base font-semibold text-slate-900"
                 >
-                  Deck materials
+                  {activeMaterialGroup.title}
                 </h2>
-                {selectedDeckMaterial ? (
+                {selectedMaterial ? (
                   <button
                     type="button"
-                    onClick={() => setSelectedDeckMaterialId(null)}
+                    onClick={() => setSelectedMaterialId(null)}
                     className="inline-flex size-9 items-center justify-center rounded-full bg-white/80 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900"
-                    aria-label="Show all deck materials"
-                    title="Show all deck materials"
+                    aria-label={`Show all ${activeMaterialGroup.title.toLowerCase()}`}
+                    title={`Show all ${activeMaterialGroup.title.toLowerCase()}`}
                   >
                     <SymbolIcon name="close" className="text-[18px]" />
                   </button>
                 ) : null}
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                {DECK_MATERIALS.map((material) => {
-                  const selected = material.id === selectedDeckMaterialId;
+                {activeMaterialGroup.materials.map((material) => {
+                  const selected = material.id === selectedMaterialId;
                   return (
                     <button
                       key={material.id}
                       type="button"
                       onClick={() =>
-                        setSelectedDeckMaterialId(selected ? null : material.id)
+                        setSelectedMaterialId(selected ? null : material.id)
                       }
                       aria-pressed={selected}
                       className={`group relative aspect-[4/5] overflow-hidden rounded-lg border bg-white text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
@@ -1170,7 +1642,7 @@ export default function Explore() {
                       <span className="absolute inset-0 block overflow-hidden bg-slate-100">
                         <img
                           src={material.image}
-                          alt={`${material.label} decking material`}
+                          alt={`${material.label} ${activeMaterialGroup.imageAltSuffix}`}
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                         />
                       </span>
