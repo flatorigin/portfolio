@@ -8,25 +8,25 @@ import contractorIllustration from "../assets/landing/contractor.webp";
 const roleCards = [
   {
     title: "For Homeowners",
-    intro: "Plan your next project and find the right contractor.",
+    intro: "Turn an idea into a clear project and find the right help.",
     features: [
-      "Save and organize project ideas",
-      "Get bids from local contractors",
-      "Keep projects private or share publicly",
+      "Browse real project examples",
+      "Organize plans, images, and details",
+      "Connect directly with local contractors",
     ],
-    cta: "Get Started",
+    cta: "Plan a Project",
     to: "/homeowner",
     image: homeownerIllustration,
   },
   {
     title: "For Contractors",
-    intro: "Showcase your work and win more projects.",
+    intro: "Show real work and connect with homeowners planning locally.",
     features: [
-      "Build a professional profile",
-      "Display your portfolio",
-      "Bid on projects in your area",
+      "Create a public business profile",
+      "Organize completed work into a portfolio",
+      "Find relevant projects in your area",
     ],
-    cta: "Get Started",
+    cta: "Showcase Your Work",
     to: "/contractor",
     image: contractorIllustration,
   },
@@ -35,8 +35,8 @@ const roleCards = [
 const whyFeatures = [
   [
     "shield",
-    "No Middlemen",
-    "Connect directly with homeowners or contractors without paying referral fees or commissions.",
+    "Direct Connections",
+    "Homeowners and contractors communicate directly without referral fees or commissions.",
   ],
   [
     "payments",
@@ -45,13 +45,13 @@ const whyFeatures = [
   ],
   [
     "schedule",
-    "Save Time",
-    "Streamlined process helps you find the right match faster than traditional methods.",
+    "Everything Together",
+    "Keep project details, images, conversations, and progress in one organized place.",
   ],
   [
     "star",
-    "Quality Focus",
-    "Detailed project descriptions and portfolios ensure better matches and outcomes.",
+    "Work You Can Review",
+    "Detailed projects and contractor portfolios help both sides make informed decisions.",
   ],
 ];
 
@@ -197,11 +197,11 @@ export default function LandingPage() {
         <Container className="py-16 sm:py-20">
           <div className="mx-auto max-w-2xl text-center">
             <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-              Find the right contractor for your next project
+              Start with the project you want to build
             </h1>
             <p className="mx-auto mt-5 max-w-lg text-lg leading-relaxed text-slate-500">
-              FlatOrigin connects homeowners and contractors around real
-              projects - no middlemen, no hassle.
+              Browse real project ideas, connect directly with local
+              contractors, and keep your plans and progress together.
             </p>
           </div>
 
@@ -221,9 +221,13 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <p className="mt-8 flex items-center justify-center gap-2 text-sm text-slate-400">
-            <SymbolIcon name="swap_horiz" className="text-[18px]" />
-            <span>You can switch between experiences anytime.</span>
+          <p className="mt-8 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-slate-500">
+            <SymbolIcon name="verified_user" className="text-[18px]" />
+            <span>Free for homeowners</span>
+            <span aria-hidden="true">·</span>
+            <span>No referral commissions</span>
+            <span aria-hidden="true">·</span>
+            <span>Browse before creating an account</span>
           </p>
         </Container>
       </main>
@@ -231,10 +235,11 @@ export default function LandingPage() {
       <section className="border-y border-slate-200 bg-[#F6F5F1] py-16">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Why Choose FlatOrigin
+            Why FlatOrigin
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-slate-500">
-            Built different from traditional contractor marketplaces
+            A clearer way to plan projects, show real work, and connect
+            directly
           </p>
         </div>
         <div className="mx-auto mt-12 grid max-w-5xl gap-8 px-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -258,11 +263,11 @@ export default function LandingPage() {
         <Container>
           <div className="flex flex-col items-center text-center">
             <h2 className="text-3xl font-bold text-white sm:text-4xl">
-              Ready to get started?
+              Ready to explore your next project?
             </h2>
             <p className="mt-3 max-w-md text-slate-400">
-              Join thousands of homeowners and contractors already using
-              FlatOrigin.
+              Start planning a project or create a profile to showcase your
+              work.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link to="/homeowner">
@@ -295,7 +300,7 @@ export default function LandingPage() {
                 FlatOrigin
               </Link>
               <p className="mt-2 max-w-xs text-sm text-slate-500">
-                Connecting homeowners with quality contractors since 2026.
+                Plan projects, showcase work, and connect directly.
               </p>
             </div>
             <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
