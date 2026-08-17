@@ -215,33 +215,6 @@ export default function ProjectPlanDetail() {
   const showProjectPreview = finalReady && projectPreviewOpen;
   const guidedRows = guidedAnswerRows(activeTemplate, plan?.guided_answers_json);
   const packetStatus = packetReadinessLabel(plan, plan?.images || [], markupVersions);
-  const packetChecklist = [
-    {
-      label: "Project type",
-      complete: !!plan?.project_type,
-      helper: plan?.project_type ? projectTypeLabel(activeTemplate) : "Choose the closest category.",
-    },
-    {
-      label: "Basic details",
-      complete: packetReady,
-      helper: packetReady ? "Title, work area, and summary are filled." : "Add title, work area, and summary.",
-    },
-    {
-      label: "Photos",
-      complete: (plan?.images || []).length > 0,
-      helper: `${(plan?.images || []).length} uploaded`,
-    },
-    {
-      label: "Access notes",
-      complete: !!String(plan?.site_access || "").trim(),
-      helper: plan?.site_access || "Optional, but helpful for contractors.",
-    },
-    {
-      label: "Guided intake",
-      complete: isIntakeComplete,
-      helper: questions.length ? `${answeredCount}/${questions.length} answered` : "Optional improvement step.",
-    },
-  ];
 
   async function patchPlan(patch, successMessage = "Saved.") {
     setSaving(true);
@@ -537,7 +510,7 @@ export default function ProjectPlanDetail() {
             <div>
               <div className="text-lg font-semibold text-slate-950">Project Packet Builder</div>
               <div className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                Start with the essentials contractors need to understand the job. Add photos and optional intake details when you want a stronger packet.
+                Add the essentials, photos, and details contractors need to understand your project.
               </div>
             </div>
             <Badge
@@ -550,29 +523,6 @@ export default function ProjectPlanDetail() {
             >
               {packetStatus}
             </Badge>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {packetChecklist.map((item) => (
-              <div
-                key={item.label}
-                className={
-                  "min-h-[92px] rounded-xl border px-4 py-3 text-sm " +
-                  (item.complete
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                    : "border-slate-200 bg-slate-50 text-slate-700")
-                }
-              >
-                <div className="flex items-start gap-2 font-semibold">
-                  <SymbolIcon
-                    name={item.complete ? "check_circle" : "radio_button_unchecked"}
-                    className={"mt-0.5 shrink-0 text-[18px] " + (item.complete ? "text-emerald-600" : "text-slate-400")}
-                  />
-                  <span className="min-w-0 leading-5">{item.label}</span>
-                </div>
-                <div className="mt-2 text-xs leading-5 opacity-80">{item.helper}</div>
-              </div>
-            ))}
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
