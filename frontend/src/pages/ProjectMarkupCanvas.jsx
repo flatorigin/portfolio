@@ -1852,7 +1852,7 @@ export default function ProjectMarkupCanvas() {
       if (saved.backgroundUrl) setBackgroundUrl(saved.backgroundUrl);
       if (Array.isArray(saved.annotations)) setAnnotations(saved.annotations);
       if (saved.canvasMode === "rough_plan" || saved.canvasMode === "photo") setCanvasMode(saved.canvasMode);
-      if (saved.workspaceView === "2d" || saved.workspaceView === "3d") setWorkspaceView(saved.workspaceView);
+      setWorkspaceView("2d");
       if (["perspective", "top", "elevation"].includes(saved.designViewMode)) setDesignViewMode(saved.designViewMode);
       if (saved.designSettings && typeof saved.designSettings === "object") {
         setDesignSettings((prev) => ({ ...prev, ...saved.designSettings }));
@@ -1883,9 +1883,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, workspaceView, designViewMode, designSettings, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, designViewMode, designSettings, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, designSettings, designViewMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers, workspaceView]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, designSettings, designViewMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -2177,7 +2177,6 @@ export default function ProjectMarkupCanvas() {
     () => buildDesignGeometry(annotations, activeMeasurementGeometry, roughPlan, designSettings),
     [activeMeasurementGeometry, annotations, designSettings, roughPlan],
   );
-  const hasActiveDesignWalls = currentDesignGeometry.walls.some((wall) => wall.kind !== "remove");
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
@@ -2234,18 +2233,6 @@ export default function ProjectMarkupCanvas() {
     const markup = safeMarkupData(plan?.markup_data);
     return Array.isArray(markup.versions) ? markup.versions : [];
   }, [plan]);
-  const cleanFloorPlanBackgroundSelected = useMemo(() => {
-    if (String(projectImage?.caption || "").toLowerCase().includes(CLEAN_FLOOR_PLAN_NAME)) return true;
-    return (plan?.images || []).some((image) =>
-      image?.image_url === backgroundUrl && String(image?.caption || "").toLowerCase().includes(CLEAN_FLOOR_PLAN_NAME),
-    );
-  }, [backgroundUrl, plan?.images, projectImage?.caption]);
-  const floorPlanSceneReady = useMemo(() => {
-    if (!(isRoughPlan || hasAiCleanPlanOverlay || cleanFloorPlanBackgroundSelected)) return false;
-    if (hasAiCleanPlanOverlay || cleanFloorPlanBackgroundSelected || annotations.length) return true;
-    if (savedVersions.some((version) => version?.version_type === "rough_plan")) return true;
-    return sketchStatus.phase === "ready" || (!sketchSource && isRoughPlan);
-  }, [annotations.length, cleanFloorPlanBackgroundSelected, hasAiCleanPlanOverlay, isRoughPlan, savedVersions, sketchSource, sketchStatus.phase]);
   const sketchSourceImages = useMemo(() => {
     if (isProjectImageMode) {
       return projectImages
@@ -6104,7 +6091,7 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
-              {workspaceView === "2d" && floorPlanSceneReady ? (
+              {workspaceView === "2d" ? (
                 <button
                   type="button"
                   onClick={request3DConversion}
