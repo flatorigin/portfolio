@@ -28,6 +28,7 @@ from accounts.models import (
     AIUsageEvent,
     Profile,
     get_ai_remaining_today_for_user,
+    record_ai_usage_event,
 )
 from .models import (
     Project,
@@ -915,20 +916,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
             rough_plan = normalize_sketch_rough_plan_payload(payload)
             annotations = normalize_sketch_annotations_payload(payload)
             uncertainty_notes = self._clean_string_list(payload.get("uncertainty_notes") if isinstance(payload, dict) else [])
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.SUCCESS,
+                status_value=AIUsageEvent.Status.SUCCESS,
                 prompt_chars=len(system_prompt) + len(user_prompt),
                 response_chars=len(result["text"]),
+                usage=result.get("usage"),
             )
         except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.ERROR,
+                status_value=AIUsageEvent.Status.ERROR,
                 prompt_chars=len(system_prompt) + len(user_prompt),
                 response_chars=0,
             )
@@ -1023,20 +1025,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     "ai_model": model_name,
                 },
             )
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.SUCCESS,
+                status_value=AIUsageEvent.Status.SUCCESS,
                 prompt_chars=len(prompt),
                 response_chars=0,
+                usage=result.get("usage"),
             )
         except AIServiceError as exc:
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.ERROR,
+                status_value=AIUsageEvent.Status.ERROR,
                 prompt_chars=len(prompt),
                 response_chars=0,
             )
@@ -1440,20 +1443,21 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 order=plan.images.count(),
                 is_cover=not plan.images.filter(is_cover=True).exists(),
             )
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.SUCCESS,
+                status_value=AIUsageEvent.Status.SUCCESS,
                 prompt_chars=len(prompt),
                 response_chars=0,
+                usage=result.get("usage"),
             )
         except AIServiceError as exc:
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.ERROR,
+                status_value=AIUsageEvent.Status.ERROR,
                 prompt_chars=len(prompt),
                 response_chars=0,
             )
@@ -1500,14 +1504,15 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             ]
         )
 
-    def _record_ai_event(self, *, user, feature, model_name, prompt_chars, response_chars, status_value):
-        AIUsageEvent.objects.create(
+    def _record_ai_event(self, *, user, feature, model_name, prompt_chars, response_chars, status_value, usage=None):
+        record_ai_usage_event(
             user=user,
             feature=feature,
             model_name=model_name,
-            status=status_value,
+            status_value=status_value,
             prompt_chars=prompt_chars,
             response_chars=response_chars,
+            usage=usage,
         )
 
     @action(detail=True, methods=["post"], url_path="sketch-to-rough-plan")
@@ -1586,6 +1591,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 prompt_chars=len(system_prompt) + len(user_prompt),
                 response_chars=len(result["text"]),
                 status_value=AIUsageEvent.Status.SUCCESS,
+                usage=result.get("usage"),
             )
         except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
             self._record_ai_event(
@@ -1661,6 +1667,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 prompt_chars=len(system_prompt) + len(user_prompt),
                 response_chars=len(result["text"]),
                 status_value=AIUsageEvent.Status.SUCCESS,
+                usage=result.get("usage"),
             )
         except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
             self._record_ai_event(
@@ -1883,6 +1890,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                     prompt_chars=len(system_prompt) + len(user_prompt),
                     response_chars=len(result["text"]),
                     status_value=AIUsageEvent.Status.SUCCESS,
+                    usage=result.get("usage"),
                 )
             except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
                 self._record_ai_event(

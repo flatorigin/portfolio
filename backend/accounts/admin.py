@@ -843,6 +843,8 @@ class AIConfigurationAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
         "bid_helper_enabled",
         "profile_helper_enabled",
         "daily_limit_per_user",
+        "company_markup_percent",
+        "minimum_charge_usd",
         "updated_at",
         "updated_by",
     )
@@ -850,7 +852,12 @@ class AIConfigurationAdmin(StaffRolePermissionMixin, admin.ModelAdmin):
 
     fieldsets = (
         ("Global control", {
-            "fields": ("enabled", "daily_limit_per_user"),
+            "fields": (
+                "enabled",
+                "daily_limit_per_user",
+                "company_markup_percent",
+                "minimum_charge_usd",
+            ),
             "description": "This is the default daily AI assist limit for every user unless a profile-level override is set.",
         }),
         ("Feature switches", {
@@ -898,6 +905,10 @@ class AIUsageEventAdmin(admin.ModelAdmin):
         "status",
         "prompt_chars",
         "response_chars",
+        "input_tokens",
+        "output_tokens",
+        "provider_cost_usd",
+        "user_charge_usd",
         "request_day",
         "created_at",
     )

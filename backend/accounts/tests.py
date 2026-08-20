@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.test import override_settings
 from django.utils import timezone
 from datetime import timedelta
+from decimal import Decimal
 from io import BytesIO
 import json
 from pathlib import Path
@@ -91,7 +92,11 @@ class AIAssistViewTests(APITestCase):
 
     @patch("accounts.views.generate_text")
     def test_homeowner_can_use_project_summary_helper(self, mock_generate_text):
-        mock_generate_text.return_value = {"text": "Drafted summary", "model": "gpt-5.4-mini"}
+        mock_generate_text.return_value = {
+            "text": "Drafted summary",
+            "model": "gpt-5.4-mini",
+            "usage": {"input_tokens": 10000, "output_tokens": 10000},
+        }
         self.client.force_authenticate(self.homeowner)
 
         response = self.client.post(
@@ -106,7 +111,38 @@ class AIAssistViewTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["text"], "Drafted summary")
-        self.assertEqual(AIUsageEvent.objects.filter(user=self.homeowner).count(), 1)
+        event = AIUsageEvent.objects.get(user=self.homeowner)
+        self.assertEqual(event.input_tokens, 10000)
+        self.assertEqual(event.output_tokens, 10000)
+        self.assertEqual(event.provider_cost_usd, Decimal("0.052500"))
+        self.assertEqual(event.user_charge_usd, Decimal("0.105000"))
+
+    def test_usage_summary_returns_balance_pricing_and_recent_activity(self):
+        config = AIConfiguration.get_solo()
+        config.daily_limit_per_user = 5
+        config.company_markup_percent = Decimal("100.00")
+        config.minimum_charge_usd = Decimal("0.0100")
+        config.save()
+        AIUsageEvent.objects.create(
+            user=self.homeowner,
+            feature=AIUsageEvent.Feature.PROJECT_SUMMARY,
+            status=AIUsageEvent.Status.SUCCESS,
+            input_tokens=1000,
+            output_tokens=500,
+            provider_cost_usd=Decimal("0.003000"),
+            user_charge_usd=Decimal("0.010000"),
+        )
+        self.client.force_authenticate(self.homeowner)
+
+        response = self.client.get("/api/ai/usage/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["remaining_today"], 4)
+        self.assertEqual(response.data["daily_limit"], 5)
+        self.assertEqual(response.data["month"]["successful_actions"], 1)
+        self.assertEqual(response.data["month"]["user_charge_usd"], "0.010000")
+        self.assertEqual(response.data["pricing"]["price_multiplier"], "2.00")
+        self.assertEqual(response.data["recent"][0]["feature_label"], "Project summary")
 
     @patch("accounts.views.generate_text")
     def test_homeowner_cannot_use_bid_helper(self, mock_generate_text):
