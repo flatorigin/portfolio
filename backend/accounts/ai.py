@@ -24,6 +24,14 @@ class AIServiceError(Exception):
     pass
 
 
+def _extract_usage(payload):
+    usage = payload.get("usage") or {}
+    return {
+        "input_tokens": int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0),
+        "output_tokens": int(usage.get("output_tokens") or usage.get("completion_tokens") or 0),
+    }
+
+
 def resolve_model_name(feature):
     variant = FEATURE_MODEL_MAP.get(feature, "primary")
     if variant == "light":
@@ -92,6 +100,7 @@ def generate_text(*, feature, system_prompt, user_prompt):
     return {
         "text": _extract_output_text(payload),
         "model": payload.get("model") or model,
+        "usage": _extract_usage(payload),
     }
 
 
@@ -147,6 +156,7 @@ def generate_text_with_image(*, feature, system_prompt, user_prompt, image_bytes
     return {
         "text": _extract_output_text(payload),
         "model": payload.get("model") or model,
+        "usage": _extract_usage(payload),
     }
 
 
@@ -230,4 +240,5 @@ def generate_image_from_image(*, feature, prompt, image_bytes, image_content_typ
         "image_bytes": image_data,
         "content_type": "image/png",
         "model": model,
+        "usage": _extract_usage(payload),
     }

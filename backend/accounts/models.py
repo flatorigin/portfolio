@@ -1,4 +1,6 @@
 # backend/accounts/models.py
+from decimal import Decimal, ROUND_HALF_UP
+
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -329,6 +331,18 @@ class AIConfiguration(models.Model):
     bid_helper_enabled = models.BooleanField(default=True)
     profile_helper_enabled = models.BooleanField(default=True)
     daily_limit_per_user = models.PositiveIntegerField(default=10)
+    company_markup_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("100.00"),
+        help_text="Percentage added to the estimated provider cost. 100% means the user price is 2x provider cost.",
+    )
+    minimum_charge_usd = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        default=Decimal("0.0100"),
+        help_text="Minimum displayed user price for each successful AI action.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -382,6 +396,10 @@ class AIUsageEvent(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCESS)
     prompt_chars = models.PositiveIntegerField(default=0)
     response_chars = models.PositiveIntegerField(default=0)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    provider_cost_usd = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("0"))
+    user_charge_usd = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal("0"))
     request_day = models.DateField(default=timezone.localdate, db_index=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
 
@@ -710,3 +728,62 @@ def get_ai_remaining_today_for_user(user, config=None):
         status=AIUsageEvent.Status.SUCCESS,
     ).count()
     return max(0, limit - used), limit
+
+
+AI_MODEL_TOKEN_RATES_USD_PER_MILLION = (
+    ("gpt-image-2", Decimal("8.00"), Decimal("30.00")),
+    ("gpt-image-1.5", Decimal("8.00"), Decimal("32.00")),
+    ("gpt-image-1-mini", Decimal("2.50"), Decimal("8.00")),
+    ("gpt-5.4-mini", Decimal("0.75"), Decimal("4.50")),
+    ("gpt-5.4-nano", Decimal("0.20"), Decimal("1.25")),
+    ("gpt-5.6-terra", Decimal("1.25"), Decimal("7.50")),
+    ("gpt-5.6-luna", Decimal("0.50"), Decimal("3.00")),
+)
+
+
+def get_ai_model_token_rates(model_name):
+    normalized = str(model_name or "").strip().lower()
+    for prefix, input_rate, output_rate in AI_MODEL_TOKEN_RATES_USD_PER_MILLION:
+        if normalized == prefix or normalized.startswith(f"{prefix}-"):
+            return input_rate, output_rate
+    return Decimal("0"), Decimal("0")
+
+
+def record_ai_usage_event(
+    *,
+    user,
+    feature,
+    model_name="",
+    status_value=AIUsageEvent.Status.SUCCESS,
+    prompt_chars=0,
+    response_chars=0,
+    usage=None,
+):
+    usage = usage or {}
+    input_tokens = max(0, int(usage.get("input_tokens") or 0))
+    output_tokens = max(0, int(usage.get("output_tokens") or 0))
+    input_rate, output_rate = get_ai_model_token_rates(model_name)
+    provider_cost = (
+        (Decimal(input_tokens) * input_rate) + (Decimal(output_tokens) * output_rate)
+    ) / Decimal("1000000")
+    provider_cost = provider_cost.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+    user_charge = Decimal("0")
+    if status_value == AIUsageEvent.Status.SUCCESS:
+        config = AIConfiguration.get_solo()
+        multiplier = Decimal("1") + (Decimal(config.company_markup_percent or 0) / Decimal("100"))
+        user_charge = (provider_cost * multiplier).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+        user_charge = max(user_charge, Decimal(config.minimum_charge_usd or 0))
+
+    return AIUsageEvent.objects.create(
+        user=user,
+        feature=feature,
+        model_name=model_name,
+        status=status_value,
+        prompt_chars=max(0, int(prompt_chars or 0)),
+        response_chars=max(0, int(response_chars or 0)),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        provider_cost_usd=provider_cost,
+        user_charge_usd=user_charge,
+    )

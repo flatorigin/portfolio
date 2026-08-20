@@ -219,6 +219,121 @@ function DashboardLoadingSection({ title, helper = "Loading..." }) {
   );
 }
 
+function formatAiCurrency(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: amount > 0 && amount < 0.01 ? 4 : 2,
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function AIUsagePanel({ usage, loading }) {
+  const remaining = Number(usage?.remaining_today || 0);
+  const dailyLimit = Number(usage?.daily_limit || 0);
+  const remainingPercent = dailyLimit > 0 ? Math.min(100, (remaining / dailyLimit) * 100) : 0;
+  const month = usage?.month || {};
+  const pricing = usage?.pricing || {};
+  const multiplier = Number(pricing.price_multiplier || 1);
+  const recent = Array.isArray(usage?.recent) ? usage.recent.slice(0, 4) : [];
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+            <SymbolIcon name="smart_toy" className="text-[22px]" weight={500} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-900">AI usage balance</h2>
+            <p className="text-xs text-slate-500">Current allowance and estimated account usage</p>
+          </div>
+        </div>
+        <span className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-600">
+          Tracking only
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="grid gap-3 p-5 sm:grid-cols-3">
+          {[0, 1, 2].map((item) => (
+            <div key={item} className="h-24 animate-pulse rounded-xl bg-slate-100" />
+          ))}
+        </div>
+      ) : usage ? (
+        <>
+          <div className="grid gap-px bg-slate-100 sm:grid-cols-3">
+            <div className="bg-white/90 p-5">
+              <div className="text-xs font-medium text-slate-500">Available today</div>
+              <div className="mt-2 flex items-end gap-2">
+                <span className="text-2xl font-semibold text-slate-900">{remaining}</span>
+                <span className="pb-1 text-xs text-slate-500">of {dailyLimit} actions</span>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-[width]"
+                  style={{ width: `${remainingPercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white/90 p-5">
+              <div className="text-xs font-medium text-slate-500">Estimated this month</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">
+                {formatAiCurrency(month.user_charge_usd)}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                {Number(month.successful_actions || 0)} successful action{Number(month.successful_actions || 0) === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            <div className="bg-white/90 p-5">
+              <div className="text-xs font-medium text-slate-500">Company pricing</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">
+                {Number.isFinite(multiplier) ? multiplier.toFixed(1) : "2.0"}x
+              </div>
+              <div className="mt-2 text-xs text-slate-500">
+                {formatAiCurrency(pricing.minimum_charge_usd)} minimum per action
+              </div>
+            </div>
+          </div>
+
+          <div className="px-5 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="text-xs font-semibold uppercase text-slate-500">Recent activity</div>
+              <div className="text-[11px] text-slate-400">Charges are not collected yet</div>
+            </div>
+            {recent.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {recent.map((event) => (
+                  <div key={event.id} className="flex min-h-11 items-center justify-between gap-4 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-slate-700">{event.feature_label}</div>
+                      <div className="text-[11px] text-slate-400">
+                        {new Date(event.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-sm font-semibold text-slate-700">
+                      {event.status === "success" ? formatAiCurrency(event.user_charge_usd) : "Not charged"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-sm text-slate-500">
+                No AI activity on this account yet.
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="px-5 py-6 text-sm text-slate-500">AI usage is temporarily unavailable.</div>
+      )}
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const isMountedRef = useRef(false);
@@ -519,6 +634,8 @@ export default function Dashboard() {
     username: localStorage.getItem("username") || "",
   });
   const [meLoading, setMeLoading] = useState(true);
+  const [aiUsage, setAiUsage] = useState(null);
+  const [aiUsageLoading, setAiUsageLoading] = useState(true);
   const [contentPresence, setContentPresence] = useState(
     DASHBOARD_CONTENT_PRESENCE_DEFAULT
   );
@@ -556,6 +673,26 @@ export default function Dashboard() {
         if (active && isMountedRef.current) setMeLoading(false);
       }
     })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    api
+      .get("/ai/usage/")
+      .then(({ data }) => {
+        if (active && isMountedRef.current) setAiUsage(data);
+      })
+      .catch((err) => {
+        console.warn("[Dashboard] failed to load AI usage", err?.response || err);
+      })
+      .finally(() => {
+        if (active && isMountedRef.current) setAiUsageLoading(false);
+      });
 
     return () => {
       active = false;
@@ -1218,6 +1355,8 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      <AIUsagePanel usage={aiUsage} loading={aiUsageLoading} />
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
 

@@ -1,12 +1,13 @@
 # backend/accounts/views.py
 import logging
 import re
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.db import transaction
 from django.db.utils import DatabaseError, OperationalError
 from django.core.mail import get_connection, send_mail
@@ -38,6 +39,7 @@ from .models import (
     ProfileSave,
     DeletedEmailBlocklist,
     get_ai_remaining_today_for_user,
+    record_ai_usage_event,
 )
 from .serializers import (
     AIAssistSerializer,
@@ -58,6 +60,10 @@ from .serializers import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def format_ai_usd(value):
+    return str(Decimal(value or 0).quantize(Decimal("0.000001")))
 
 
 class ProfileUnavailable(APIException):
@@ -347,20 +353,21 @@ class AIAssistView(APIView):
                 user_prompt=user_prompt,
             )
             model_name = result["model"]
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.SUCCESS,
+                status_value=AIUsageEvent.Status.SUCCESS,
                 prompt_chars=len(system_prompt) + len(user_prompt),
                 response_chars=len(result["text"]),
+                usage=result.get("usage"),
             )
         except AIServiceError as exc:
-            AIUsageEvent.objects.create(
+            record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
-                status=AIUsageEvent.Status.ERROR,
+                status_value=AIUsageEvent.Status.ERROR,
                 prompt_chars=len(system_prompt) + len(user_prompt),
                 response_chars=0,
             )
@@ -374,6 +381,66 @@ class AIAssistView(APIView):
                 "remaining_today": remaining_after,
             },
             status=status.HTTP_200_OK,
+        )
+
+
+class AIUsageSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        config = AIConfiguration.get_solo()
+        remaining_today, daily_limit = get_ai_remaining_today_for_user(request.user, config=config)
+        today = timezone.localdate()
+        period_start = today.replace(day=1)
+        successful_events = AIUsageEvent.objects.filter(
+            user=request.user,
+            status=AIUsageEvent.Status.SUCCESS,
+            request_day__gte=period_start,
+        )
+        totals = successful_events.aggregate(
+            input_tokens=Sum("input_tokens"),
+            output_tokens=Sum("output_tokens"),
+            provider_cost_usd=Sum("provider_cost_usd"),
+            user_charge_usd=Sum("user_charge_usd"),
+        )
+        recent_events = AIUsageEvent.objects.filter(user=request.user)[:8]
+        markup_percent = config.company_markup_percent or 0
+
+        return Response(
+            {
+                "enabled": bool(settings.AI_ENABLED or config.enabled),
+                "remaining_today": remaining_today,
+                "daily_limit": daily_limit,
+                "period_start": period_start.isoformat(),
+                "month": {
+                    "successful_actions": successful_events.count(),
+                    "input_tokens": totals["input_tokens"] or 0,
+                    "output_tokens": totals["output_tokens"] or 0,
+                    "provider_cost_usd": format_ai_usd(totals["provider_cost_usd"]),
+                    "user_charge_usd": format_ai_usd(totals["user_charge_usd"]),
+                },
+                "pricing": {
+                    "company_markup_percent": str(markup_percent),
+                    "price_multiplier": str(1 + (markup_percent / 100)),
+                    "minimum_charge_usd": str(config.minimum_charge_usd or "0.0000"),
+                    "billing_active": False,
+                },
+                "recent": [
+                    {
+                        "id": event.id,
+                        "feature": event.feature,
+                        "feature_label": event.get_feature_display(),
+                        "status": event.status,
+                        "model": event.model_name,
+                        "input_tokens": event.input_tokens,
+                        "output_tokens": event.output_tokens,
+                        "provider_cost_usd": format_ai_usd(event.provider_cost_usd),
+                        "user_charge_usd": format_ai_usd(event.user_charge_usd),
+                        "created_at": event.created_at.isoformat(),
+                    }
+                    for event in recent_events
+                ],
+            }
         )
 
 
