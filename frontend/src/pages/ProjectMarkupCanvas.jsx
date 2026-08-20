@@ -2147,6 +2147,7 @@ export default function ProjectMarkupCanvas() {
     () => buildDesignGeometry(annotations, activeMeasurementGeometry, roughPlan, designSettings),
     [activeMeasurementGeometry, annotations, designSettings, roughPlan],
   );
+  const hasActiveDesignWalls = currentDesignGeometry.walls.some((wall) => wall.kind !== "remove");
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
@@ -4531,26 +4532,27 @@ export default function ProjectMarkupCanvas() {
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 max-lg:gap-1">
-            <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <button
-                type="button"
-                onClick={() => setWorkspaceView("2d")}
-                className={`inline-flex h-9 items-center gap-1 px-2.5 text-xs font-semibold ${workspaceView === "2d" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-                aria-label="Show 2D markup"
-              >
-                <SymbolIcon name="floor_plan" className="text-[17px]" />
-                <span className="max-sm:hidden">2D</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openFloorPlanIn3D(designViewMode)}
-                className={`inline-flex h-9 items-center gap-1 px-2.5 text-xs font-semibold ${workspaceView === "3d" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
-                aria-label="Show interactive 3D design"
-              >
-                <SymbolIcon name="view_in_ar" className="text-[17px]" />
-                <span className="max-sm:hidden">3D</span>
-              </button>
-            </div>
+            {workspaceView === "3d" ? (
+              <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceView("2d")}
+                  className="inline-flex h-9 items-center gap-1 px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  aria-label="Return to floor plan"
+                >
+                  <SymbolIcon name="floor_plan" className="text-[17px]" />
+                  <span className="max-sm:hidden">Floor plan</span>
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-1 bg-slate-950 px-2.5 text-xs font-semibold text-white"
+                  aria-label="Interactive 3D design active"
+                >
+                  <SymbolIcon name="view_in_ar" className="text-[17px]" />
+                  <span className="max-sm:hidden">3D</span>
+                </button>
+              </div>
+            ) : null}
             <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
               <button
                 type="button"
@@ -5989,13 +5991,13 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
-              {workspaceView === "2d" && (isRoughPlan || hasAiCleanPlanOverlay || currentDesignGeometry.walls.length > 0) ? (
+              {workspaceView === "2d" && hasActiveDesignWalls && (isRoughPlan || hasAiCleanPlanOverlay) ? (
                 <button
                   type="button"
                   onClick={() => openFloorPlanIn3D("perspective")}
                   className="absolute right-2 top-2 z-30 inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white shadow-xl hover:bg-slate-800 lg:right-3 lg:top-3 lg:h-10 lg:px-4"
                   aria-label="Create 3D elevation from this floor plan"
-                  title={currentDesignGeometry.walls.length ? "Create 3D elevation from this floor plan" : "Add wall markup first"}
+                  title="Create 3D elevation from this floor plan"
                 >
                   <SymbolIcon name="view_sidebar" className="text-[19px]" />
                   <span className="max-sm:hidden">Create 3D elevation</span>
