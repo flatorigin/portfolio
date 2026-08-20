@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
+import { Design3DInspector, Design3DViewport } from "../components/Design3DStudio";
+import { DEFAULT_DESIGN_SETTINGS, createDesignTransform } from "../utils/designGeometry";
 import { SymbolIcon } from "../ui";
 
 const CANVAS_W = 1200;
@@ -19,6 +21,7 @@ const BASE_TOOLS = {
   text: { key: "text", label: "Text", icon: "title" },
   arrow: { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
+  wall: { key: "wall", label: "Wall", icon: "foundation" },
   freehand: { key: "freehand", label: "Pencil", icon: "draw" },
   pen: { key: "pen", label: "Pen", icon: "polyline" },
   penAdd: { key: "pen_add", label: "Add node", icon: "add" },
@@ -261,7 +264,7 @@ function annotationLayerLabel(item, index) {
   if (item.type === "rect") return "Rectangle";
   if (item.type === "circle") return "Circle";
   if (item.type === "arrow") return "Arrow";
-  if (item.type === "line") return "Line";
+  if (item.type === "line") return item.designRole === "wall" ? (item.wallLabel || "Wall") : "Line";
   if (item.type === "priority") return `Priority ${item.priorityNumber || index + 1}`;
   if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
     return item.type.charAt(0).toUpperCase() + item.type.slice(1);
@@ -1689,6 +1692,11 @@ export default function ProjectMarkupCanvas() {
   const [annotations, setAnnotations] = useState([]);
   const [tool, setTool] = useState("select");
   const [canvasMode, setCanvasMode] = useState("photo");
+  const [workspaceView, setWorkspaceView] = useState("2d");
+  const [designSettings, setDesignSettings] = useState(DEFAULT_DESIGN_SETTINGS);
+  const [designPrompt, setDesignPrompt] = useState("");
+  const [designProposal, setDesignProposal] = useState(null);
+  const [designPromptBusy, setDesignPromptBusy] = useState(false);
   const [activeColor, setActiveColor] = useState(DEFAULT_MARKUP_COLOR);
   const [activeFillColor, setActiveFillColor] = useState(DEFAULT_MARKUP_COLOR);
   const [activeFillMaterial, setActiveFillMaterial] = useState("flat");
@@ -1813,6 +1821,10 @@ export default function ProjectMarkupCanvas() {
       if (saved.backgroundUrl) setBackgroundUrl(saved.backgroundUrl);
       if (Array.isArray(saved.annotations)) setAnnotations(saved.annotations);
       if (saved.canvasMode === "rough_plan" || saved.canvasMode === "photo") setCanvasMode(saved.canvasMode);
+      if (saved.workspaceView === "2d" || saved.workspaceView === "3d") setWorkspaceView(saved.workspaceView);
+      if (saved.designSettings && typeof saved.designSettings === "object") {
+        setDesignSettings((prev) => ({ ...prev, ...saved.designSettings }));
+      }
       if (saved.roughPlan && typeof saved.roughPlan === "object") {
         setRoughPlan((prev) => ({ ...prev, ...saved.roughPlan }));
       }
@@ -1839,9 +1851,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, workspaceView, designSettings, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, designSettings, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers, workspaceView]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -1934,6 +1946,10 @@ export default function ProjectMarkupCanvas() {
             }
           }
         }
+        const savedDesign = selectedImageVersion?.design_3d || markup.design_3d;
+        if (savedDesign?.settings && typeof savedDesign.settings === "object") {
+          setDesignSettings((prev) => ({ ...prev, ...savedDesign.settings }));
+        }
       })
       .catch((err) => {
         if (alive) setMessage(normalizeError(err, "Could not load this project plan."));
@@ -1984,6 +2000,9 @@ export default function ProjectMarkupCanvas() {
             if (markupVersion.measurement_calibration.length != null) {
               setMeasurementCalibrationInputLength(String(markupVersion.measurement_calibration.length));
             }
+          }
+          if (markupVersion.design_3d?.settings && typeof markupVersion.design_3d.settings === "object") {
+            setDesignSettings((prev) => ({ ...prev, ...markupVersion.design_3d.settings }));
           }
         } else {
           setAnnotations([]);
@@ -2163,7 +2182,7 @@ export default function ProjectMarkupCanvas() {
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
       ...(isRoughPlan ? [] : [{ key: "background", tools: [BASE_TOOLS.backgroundEraser] }]),
-      { key: "geometry", tools: [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
+      { key: "geometry", tools: [BASE_TOOLS.wall, BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
       ...(isRoughPlan ? [{ key: "symbols", tools: SYMBOL_TOOLS }] : []),
       { key: "delete", tools: [BASE_TOOLS.delete] },
     ],
@@ -2219,6 +2238,10 @@ export default function ProjectMarkupCanvas() {
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
       annotation_count: normalizedAnnotations.length,
+      design_3d: {
+        schema_version: 1,
+        settings: designSettings,
+      },
     };
 
     return {
@@ -2232,6 +2255,10 @@ export default function ProjectMarkupCanvas() {
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
+      design_3d: {
+        schema_version: 1,
+        settings: designSettings,
+      },
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
     };
@@ -2294,6 +2321,154 @@ export default function ProjectMarkupCanvas() {
   function commitAnnotations(nextAnnotations) {
     setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
     setAnnotations(nextAnnotations);
+  }
+
+  function designBaselineFor(item) {
+    if (item?.designBaseline) return item.designBaseline;
+    return {
+      x: item?.x,
+      y: item?.y,
+      x2: item?.x2,
+      y2: item?.y2,
+      wallHeight: item?.wallHeight || designSettings.ceilingHeight,
+      wallThickness: item?.wallThickness || designSettings.wallThickness,
+      wallKind: item?.wallKind || "existing",
+      openingWidth: item?.openingWidth || 3,
+      openingHeight: item?.openingHeight || (item?.type === "door" ? 6.67 : 4),
+      sillHeight: item?.sillHeight ?? (item?.type === "window" ? 3 : 0),
+      stairWidth: item?.stairWidth || 3.5,
+      stairRun: item?.stairRun || 5,
+      stairRise: item?.stairRise || 3,
+    };
+  }
+
+  function beginDesignGeometryEdit() {
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+  }
+
+  function previewDesignAnnotation(annotationId, patch) {
+    setAnnotations((prev) => prev.map((item) => (
+      item.id === annotationId
+        ? {
+            ...item,
+            ...(["line", "door", "window", "steps"].includes(item.type) ? { designBaseline: designBaselineFor(item) } : {}),
+            ...patch,
+          }
+        : item
+    )));
+  }
+
+  function changeDesignAnnotation(annotationId, patch) {
+    commitAnnotations(annotations.map((item) => (
+      item.id === annotationId
+        ? {
+            ...item,
+            ...(["line", "door", "window", "steps"].includes(item.type) ? { designBaseline: designBaselineFor(item) } : {}),
+            ...patch,
+          }
+        : item
+    )));
+  }
+
+  function changeDesignSettings(patch) {
+    setDesignSettings((prev) => ({ ...prev, ...patch }));
+  }
+
+  function changeDesignRoughPlan(patch) {
+    setDesignSettings((prev) => ({
+      ...prev,
+      baseFloorWidth: prev.baseFloorWidth ?? Number(roughPlan.width),
+      baseFloorLength: prev.baseFloorLength ?? Number(roughPlan.length),
+      baseFloorUnit: prev.baseFloorUnit || roughPlan.unit || "ft",
+    }));
+    setRoughPlan((prev) => ({ ...prev, ...patch }));
+  }
+
+  async function requestDesignProposal() {
+    if (!planId) {
+      setMessage("Save this design in a project planner before requesting an AI change preview.");
+      return;
+    }
+    const selectedAnnotation = annotations.find((item) => item.id === selectedId) || null;
+    setDesignPromptBusy(true);
+    setDesignProposal(null);
+    setMessage("");
+    try {
+      const { data } = await api.post(`/project-plans/${planId}/design-proposal/`, {
+        prompt: designPrompt,
+        selected_id: selectedId || "floor",
+        selected_element: selectedAnnotation,
+        design: {
+          settings: designSettings,
+          rough_plan: roughPlan,
+          annotations: annotations
+            .filter((item) => item.designRole === "wall" || item.type === "line" || ["door", "window", "steps"].includes(item.type))
+            .slice(0, 100),
+        },
+      });
+      setDesignProposal(data);
+    } catch (err) {
+      setMessage(normalizeError(err, "Could not prepare the proposed design changes."));
+    } finally {
+      setDesignPromptBusy(false);
+    }
+  }
+
+  function applyDesignProposal() {
+    const changes = Array.isArray(designProposal?.changes) ? designProposal.changes : [];
+    if (!changes.length) {
+      setDesignProposal(null);
+      return;
+    }
+    let nextSettings = { ...designSettings };
+    let nextAnnotations = [...annotations];
+    const transform = createDesignTransform(annotations, activeMeasurementGeometry, roughPlan);
+    const propertyMap = {
+      wall_height: "wallHeight",
+      wall_thickness: "wallThickness",
+      wall_kind: "wallKind",
+      opening_width: "openingWidth",
+      opening_height: "openingHeight",
+      sill_height: "sillHeight",
+      stair_width: "stairWidth",
+      stair_run: "stairRun",
+      stair_rise: "stairRise",
+    };
+    changes.forEach((change) => {
+      const value = change.value;
+      if (change.property === "ceiling_height") {
+        nextSettings.ceilingHeight = clamp(Number(value) || 8, 4, 30);
+        return;
+      }
+      if (change.property === "exterior") {
+        nextSettings.exterior = Boolean(value);
+        return;
+      }
+      const targetId = change.target_id || selectedId;
+      nextAnnotations = nextAnnotations.map((item) => {
+        if (item.id !== targetId) return item;
+        const baseline = ["line", "door", "window", "steps"].includes(item.type) ? designBaselineFor(item) : item.designBaseline;
+        if (propertyMap[change.property]) {
+          return { ...item, ...(baseline ? { designBaseline: baseline } : {}), [propertyMap[change.property]]: value };
+        }
+        if (change.property === "translate_x" || change.property === "translate_y") {
+          const axis = change.property === "translate_x" ? "x" : "z";
+          const amount = Number(value) || 0;
+          const start = transform.toWorld({ x: item.x, y: item.y });
+          const end = transform.toWorld({ x: item.x2, y: item.y2 });
+          const nextStart = transform.toCanvas({ ...start, [axis]: start[axis] + amount });
+          const nextEnd = transform.toCanvas({ ...end, [axis]: end[axis] + amount });
+          return { ...item, ...(baseline ? { designBaseline: baseline } : {}), x: nextStart.x, y: nextStart.y, x2: nextEnd.x, y2: nextEnd.y };
+        }
+        return item;
+      });
+    });
+    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
+    setAnnotations(nextAnnotations);
+    setDesignSettings(nextSettings);
+    setDesignProposal(null);
+    setDesignPrompt("");
+    setMessage("Proposed design changes applied. Review the dimensions and save when ready.");
   }
 
   function undo() {
@@ -3217,10 +3392,11 @@ export default function ProjectMarkupCanvas() {
     const id = `mark-${Date.now()}`;
     const nextPriorityNumber =
       annotations.filter((item) => item.type === "priority").length + 1;
+    const annotationType = tool === "wall" ? "line" : tool;
     const base = {
       id,
       layer: id,
-      type: tool,
+      type: annotationType,
       x: point.x,
       y: point.y,
       x2: point.x,
@@ -3241,6 +3417,11 @@ export default function ProjectMarkupCanvas() {
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
       canvasMode,
+      designRole: tool === "wall" ? "wall" : tool === "line" ? "note" : undefined,
+      designOrigin: tool === "wall" ? "proposed" : undefined,
+      wallKind: tool === "wall" ? "new" : undefined,
+      wallHeight: tool === "wall" ? designSettings.ceilingHeight : undefined,
+      wallThickness: tool === "wall" ? designSettings.wallThickness : undefined,
     };
 
     commitAnnotations([...annotations, base]);
@@ -3849,6 +4030,10 @@ export default function ProjectMarkupCanvas() {
           locked_layers: lockedLayers,
           measurement_calibration: measurementCalibration,
           annotation_count: normalizedAnnotations.length,
+          design_3d: {
+            schema_version: 1,
+            settings: designSettings,
+          },
         };
         const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
           extra_data: {
@@ -4241,6 +4426,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   const mobileSettingsItems = [
+    ...(workspaceView === "3d" ? [{ key: "design", label: "Design", icon: "view_in_ar", section: "design" }] : []),
     { key: "canvas", label: "Canvas", icon: "dashboard", section: "mode" },
     { key: "layers", label: "Layers", icon: "layers", section: "layers", count: annotations.length },
     { key: "style", label: "Style", icon: "palette", section: "stroke" },
@@ -4315,7 +4501,7 @@ export default function ProjectMarkupCanvas() {
               <SymbolIcon name="arrow_back" className="text-[22px]" />
             </Link>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">Markup canvas</h1>
+              <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">{workspaceView === "3d" ? "3D design" : "Markup canvas"}</h1>
               <p className="text-xs text-slate-500 max-lg:hidden">
                 {isProjectImageMode ? "Markup will stay on this project image" : `${modeLabel}: mark the area that needs work`}
               </p>
@@ -4323,6 +4509,30 @@ export default function ProjectMarkupCanvas() {
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 max-lg:gap-1">
+            <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <button
+                type="button"
+                onClick={() => setWorkspaceView("2d")}
+                className={`inline-flex h-9 items-center gap-1 px-2.5 text-xs font-semibold ${workspaceView === "2d" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                aria-label="Show 2D markup"
+              >
+                <SymbolIcon name="floor_plan" className="text-[17px]" />
+                <span className="max-sm:hidden">2D</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  finishPenPath();
+                  setWorkspaceView("3d");
+                  setOpenSidebarSection("design");
+                }}
+                className={`inline-flex h-9 items-center gap-1 px-2.5 text-xs font-semibold ${workspaceView === "3d" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                aria-label="Show interactive 3D design"
+              >
+                <SymbolIcon name="view_in_ar" className="text-[17px]" />
+                <span className="max-sm:hidden">3D</span>
+              </button>
+            </div>
             <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
               <button
                 type="button"
@@ -4514,6 +4724,26 @@ export default function ProjectMarkupCanvas() {
                 <SymbolIcon name="close" className="text-[22px]" />
               </button>
             </div>
+            {workspaceView === "3d" && (!compactViewport || mobileSettingsPanel === "design") ? (
+              <Design3DInspector
+                annotations={annotations}
+                measurementGeometry={activeMeasurementGeometry}
+                roughPlan={roughPlan}
+                settings={designSettings}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onSettingsChange={changeDesignSettings}
+                onRoughPlanChange={changeDesignRoughPlan}
+                onAnnotationChange={changeDesignAnnotation}
+                prompt={designPrompt}
+                onPromptChange={setDesignPrompt}
+                proposal={designProposal}
+                promptBusy={designPromptBusy}
+                onRequestProposal={requestDesignProposal}
+                onApplyProposal={applyDesignProposal}
+                onDiscardProposal={() => setDesignProposal(null)}
+              />
+            ) : null}
             <CollapsibleSection
               id="mode"
               title="Markup mode"
@@ -5741,6 +5971,20 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
+              {workspaceView === "3d" ? (
+                <div className="absolute inset-0 z-40">
+                  <Design3DViewport
+                    annotations={annotations}
+                    measurementGeometry={activeMeasurementGeometry}
+                    roughPlan={roughPlan}
+                    settings={designSettings}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onBeginEdit={beginDesignGeometryEdit}
+                    onAnnotationPreview={previewDesignAnnotation}
+                  />
+                </div>
+              ) : null}
               {!isRoughPlan && !calibratedMeasurementGeometry ? (
                 <button
                   type="button"
