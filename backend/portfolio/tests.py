@@ -1226,6 +1226,38 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("JPG, PNG, or WebP", str(response.data))
 
+    @patch("portfolio.views.generate_text_with_image")
+    def test_sketch_to_rough_plan_reads_saved_snapshot_and_corner_convention(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = {
+            "text": json.dumps(
+                {
+                    "rough_plan": {"width": 15, "length": 20, "unit": "ft"},
+                    "annotations": [{"type": "line", "x": 100, "y": 100, "x2": 500, "y2": 100}],
+                    "uncertainty_notes": [],
+                }
+            ),
+            "model": "gpt-test",
+        }
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Saved floor plan")
+        snapshot = plan.images.create(
+            image=SimpleUploadedFile("markup-floor-plan.png", TINY_PNG_BYTES, content_type="image/png"),
+            caption="markup-floor-plan",
+        )
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-rough-plan/",
+            {"source_image_id": str(snapshot.id), "overlay_mode": "trace_clean_floor_plan"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        call = mock_generate_text_with_image.call_args.kwargs
+        self.assertTrue(call["image_bytes"])
+        self.assertEqual(call["image_content_type"], "image/webp")
+        self.assertIn("user-confirmed wall corner", call["user_prompt"])
+        self.assertEqual(response.data["annotations"][0]["designRole"], "wall")
+
     @patch("portfolio.views.generate_image_from_image")
     def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_image_from_image):
         mock_generate_image_from_image.return_value = {

@@ -964,6 +964,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if trace_clean_floor_plan:
             user_prompt += (
                 "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
+                "A blue plus (+) inside a small white circle is a user-confirmed wall corner or junction. "
+                "Treat the exact center of every such marker as a required wall centerline anchor, connect the visible adjoining wall segments through it, "
+                "and never interpret the marker itself as room content, a fixture, or an opening. "
                 "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
                 "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
                 "Use separate line annotations for all straight exterior and interior wall segments. Use pen only for genuinely curved non-wall linework. "
@@ -1670,13 +1673,33 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         feature = AIUsageEvent.Feature.PLANNER_DRAFT
         _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
         sketch = request.FILES.get("sketch") or request.FILES.get("image")
-        if not sketch:
-            raise ValidationError({"sketch": "Upload a sketch image."})
-        content_type = str(getattr(sketch, "content_type", "") or "").lower()
-        if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
-            raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
-        if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
-            raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
+        source_image_id = str(request.data.get("source_image_id") or "").strip()
+        image_bytes = None
+        content_type = ""
+        if sketch:
+            content_type = str(getattr(sketch, "content_type", "") or "").lower()
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
+            if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
+            image_bytes = sketch.read()
+        elif source_image_id:
+            try:
+                source_plan_image = ProjectPlanImage.objects.get(id=source_image_id, project_plan=plan)
+            except ProjectPlanImage.DoesNotExist:
+                raise ValidationError({"source_image_id": "Could not find that planner image."})
+            content_type = infer_supported_image_content_type(getattr(source_plan_image.image, "name", ""))
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"source_image_id": "Use a JPG, PNG, or WebP planner image for plan creation."})
+            try:
+                with source_plan_image.image.open("rb") as fh:
+                    image_bytes = fh.read(MAX_SKETCH_PLAN_IMAGE_SIZE + 1)
+            except Exception:
+                raise ValidationError({"source_image_id": "Could not read that planner image."})
+            if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
+        else:
+            raise ValidationError({"sketch": "Upload a sketch image or choose a saved planner image."})
 
         requested_width = request.data.get("width") or "20"
         requested_length = request.data.get("length") or "30"
@@ -1712,6 +1735,9 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         if trace_clean_floor_plan:
             user_prompt += (
                 "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
+                "A blue plus (+) inside a small white circle is a user-confirmed wall corner or junction. "
+                "Treat the exact center of every such marker as a required wall centerline anchor, connect the visible adjoining wall segments through it, "
+                "and never interpret the marker itself as room content, a fixture, or an opening. "
                 "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
                 "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
                 "Use separate line annotations for all straight exterior and interior wall segments. Use pen only for genuinely curved non-wall linework. "
@@ -1726,7 +1752,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 feature=feature,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                image_bytes=sketch.read(),
+                image_bytes=image_bytes,
                 image_content_type=content_type,
             )
             model_name = result["model"]
