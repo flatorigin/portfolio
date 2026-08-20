@@ -165,12 +165,13 @@ export function Design3DViewport({
   onSelect,
   onBeginEdit,
   onAnnotationPreview,
+  viewMode = "perspective",
+  onViewModeChange,
 }) {
   const hostRef = useRef(null);
   const sceneStateRef = useRef(null);
   const dragRef = useRef(null);
   const interactionRef = useRef({});
-  const [view, setView] = useState("perspective");
   const geometry = useMemo(
     () => buildDesignGeometry(annotations, measurementGeometry, roughPlan, settings),
     [annotations, measurementGeometry, roughPlan, settings],
@@ -301,11 +302,11 @@ export function Design3DViewport({
   useEffect(() => {
     const state = sceneStateRef.current;
     if (!state) return;
-    const next = cameraPositionFor(view, geometry);
+    const next = cameraPositionFor(viewMode, geometry);
     state.camera.position.copy(next.position);
     state.controls.target.copy(next.target);
     state.controls.update();
-  }, [geometry.length, geometry.settings.ceilingHeight, geometry.width, view]);
+  }, [geometry.length, geometry.settings.ceilingHeight, geometry.width, viewMode]);
 
   useEffect(() => {
     const state = sceneStateRef.current;
@@ -410,9 +411,9 @@ export function Design3DViewport({
           <button
             key={option.key}
             type="button"
-            onClick={() => setView(option.key)}
+            onClick={() => onViewModeChange?.(option.key)}
             className={`inline-flex h-9 items-center gap-1.5 px-3 text-xs font-semibold ${
-              view === option.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"
+              viewMode === option.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
             <SymbolIcon name={option.icon} className="text-[17px]" />

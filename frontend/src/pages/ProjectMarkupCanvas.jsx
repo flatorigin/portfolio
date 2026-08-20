@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { Design3DInspector, Design3DViewport } from "../components/Design3DStudio";
-import { DEFAULT_DESIGN_SETTINGS, createDesignTransform } from "../utils/designGeometry";
+import { DEFAULT_DESIGN_SETTINGS, buildDesignGeometry, createDesignTransform } from "../utils/designGeometry";
 import { SymbolIcon } from "../ui";
 
 const CANVAS_W = 1200;
@@ -1693,6 +1693,7 @@ export default function ProjectMarkupCanvas() {
   const [tool, setTool] = useState("select");
   const [canvasMode, setCanvasMode] = useState("photo");
   const [workspaceView, setWorkspaceView] = useState("2d");
+  const [designViewMode, setDesignViewMode] = useState("perspective");
   const [designSettings, setDesignSettings] = useState(DEFAULT_DESIGN_SETTINGS);
   const [designPrompt, setDesignPrompt] = useState("");
   const [designProposal, setDesignProposal] = useState(null);
@@ -1822,6 +1823,7 @@ export default function ProjectMarkupCanvas() {
       if (Array.isArray(saved.annotations)) setAnnotations(saved.annotations);
       if (saved.canvasMode === "rough_plan" || saved.canvasMode === "photo") setCanvasMode(saved.canvasMode);
       if (saved.workspaceView === "2d" || saved.workspaceView === "3d") setWorkspaceView(saved.workspaceView);
+      if (["perspective", "top", "elevation"].includes(saved.designViewMode)) setDesignViewMode(saved.designViewMode);
       if (saved.designSettings && typeof saved.designSettings === "object") {
         setDesignSettings((prev) => ({ ...prev, ...saved.designSettings }));
       }
@@ -1851,9 +1853,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, workspaceView, designSettings, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, workspaceView, designViewMode, designSettings, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, designSettings, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers, workspaceView]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, designSettings, designViewMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers, workspaceView]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -2141,6 +2143,10 @@ export default function ProjectMarkupCanvas() {
   const activeMeasurementGeometry = isRoughPlan
     ? roughGeometry
     : calibratedMeasurementGeometry || (hasAiCleanPlanOverlay ? cleanPlanGeometry : null);
+  const currentDesignGeometry = useMemo(
+    () => buildDesignGeometry(annotations, activeMeasurementGeometry, roughPlan, designSettings),
+    [activeMeasurementGeometry, annotations, designSettings, roughPlan],
+  );
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
@@ -4408,6 +4414,22 @@ export default function ProjectMarkupCanvas() {
     if (compactViewport) setMobileSettingsPanel("style");
   }
 
+  function openFloorPlanIn3D(nextViewMode = "perspective") {
+    finishPenPath();
+    if (!currentDesignGeometry.walls.length) {
+      setWorkspaceView("2d");
+      setTool("wall");
+      setOpenToolGroup("");
+      setMessage("Add wall segments to this floor plan before creating its 3D elevation.");
+      return;
+    }
+    setDesignViewMode(nextViewMode);
+    setWorkspaceView("3d");
+    setOpenSidebarSection("design");
+    setMobileSettingsPanel("");
+    setMessage("");
+  }
+
   function changeStrokeStyle(nextStyle) {
     if (selectedForEditing) updateSelected({ strokeStyle: nextStyle });
   }
@@ -4521,11 +4543,7 @@ export default function ProjectMarkupCanvas() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  finishPenPath();
-                  setWorkspaceView("3d");
-                  setOpenSidebarSection("design");
-                }}
+                onClick={() => openFloorPlanIn3D(designViewMode)}
                 className={`inline-flex h-9 items-center gap-1 px-2.5 text-xs font-semibold ${workspaceView === "3d" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}
                 aria-label="Show interactive 3D design"
               >
@@ -5971,6 +5989,19 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
+              {workspaceView === "2d" && (isRoughPlan || hasAiCleanPlanOverlay || currentDesignGeometry.walls.length > 0) ? (
+                <button
+                  type="button"
+                  onClick={() => openFloorPlanIn3D("perspective")}
+                  className="absolute right-2 top-2 z-30 inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white shadow-xl hover:bg-slate-800 lg:right-3 lg:top-3 lg:h-10 lg:px-4"
+                  aria-label="Create 3D elevation from this floor plan"
+                  title={currentDesignGeometry.walls.length ? "Create 3D elevation from this floor plan" : "Add wall markup first"}
+                >
+                  <SymbolIcon name="view_sidebar" className="text-[19px]" />
+                  <span className="max-sm:hidden">Create 3D elevation</span>
+                  <span className="sm:hidden">Elevation</span>
+                </button>
+              ) : null}
               {workspaceView === "3d" ? (
                 <div className="absolute inset-0 z-40">
                   <Design3DViewport
@@ -5982,6 +6013,8 @@ export default function ProjectMarkupCanvas() {
                     onSelect={setSelectedId}
                     onBeginEdit={beginDesignGeometryEdit}
                     onAnnotationPreview={previewDesignAnnotation}
+                    viewMode={designViewMode}
+                    onViewModeChange={setDesignViewMode}
                   />
                 </div>
               ) : null}
