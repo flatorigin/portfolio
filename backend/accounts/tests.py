@@ -141,6 +141,7 @@ class AIAssistViewTests(APITestCase):
         self.assertEqual(response.data["daily_limit"], 5)
         self.assertEqual(response.data["month"]["successful_actions"], 1)
         self.assertEqual(response.data["month"]["user_charge_usd"], "0.010000")
+        self.assertEqual(response.data["month"]["company_charge_usd"], "0.000000")
         self.assertEqual(response.data["pricing"]["price_multiplier"], "2.00")
         self.assertEqual(response.data["recent"][0]["feature_label"], "Project summary")
 

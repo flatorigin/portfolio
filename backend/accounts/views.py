@@ -418,6 +418,7 @@ class AIUsageSummaryView(APIView):
                     "output_tokens": totals["output_tokens"] or 0,
                     "provider_cost_usd": format_ai_usd(totals["provider_cost_usd"]),
                     "user_charge_usd": format_ai_usd(totals["user_charge_usd"]),
+                    "company_charge_usd": format_ai_usd(0),
                 },
                 "pricing": {
                     "company_markup_percent": str(markup_percent),
