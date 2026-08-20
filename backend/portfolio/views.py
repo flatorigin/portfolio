@@ -207,6 +207,8 @@ def normalize_sketch_annotations_payload(payload):
             base.update({"x": x, "y": y, "x2": x, "y2": y, "text": text or ("Add note" if item_type == "text" else "")})
         else:
             base.update({"x": x, "y": y, "x2": x2, "y2": y2, "text": text or ("measurement" if item_type == "measure" else "")})
+        if item_type == "line":
+            base.update({"designRole": "wall", "wallKind": "existing"})
         normalized.append(base)
     return normalized
 
@@ -466,6 +468,73 @@ def parse_ai_json(text):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
     return json.loads(cleaned)
+
+
+DESIGN_NUMERIC_PROPERTY_LIMITS = {
+    "ceiling_height": (4, 30),
+    "wall_height": (0.5, 30),
+    "wall_thickness": (0.2, 2),
+    "opening_width": (1, 12),
+    "opening_height": (1, 12),
+    "sill_height": (0, 10),
+    "stair_width": (2, 12),
+    "stair_run": (2, 20),
+    "stair_rise": (0.5, 15),
+    "translate_x": (-100, 100),
+    "translate_y": (-100, 100),
+}
+
+
+def normalize_design_proposal(payload, selected_id=""):
+    source = payload if isinstance(payload, dict) else {}
+    raw_changes = source.get("changes") if isinstance(source.get("changes"), list) else []
+    changes = []
+    for raw in raw_changes[:20]:
+        if not isinstance(raw, dict):
+            continue
+        property_name = str(raw.get("property") or "").strip().lower()
+        target_type = str(raw.get("target_type") or "").strip().lower()
+        if property_name not in {*DESIGN_NUMERIC_PROPERTY_LIMITS, "wall_kind", "exterior"}:
+            continue
+        if target_type not in {"floor", "wall", "opening", "stairs"}:
+            continue
+        target_id = str(raw.get("target_id") or selected_id or "floor").strip()[:120]
+        value = raw.get("value")
+        if property_name in DESIGN_NUMERIC_PROPERTY_LIMITS:
+            lower, upper = DESIGN_NUMERIC_PROPERTY_LIMITS[property_name]
+            try:
+                value = max(lower, min(upper, float(value)))
+            except (TypeError, ValueError):
+                continue
+        elif property_name == "wall_kind":
+            value = str(value or "").strip().lower()
+            if value not in {"existing", "new", "half", "remove"}:
+                continue
+        else:
+            if isinstance(value, bool):
+                pass
+            elif str(value).strip().lower() in {"true", "1", "yes"}:
+                value = True
+            elif str(value).strip().lower() in {"false", "0", "no"}:
+                value = False
+            else:
+                continue
+        changes.append(
+            {
+                "target_type": target_type,
+                "target_id": target_id,
+                "property": property_name,
+                "value": value,
+                "label": str(raw.get("label") or property_name.replace("_", " ").title()).strip()[:120],
+                "display_value": str(raw.get("display_value") or value).strip()[:80],
+                "reason": str(raw.get("reason") or "").strip()[:240],
+            }
+        )
+    return {
+        "summary": str(source.get("summary") or "Review the proposed design changes.").strip()[:240],
+        "changes": changes,
+        "assumptions": [str(item).strip()[:180] for item in (source.get("assumptions") or [])[:8] if str(item).strip()],
+    }
 
 
 # ---------------------------------------------------
@@ -885,6 +954,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
             "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
+            "Use a separate line annotation for every straight wall segment; these lines become editable 3D walls. "
             "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
             "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
             "For pen use points as [{x,y}], closed true only for clear enclosed shapes. "
@@ -896,7 +966,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
                 "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
                 "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
-                "Prefer pen annotations with multiple points for continuous connected linework and line annotations for straight independent segments. "
+                "Use separate line annotations for all straight exterior and interior wall segments. Use pen only for genuinely curved non-wall linework. "
                 "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
                 "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
                 "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "
@@ -1515,6 +1585,85 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             usage=usage,
         )
 
+    @action(detail=True, methods=["post"], url_path="design-proposal")
+    def design_proposal(self, request, pk=None):
+        plan = self.get_object()
+        feature = AIUsageEvent.Feature.PLANNER_DRAFT
+        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
+        prompt = str(request.data.get("prompt") or "").strip()
+        if not prompt:
+            raise ValidationError({"prompt": "Describe the design change you want to preview."})
+        if len(prompt) > 2000:
+            raise ValidationError({"prompt": "Keep the design request under 2,000 characters."})
+
+        selected_id = str(request.data.get("selected_id") or "floor").strip()[:120]
+        selected_element = request.data.get("selected_element")
+        design = request.data.get("design")
+        if not isinstance(selected_element, dict):
+            selected_element = {}
+        if not isinstance(design, dict):
+            design = {}
+        design_context = json.dumps(design, separators=(",", ":"), default=str)[:30000]
+        selected_context = json.dumps(selected_element, separators=(",", ":"), default=str)[:6000]
+        system_prompt = (
+            "You translate homeowner requests into a small, reviewable list of changes for a simple one-floor 3D space preview. "
+            "Return strict JSON only with summary, changes, and assumptions. Never return markdown. "
+            "A change must contain target_type, target_id, property, value, label, display_value, and reason. "
+            "Allowed target types are floor, wall, opening, stairs. Allowed properties are ceiling_height, wall_height, "
+            "wall_thickness, wall_kind, opening_width, opening_height, sill_height, stair_width, stair_run, stair_rise, "
+            "translate_x, translate_y, exterior. All dimensions and translations must be decimal feet. "
+            "wall_kind must be existing, new, half, or remove. Use the selected target unless the request clearly applies to the whole floor. "
+            "Do not invent walls, coordinates, structural claims, code compliance, or construction instructions. "
+            "If the request is unclear, return no changes and list the question in assumptions."
+        )
+        user_prompt = (
+            f"Project: {plan.title or 'Untitled project'}\n"
+            f"Project context: {plan.project_type or 'general'}; {plan.house_location or 'location not specified'}\n"
+            f"Selected target id: {selected_id}\n"
+            f"Selected element: {selected_context}\n"
+            f"Current design: {design_context}\n\n"
+            f"Homeowner request: {prompt}"
+        )
+        model_name = ""
+        try:
+            result = generate_text(
+                feature=feature,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
+            model_name = result["model"]
+            proposal = normalize_design_proposal(parse_ai_json(result["text"]), selected_id=selected_id)
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=len(result["text"]),
+                status_value=AIUsageEvent.Status.SUCCESS,
+                usage=result.get("usage"),
+            )
+        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=0,
+                status_value=AIUsageEvent.Status.ERROR,
+            )
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        remaining_after, _ = get_ai_remaining_today(request.user)
+        return Response(
+            {
+                **proposal,
+                "remaining_today": remaining_after,
+                "daily_limit": daily_limit,
+                "model": model_name,
+            },
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=True, methods=["post"], url_path="sketch-to-rough-plan")
     def sketch_to_rough_plan(self, request, pk=None):
         plan = self.get_object()
@@ -1553,6 +1702,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
             "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
+            "Use a separate line annotation for every straight wall segment; these lines become editable 3D walls. "
             "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
             "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
             "For pen use points as [{x,y}], closed true only for clear enclosed shapes. "
@@ -1564,7 +1714,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
                 "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
                 "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
-                "Prefer pen annotations with multiple points for continuous connected linework and line annotations for straight independent segments. "
+                "Use separate line annotations for all straight exterior and interior wall segments. Use pen only for genuinely curved non-wall linework. "
                 "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
                 "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
                 "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "

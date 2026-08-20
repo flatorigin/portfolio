@@ -1121,6 +1121,57 @@ class ProjectPlannerTests(APITestCase):
             1,
         )
 
+    @patch("portfolio.views.generate_text")
+    def test_design_proposal_returns_reviewable_normalized_changes(self, mock_generate_text):
+        mock_generate_text.return_value = {
+            "text": json.dumps(
+                {
+                    "summary": "Raise the ceiling for the proposed design.",
+                    "changes": [
+                        {
+                            "target_type": "floor",
+                            "target_id": "floor",
+                            "property": "ceiling_height",
+                            "value": 9.25,
+                            "label": "Ceiling height",
+                            "display_value": "9 ft 3 in",
+                            "reason": "Requested by homeowner",
+                        },
+                        {
+                            "target_type": "wall",
+                            "target_id": "wall-1",
+                            "property": "unsupported_property",
+                            "value": 10,
+                        },
+                    ],
+                    "assumptions": [],
+                }
+            ),
+            "model": "gpt-test",
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        }
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Kitchen opening")
+        self.client.force_authenticate(user=self.homeowner)
+
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/design-proposal/",
+            {
+                "prompt": "Raise the ceiling to 9 feet 3 inches.",
+                "selected_id": "floor",
+                "design": {"settings": {"ceilingHeight": 8}, "annotations": []},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["changes"][0]["property"], "ceiling_height")
+        self.assertEqual(response.data["changes"][0]["value"], 9.25)
+        self.assertEqual(len(response.data["changes"]), 1)
+        self.assertEqual(
+            AIUsageEvent.objects.filter(user=self.homeowner, status=AIUsageEvent.Status.SUCCESS).count(),
+            1,
+        )
+
     @patch("portfolio.views.generate_text_with_image")
     def test_sketch_to_rough_plan_returns_editable_annotations(self, mock_generate_text_with_image):
         mock_generate_text_with_image.return_value = {
@@ -1153,6 +1204,8 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(len(response.data["annotations"]), 3)
         self.assertEqual(response.data["annotations"][0]["canvasMode"], "rough_plan")
         self.assertEqual(response.data["annotations"][0]["strokeColor"], "#111827")
+        self.assertEqual(response.data["annotations"][0]["designRole"], "wall")
+        self.assertEqual(response.data["annotations"][0]["wallKind"], "existing")
         self.assertEqual(response.data["uncertainty_notes"], ["Measurements are approximate."])
         self.assertEqual(
             AIUsageEvent.objects.filter(user=self.homeowner, status=AIUsageEvent.Status.SUCCESS).count(),
