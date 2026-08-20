@@ -235,7 +235,6 @@ function AIUsagePanel({ usage, loading }) {
   const remainingPercent = dailyLimit > 0 ? Math.min(100, (remaining / dailyLimit) * 100) : 0;
   const month = usage?.month || {};
   const pricing = usage?.pricing || {};
-  const multiplier = Number(pricing.price_multiplier || 1);
   const recent = Array.isArray(usage?.recent) ? usage.recent.slice(0, 4) : [];
 
   return (
@@ -247,7 +246,7 @@ function AIUsagePanel({ usage, loading }) {
           </div>
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-slate-900">AI usage balance</h2>
-            <p className="text-xs text-slate-500">Current allowance and estimated account usage</p>
+            <p className="text-xs text-slate-500">Current allowance and account charges</p>
           </div>
         </div>
         <span className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-600">
@@ -256,14 +255,14 @@ function AIUsagePanel({ usage, loading }) {
       </div>
 
       {loading ? (
-        <div className="grid gap-3 p-5 sm:grid-cols-3">
-          {[0, 1, 2].map((item) => (
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {[0, 1].map((item) => (
             <div key={item} className="h-24 animate-pulse rounded-xl bg-slate-100" />
           ))}
         </div>
       ) : usage ? (
         <>
-          <div className="grid gap-px bg-slate-100 sm:grid-cols-3">
+          <div className="grid gap-px bg-slate-100 sm:grid-cols-2">
             <div className="bg-white/90 p-5">
               <div className="text-xs font-medium text-slate-500">Available today</div>
               <div className="mt-2 flex items-end gap-2">
@@ -279,22 +278,14 @@ function AIUsagePanel({ usage, loading }) {
             </div>
 
             <div className="bg-white/90 p-5">
-              <div className="text-xs font-medium text-slate-500">Estimated this month</div>
+              <div className="text-xs font-medium text-slate-500">Company charge</div>
               <div className="mt-2 text-2xl font-semibold text-slate-900">
-                {formatAiCurrency(month.user_charge_usd)}
+                {formatAiCurrency(month.company_charge_usd)}
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                {Number(month.successful_actions || 0)} successful action{Number(month.successful_actions || 0) === 1 ? "" : "s"}
-              </div>
-            </div>
-
-            <div className="bg-white/90 p-5">
-              <div className="text-xs font-medium text-slate-500">Company pricing</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">
-                {Number.isFinite(multiplier) ? multiplier.toFixed(1) : "2.0"}x
-              </div>
-              <div className="mt-2 text-xs text-slate-500">
-                {formatAiCurrency(pricing.minimum_charge_usd)} minimum per action
+                {remaining > 0
+                  ? "No paid usage this month"
+                  : `${formatAiCurrency(pricing.minimum_charge_usd)} minimum per paid action`}
               </div>
             </div>
           </div>
@@ -315,7 +306,7 @@ function AIUsagePanel({ usage, loading }) {
                       </div>
                     </div>
                     <div className="shrink-0 text-sm font-semibold text-slate-700">
-                      {event.status === "success" ? formatAiCurrency(event.user_charge_usd) : "Not charged"}
+                      {event.status === "success" ? "Included" : "Not charged"}
                     </div>
                   </div>
                 ))}
