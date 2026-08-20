@@ -403,23 +403,43 @@ export function Design3DViewport({
     };
   }, []);
 
+  const resetCameraPosition = () => {
+    const state = sceneStateRef.current;
+    if (!state) return;
+    const next = cameraPositionFor(viewMode, geometry);
+    state.camera.position.copy(next.position);
+    state.controls.target.copy(next.target);
+    state.controls.update();
+  };
+
   return (
     <div className="relative h-full min-h-[560px] w-full overflow-hidden bg-slate-100 max-lg:min-h-0">
       <div ref={hostRef} className="absolute inset-0" />
-      <div className="absolute left-3 top-3 z-10 flex overflow-hidden rounded-lg border border-slate-200 bg-white/95 shadow-lg">
-        {VIEW_OPTIONS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => onViewModeChange?.(option.key)}
-            className={`inline-flex h-9 items-center gap-1.5 px-3 text-xs font-semibold ${
-              viewMode === option.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <SymbolIcon name={option.icon} className="text-[17px]" />
-            {option.label}
-          </button>
-        ))}
+      <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+        <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white/95 shadow-lg">
+          {VIEW_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => onViewModeChange?.(option.key)}
+              className={`inline-flex h-9 items-center gap-1.5 px-3 text-xs font-semibold ${
+                viewMode === option.key ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <SymbolIcon name={option.icon} className="text-[17px]" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={resetCameraPosition}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-slate-600 shadow-lg hover:bg-slate-50 hover:text-slate-950"
+          aria-label="Reset camera position"
+          title="Reset camera position"
+        >
+          <SymbolIcon name="restart_alt" className="text-[19px]" />
+        </button>
       </div>
       {!geometry.walls.length ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center">
@@ -430,7 +450,7 @@ export function Design3DViewport({
         </div>
       ) : null}
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-slate-950/80 px-3 py-2 text-[11px] text-white/85">
-        Drag walls or blue endpoints. Scroll to zoom.
+        Drag empty space to orbit. Scroll to zoom.
       </div>
     </div>
   );
