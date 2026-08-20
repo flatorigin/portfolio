@@ -34,6 +34,7 @@ const DashboardProjectsPage = lazy(() => import("./pages/DashboardProjectsPage.j
 const ProjectEditPage = lazy(() => import("./pages/ProjectEditPage.jsx"));
 const ProjectPlanDetail = lazy(() => import("./pages/ProjectPlanDetail.jsx"));
 const ProjectMarkupCanvas = lazy(() => import("./pages/ProjectMarkupCanvas.jsx"));
+const ProjectDesign3DWorkspace = lazy(() => import("./pages/ProjectDesign3DWorkspace.jsx"));
 const ProjectCheckGateway = lazy(() => import("./pages/ProjectCheckGateway.jsx"));
 const HomeownerProjectCheck = lazy(() => import("./pages/HomeownerProjectCheck.jsx"));
 const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx"));
@@ -118,10 +119,26 @@ createRoot(document.getElementById("root")).render(
             }
           />
           <Route
+            path="dashboard/planner/:planId/design-3d"
+            element={
+              <RequireAuth>
+                <ProjectDesign3DWorkspace />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="dashboard/projects/:projectId/images/:imageId/markup"
             element={
               <RequireAuth>
                 <ProjectMarkupCanvas />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="dashboard/projects/:projectId/images/:imageId/design-3d"
+            element={
+              <RequireAuth>
+                <ProjectDesign3DWorkspace />
               </RequireAuth>
             }
           />

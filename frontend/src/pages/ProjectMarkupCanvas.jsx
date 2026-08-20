@@ -22,6 +22,7 @@ const BASE_TOOLS = {
   arrow: { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
   wall: { key: "wall", label: "Wall", icon: "foundation" },
+  corner: { key: "corner", label: "3D corner", icon: "add" },
   freehand: { key: "freehand", label: "Pencil", icon: "draw" },
   pen: { key: "pen", label: "Pen", icon: "polyline" },
   penAdd: { key: "pen_add", label: "Add node", icon: "add" },
@@ -265,6 +266,7 @@ function annotationLayerLabel(item, index) {
   if (item.type === "circle") return "Circle";
   if (item.type === "arrow") return "Arrow";
   if (item.type === "line") return item.designRole === "wall" ? (item.wallLabel || "Wall") : "Line";
+  if (item.type === "corner") return "Confirmed 3D corner";
   if (item.type === "priority") return `Priority ${item.priorityNumber || index + 1}`;
   if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
     return item.type.charAt(0).toUpperCase() + item.type.slice(1);
@@ -415,6 +417,15 @@ function annotationBounds(item) {
   }
   if (item.type === "priority") {
     const radius = 26;
+    return {
+      x1: (item.x || 0) - radius,
+      y1: (item.y || 0) - radius,
+      x2: (item.x || 0) + radius,
+      y2: (item.y || 0) + radius,
+    };
+  }
+  if (item.type === "corner") {
+    const radius = 20;
     return {
       x1: (item.x || 0) - radius,
       y1: (item.y || 0) - radius,
@@ -1179,7 +1190,6 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
   const shouldShowLengths = showSegmentLengths || liveLength;
   const strokeWidth = baseStrokeWidth;
   const common = {
-    key: item.id,
     onPointerDown,
     onPointerEnter,
     onPointerLeave,
@@ -1191,7 +1201,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const { x1, y1, x2, y2 } = annotationBounds(item);
     const radii = rectCornerRadii(item, { x1, y1, x2, y2 });
     return (
-      <g {...common}>
+      <g key={item.id} {...common}>
         <path
           d={roundedRectPath({ x1, y1, x2, y2 }, radii)}
           fill={style.fill}
@@ -1211,6 +1221,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const cy = (y1 + y2) / 2;
     return (
       <ellipse
+        key={item.id}
         {...common}
         cx={cx}
         cy={cy}
@@ -1232,7 +1243,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
       .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
       .join(" ");
     return (
-      <g {...common}>
+      <g key={item.id} {...common}>
         <path
           d={d}
           fill="none"
@@ -1264,7 +1275,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
             .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
             .join(" ");
     return (
-      <g {...common}>
+      <g key={item.id} {...common}>
         {item.type === "pen" ? (
           <path
             d={d}
@@ -1311,7 +1322,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
   if (item.type === "priority") {
     const radius = 26;
     return (
-      <g {...common}>
+      <g key={item.id} {...common}>
         <circle
           cx={item.x}
           cy={item.y}
@@ -1333,6 +1344,24 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
         >
           {item.priorityNumber || 1}
         </text>
+      </g>
+    );
+  }
+
+  if (item.type === "corner") {
+    const markerStroke = selected ? MARKUP_SELECTION_COLOR : "#0284c7";
+    return (
+      <g key={item.id} {...common}>
+        <circle cx={item.x} cy={item.y} r="20" fill="transparent" pointerEvents="all" />
+        <circle cx={item.x} cy={item.y} r="12" fill="#ffffff" fillOpacity="0.92" stroke={markerStroke} strokeWidth="2" />
+        <path
+          d={`M ${(item.x || 0) - 8} ${item.y || 0} H ${(item.x || 0) + 8} M ${item.x || 0} ${(item.y || 0) - 8} V ${(item.y || 0) + 8}`}
+          fill="none"
+          stroke={markerStroke}
+          strokeWidth="3"
+          strokeLinecap="round"
+          pointerEvents="none"
+        />
       </g>
     );
   }
@@ -1363,7 +1392,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const labelX = midX - box.width / 2;
     const labelY = midY - box.height - 5;
     return (
-      <g {...common}>
+      <g key={item.id} {...common}>
         {calibratedReference ? (
           <path
             d={linePathD(item)}
@@ -1465,7 +1494,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const y = item.y || 0;
     if (item.type === "door") {
       return (
-        <g {...common}>
+        <g key={item.id} {...common}>
           <path d={`M ${x - 26} ${y + 28} L ${x - 26} ${y - 26} L ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
           <path d={`M ${x - 24} ${y + 24} A 54 54 0 0 1 ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} strokeDasharray="7 7" />
         </g>
@@ -1473,7 +1502,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     }
     if (item.type === "window") {
       return (
-        <g {...common}>
+        <g key={item.id} {...common}>
           <rect x={x - 32} y={y - 12} width="64" height="24" rx="3" fill="rgba(255,255,255,0.9)" stroke={stroke} strokeWidth={strokeWidth} />
           <line x1={x} y1={y - 12} x2={x} y2={y + 12} stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} />
         </g>
@@ -1481,7 +1510,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     }
     if (item.type === "tree") {
       return (
-        <g {...common}>
+        <g key={item.id} {...common}>
           <circle cx={x} cy={y - 8} r="28" fill={hexToRgba(stroke, 0.16)} stroke={stroke} strokeWidth={strokeWidth} />
           <path d={`M ${x} ${y + 20} L ${x} ${y + 36}`} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
         </g>
@@ -1489,7 +1518,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     }
     if (item.type === "steps") {
       return (
-        <g {...common}>
+        <g key={item.id} {...common}>
           {[0, 1, 2, 3].map((index) => (
             <rect key={`${item.id}-step-${index}`} x={x - 34 + index * 16} y={y - 24 + index * 12} width="48" height="10" fill="rgba(255,255,255,0.92)" stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} />
           ))}
@@ -1497,7 +1526,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
       );
     }
     return (
-      <g {...common}>
+      <g key={item.id} {...common}>
         <line x1={x - 34} y1={y - 18} x2={x + 34} y2={y - 18} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
         <line x1={x - 34} y1={y + 18} x2={x + 34} y2={y + 18} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
         {[-24, 0, 24].map((offset) => (
@@ -1522,7 +1551,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     );
   }
   return (
-    <g {...common}>
+    <g key={item.id} {...common}>
       <rect
         x={labelX}
         y={labelY}
@@ -1720,6 +1749,7 @@ export default function ProjectMarkupCanvas() {
   const [measurementCalibrationInputLength, setMeasurementCalibrationInputLength] = useState(DEFAULT_MEASUREMENT_CALIBRATION.length);
   const [showMeasurementCalibrationPrompt, setShowMeasurementCalibrationPrompt] = useState(false);
   const [measurementCalibrationPromptComplete, setMeasurementCalibrationPromptComplete] = useState(false);
+  const [show3DConversionPrompt, setShow3DConversionPrompt] = useState(false);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [selectedNodes, setSelectedNodes] = useState({ annotationId: "", handleKeys: [] });
@@ -2189,7 +2219,7 @@ export default function ProjectMarkupCanvas() {
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
       ...(isRoughPlan ? [] : [{ key: "background", tools: [BASE_TOOLS.backgroundEraser] }]),
-      { key: "geometry", tools: [BASE_TOOLS.wall, BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
+      { key: "geometry", tools: [BASE_TOOLS.wall, BASE_TOOLS.corner, BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
       ...(isRoughPlan ? [{ key: "symbols", tools: SYMBOL_TOOLS }] : []),
       { key: "delete", tools: [BASE_TOOLS.delete] },
     ],
@@ -2204,6 +2234,18 @@ export default function ProjectMarkupCanvas() {
     const markup = safeMarkupData(plan?.markup_data);
     return Array.isArray(markup.versions) ? markup.versions : [];
   }, [plan]);
+  const cleanFloorPlanBackgroundSelected = useMemo(() => {
+    if (String(projectImage?.caption || "").toLowerCase().includes(CLEAN_FLOOR_PLAN_NAME)) return true;
+    return (plan?.images || []).some((image) =>
+      image?.image_url === backgroundUrl && String(image?.caption || "").toLowerCase().includes(CLEAN_FLOOR_PLAN_NAME),
+    );
+  }, [backgroundUrl, plan?.images, projectImage?.caption]);
+  const floorPlanSceneReady = useMemo(() => {
+    if (!(isRoughPlan || hasAiCleanPlanOverlay || cleanFloorPlanBackgroundSelected)) return false;
+    if (hasAiCleanPlanOverlay || cleanFloorPlanBackgroundSelected || annotations.length) return true;
+    if (savedVersions.some((version) => version?.version_type === "rough_plan")) return true;
+    return sketchStatus.phase === "ready" || (!sketchSource && isRoughPlan);
+  }, [annotations.length, cleanFloorPlanBackgroundSelected, hasAiCleanPlanOverlay, isRoughPlan, savedVersions, sketchSource, sketchStatus.phase]);
   const sketchSourceImages = useMemo(() => {
     if (isProjectImageMode) {
       return projectImages
@@ -3424,8 +3466,9 @@ export default function ProjectMarkupCanvas() {
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
       canvasMode,
-      designRole: tool === "wall" ? "wall" : tool === "line" ? "note" : undefined,
-      designOrigin: tool === "wall" ? "proposed" : undefined,
+      designRole: tool === "wall" ? "wall" : tool === "corner" ? "corner" : tool === "line" ? "note" : undefined,
+      designOrigin: tool === "wall" || tool === "corner" ? "proposed" : undefined,
+      cornerKind: tool === "corner" ? "wall_junction" : undefined,
       wallKind: tool === "wall" ? "new" : undefined,
       wallHeight: tool === "wall" ? designSettings.ceilingHeight : undefined,
       wallThickness: tool === "wall" ? designSettings.wallThickness : undefined,
@@ -3440,7 +3483,7 @@ export default function ProjectMarkupCanvas() {
       setDraft(null);
       return;
     }
-    if (tool === "text" || tool === "priority" || ["door", "window", "tree", "steps", "fence"].includes(tool)) return;
+    if (tool === "text" || tool === "priority" || tool === "corner" || ["door", "window", "tree", "steps", "fence"].includes(tool)) return;
     setDraft(id);
   }
 
@@ -4431,6 +4474,22 @@ export default function ProjectMarkupCanvas() {
     setMessage("");
   }
 
+  function request3DConversion() {
+    finishPenPath();
+    setShow3DConversionPrompt(true);
+  }
+
+  async function saveAndCreate3D() {
+    const saved = await saveToPlanner();
+    if (!saved) return;
+    setShow3DConversionPrompt(false);
+    if (isProjectImageMode) {
+      navigate(`/dashboard/projects/${projectId}/images/${imageId}/design-3d?analyze=1`);
+      return;
+    }
+    navigate(`/dashboard/planner/${planId}/design-3d?analyze=1`);
+  }
+
   function changeStrokeStyle(nextStyle) {
     if (selectedForEditing) updateSelected({ strokeStyle: nextStyle });
   }
@@ -4710,6 +4769,60 @@ export default function ProjectMarkupCanvas() {
                 >
                   <SymbolIcon name={measurementCalibrationPromptComplete ? "check" : "straighten"} className="text-[18px]" />
                   {measurementCalibrationPromptComplete ? "Got it" : calibrationReady ? "Use selected measure" : "Draw measure"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {show3DConversionPrompt ? (
+          <div
+            className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/50 px-4 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-3d-title"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget && !saving) setShow3DConversionPrompt(false);
+            }}
+          >
+            <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="create-3d-title" className="text-base font-semibold text-slate-950">Save this floor plan and create 3D?</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    FlatOrigin will save the exact visible floor plan and markup, then read the walls, openings, stairs, and confirmed + corner markers for the 3D workspace.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShow3DConversionPrompt(false)}
+                  disabled={saving}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                  aria-label="Cancel 3D conversion"
+                >
+                  <SymbolIcon name="close" className="text-[20px]" />
+                </button>
+              </div>
+              <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
+                Use the 3D corner tool to place a + at any wall corner the image reader must treat as exact. The first conversion of this saved version uses one floor-plan AI analysis; reopening it uses the cached result.
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShow3DConversionPrompt(false)}
+                  disabled={saving}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveAndCreate3D}
+                  disabled={saving || savingEditable}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <SymbolIcon name={saving ? "progress_activity" : "view_in_ar"} className={`text-[18px] ${saving ? "animate-spin" : ""}`} />
+                  {saving ? "Saving floor plan..." : "Save and create 3D"}
                 </button>
               </div>
             </div>
@@ -5991,10 +6104,10 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
-              {workspaceView === "2d" && hasActiveDesignWalls && (isRoughPlan || hasAiCleanPlanOverlay) ? (
+              {workspaceView === "2d" && floorPlanSceneReady ? (
                 <button
                   type="button"
-                  onClick={() => openFloorPlanIn3D("perspective")}
+                  onClick={request3DConversion}
                   className="absolute right-2 top-2 z-30 inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white shadow-xl hover:bg-slate-800 lg:right-3 lg:top-3 lg:h-10 lg:px-4"
                   aria-label="Create 3D elevation from this floor plan"
                   title="Create 3D elevation from this floor plan"
