@@ -1258,6 +1258,116 @@ class ProjectPlannerTests(APITestCase):
         self.assertIn("user-confirmed wall corner", call["user_prompt"])
         self.assertEqual(response.data["annotations"][0]["designRole"], "wall")
 
+    @patch("portfolio.views.generate_text_with_image")
+    def test_clean_plan_trace_returns_cohesive_semantic_vector_plan(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = {
+            "text": json.dumps(
+                {
+                    "rough_plan": {"width": 24, "length": 32, "unit": "ft"},
+                    "vector_plan": {
+                        "schema_version": 1,
+                        "coordinate_space": {"width": 1200, "height": 760},
+                        "nodes": [
+                            {"id": "corner-a", "x": 120, "y": 120},
+                            {"id": "corner-b", "x": 560, "y": 120},
+                            {"id": "corner-c", "x": 560, "y": 520},
+                        ],
+                        "elements": [
+                            {
+                                "id": "wall-north",
+                                "type": "wall",
+                                "label": "Wall",
+                                "start_node_id": "corner-a",
+                                "end_node_id": "corner-b",
+                                "confidence": 0.98,
+                            },
+                            {
+                                "id": "wall-east",
+                                "type": "wall",
+                                "label": "Wall",
+                                "start_node_id": "corner-b",
+                                "end_node_id": "corner-c",
+                                "confidence": 0.96,
+                            },
+                            {
+                                "id": "door-entry",
+                                "type": "door",
+                                "label": "Door",
+                                "parent_wall_id": "wall-north",
+                                "x1": 220,
+                                "y1": 120,
+                                "x2": 300,
+                                "y2": 120,
+                                "swing_direction": "right",
+                            },
+                            {
+                                "id": "window-east",
+                                "type": "window",
+                                "label": "Window",
+                                "parent_wall_id": "wall-east",
+                                "x1": 560,
+                                "y1": 240,
+                                "x2": 560,
+                                "y2": 340,
+                            },
+                            {
+                                "id": "opening-kitchen",
+                                "type": "opening",
+                                "label": "Opening",
+                                "parent_wall_id": "wall-east",
+                                "x1": 560,
+                                "y1": 370,
+                                "x2": 560,
+                                "y2": 440,
+                            },
+                            {
+                                "id": "stairs-main",
+                                "type": "stairs",
+                                "label": "Stairs",
+                                "points": [
+                                    {"x": 700, "y": 220},
+                                    {"x": 940, "y": 220},
+                                    {"x": 940, "y": 340},
+                                    {"x": 700, "y": 340},
+                                ],
+                                "direction": "up",
+                                "tread_count": 10,
+                            },
+                        ],
+                    },
+                    "uncertainty_notes": [],
+                }
+            ),
+            "model": "gpt-test",
+        }
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Semantic vector plan")
+        sketch = SimpleUploadedFile("clean-plan.png", TINY_PNG_BYTES, content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-rough-plan/",
+            {"sketch": sketch, "overlay_mode": "trace_clean_floor_plan"},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        vector_plan = response.data["vector_plan"]
+        shared_corner = next(node for node in vector_plan["nodes"] if node["id"] == "corner-b")
+        self.assertEqual(shared_corner["kind"], "corner")
+        self.assertEqual(shared_corner["connected_element_ids"], ["wall-north", "wall-east"])
+        elements = {item["id"]: item for item in vector_plan["elements"]}
+        self.assertEqual(elements["door-entry"]["parent_wall_id"], "wall-north")
+        self.assertEqual(elements["window-east"]["label"], "Window")
+        self.assertEqual(elements["opening-kitchen"]["type"], "opening")
+        self.assertEqual(elements["stairs-main"]["tread_count"], 10)
+        annotations = response.data["annotations"]
+        self.assertTrue(any(item["type"] == "corner" and item["vectorNodeId"] == "corner-b" for item in annotations))
+        self.assertTrue(any(item["type"] == "door" and item["semanticLabel"] == "Door" for item in annotations))
+        self.assertTrue(any(item["type"] == "window" and item["parentWallId"] == "wall-east" for item in annotations))
+        self.assertTrue(any(item["type"] == "opening" for item in annotations))
+        self.assertTrue(any(item["type"] == "steps" and item["treadCount"] == 10 for item in annotations))
+        self.assertIn("Semantic vector trace mode", mock_generate_text_with_image.call_args.kwargs["user_prompt"])
+
     @patch("portfolio.views.generate_image_from_image")
     def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_image_from_image):
         mock_generate_image_from_image.return_value = {
