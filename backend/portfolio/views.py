@@ -142,7 +142,7 @@ def normalize_sketch_annotations_payload(payload):
     items = payload.get("annotations") if isinstance(payload, dict) else []
     if not isinstance(items, list):
         return []
-    allowed = {"line", "arrow", "rect", "circle", "text", "measure", "door", "window", "tree", "steps", "fence", "pen"}
+    allowed = {"line", "arrow", "rect", "circle", "text", "measure", "door", "window", "opening", "tree", "steps", "fence", "pen", "corner"}
     normalized = []
     for index, raw in enumerate(items[:80]):
         if not isinstance(raw, dict):
@@ -203,7 +203,10 @@ def normalize_sketch_annotations_payload(payload):
         y2 = sketch_float(raw.get("y2"), y + sketch_float(raw.get("h"), 80, 8, 500), 0, MARKUP_CANVAS_HEIGHT)
         text = str(raw.get("text") or raw.get("label") or "").strip()[:160]
 
-        if item_type in {"door", "window", "tree", "steps", "fence", "text"}:
+        if item_type in {"door", "window", "opening", "steps"}:
+            has_span = any(key in raw for key in ("x2", "y2", "w", "h"))
+            base.update({"x": x, "y": y, "x2": x2 if has_span else x, "y2": y2 if has_span else y, "text": text})
+        elif item_type in {"tree", "fence", "text", "corner"}:
             base.update({"x": x, "y": y, "x2": x, "y2": y, "text": text or ("Add note" if item_type == "text" else "")})
         else:
             base.update({"x": x, "y": y, "x2": x2, "y2": y2, "text": text or ("measurement" if item_type == "measure" else "")})
@@ -211,6 +214,351 @@ def normalize_sketch_annotations_payload(payload):
             base.update({"designRole": "wall", "wallKind": "existing"})
         normalized.append(base)
     return normalized
+
+
+def sketch_vector_id(value, fallback):
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "").strip()).strip("-")
+    return (cleaned or fallback)[:80]
+
+
+def normalize_sketch_vector_plan_payload(payload):
+    source = payload.get("vector_plan") if isinstance(payload, dict) else None
+    if not isinstance(source, dict) or not isinstance(source.get("elements"), list):
+        return None
+
+    coordinate_space = source.get("coordinate_space") if isinstance(source.get("coordinate_space"), dict) else {}
+    canvas_width = sketch_float(coordinate_space.get("width"), MARKUP_CANVAS_WIDTH, 100, MARKUP_CANVAS_WIDTH)
+    canvas_height = sketch_float(
+        coordinate_space.get("height"),
+        MARKUP_CANVAS_HEIGHT,
+        100,
+        MARKUP_CANVAS_HEIGHT,
+    )
+    raw_nodes = source.get("nodes") if isinstance(source.get("nodes"), list) else []
+    nodes = []
+    nodes_by_id = {}
+    for index, raw in enumerate(raw_nodes[:180]):
+        if not isinstance(raw, dict):
+            continue
+        node_id = sketch_vector_id(raw.get("id"), f"node-{index + 1}")
+        if node_id in nodes_by_id:
+            continue
+        node = {
+            "id": node_id,
+            "x": sketch_float(raw.get("x"), 0, 0, canvas_width),
+            "y": sketch_float(raw.get("y"), 0, 0, canvas_height),
+            "kind": "junction",
+            "label": str(raw.get("label") or "Wall joint").strip()[:80],
+            "connected_element_ids": [],
+        }
+        nodes.append(node)
+        nodes_by_id[node_id] = node
+
+    elements = []
+    raw_elements = source.get("elements")[:180]
+    wall_endpoints = []
+    semantic_types = {"wall", "door", "window", "opening", "stairs", "room"}
+    aliases = {"line": "wall", "steps": "stairs"}
+
+    for index, raw in enumerate(raw_elements):
+        if not isinstance(raw, dict):
+            continue
+        element_type = aliases.get(str(raw.get("type") or "").strip().lower(), str(raw.get("type") or "").strip().lower())
+        if element_type not in semantic_types:
+            continue
+        element_id = sketch_vector_id(raw.get("id"), f"{element_type}-{index + 1}")
+        if any(item["id"] == element_id for item in elements):
+            element_id = f"{element_id}-{index + 1}"
+        label = str(raw.get("label") or element_type.title()).strip()[:80]
+        confidence = sketch_float(raw.get("confidence"), 0.75, 0, 1)
+
+        if element_type == "wall":
+            start_node_id = sketch_vector_id(raw.get("start_node_id") or raw.get("startNodeId"), "")
+            end_node_id = sketch_vector_id(raw.get("end_node_id") or raw.get("endNodeId"), "")
+            start_node = nodes_by_id.get(start_node_id)
+            end_node = nodes_by_id.get(end_node_id)
+            start = {
+                "x": start_node["x"] if start_node else sketch_float(raw.get("x1", raw.get("x")), 0, 0, canvas_width),
+                "y": start_node["y"] if start_node else sketch_float(raw.get("y1", raw.get("y")), 0, 0, canvas_height),
+            }
+            end = {
+                "x": end_node["x"] if end_node else sketch_float(raw.get("x2"), start["x"], 0, canvas_width),
+                "y": end_node["y"] if end_node else sketch_float(raw.get("y2"), start["y"], 0, canvas_height),
+            }
+            if start == end:
+                continue
+            element = {
+                "id": element_id,
+                "type": "wall",
+                "label": label or "Wall",
+                "x1": start["x"],
+                "y1": start["y"],
+                "x2": end["x"],
+                "y2": end["y"],
+                "start_node_id": start_node_id or None,
+                "end_node_id": end_node_id or None,
+                "wall_kind": str(raw.get("wall_kind") or raw.get("wallKind") or "existing").strip().lower()[:30],
+                "thickness_px": sketch_float(raw.get("thickness_px", raw.get("strokeWidth")), 4, 1, 24),
+                "confidence": confidence,
+            }
+            elements.append(element)
+            wall_endpoints.extend([(element, "start", start), (element, "end", end)])
+            continue
+
+        if element_type == "stairs":
+            points = raw.get("points") if isinstance(raw.get("points"), list) else []
+            clean_points = [
+                {
+                    "x": sketch_float(point.get("x"), 0, 0, canvas_width),
+                    "y": sketch_float(point.get("y"), 0, 0, canvas_height),
+                }
+                for point in points[:8]
+                if isinstance(point, dict)
+            ]
+            x1 = sketch_float(raw.get("x1", raw.get("x")), 0, 0, canvas_width)
+            y1 = sketch_float(raw.get("y1", raw.get("y")), 0, 0, canvas_height)
+            x2 = sketch_float(raw.get("x2"), x1 + 100, 0, canvas_width)
+            y2 = sketch_float(raw.get("y2"), y1, 0, canvas_height)
+            if len(clean_points) < 4:
+                stair_width = sketch_float(raw.get("width_px"), 56, 12, 240)
+                dx = x2 - x1
+                dy = y2 - y1
+                length = max(1, (dx * dx + dy * dy) ** 0.5)
+                px = (-dy / length) * stair_width / 2
+                py = (dx / length) * stair_width / 2
+                clean_points = [
+                    {"x": x1 + px, "y": y1 + py},
+                    {"x": x2 + px, "y": y2 + py},
+                    {"x": x2 - px, "y": y2 - py},
+                    {"x": x1 - px, "y": y1 - py},
+                ]
+            elements.append(
+                {
+                    "id": element_id,
+                    "type": "stairs",
+                    "label": label or "Stairs",
+                    "points": clean_points,
+                    "direction": str(raw.get("direction") or "up").strip().lower()[:20],
+                    "tread_count": int(sketch_float(raw.get("tread_count", raw.get("treadCount")), 8, 2, 40)),
+                    "confidence": confidence,
+                }
+            )
+            continue
+
+        points = raw.get("points") if isinstance(raw.get("points"), list) else []
+        clean_points = [
+            {
+                "x": sketch_float(point.get("x"), 0, 0, canvas_width),
+                "y": sketch_float(point.get("y"), 0, 0, canvas_height),
+            }
+            for point in points[:20]
+            if isinstance(point, dict)
+        ]
+        x1 = sketch_float(raw.get("x1", raw.get("x")), clean_points[0]["x"] if clean_points else 0, 0, canvas_width)
+        y1 = sketch_float(raw.get("y1", raw.get("y")), clean_points[0]["y"] if clean_points else 0, 0, canvas_height)
+        x2 = sketch_float(raw.get("x2"), clean_points[-1]["x"] if clean_points else x1 + 48, 0, canvas_width)
+        y2 = sketch_float(raw.get("y2"), clean_points[-1]["y"] if clean_points else y1, 0, canvas_height)
+        element = {
+            "id": element_id,
+            "type": element_type,
+            "label": label,
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+            "parent_wall_id": sketch_vector_id(raw.get("parent_wall_id") or raw.get("parentWallId"), "") or None,
+            "confidence": confidence,
+        }
+        if element_type == "door":
+            element["swing_direction"] = str(raw.get("swing_direction") or raw.get("swingDirection") or "left").strip().lower()[:20]
+        if element_type == "room":
+            element["points"] = clean_points
+        elements.append(element)
+
+    def nearest_node(point):
+        best = None
+        best_distance = 12 * 12
+        for node in nodes:
+            distance = (node["x"] - point["x"]) ** 2 + (node["y"] - point["y"]) ** 2
+            if distance <= best_distance:
+                best = node
+                best_distance = distance
+        return best
+
+    for element, endpoint, point in wall_endpoints:
+        requested_id = element[f"{endpoint}_node_id"]
+        node = nodes_by_id.get(requested_id) if requested_id else nearest_node(point)
+        if node is None:
+            node_id = f"node-{len(nodes) + 1}"
+            node = {
+                "id": node_id,
+                "x": point["x"],
+                "y": point["y"],
+                "kind": "endpoint",
+                "label": "Wall endpoint",
+                "connected_element_ids": [],
+            }
+            nodes.append(node)
+            nodes_by_id[node_id] = node
+        element[f"{endpoint}_node_id"] = node["id"]
+        element["x1" if endpoint == "start" else "x2"] = node["x"]
+        element["y1" if endpoint == "start" else "y2"] = node["y"]
+        if element["id"] not in node["connected_element_ids"]:
+            node["connected_element_ids"].append(element["id"])
+
+    for node in nodes:
+        connection_count = len(node["connected_element_ids"])
+        node["kind"] = "junction" if connection_count >= 3 else "corner" if connection_count == 2 else "endpoint"
+        node["label"] = "Wall junction" if connection_count >= 3 else "Wall corner" if connection_count == 2 else "Wall endpoint"
+
+    if not elements:
+        return None
+    return {
+        "schema_version": 1,
+        "coordinate_space": {"width": canvas_width, "height": canvas_height, "unit": "canvas_px"},
+        "source_image_as_truth": True,
+        "nodes": nodes,
+        "elements": elements,
+    }
+
+
+def sketch_vector_plan_from_annotations(annotations):
+    elements = []
+    for index, item in enumerate(annotations or []):
+        item_type = item.get("type")
+        semantic_type = "wall" if item_type == "line" and item.get("designRole") == "wall" else {"steps": "stairs"}.get(item_type, item_type)
+        if semantic_type not in {"wall", "door", "window", "opening", "stairs"}:
+            continue
+        elements.append(
+            {
+                "id": item.get("vectorElementId") or f"{semantic_type}-{index + 1}",
+                "type": semantic_type,
+                "x1": item.get("x"),
+                "y1": item.get("y"),
+                "x2": item.get("x2"),
+                "y2": item.get("y2"),
+                "points": item.get("points"),
+                "label": item.get("wallLabel") or item.get("text") or semantic_type.title(),
+            }
+        )
+    return normalize_sketch_vector_plan_payload({"vector_plan": {"elements": elements}}) if elements else None
+
+
+def sketch_annotations_from_vector_plan(vector_plan):
+    annotations = []
+    now = timezone.now().strftime("%Y%m%d%H%M%S")
+    for element in vector_plan.get("elements", []):
+        semantic_type = element["type"]
+        annotation_type = {"wall": "line", "stairs": "steps"}.get(semantic_type, semantic_type)
+        annotation_id = f"ai-vector-{element['id']}"
+        base = {
+            "id": annotation_id,
+            "layer": annotation_id,
+            "type": annotation_type,
+            "semanticType": semantic_type,
+            "semanticLabel": element.get("label") or semantic_type.title(),
+            "vectorElementId": element["id"],
+            "source": "ai_semantic_vector_trace",
+            "color": "#0369a1",
+            "strokeColor": "#0369a1",
+            "fillColor": "#38bdf8",
+            "fillMaterial": "flat",
+            "colorLabel": "Semantic vector",
+            "strokeWidth": element.get("thickness_px", 2),
+            "strokeOpacity": 0.9,
+            "fillOpacity": 0.08,
+            "strokeAlign": "center",
+            "startEndpoint": "none",
+            "endEndpoint": "none",
+            "strokeStyle": "solid",
+            "canvasMode": "photo",
+            "confidence": element.get("confidence", 0.75),
+            "x": element.get("x1", 0),
+            "y": element.get("y1", 0),
+            "x2": element.get("x2", element.get("x1", 0)),
+            "y2": element.get("y2", element.get("y1", 0)),
+            "text": element.get("label") or semantic_type.title(),
+        }
+        if semantic_type == "wall":
+            base.update(
+                {
+                    "designRole": "wall",
+                    "wallKind": element.get("wall_kind") or "existing",
+                    "wallLabel": element.get("label") or "Wall",
+                    "startNodeId": element.get("start_node_id"),
+                    "endNodeId": element.get("end_node_id"),
+                }
+            )
+        if semantic_type in {"door", "window", "opening"}:
+            base["parentWallId"] = element.get("parent_wall_id")
+        if semantic_type == "door":
+            base["swingDirection"] = element.get("swing_direction") or "left"
+        if semantic_type == "stairs":
+            points = element.get("points") or []
+            base.update(
+                {
+                    "points": points,
+                    "x": points[0]["x"] if points else 0,
+                    "y": points[0]["y"] if points else 0,
+                    "x2": points[2]["x"] if len(points) > 2 else 0,
+                    "y2": points[2]["y"] if len(points) > 2 else 0,
+                    "treadCount": element.get("tread_count") or 8,
+                    "direction": element.get("direction") or "up",
+                }
+            )
+        annotations.append(base)
+
+    for node in vector_plan.get("nodes", []):
+        if len(node.get("connected_element_ids") or []) < 2:
+            continue
+        annotation_id = f"ai-vector-node-{node['id']}-{now}"
+        annotations.append(
+            {
+                "id": annotation_id,
+                "layer": annotation_id,
+                "type": "corner",
+                "semanticType": "junction",
+                "semanticLabel": node.get("label") or "Wall corner",
+                "vectorNodeId": node["id"],
+                "connectedElementIds": node.get("connected_element_ids") or [],
+                "source": "ai_semantic_vector_trace",
+                "x": node["x"],
+                "y": node["y"],
+                "x2": node["x"],
+                "y2": node["y"],
+                "color": "#0369a1",
+                "strokeColor": "#0369a1",
+                "fillColor": "#ffffff",
+                "strokeWidth": 2,
+                "strokeOpacity": 0.9,
+                "fillOpacity": 0,
+                "canvasMode": "photo",
+                "designRole": "corner",
+                "cornerKind": node.get("kind") or "wall_junction",
+                "text": node.get("label") or "Wall corner",
+            }
+        )
+    return annotations
+
+
+def semantic_vector_trace_instructions():
+    return (
+        "\n\nSemantic vector trace mode: the supplied image is the source of truth. "
+        "Return rough_plan, vector_plan, and uncertainty_notes. Do not return a replacement drawing. "
+        f"vector_plan must use the full {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} coordinate space and contain "
+        "schema_version, coordinate_space, nodes, and elements. Preserve the image proportions and place every vector "
+        "element directly over the matching visible element. Do not simplify away interior information.\n"
+        "nodes: every visible wall endpoint, corner, T-junction, and crossing as {id,x,y,label}. Reuse the exact same node id "
+        "where walls meet.\n"
+        "elements: typed objects. Walls use {id,type:'wall',label:'Wall',start_node_id,end_node_id,x1,y1,x2,y2,"
+        "wall_kind,thickness_px,confidence}. Create one wall element per straight segment and include exterior and interior walls. "
+        "Doors use {id,type:'door',label:'Door',parent_wall_id,x1,y1,x2,y2,swing_direction,confidence}, with x1,y1 at the hinge "
+        "and x2,y2 at the closed leaf end. Windows and open passages use the same wall-aligned endpoints with type 'window' or "
+        "'opening' and parent_wall_id. Stairs use {id,type:'stairs',label:'Stairs',points:[four footprint corners in order],"
+        "direction,tread_count,confidence}; match the visible stair footprint, orientation, treads, and travel direction. "
+        "Use short labels exactly describing the element nature. Never classify furniture, cabinets, dimension lines, text, or fixtures as walls. "
+        "Do not invent hidden geometry. Put unclear classifications in uncertainty_notes and lower that element's confidence."
+    )
 
 
 def infer_supported_image_content_type(file_name):
@@ -947,13 +1295,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             f"Image source: {image_name}\n"
             f"Preferred rough plan size: {requested_width} x {requested_length} {requested_unit}\n\n"
             f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
-            "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
+            "Return JSON with rough_plan and uncertainty_notes, plus annotations for ordinary sketch mode or vector_plan for semantic trace mode.\n"
             "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
             "Treat width and length as the measured full sketch/design area. The interface adds a 4-unit grid margin on every side, "
             "so keep the actual plan geometry inside the centered design area, not against the outer grid edge. Set grid_visible true.\n"
-            f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
+            f"When returning annotations, they must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
-            "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
+            "Allowed annotation types: line, rect, circle, text, measure, door, window, opening, tree, steps, fence, pen, corner.\n"
             "Use a separate line annotation for every straight wall segment; these lines become editable 3D walls. "
             "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
             "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
@@ -962,19 +1310,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
         )
         if trace_clean_floor_plan:
-            user_prompt += (
+            user_prompt += semantic_vector_trace_instructions() + (
                 "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
                 "A blue plus (+) inside a small white circle is a user-confirmed wall corner or junction. "
                 "Treat the exact center of every such marker as a required wall centerline anchor, connect the visible adjoining wall segments through it, "
                 "and never interpret the marker itself as room content, a fixture, or an opening. "
                 "Do not require these markers: automatically infer every visible corner and wall junction, and give adjoining wall segments identical endpoint coordinates so they meet cleanly. "
-                "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
-                "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
-                "Use separate line annotations for all straight exterior and interior wall segments. Use pen only for genuinely curved non-wall linework. "
-                "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
-                "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
-                "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "
-                "Coordinates should match the supplied image layout closely in the full canvas, preserving the plan proportions and relative positions."
+                "Trace the visible floor-plan linework and symbols completely, including the exterior perimeter, interior partitions, openings, windows, doors, and stairs."
             )
         model_name = ""
         try:
@@ -988,7 +1330,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
             model_name = result["model"]
             payload = parse_ai_json(result["text"])
             rough_plan = normalize_sketch_rough_plan_payload(payload)
-            annotations = normalize_sketch_annotations_payload(payload)
+            vector_plan = normalize_sketch_vector_plan_payload(payload)
+            if vector_plan:
+                annotations = sketch_annotations_from_vector_plan(vector_plan)
+            else:
+                annotations = normalize_sketch_annotations_payload(payload)
+                vector_plan = sketch_vector_plan_from_annotations(annotations)
             uncertainty_notes = self._clean_string_list(payload.get("uncertainty_notes") if isinstance(payload, dict) else [])
             record_ai_usage_event(
                 user=request.user,
@@ -1015,6 +1362,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             {
                 "rough_plan": rough_plan,
                 "annotations": annotations,
+                "vector_plan": vector_plan,
                 "uncertainty_notes": uncertainty_notes,
                 "remaining_today": remaining_after,
                 "daily_limit": daily_limit,
@@ -1719,13 +2067,13 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             f"Project notes: {plan.issue_summary or plan.notes or ''}\n"
             f"Preferred rough plan size: {requested_width} x {requested_length} {requested_unit}\n\n"
             f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
-            "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
+            "Return JSON with rough_plan and uncertainty_notes, plus annotations for ordinary sketch mode or vector_plan for semantic trace mode.\n"
             "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
             "Treat width and length as the measured full sketch/design area. The interface adds a 4-unit grid margin on every side, "
             "so keep the actual plan geometry inside the centered design area, not against the outer grid edge. Set grid_visible true.\n"
-            f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
+            f"When returning annotations, they must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
             "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
-            "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
+            "Allowed annotation types: line, rect, circle, text, measure, door, window, opening, tree, steps, fence, pen, corner.\n"
             "Use a separate line annotation for every straight wall segment; these lines become editable 3D walls. "
             "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
             "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
@@ -1734,19 +2082,13 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
         )
         if trace_clean_floor_plan:
-            user_prompt += (
+            user_prompt += semantic_vector_trace_instructions() + (
                 "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
                 "A blue plus (+) inside a small white circle is a user-confirmed wall corner or junction. "
                 "Treat the exact center of every such marker as a required wall centerline anchor, connect the visible adjoining wall segments through it, "
                 "and never interpret the marker itself as room content, a fixture, or an opening. "
                 "Do not require these markers: automatically infer every visible corner and wall junction, and give adjoining wall segments identical endpoint coordinates so they meet cleanly. "
-                "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
-                "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
-                "Use separate line annotations for all straight exterior and interior wall segments. Use pen only for genuinely curved non-wall linework. "
-                "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
-                "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
-                "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "
-                "Coordinates should match the supplied image layout closely in the full canvas, preserving the plan proportions and relative positions."
+                "Trace the visible floor-plan linework and symbols completely, including the exterior perimeter, interior partitions, openings, windows, doors, and stairs."
             )
         model_name = ""
         try:
@@ -1760,7 +2102,12 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             model_name = result["model"]
             payload = parse_ai_json(result["text"])
             rough_plan = normalize_sketch_rough_plan_payload(payload)
-            annotations = normalize_sketch_annotations_payload(payload)
+            vector_plan = normalize_sketch_vector_plan_payload(payload)
+            if vector_plan:
+                annotations = sketch_annotations_from_vector_plan(vector_plan)
+            else:
+                annotations = normalize_sketch_annotations_payload(payload)
+                vector_plan = sketch_vector_plan_from_annotations(annotations)
             uncertainty_notes = self._clean_string_list(payload.get("uncertainty_notes") if isinstance(payload, dict) else [])
             self._record_ai_event(
                 user=request.user,
@@ -1787,6 +2134,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             {
                 "rough_plan": rough_plan,
                 "annotations": annotations,
+                "vector_plan": vector_plan,
                 "uncertainty_notes": uncertainty_notes,
                 "remaining_today": remaining_after,
                 "daily_limit": daily_limit,

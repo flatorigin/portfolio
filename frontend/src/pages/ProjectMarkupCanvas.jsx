@@ -256,6 +256,7 @@ function fillMaterialPreviewStyle(material, fillColor, fillOpacity) {
 function annotationLayerLabel(item, index) {
   const fallback = `Layer ${index + 1}`;
   if (!item) return fallback;
+  if (item.semanticLabel) return item.semanticLabel;
   if (item.type === "text") return normalizeMarkupText(item.text) || "Text note";
   if (item.type === "measure") return normalizeMarkupText(item.text) || "Measurement";
   if (item.type === "pen") return item.closed ? "Pen shape" : "Pen path";
@@ -267,7 +268,7 @@ function annotationLayerLabel(item, index) {
   if (item.type === "line") return item.designRole === "wall" ? (item.wallLabel || "Wall") : "Line";
   if (item.type === "corner") return "Confirmed 3D corner";
   if (item.type === "priority") return `Priority ${item.priorityNumber || index + 1}`;
-  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+  if (["door", "window", "opening", "tree", "steps", "fence"].includes(item.type)) {
     return item.type.charAt(0).toUpperCase() + item.type.slice(1);
   }
   return fallback;
@@ -432,7 +433,26 @@ function annotationBounds(item) {
       y2: (item.y || 0) + radius,
     };
   }
-  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+  if (item.type === "steps" && Array.isArray(item.points) && item.points.length >= 4) {
+    const xs = item.points.map((point) => point.x);
+    const ys = item.points.map((point) => point.y);
+    return {
+      x1: Math.min(...xs),
+      y1: Math.min(...ys),
+      x2: Math.max(...xs),
+      y2: Math.max(...ys),
+    };
+  }
+  if (["door", "window", "opening"].includes(item.type) && (item.x2 !== item.x || item.y2 !== item.y)) {
+    const padding = item.type === "door" ? Math.max(18, lineLengthPx(item)) : 18;
+    return {
+      x1: Math.min(item.x || 0, item.x2 || 0) - padding,
+      y1: Math.min(item.y || 0, item.y2 || 0) - padding,
+      x2: Math.max(item.x || 0, item.x2 || 0) + padding,
+      y2: Math.max(item.y || 0, item.y2 || 0) + padding,
+    };
+  }
+  if (["door", "window", "opening", "tree", "steps", "fence"].includes(item.type)) {
     const size = item.type === "tree" ? 70 : 64;
     return {
       x1: (item.x || 0) - size / 2,
@@ -470,9 +490,11 @@ function allAnnotationBounds(items) {
 }
 
 function transformPointToDesignArea(point, transform) {
+  const scaleX = transform.scaleX ?? transform.scale;
+  const scaleY = transform.scaleY ?? transform.scale;
   return {
-    x: clamp(Math.round((point.x - transform.sourceX) * transform.scale + transform.targetX), 0, CANVAS_W),
-    y: clamp(Math.round((point.y - transform.sourceY) * transform.scale + transform.targetY), 0, CANVAS_H),
+    x: clamp(Math.round((point.x - transform.sourceX) * scaleX + transform.targetX), 0, CANVAS_W),
+    y: clamp(Math.round((point.y - transform.sourceY) * scaleY + transform.targetY), 0, CANVAS_H),
   };
 }
 
@@ -577,9 +599,32 @@ function cleanPlanMeasurementGeometry(roughPlan, imageDimensions = null) {
 
 function fitAnnotationsToImageBackgroundArea(items, imageDimensions = null) {
   const annotations = Array.isArray(items) ? items : [];
+  const semanticTrace = annotations.some((item) => item?.source === "ai_semantic_vector_trace");
+  const frame = backgroundImageFrame(imageDimensions);
+  if (semanticTrace) {
+    const transform = {
+      sourceX: 0,
+      sourceY: 0,
+      scaleX: frame.width / CANVAS_W,
+      scaleY: frame.height / CANVAS_H,
+      targetX: frame.x,
+      targetY: frame.y,
+    };
+    return annotations.map((item, index) => {
+      const transformed = transformAnnotationToDesignArea(item, transform);
+      return {
+        ...transformed,
+        id: transformed.id || `ai-clean-plan-vector-${Date.now()}-${index}`,
+        source: "ai_semantic_vector_trace",
+        strokeColor: safeHexColor(transformed.strokeColor || transformed.color || "#0369a1", "#0369a1"),
+        color: safeHexColor(transformed.strokeColor || transformed.color || "#0369a1", "#0369a1"),
+        strokeWidth: Math.min(Number(transformed.strokeWidth) || 2, 5),
+        fillOpacity: transformed.fillOpacity ?? 0.08,
+      };
+    });
+  }
   const bounds = allAnnotationBounds(annotations);
   if (!bounds) return annotations;
-  const frame = backgroundImageFrame(imageDimensions);
   const inset = Math.min(44, Math.max(18, Math.min(frame.width, frame.height) * 0.045));
   const sourceWidth = Math.max(1, bounds.x2 - bounds.x1);
   const sourceHeight = Math.max(1, bounds.y2 - bounds.y1);
@@ -607,6 +652,113 @@ function fitAnnotationsToImageBackgroundArea(items, imageDimensions = null) {
       fillOpacity: transformed.fillOpacity ?? 0.08,
     };
   });
+}
+
+function semanticVectorPlanFromAnnotations(items) {
+  const vectorItems = (Array.isArray(items) ? items : []).filter((item) =>
+    item?.semanticType ||
+    (item?.type === "line" && item?.designRole === "wall") ||
+    ["door", "window", "opening", "steps"].includes(item?.type),
+  );
+  if (!vectorItems.length) return null;
+
+  const nodes = new Map();
+  const ensureNode = (nodeId, point, elementId) => {
+    if (!nodeId || !point) return null;
+    const current = nodes.get(nodeId) || {
+      id: nodeId,
+      x: point.x,
+      y: point.y,
+      kind: "endpoint",
+      label: "Wall endpoint",
+      connected_element_ids: [],
+    };
+    if (!current.connected_element_ids.includes(elementId)) current.connected_element_ids.push(elementId);
+    nodes.set(nodeId, current);
+    return nodeId;
+  };
+
+  vectorItems
+    .filter((item) => item.type === "corner" && item.vectorNodeId)
+    .forEach((item) => {
+      nodes.set(item.vectorNodeId, {
+        id: item.vectorNodeId,
+        x: item.x || 0,
+        y: item.y || 0,
+        kind: item.cornerKind || "corner",
+        label: item.semanticLabel || item.text || "Wall corner",
+        connected_element_ids: Array.isArray(item.connectedElementIds) ? [...item.connectedElementIds] : [],
+      });
+    });
+
+  const elements = vectorItems.reduce((result, item, index) => {
+    if (item.type === "corner") return result;
+    const semanticType = item.semanticType || (item.type === "line" && item.designRole === "wall" ? "wall" : item.type === "steps" ? "stairs" : item.type);
+    if (!["wall", "door", "window", "opening", "stairs"].includes(semanticType)) return result;
+    const elementId = item.vectorElementId || `${semanticType}-${index + 1}`;
+    if (semanticType === "wall") {
+      const startNodeId = item.startNodeId || `${elementId}-start`;
+      const endNodeId = item.endNodeId || `${elementId}-end`;
+      ensureNode(startNodeId, { x: item.x || 0, y: item.y || 0 }, elementId);
+      ensureNode(endNodeId, { x: item.x2 ?? item.x ?? 0, y: item.y2 ?? item.y ?? 0 }, elementId);
+      result.push({
+        id: elementId,
+        type: "wall",
+        label: item.semanticLabel || item.wallLabel || "Wall",
+        x1: item.x || 0,
+        y1: item.y || 0,
+        x2: item.x2 ?? item.x ?? 0,
+        y2: item.y2 ?? item.y ?? 0,
+        start_node_id: startNodeId,
+        end_node_id: endNodeId,
+        wall_kind: item.wallKind || "existing",
+        thickness_px: Number(item.strokeWidth) || 2,
+        confidence: item.confidence ?? 1,
+      });
+      return result;
+    }
+    if (semanticType === "stairs") {
+      result.push({
+        id: elementId,
+        type: "stairs",
+        label: item.semanticLabel || "Stairs",
+        points: Array.isArray(item.points) ? item.points : [],
+        direction: item.direction || "up",
+        tread_count: Number(item.treadCount) || 8,
+        confidence: item.confidence ?? 1,
+      });
+      return result;
+    }
+    result.push({
+      id: elementId,
+      type: semanticType,
+      label: item.semanticLabel || semanticType.charAt(0).toUpperCase() + semanticType.slice(1),
+      x1: item.x || 0,
+      y1: item.y || 0,
+      x2: item.x2 ?? item.x ?? 0,
+      y2: item.y2 ?? item.y ?? 0,
+      parent_wall_id: item.parentWallId || null,
+      swing_direction: semanticType === "door" ? item.swingDirection || "left" : undefined,
+      confidence: item.confidence ?? 1,
+    });
+    return result;
+  }, []);
+
+  const normalizedNodes = Array.from(nodes.values()).map((node) => {
+    const count = node.connected_element_ids.length;
+    return {
+      ...node,
+      kind: count >= 3 ? "junction" : count === 2 ? "corner" : node.kind,
+      label: count >= 3 ? "Wall junction" : count === 2 ? "Wall corner" : node.label,
+    };
+  });
+  return {
+    schema_version: 1,
+    coordinate_space: { width: CANVAS_W, height: CANVAS_H, unit: "canvas_px" },
+    source_image_as_truth: true,
+    nodes: normalizedNodes,
+    elements,
+  };
 }
 
 function wrappedTextLines(text) {
@@ -1361,6 +1513,9 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
           strokeLinecap="round"
           pointerEvents="none"
         />
+        {item.semanticLabel ? (
+          <SegmentLengthLabel x={item.x} y={(item.y || 0) - 29} label={item.semanticLabel} stroke={markerStroke} />
+        ) : null}
       </g>
     );
   }
@@ -1423,6 +1578,14 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
           markerEnd={markerEnd}
           strokeDasharray={style.strokeDasharray}
         />
+        {item.semanticType === "wall" && item.semanticLabel && !editing ? (
+          <SegmentLengthLabel
+            x={midX}
+            y={midY + (shouldShowLengths ? 18 : -18)}
+            label={item.semanticLabel}
+            stroke={stroke}
+          />
+        ) : null}
         {item.type === "measure" ? (
           <>
             <line
@@ -1488,9 +1651,65 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     );
   }
 
-  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+  if (["door", "window", "opening", "tree", "steps", "fence"].includes(item.type)) {
     const x = item.x || 0;
     const y = item.y || 0;
+    const x2 = item.x2 ?? x;
+    const y2 = item.y2 ?? y;
+    const dx = x2 - x;
+    const dy = y2 - y;
+    const segmentLength = Math.max(1, Math.hypot(dx, dy));
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const normalX = -dy / segmentLength;
+    const normalY = dx / segmentLength;
+    const labelX = (x + x2) / 2 + normalX * 22;
+    const labelY = (y + y2) / 2 + normalY * 22;
+    if (item.type === "door" && segmentLength > 4) {
+      const swingSign = item.swingDirection === "right" ? -1 : 1;
+      return (
+        <g key={item.id} {...common}>
+          <g transform={`translate(${x} ${y}) rotate(${angle})`}>
+            <line x1="0" y1="0" x2={segmentLength} y2="0" stroke="transparent" strokeWidth={Math.max(16, strokeWidth + 10)} />
+            <line x1="0" y1="0" x2="0" y2={swingSign * segmentLength} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+            <path
+              d={`M ${segmentLength} 0 A ${segmentLength} ${segmentLength} 0 0 ${swingSign > 0 ? 1 : 0} 0 ${swingSign * segmentLength}`}
+              fill="none"
+              stroke={stroke}
+              strokeWidth={Math.max(1.5, strokeWidth - 0.5)}
+              strokeDasharray="6 5"
+            />
+            <circle cx="0" cy="0" r="3.5" fill="#ffffff" stroke={stroke} strokeWidth={Math.max(1.5, strokeWidth - 0.5)} />
+          </g>
+          <SegmentLengthLabel x={labelX} y={labelY} label={item.semanticLabel || "Door"} stroke={stroke} />
+        </g>
+      );
+    }
+    if (item.type === "window" && segmentLength > 4) {
+      return (
+        <g key={item.id} {...common}>
+          <g transform={`translate(${x} ${y}) rotate(${angle})`}>
+            <rect x="0" y="-8" width={segmentLength} height="16" fill="rgba(255,255,255,0.76)" stroke="transparent" />
+            <line x1="0" y1="-5" x2={segmentLength} y2="-5" stroke={stroke} strokeWidth={strokeWidth} />
+            <line x1="0" y1="0" x2={segmentLength} y2="0" stroke={stroke} strokeWidth={Math.max(1.25, strokeWidth - 0.75)} />
+            <line x1="0" y1="5" x2={segmentLength} y2="5" stroke={stroke} strokeWidth={strokeWidth} />
+            <line x1="0" y1="-9" x2="0" y2="9" stroke={stroke} strokeWidth={strokeWidth} />
+            <line x1={segmentLength} y1="-9" x2={segmentLength} y2="9" stroke={stroke} strokeWidth={strokeWidth} />
+          </g>
+          <SegmentLengthLabel x={labelX} y={labelY} label={item.semanticLabel || "Window"} stroke={stroke} />
+        </g>
+      );
+    }
+    if (item.type === "opening" && segmentLength > 4) {
+      return (
+        <g key={item.id} {...common}>
+          <line x1={x} y1={y} x2={x2} y2={y2} stroke="transparent" strokeWidth={Math.max(16, strokeWidth + 10)} />
+          <line x1={x} y1={y} x2={x2} y2={y2} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray="7 5" />
+          <line x1={x - normalX * 8} y1={y - normalY * 8} x2={x + normalX * 8} y2={y + normalY * 8} stroke={stroke} strokeWidth={strokeWidth} />
+          <line x1={x2 - normalX * 8} y1={y2 - normalY * 8} x2={x2 + normalX * 8} y2={y2 + normalY * 8} stroke={stroke} strokeWidth={strokeWidth} />
+          <SegmentLengthLabel x={labelX} y={labelY} label={item.semanticLabel || "Opening"} stroke={stroke} />
+        </g>
+      );
+    }
     if (item.type === "door") {
       return (
         <g key={item.id} {...common}>
@@ -1507,11 +1726,46 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
         </g>
       );
     }
+    if (item.type === "opening") {
+      return (
+        <g key={item.id} {...common}>
+          <line x1={x - 30} y1={y} x2={x + 30} y2={y} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray="7 5" />
+          <SegmentLengthLabel x={x} y={y - 22} label={item.semanticLabel || "Opening"} stroke={stroke} />
+        </g>
+      );
+    }
     if (item.type === "tree") {
       return (
         <g key={item.id} {...common}>
           <circle cx={x} cy={y - 8} r="28" fill={hexToRgba(stroke, 0.16)} stroke={stroke} strokeWidth={strokeWidth} />
           <path d={`M ${x} ${y + 20} L ${x} ${y + 36}`} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+        </g>
+      );
+    }
+    if (item.type === "steps" && Array.isArray(item.points) && item.points.length >= 4) {
+      const [p0, p1, p2, p3] = item.points;
+      const treadCount = clamp(Math.round(Number(item.treadCount) || 8), 2, 24);
+      const centerX = item.points.slice(0, 4).reduce((sum, point) => sum + point.x, 0) / 4;
+      const centerY = item.points.slice(0, 4).reduce((sum, point) => sum + point.y, 0) / 4;
+      return (
+        <g key={item.id} {...common}>
+          <polygon points={item.points.slice(0, 4).map((point) => `${point.x},${point.y}`).join(" ")} fill="rgba(255,255,255,0.38)" stroke={stroke} strokeWidth={strokeWidth} />
+          {Array.from({ length: treadCount + 1 }, (_, index) => {
+            const ratio = index / treadCount;
+            const sideA = { x: p0.x + (p1.x - p0.x) * ratio, y: p0.y + (p1.y - p0.y) * ratio };
+            const sideB = { x: p3.x + (p2.x - p3.x) * ratio, y: p3.y + (p2.y - p3.y) * ratio };
+            return <line key={`${item.id}-tread-${index}`} x1={sideA.x} y1={sideA.y} x2={sideB.x} y2={sideB.y} stroke={stroke} strokeWidth={Math.max(1, strokeWidth - 0.75)} />;
+          })}
+          <line
+            x1={(p0.x + p3.x) / 2}
+            y1={(p0.y + p3.y) / 2}
+            x2={(p1.x + p2.x) / 2}
+            y2={(p1.y + p2.y) / 2}
+            stroke={stroke}
+            strokeWidth={Math.max(1.5, strokeWidth)}
+            markerEnd={`url(#${markerIdForColor(stroke)})`}
+          />
+          <SegmentLengthLabel x={centerX} y={centerY - 20} label={item.semanticLabel || "Stairs"} stroke={stroke} />
         </g>
       );
     }
@@ -2252,6 +2506,7 @@ export default function ProjectMarkupCanvas() {
       layer: item.id,
       text: item.type === "text" || item.type === "measure" ? normalizeMarkupText(item.text) : item.text,
     }));
+    const vectorPlan = semanticVectorPlanFromAnnotations(normalizedAnnotations);
     const version = {
       id: `version-${Date.now()}`,
       name: versionOverrides.name || MARKUP_FLOOR_PLAN_NAME,
@@ -2263,6 +2518,7 @@ export default function ProjectMarkupCanvas() {
       snapshot_url: versionOverrides.snapshot_url || "",
       snapshot_image_id: versionOverrides.snapshot_image_id || null,
       annotations: normalizedAnnotations,
+      vector_plan: vectorPlan || undefined,
       rough_plan: isRoughPlan ? roughPlan : undefined,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
@@ -2282,6 +2538,7 @@ export default function ProjectMarkupCanvas() {
       rough_plan: isRoughPlan ? roughPlan : undefined,
       background_url: isRoughPlan ? "" : background_url,
       annotations: normalizedAnnotations,
+      vector_plan: vectorPlan || undefined,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
@@ -2807,7 +3064,7 @@ export default function ProjectMarkupCanvas() {
       let overlayNotes = "";
       if (overlaySource) {
         try {
-          setSketchStatus({ phase: "drafting", progress: 100, fileName: overlaySource.name, detail: "Creating editable markup overlay." });
+          setSketchStatus({ phase: "drafting", progress: 100, fileName: overlaySource.name, detail: "Tracing walls, joints, openings, and stairs as vectors." });
           const overlayData = await requestRoughPlanFromSketchSource(overlaySource, {
             overlayMode: "trace_clean_floor_plan",
           });
@@ -2823,17 +3080,17 @@ export default function ProjectMarkupCanvas() {
             ? ` Review note: ${overlayData.uncertainty_notes.slice(0, 2).join(" ")}`
             : "";
           overlayNotes = overlayAnnotations.length
-            ? ` Editable markup overlay created on top.${uncertaintyNotes}`
-            : " Clean plan saved, but no editable overlay lines were detected.";
+            ? ` Semantic vector overlay created on top.${uncertaintyNotes}`
+            : " Clean plan saved, but no semantic vector elements were detected.";
         } catch (overlayErr) {
           commitAnnotations([]);
-          overlayNotes = ` Clean plan saved, but the editable overlay could not be created: ${normalizeError(overlayErr, "Try adding markup manually.")}`;
+          overlayNotes = ` Clean plan saved, but the semantic vector overlay could not be created: ${normalizeError(overlayErr, "Try tracing the missing element manually.")}`;
         }
       } else {
         commitAnnotations([]);
       }
       setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME, detail: "" });
-      setMessage(`AI clean floor plan created and saved to the image library.${overlayNotes} Save when the editable overlay looks right, or export PNG/PDF for a flattened preview.`);
+      setMessage(`AI clean floor plan created and saved to the image library.${overlayNotes} The image remains the measurement reference; save when the vector overlay matches it.`);
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
@@ -4040,6 +4297,7 @@ export default function ProjectMarkupCanvas() {
             ? { ...item, text: normalizeMarkupText(item.text) }
             : item,
         );
+        const vectorPlan = semanticVectorPlanFromAnnotations(normalizedAnnotations);
         const previousExtraData =
           projectImage.extra_data && typeof projectImage.extra_data === "object"
             ? projectImage.extra_data
@@ -4056,6 +4314,7 @@ export default function ProjectMarkupCanvas() {
           snapshot_url: versionSnapshotUrl || previousExtraData.markup_version?.snapshot_url || "",
           snapshot_image_id: versionSnapshotImageId || previousExtraData.markup_version?.snapshot_image_id || null,
           annotations: normalizedAnnotations,
+          vector_plan: vectorPlan || undefined,
           rough_plan: isRoughPlan ? roughPlan : undefined,
           visible_layers: visibleLayers,
           locked_layers: lockedLayers,
@@ -5051,7 +5310,7 @@ export default function ProjectMarkupCanvas() {
                                     ? "AI is creating a clean floor-plan image."
                                     : "Upload complete. AI is reading the sketch."
                                   : sketchPhase === "drafting"
-                                    ? "Building editable rough-plan elements."
+                                    ? "Building labeled semantic vector elements."
                                     : sketchPhase === "ready"
                                       ? sketchPlanMode === "clean"
                                         ? "Clean floor plan is saved to the image library."
