@@ -178,8 +178,12 @@ export default function ProjectDesign3DWorkspace() {
       setLoading(true);
       setMessage("");
       try {
-        const url = isProjectImageMode ? `/projects/${projectId}/images/${imageId}/` : `/project-plans/${planId}/`;
-        const { data } = await api.get(url);
+        const url = isProjectImageMode ? `/projects/${projectId}/images/` : `/project-plans/${planId}/`;
+        const { data: responseData } = await api.get(url);
+        const data = isProjectImageMode
+          ? (Array.isArray(responseData) ? responseData.find((image) => String(image.id) === String(imageId)) : null)
+          : responseData;
+        if (!data) throw new Error("Could not find the selected project image.");
         if (cancelled) return;
         const nextSource = readWorkspaceSource(data, isProjectImageMode);
         const conversion = safeObject(nextSource.markup?.design_3d?.conversion);
@@ -205,7 +209,10 @@ export default function ProjectDesign3DWorkspace() {
           setMessage("Loaded the saved 3D reading for this floor-plan snapshot.");
         }
       } catch (error) {
-        if (!cancelled) setMessage(errorMessage(error, "Could not load this floor plan."));
+        if (!cancelled) {
+          setAnalyzing(false);
+          setMessage(errorMessage(error, "Could not load this floor plan."));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
