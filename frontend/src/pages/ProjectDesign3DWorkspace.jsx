@@ -116,6 +116,14 @@ function mergeFloorPlanAnalysis(detected, saved, settings) {
   return [...traced, ...overrides].filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index);
 }
 
+function reusableImageWalls(annotations) {
+  return (annotations || []).filter((item) =>
+    item?.type === "line" &&
+    item.designRole === "wall" &&
+    (item.designOrigin === "ai_trace" || item.source === "ai_clean_plan_trace" || String(item.id || "").startsWith("ai-sketch-")),
+  );
+}
+
 function readWorkspaceSource(data, isProjectImageMode) {
   if (isProjectImageMode) {
     const extraData = safeObject(data?.extra_data);
@@ -156,6 +164,10 @@ export default function ProjectDesign3DWorkspace() {
   );
   const source = useMemo(() => readWorkspaceSource(sourceRecord, isProjectImageMode), [isProjectImageMode, sourceRecord]);
   const sourceSnapshotId = source.version?.snapshot_image_id || source.markup?.snapshot_image_id || null;
+  const hasImmediateWallGeometry = useMemo(
+    () => annotations.some((item) => item?.type === "line" && item.designRole === "wall"),
+    [annotations],
+  );
   const backPath = isProjectImageMode
     ? `/dashboard/projects/${projectId}/images/${imageId}/markup`
     : `/dashboard/planner/${planId}/markup`;
@@ -240,6 +252,26 @@ export default function ProjectDesign3DWorkspace() {
     const existingConversion = safeObject(source.markup?.design_3d?.conversion);
     if (existingConversion.source_snapshot_image_id && String(existingConversion.source_snapshot_image_id) === String(sourceSnapshotId || "")) {
       setSearchParams({}, { replace: true });
+      return;
+    }
+    const reusableWalls = reusableImageWalls(annotations);
+    if (reusableWalls.length >= 2) {
+      const conversion = {
+        schema_version: 1,
+        source_snapshot_image_id: sourceSnapshotId,
+        generated_at: new Date().toISOString(),
+        annotations,
+        rough_plan: roughPlan,
+        uncertainty_notes: [],
+        source: "existing_floor_plan_geometry",
+      };
+      persistWorkspace(annotations, roughPlan, settings, conversion)
+        .then(() => setMessage("3D created immediately from the existing floor-plan geometry."))
+        .catch((error) => setMessage(errorMessage(error, "The 3D model is ready, but its conversion data could not be cached.")))
+        .finally(() => {
+          setAnalyzing(false);
+          setSearchParams({}, { replace: true });
+        });
       return;
     }
     if (!sourceSnapshotId) {
@@ -431,13 +463,19 @@ export default function ProjectDesign3DWorkspace() {
             viewMode={viewMode}
             onViewModeChange={setViewMode}
           />
-          {analyzing ? (
+          {analyzing && !hasImmediateWallGeometry ? (
             <div className="absolute inset-0 z-30 grid place-items-center bg-white/80 px-4 backdrop-blur-sm">
               <div className="max-w-sm text-center">
                 <SymbolIcon name="progress_activity" className="mx-auto animate-spin text-[30px] text-sky-700" />
                 <div className="mt-3 text-sm font-semibold text-slate-950">Reading floor-plan geometry</div>
                 <p className="mt-1 text-xs leading-5 text-slate-600">Detecting wall centerlines, connected corners, openings, stairs, and wall markup automatically.</p>
               </div>
+            </div>
+          ) : null}
+          {analyzing && hasImmediateWallGeometry ? (
+            <div className="absolute right-3 top-16 z-20 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-lg">
+              <SymbolIcon name="progress_activity" className="animate-spin text-[17px] text-sky-700" />
+              Refining walls from image...
             </div>
           ) : null}
           {message ? <div className="absolute bottom-3 left-3 right-3 z-20 rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-lg sm:right-auto sm:max-w-lg">{message}</div> : null}
