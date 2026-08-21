@@ -22,7 +22,6 @@ const BASE_TOOLS = {
   arrow: { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
   wall: { key: "wall", label: "Wall", icon: "foundation" },
-  corner: { key: "corner", label: "3D corner", icon: "add" },
   freehand: { key: "freehand", label: "Pencil", icon: "draw" },
   pen: { key: "pen", label: "Pen", icon: "polyline" },
   penAdd: { key: "pen_add", label: "Add node", icon: "add" },
@@ -1749,7 +1748,6 @@ export default function ProjectMarkupCanvas() {
   const [measurementCalibrationInputLength, setMeasurementCalibrationInputLength] = useState(DEFAULT_MEASUREMENT_CALIBRATION.length);
   const [showMeasurementCalibrationPrompt, setShowMeasurementCalibrationPrompt] = useState(false);
   const [measurementCalibrationPromptComplete, setMeasurementCalibrationPromptComplete] = useState(false);
-  const [show3DConversionPrompt, setShow3DConversionPrompt] = useState(false);
   const [draggingLayerId, setDraggingLayerId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [selectedNodes, setSelectedNodes] = useState({ annotationId: "", handleKeys: [] });
@@ -2218,7 +2216,7 @@ export default function ProjectMarkupCanvas() {
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
       ...(isRoughPlan ? [] : [{ key: "background", tools: [BASE_TOOLS.backgroundEraser] }]),
-      { key: "geometry", tools: [BASE_TOOLS.wall, BASE_TOOLS.corner, BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
+      { key: "geometry", tools: [BASE_TOOLS.wall, BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
       ...(isRoughPlan ? [{ key: "symbols", tools: SYMBOL_TOOLS }] : []),
       { key: "delete", tools: [BASE_TOOLS.delete] },
     ],
@@ -4461,15 +4459,12 @@ export default function ProjectMarkupCanvas() {
     setMessage("");
   }
 
-  function request3DConversion() {
-    finishPenPath();
-    setShow3DConversionPrompt(true);
-  }
-
   async function saveAndCreate3D() {
+    if (saving || savingEditable) return;
+    finishPenPath();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const saved = await saveToPlanner();
     if (!saved) return;
-    setShow3DConversionPrompt(false);
     if (isProjectImageMode) {
       navigate(`/dashboard/projects/${projectId}/images/${imageId}/design-3d?analyze=1`);
       return;
@@ -4756,60 +4751,6 @@ export default function ProjectMarkupCanvas() {
                 >
                   <SymbolIcon name={measurementCalibrationPromptComplete ? "check" : "straighten"} className="text-[18px]" />
                   {measurementCalibrationPromptComplete ? "Got it" : calibrationReady ? "Use selected measure" : "Draw measure"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {show3DConversionPrompt ? (
-          <div
-            className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/50 px-4 py-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-3d-title"
-            onPointerDown={(event) => {
-              if (event.target === event.currentTarget && !saving) setShow3DConversionPrompt(false);
-            }}
-          >
-            <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 id="create-3d-title" className="text-base font-semibold text-slate-950">Save this floor plan and create 3D?</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    FlatOrigin will save the exact visible floor plan and markup, then read the walls, openings, stairs, and confirmed + corner markers for the 3D workspace.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShow3DConversionPrompt(false)}
-                  disabled={saving}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-50"
-                  aria-label="Cancel 3D conversion"
-                >
-                  <SymbolIcon name="close" className="text-[20px]" />
-                </button>
-              </div>
-              <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
-                Use the 3D corner tool to place a + at any wall corner the image reader must treat as exact. The first conversion of this saved version uses one floor-plan AI analysis; reopening it uses the cached result.
-              </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShow3DConversionPrompt(false)}
-                  disabled={saving}
-                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveAndCreate3D}
-                  disabled={saving || savingEditable}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                >
-                  <SymbolIcon name={saving ? "progress_activity" : "view_in_ar"} className={`text-[18px] ${saving ? "animate-spin" : ""}`} />
-                  {saving ? "Saving floor plan..." : "Save and create 3D"}
                 </button>
               </div>
             </div>
@@ -6094,14 +6035,15 @@ export default function ProjectMarkupCanvas() {
               {workspaceView === "2d" ? (
                 <button
                   type="button"
-                  onClick={request3DConversion}
+                  onClick={saveAndCreate3D}
+                  disabled={saving || savingEditable}
                   className="absolute right-2 top-2 z-30 inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white shadow-xl hover:bg-slate-800 lg:right-3 lg:top-3 lg:h-10 lg:px-4"
                   aria-label="Create 3D elevation from this floor plan"
                   title="Create 3D elevation from this floor plan"
                 >
-                  <SymbolIcon name="view_sidebar" className="text-[19px]" />
-                  <span className="max-sm:hidden">Create 3D elevation</span>
-                  <span className="sm:hidden">Elevation</span>
+                  <SymbolIcon name={saving ? "progress_activity" : "view_sidebar"} className={`text-[19px] ${saving ? "animate-spin" : ""}`} />
+                  <span className="max-sm:hidden">{saving ? "Creating 3D..." : "Create 3D elevation"}</span>
+                  <span className="sm:hidden">{saving ? "Creating..." : "3D"}</span>
                 </button>
               ) : null}
               {workspaceView === "3d" ? (
