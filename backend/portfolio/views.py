@@ -223,12 +223,21 @@ def infer_supported_image_content_type(file_name):
 
 
 def clean_floor_plan_prompt(*, title, category, location="", notes="", width="", length="", unit="ft"):
-    size_line = f"Known or requested full area size: {width or 'unknown'} x {length or 'unknown'} {unit or 'ft'}."
+    size_line = (
+        f"Explicitly supplied overall footprint: {width} x {length} {unit or 'ft'}."
+        if width and length
+        else "No overall footprint was explicitly supplied; use only measurements that are clearly legible in the source image."
+    )
     return (
-        "Convert the supplied homeowner sketch into one clean, presentation-ready, black-and-white architectural floor plan "
-        "shown in a true top-down orthographic view on a plain white background. Faithfully trace the source: preserve its "
-        "footprint, room relationships, wall positions and lengths, openings, doors, windows, stairs, labels, dimensions, and "
-        "overall proportions. Do not redesign the plan, add new spaces or openings, or remove visible structural information. "
+        "Convert the supplied homeowner sketch into one clean, presentation-ready, black-and-white architectural floor-plan "
+        "image shown in a true top-down orthographic view on a plain white background. This output must be one flat image, not an "
+        "editable overlay, diagram, vector display, or 3D rendering. Faithfully trace the source: preserve its footprint, room "
+        "relationships, wall positions and lengths, openings, doors, windows, stairs, labels, and overall proportions. Do not "
+        "redesign the plan, add new spaces or openings, or remove visible structural information. "
+        "Before drawing, read every clearly legible source measurement and use the complete set as authoritative geometric "
+        "constraints. Keep one uniform scale across the entire plan so equal real-world lengths have equal drawn lengths. Resolve "
+        "wall lengths, room sizes, opening positions, and relative proportions from those measurements. Use explicitly supplied "
+        "overall dimensions as outer constraints when present. Never estimate, average, convert, or invent missing dimensions. "
         "Follow these floor-plan drafting rules exactly. Draw every wall as a consistent solid thick black line or wall band, "
         "clearly heavier than symbols, dimensions, and labels. Connect intersecting walls into continuous clean square or mitered "
         "joint corners with no gaps, overlaps, doubled corners, loose endpoints, or stray line fragments. Represent each hinged "
@@ -236,12 +245,14 @@ def clean_floor_plan_prompt(*, title, category, location="", notes="", width="",
         "appropriate standard plan symbol when a sliding or pocket door is clearly shown. Represent each window as a clean break "
         "in the wall with aligned jambs and thin parallel glazing lines centered within the wall thickness. Preserve stairs and "
         "other clearly recognizable built elements using conventional architectural plan symbols. "
-        "Include every clearly readable measurement from the source using the exact value and original unit. Place measurements "
-        "on orderly dimension strings with thin extension lines, dimension lines, and ticks or arrowheads, keeping dimension text "
-        "clear of walls and room labels. Use the supplied full-area size as an overall outer dimension when both values are known. "
-        "Never estimate, infer, convert, or invent a dimension that is not readable in the source or explicitly supplied. This "
-        "image-generation step does not calibrate scale; markup calibration happens later and must use the same unit shown in the "
-        "drawing. Use simple room or area labels only when they are legible or unambiguous in the source. Avoid photorealistic "
+        "Do not print dimension strings, room measurements, measurement notes, or measurement text anywhere on the floor plan. "
+        "The only exception is exactly one compact calibration reference. Choose one unobstructed straight wall or outer edge with "
+        "a clearly readable source dimension and place one small thin dimension line immediately outside that segment, labeled "
+        "'CALIBRATION: <exact source value and original unit>'. Prefer the longest unambiguous horizontal segment. If no source "
+        "dimension is readable but an overall footprint was explicitly supplied, use one outer footprint edge. If neither exists, "
+        "omit the calibration reference rather than guessing. All other measurements must influence geometry without appearing in "
+        "the image. Actual markup calibration happens later by drawing over this single reference. Use simple room or area labels "
+        "only when they are legible or unambiguous in the source. Avoid photorealistic "
         "rendering, furniture staging, textures, colors, shadows, decorative styling, perspective, 3D elements, grids, legends, "
         "title blocks, annotations about uncertainty, or explanatory prose. This is a contractor communication preview, not a "
         "permit, CAD, design, engineering, or construction drawing. "

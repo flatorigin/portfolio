@@ -115,34 +115,6 @@ function readImageDimensions(url) {
   });
 }
 
-function isMeasuredRoughPlan(roughPlan) {
-  return roughPlan?.grid_visible === true || roughPlan?.showGrid === true || roughPlan?.scale_source === "measured" || roughPlan?.scaleSource === "measured";
-}
-
-function roughPlanFromSketchResponse(responsePlan = {}, source = {}, fallbackPlan = ROUGH_PLAN_DEFAULTS) {
-  const imageWidth = Number(source?.width || source?.sourceWidth || 0);
-  const imageHeight = Number(source?.height || source?.sourceHeight || 0);
-  const measuredScale = isMeasuredRoughPlan(responsePlan);
-  const widthBase = Number(fallbackPlan.width) || Number(responsePlan.width) || 20;
-  const next = {
-    ...fallbackPlan,
-    ...responsePlan,
-    scaleSource: responsePlan.scale_source || responsePlan.scaleSource || (measuredScale ? "measured" : "image_aspect"),
-    showGrid: true,
-    grid_visible: true,
-    snap: responsePlan.snap ?? true,
-  };
-
-  if (imageWidth > 0 && imageHeight > 0 && !measuredScale) {
-    next.width = formatPlanNumber(widthBase);
-    next.length = formatPlanNumber(Math.max(1, widthBase * (imageHeight / imageWidth)));
-    next.sourceWidth = imageWidth;
-    next.sourceHeight = imageHeight;
-  }
-
-  return next;
-}
-
 function normalizeMarkupText(value) {
   return String(value || "").replace(/[ \t]+$/gm, "").replace(/\s+$/g, "");
 }
@@ -442,86 +414,6 @@ function annotationBounds(item) {
   return { x1, y1, x2, y2 };
 }
 
-function allAnnotationBounds(items) {
-  const boxes = (items || []).map(annotationBounds).filter((box) => box && Number.isFinite(box.x1) && Number.isFinite(box.y1));
-  if (!boxes.length) return null;
-  return boxes.reduce(
-    (bounds, box) => ({
-      x1: Math.min(bounds.x1, box.x1),
-      y1: Math.min(bounds.y1, box.y1),
-      x2: Math.max(bounds.x2, box.x2),
-      y2: Math.max(bounds.y2, box.y2),
-    }),
-    boxes[0],
-  );
-}
-
-function transformPointToDesignArea(point, transform) {
-  return {
-    x: clamp(Math.round((point.x - transform.sourceX) * transform.scale + transform.targetX), 0, CANVAS_W),
-    y: clamp(Math.round((point.y - transform.sourceY) * transform.scale + transform.targetY), 0, CANVAS_H),
-  };
-}
-
-function transformCurvePointsToDesignArea(curvePoints, transform) {
-  if (!curvePoints || typeof curvePoints !== "object") return curvePoints;
-  return Object.entries(curvePoints).reduce((next, [key, point]) => {
-    if (!point || typeof point !== "object") return next;
-    if (point.type === "cubic" && point.c1 && point.c2) {
-      next[key] = {
-        ...point,
-        c1: transformPointToDesignArea(point.c1, transform),
-        c2: transformPointToDesignArea(point.c2, transform),
-      };
-    } else {
-      next[key] = transformPointToDesignArea(point, transform);
-    }
-    return next;
-  }, {});
-}
-
-function transformAnnotationToDesignArea(item, transform) {
-  const start = transformPointToDesignArea({ x: item.x || 0, y: item.y || 0 }, transform);
-  const end = transformPointToDesignArea({ x: item.x2 ?? item.x ?? 0, y: item.y2 ?? item.y ?? 0 }, transform);
-  const next = { ...item, x: start.x, y: start.y, x2: end.x, y2: end.y };
-  if (Array.isArray(item.points)) {
-    const points = item.points.map((point) => transformPointToDesignArea(point, transform));
-    const first = points[0] || start;
-    const last = points[points.length - 1] || end;
-    next.points = points;
-    next.x = first.x;
-    next.y = first.y;
-    next.x2 = last.x;
-    next.y2 = last.y;
-  }
-  if (item.curvePoint) next.curvePoint = transformPointToDesignArea(item.curvePoint, transform);
-  if (item.curvePoints) next.curvePoints = transformCurvePointsToDesignArea(item.curvePoints, transform);
-  return next;
-}
-
-function fitAnnotationsToRoughPlanDesignArea(items, roughPlan) {
-  const annotations = Array.isArray(items) ? items : [];
-  const bounds = allAnnotationBounds(annotations);
-  if (!bounds) return annotations;
-  const geometry = roughPlanGeometry(roughPlan);
-  const sourceWidth = Math.max(1, bounds.x2 - bounds.x1);
-  const sourceHeight = Math.max(1, bounds.y2 - bounds.y1);
-  const inset = Math.min(geometry.scale * 0.5, 18);
-  const targetWidth = Math.max(1, geometry.designWidthPx - inset * 2);
-  const targetHeight = Math.max(1, geometry.designHeightPx - inset * 2);
-  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
-  const renderedWidth = sourceWidth * scale;
-  const renderedHeight = sourceHeight * scale;
-  const transform = {
-    sourceX: bounds.x1,
-    sourceY: bounds.y1,
-    scale,
-    targetX: geometry.designX + (geometry.designWidthPx - renderedWidth) / 2,
-    targetY: geometry.designY + (geometry.designHeightPx - renderedHeight) / 2,
-  };
-  return annotations.map((item) => transformAnnotationToDesignArea(item, transform));
-}
-
 function backgroundImageFrame(imageDimensions = null) {
   const width = Number(imageDimensions?.width || 0);
   const height = Number(imageDimensions?.height || 0);
@@ -560,40 +452,6 @@ function cleanPlanMeasurementGeometry(roughPlan, imageDimensions = null) {
     scale: Math.min(designWidthPx / widthUnits, designHeightPx / lengthUnits),
     unit: roughPlan?.unit || "ft",
   };
-}
-
-function fitAnnotationsToImageBackgroundArea(items, imageDimensions = null) {
-  const annotations = Array.isArray(items) ? items : [];
-  const bounds = allAnnotationBounds(annotations);
-  if (!bounds) return annotations;
-  const frame = backgroundImageFrame(imageDimensions);
-  const inset = Math.min(44, Math.max(18, Math.min(frame.width, frame.height) * 0.045));
-  const sourceWidth = Math.max(1, bounds.x2 - bounds.x1);
-  const sourceHeight = Math.max(1, bounds.y2 - bounds.y1);
-  const targetWidth = Math.max(1, frame.width - inset * 2);
-  const targetHeight = Math.max(1, frame.height - inset * 2);
-  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
-  const renderedWidth = sourceWidth * scale;
-  const renderedHeight = sourceHeight * scale;
-  const transform = {
-    sourceX: bounds.x1,
-    sourceY: bounds.y1,
-    scale,
-    targetX: frame.x + (frame.width - renderedWidth) / 2,
-    targetY: frame.y + (frame.height - renderedHeight) / 2,
-  };
-  return annotations.map((item, index) => {
-    const transformed = transformAnnotationToDesignArea(item, transform);
-    return {
-      ...transformed,
-      id: transformed.id || `ai-clean-plan-overlay-${Date.now()}-${index}`,
-      source: "ai_clean_plan_trace",
-      strokeColor: safeHexColor(transformed.strokeColor || transformed.color || "#111827", "#111827"),
-      color: safeHexColor(transformed.strokeColor || transformed.color || "#111827", "#111827"),
-      strokeWidth: Math.min(Number(transformed.strokeWidth) || 2, 2.5),
-      fillOpacity: transformed.fillOpacity ?? 0.08,
-    };
-  });
 }
 
 function wrappedTextLines(text) {
@@ -1726,7 +1584,6 @@ export default function ProjectMarkupCanvas() {
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
-  const [sketchPlanMode, setSketchPlanMode] = useState("clean");
   const [hideTextAndMeasurements, setHideTextAndMeasurements] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
@@ -2012,7 +1869,7 @@ export default function ProjectMarkupCanvas() {
       setAnnotations([]);
       setSelectedId("");
       setEditingTextId("");
-      setMessage("Upload a sketch in the Create from sketch panel. AI will create an editable rough plan for review.");
+      setMessage("Upload a sketch in the Create from sketch panel. AI will create a floor-plan image for review.");
     }
   }, [loadingPlan, requestedCanvasMode, sketchUploadRequested]);
 
@@ -2368,7 +2225,7 @@ export default function ProjectMarkupCanvas() {
           : prev,
       );
     });
-    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected. Click Create editable plan when ready." });
+    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected. Create the floor-plan image when ready." });
     setMessage("New sketch selected for plan creation. It has not been saved as a project image.");
   }
 
@@ -2395,121 +2252,8 @@ export default function ProjectMarkupCanvas() {
           : prev,
       );
     });
-    setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected. Click Create editable plan when ready." });
-    setMessage("Project image selected. Confirm the source, then create the editable plan.");
-  }
-
-  async function fileFromExistingSketchSource(source) {
-    const response = await fetch(source.imageUrl, { credentials: "include" });
-    if (!response.ok) throw new Error("Could not load that project image for plan creation.");
-    const blob = await response.blob();
-    const lowerUrl = String(source.imageUrl || "").split("?")[0].toLowerCase();
-    const inferredType = lowerUrl.endsWith(".png")
-      ? "image/png"
-      : lowerUrl.endsWith(".webp")
-        ? "image/webp"
-        : lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg")
-          ? "image/jpeg"
-          : "";
-    const contentType = blob.type || inferredType || "image/jpeg";
-    const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-    return new File([blob], `project-image-${source.imageId || Date.now()}.${extension}`, { type: contentType });
-  }
-
-  async function requestRoughPlanFromSketchSource(source, options = {}) {
-    if (!source) throw new Error("Choose an uploaded image or upload a new sketch first.");
-    const endpoint = planId
-      ? `/project-plans/${planId}/sketch-to-rough-plan/`
-      : `/projects/${projectId}/images/${imageId}/sketch-to-rough-plan/`;
-    const file =
-      source.kind === "upload"
-        ? source.file
-        : planId
-          ? await fileFromExistingSketchSource(source)
-          : null;
-    const formData = new FormData();
-    if (file) {
-      const validationError = validateSketchFile(file);
-      if (validationError) throw new Error(validationError);
-      formData.append("sketch", file);
-    } else if (source.kind === "existing") {
-      formData.append("source_image_id", source.imageId);
-    } else {
-      throw new Error("Choose an uploaded image or upload a new sketch first.");
-    }
-    formData.append("width", roughPlan.width || "20");
-    formData.append("length", roughPlan.length || "30");
-    formData.append("unit", roughPlan.unit || "ft");
-    if (options.overlayMode) formData.append("overlay_mode", options.overlayMode);
-    if (source.width && source.height) {
-      formData.append("source_width", String(source.width));
-      formData.append("source_height", String(source.height));
-    }
-    const { data } = await api.post(endpoint, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      onUploadProgress: (progressEvent) => {
-        const total = progressEvent.total || file?.size || 0;
-        const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
-        setSketchStatus({
-          phase: progress >= 100 ? "analyzing" : "uploading",
-          progress,
-          fileName: source.name || file?.name || "Sketch image",
-          detail: "",
-        });
-      },
-    });
-    return data;
-  }
-
-  async function createPlanFromSketchSource() {
-    if (!sketchSource) {
-      setSketchStatus({ phase: "error", progress: 0, fileName: "", detail: "Choose an uploaded image or upload a new sketch first." });
-      setMessage("Choose an uploaded image or upload a new sketch first.");
-      return;
-    }
-    if (!planId && !isProjectImageMode) {
-      const detail = "Open this from a saved project planner or project image before creating a plan from a sketch.";
-      setSketchStatus({ phase: "error", progress: 0, fileName: sketchSource.name || "", detail });
-      setMessage(detail);
-      return;
-    }
-    if (annotations.length && !window.confirm("Replace the current canvas with an AI rough plan from this sketch? Save first if you need this version.")) {
-      return;
-    }
-
-    setSketchBusy(true);
-    setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
-    setMessage("");
-    try {
-      const data = await requestRoughPlanFromSketchSource(sketchSource);
-      setSketchStatus({ phase: "drafting", progress: 100, fileName: sketchSource.name || "Sketch image", detail: "" });
-      setCanvasMode("rough_plan");
-      setBackgroundUrl("");
-      const nextRoughPlan = roughPlanFromSketchResponse(data.rough_plan || {}, sketchSource, roughPlan);
-      setRoughPlan(nextRoughPlan);
-      const fittedAnnotations = fitAnnotationsToRoughPlanDesignArea(
-        Array.isArray(data.annotations) ? data.annotations : [],
-        nextRoughPlan,
-      );
-      commitAnnotations(fittedAnnotations);
-      setSelectedId("");
-      setEditingTextId("");
-      setOpenSidebarSection("annotations");
-      const notes = Array.isArray(data.uncertainty_notes) && data.uncertainty_notes.length
-        ? ` Review note: ${data.uncertainty_notes.slice(0, 2).join(" ")}`
-        : "";
-      setSketchStatus({ phase: "ready", progress: 100, fileName: sketchSource.name || "Sketch image", detail: "" });
-      setMessage(`AI rough plan created on a measured grid with a ${ROUGH_PLAN_GRID_MARGIN_UNITS} ${nextRoughPlan.unit} buffer around the design. Review and edit it before saving.${notes}`);
-    } catch (err) {
-      const statusCode = err?.response?.status;
-      const providerDetail = normalizeError(err, "Could not create a rough plan from this sketch.");
-      const detailPrefix = statusCode >= 500 ? "AI processing failed" : "Image upload or API request failed";
-      const detail = `${detailPrefix}${statusCode ? ` (${statusCode})` : ""}: ${providerDetail}`;
-      setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: sketchSource.name || "Sketch image", detail }));
-      setMessage(detail);
-    } finally {
-      setSketchBusy(false);
-    }
+    setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected. Create the floor-plan image when ready." });
+    setMessage("Project image selected. Confirm the source, then create the floor-plan image.");
   }
 
   async function createCleanFloorPlanFromSketchSource() {
@@ -2548,9 +2292,6 @@ export default function ProjectMarkupCanvas() {
       } else {
         throw new Error("Choose an uploaded image or upload a new sketch first.");
       }
-      formData.append("width", roughPlan.width || "20");
-      formData.append("length", roughPlan.length || "30");
-      formData.append("unit", roughPlan.unit || "ft");
       if (sketchSource.width && sketchSource.height) {
         formData.append("source_width", String(sketchSource.width));
         formData.append("source_height", String(sketchSource.height));
@@ -2571,7 +2312,6 @@ export default function ProjectMarkupCanvas() {
       });
       const generatedImage = data.image || {};
       const generatedUrl = projectImageUrl(generatedImage);
-      let generatedDimensions = null;
       if (planId) {
         setPlan((prev) =>
           prev
@@ -2582,53 +2322,14 @@ export default function ProjectMarkupCanvas() {
         setProjectImages((prev) => [...prev, generatedImage]);
       }
       if (generatedUrl) {
-        generatedDimensions = await readImageDimensions(generatedUrl);
         setCanvasMode("photo");
         setBackgroundUrl(generatedUrl);
+        commitAnnotations([]);
         setSelectedId("");
         setEditingTextId("");
       }
-      const overlaySource = generatedUrl
-        ? {
-            kind: "existing",
-            imageId: generatedImage.id,
-            imageUrl: generatedUrl,
-            previewUrl: generatedUrl,
-            name: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME,
-            width: generatedDimensions?.width || undefined,
-            height: generatedDimensions?.height || undefined,
-          }
-        : null;
-      let overlayNotes = "";
-      if (overlaySource) {
-        try {
-          setSketchStatus({ phase: "drafting", progress: 100, fileName: overlaySource.name, detail: "Creating editable markup overlay." });
-          const overlayData = await requestRoughPlanFromSketchSource(overlaySource, {
-            overlayMode: "trace_clean_floor_plan",
-          });
-          const nextRoughPlan = roughPlanFromSketchResponse(overlayData.rough_plan || {}, overlaySource, roughPlan);
-          const overlayAnnotations = fitAnnotationsToImageBackgroundArea(
-            Array.isArray(overlayData.annotations) ? overlayData.annotations : [],
-            generatedDimensions,
-          );
-          setRoughPlan(nextRoughPlan);
-          commitAnnotations(overlayAnnotations);
-          setOpenSidebarSection("annotations");
-          const uncertaintyNotes = Array.isArray(overlayData.uncertainty_notes) && overlayData.uncertainty_notes.length
-            ? ` Review note: ${overlayData.uncertainty_notes.slice(0, 2).join(" ")}`
-            : "";
-          overlayNotes = overlayAnnotations.length
-            ? ` Editable markup overlay created on top.${uncertaintyNotes}`
-            : " Clean plan saved, but no editable overlay lines were detected.";
-        } catch (overlayErr) {
-          commitAnnotations([]);
-          overlayNotes = ` Clean plan saved, but the editable overlay could not be created: ${normalizeError(overlayErr, "Try adding markup manually.")}`;
-        }
-      } else {
-        commitAnnotations([]);
-      }
       setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME, detail: "" });
-      setMessage(`AI clean floor plan created and saved to the image library.${overlayNotes} Save when the editable overlay looks right, or export PNG/PDF for a flattened preview.`);
+      setMessage("AI floor-plan image created and saved. Use the Measure tool on its calibration reference before adding markup.");
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
@@ -4283,15 +3984,9 @@ export default function ProjectMarkupCanvas() {
       done: sketchProgress >= 100 && ["analyzing", "drafting", "ready"].includes(sketchPhase),
     },
     {
-      key: "analyze",
-      label: "AI reading sketch",
-      active: sketchPhase === "analyzing",
-      done: ["drafting", "ready"].includes(sketchPhase),
-    },
-    {
-      key: "draft",
-      label: "Draft editable plan",
-      active: sketchPhase === "drafting",
+      key: "create",
+      label: "Create floor-plan image",
+      active: ["analyzing", "drafting"].includes(sketchPhase),
       done: sketchPhase === "ready",
     },
     {
@@ -4619,36 +4314,8 @@ export default function ProjectMarkupCanvas() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="text-sm font-semibold text-slate-900">Create from sketch</div>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Start with a clean AI floor-plan image, or create an editable measured schematic when you have area dimensions.
+                      Create one clean floor-plan image. Source measurements guide its proportions, with one reference retained for later calibration.
                     </p>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        disabled={sketchBusy}
-                        onClick={() => setSketchPlanMode("clean")}
-                        className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
-                          sketchPlanMode === "clean"
-                            ? "border-slate-950 bg-white text-slate-950 shadow-sm"
-                            : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white"
-                        } disabled:opacity-60`}
-                      >
-                        <span className="block text-sm font-semibold">Clean floor plan</span>
-                        <span className="mt-0.5 block leading-4">Best visual result, saved as an image.</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={sketchBusy}
-                        onClick={() => setSketchPlanMode("editable")}
-                        className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
-                          sketchPlanMode === "editable"
-                            ? "border-slate-950 bg-white text-slate-950 shadow-sm"
-                            : "border-slate-200 bg-white/70 text-slate-500 hover:bg-white"
-                        } disabled:opacity-60`}
-                      >
-                        <span className="block text-sm font-semibold">Editable schematic</span>
-                        <span className="mt-0.5 block leading-4">Grid-based, best with known dimensions.</span>
-                      </button>
-                    </div>
                     <input
                       ref={sketchFileRef}
                       type="file"
@@ -4749,17 +4416,11 @@ export default function ProjectMarkupCanvas() {
                     <button
                       type="button"
                       disabled={sketchBusy || !sketchSource}
-                      onClick={sketchPlanMode === "clean" ? createCleanFloorPlanFromSketchSource : createPlanFromSketchSource}
+                      onClick={createCleanFloorPlanFromSketchSource}
                       className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                     >
-                      <SymbolIcon name={sketchPlanMode === "clean" ? "floor_plan" : "architecture"} className="text-[18px]" />
-                      {sketchBusy
-                        ? sketchPlanMode === "clean"
-                          ? "Creating clean floor plan..."
-                          : "Creating editable schematic..."
-                        : sketchPlanMode === "clean"
-                          ? "Create clean floor plan"
-                          : "Create editable schematic"}
+                      <SymbolIcon name="floor_plan" className="text-[18px]" />
+                      {sketchBusy ? "Creating floor-plan image..." : "Create floor-plan image"}
                     </button>
                     {sketchPhase !== "idle" ? (
                       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -4770,22 +4431,18 @@ export default function ProjectMarkupCanvas() {
                             </div>
                             <div className="mt-0.5 text-[11px] text-slate-500">
                               {sketchPhase === "selected"
-                                ? sketchStatus.detail || "Image selected. Choose a plan option when ready."
+                                ? sketchStatus.detail || "Image selected. Create the floor-plan image when ready."
                                 : sketchPhase === "preparing"
                                   ? "Preparing the selected project image."
                                   : sketchPhase === "uploading"
                                     ? `Uploading ${sketchProgress}%`
                                 : sketchPhase === "analyzing"
-                                  ? sketchPlanMode === "clean"
-                                    ? "AI is creating a clean floor-plan image."
-                                    : "Upload complete. AI is reading the sketch."
+                                  ? "AI is creating the floor-plan image."
                                   : sketchPhase === "drafting"
-                                    ? "Building editable rough-plan elements."
+                                    ? "Finishing the floor-plan image."
                                     : sketchPhase === "ready"
-                                      ? sketchPlanMode === "clean"
-                                        ? "Clean floor plan is saved to the image library."
-                                        : "Editable schematic is ready."
-                                      : sketchStatus.detail || "Could not create the rough plan."}
+                                      ? "Floor-plan image is saved to the image library."
+                                      : sketchStatus.detail || "Could not create the floor-plan image."}
                             </div>
                           </div>
                           {sketchBusy ? (

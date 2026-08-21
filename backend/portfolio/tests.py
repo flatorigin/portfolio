@@ -1198,8 +1198,11 @@ class ProjectPlannerTests(APITestCase):
         self.assertIn("joint corners", prompt)
         self.assertIn("thin door leaf, hinge point, and swing arc", prompt)
         self.assertIn("thin parallel glazing lines", prompt)
-        self.assertIn("Include every clearly readable measurement", prompt)
-        self.assertIn("does not calibrate scale", prompt)
+        self.assertIn("authoritative geometric constraints", prompt)
+        self.assertIn("Do not print dimension strings", prompt)
+        self.assertIn("exactly one compact calibration reference", prompt)
+        self.assertIn("CALIBRATION: <exact source value and original unit>", prompt)
+        self.assertIn("Actual markup calibration happens later", prompt)
         self.assertIn("12 x 18 ft", prompt)
         self.assertEqual(
             AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-image-test", status=AIUsageEvent.Status.SUCCESS).count(),
@@ -1263,7 +1266,7 @@ class ProjectPlannerTests(APITestCase):
         self.client.force_authenticate(user=self.homeowner)
         response = self.client.post(
             f"/api/projects/{project.id}/images/{project_image.id}/sketch-to-clean-floor-plan/",
-            {"source_image_id": str(project_image.id), "width": "14", "length": "22", "unit": "ft"},
+            {"source_image_id": str(project_image.id)},
             format="multipart",
         )
 
@@ -1276,6 +1279,10 @@ class ProjectPlannerTests(APITestCase):
         self.assertIn("joint corners", prompt)
         self.assertIn("thin door leaf, hinge point, and swing arc", prompt)
         self.assertIn("thin parallel glazing lines", prompt)
-        self.assertIn("Include every clearly readable measurement", prompt)
-        self.assertIn("does not calibrate scale", prompt)
-        self.assertIn("14 x 22 ft", prompt)
+        self.assertIn("authoritative geometric constraints", prompt)
+        self.assertIn("Do not print dimension strings", prompt)
+        self.assertIn("exactly one compact calibration reference", prompt)
+        self.assertIn("CALIBRATION: <exact source value and original unit>", prompt)
+        self.assertIn("Actual markup calibration happens later", prompt)
+        self.assertIn("No overall footprint was explicitly supplied", prompt)
+        self.assertNotIn("20 x 30", prompt)
