@@ -444,8 +444,8 @@ export function Design3DViewport({
       {!geometry.walls.length ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center">
           <div className="max-w-sm rounded-lg border border-slate-200 bg-white/95 px-5 py-4 shadow-xl">
-            <div className="text-sm font-semibold text-slate-900">No wall geometry yet</div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">Return to 2D and use the Wall tool, or create an editable floor plan from a sketch.</div>
+            <div className="text-sm font-semibold text-slate-900">Preparing wall geometry</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">Walls are elevated automatically from the floor-plan image and any wall markup.</div>
           </div>
         </div>
       ) : null}

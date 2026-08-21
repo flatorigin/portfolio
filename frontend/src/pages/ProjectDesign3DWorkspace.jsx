@@ -59,22 +59,60 @@ function baselineFor(annotation, settings) {
   };
 }
 
-function semanticUserAnnotations(annotations) {
+function semanticUserAnnotations(annotations, includeDetectedFallback = false) {
   return (annotations || []).filter((item) =>
     item?.type === "corner" ||
-    (String(item?.id || "").startsWith("mark-") && (item.designRole === "wall" || ["door", "window", "steps"].includes(item.type))),
+    (item?.designRole === "wall" && (includeDetectedFallback || item.designOrigin === "proposed" || String(item.id || "").startsWith("mark-"))) ||
+    (["door", "window", "steps"].includes(item?.type) && (includeDetectedFallback || String(item.id || "").startsWith("mark-"))),
   );
 }
 
-function mergeFloorPlanAnalysis(detected, saved, settings) {
-  const traced = (detected || []).map((item) => ({
-    ...item,
+function wallSegment(source, start, end, index, settings) {
+  if (Math.hypot((end.x || 0) - (start.x || 0), (end.y || 0) - (start.y || 0)) < 3) return null;
+  const wall = {
+    ...source,
+    id: `${source.id || "detected"}-wall-${index}`,
+    layer: `${source.id || "detected"}-wall-${index}`,
+    type: "line",
+    x: start.x,
+    y: start.y,
+    x2: end.x,
+    y2: end.y,
+    text: "",
+    canvasMode: "rough_plan",
+    designRole: "wall",
     designOrigin: "ai_trace",
-    ...(item.type === "line"
-      ? { designRole: "wall", wallKind: "existing", designBaseline: baselineFor({ ...item, wallKind: "existing" }, settings) }
-      : {}),
-  }));
-  const overrides = semanticUserAnnotations(saved);
+    wallKind: "existing",
+  };
+  return { ...wall, designBaseline: baselineFor(wall, settings) };
+}
+
+function detectedGeometry(annotations, settings) {
+  return (annotations || []).flatMap((item) => {
+    if (item?.type === "line") {
+      const wall = wallSegment(item, { x: item.x, y: item.y }, { x: item.x2, y: item.y2 }, 0, settings);
+      return wall ? [wall] : [];
+    }
+    if (item?.type === "rect") {
+      const x1 = Math.min(Number(item.x) || 0, Number(item.x2) || 0);
+      const y1 = Math.min(Number(item.y) || 0, Number(item.y2) || 0);
+      const x2 = Math.max(Number(item.x) || 0, Number(item.x2) || 0);
+      const y2 = Math.max(Number(item.y) || 0, Number(item.y2) || 0);
+      const corners = [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }];
+      return corners.map((point, index) => wallSegment(item, point, corners[(index + 1) % corners.length], index, settings)).filter(Boolean);
+    }
+    if (item?.type === "pen" && Array.isArray(item.points) && item.points.length > 1) {
+      const points = item.closed ? [...item.points, item.points[0]] : item.points;
+      return points.slice(0, -1).map((point, index) => wallSegment(item, point, points[index + 1], index, settings)).filter(Boolean);
+    }
+    return [{ ...item, designOrigin: "ai_trace" }];
+  });
+}
+
+function mergeFloorPlanAnalysis(detected, saved, settings) {
+  const traced = detectedGeometry(detected, settings);
+  const hasDetectedWalls = traced.some((item) => item.type === "line" && item.designRole === "wall");
+  const overrides = semanticUserAnnotations(saved, !hasDetectedWalls);
   return [...traced, ...overrides].filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index);
 }
 
@@ -106,7 +144,7 @@ export default function ProjectDesign3DWorkspace() {
   const [proposal, setProposal] = useState(null);
   const [promptBusy, setPromptBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(() => searchParams.get("analyze") === "1");
   const [saving, setSaving] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -205,14 +243,15 @@ export default function ProjectDesign3DWorkspace() {
       return;
     }
     if (!sourceSnapshotId) {
-      setMessage("The floor plan was saved, but its image snapshot is missing. Using the saved wall geometry instead.");
+      setAnalyzing(false);
+      setMessage("The saved floor-plan image could not be read for automatic elevation.");
       setSearchParams({}, { replace: true });
       return;
     }
 
     async function analyze() {
       setAnalyzing(true);
-      setMessage("Reading the saved floor plan and confirmed corner anchors...");
+      setMessage("Reading the floor-plan image and wall markup automatically...");
       try {
         const formData = new FormData();
         formData.append("source_image_id", String(sourceSnapshotId));
@@ -226,6 +265,9 @@ export default function ProjectDesign3DWorkspace() {
         const { data } = await api.post(endpoint, formData, { headers: { "Content-Type": "multipart/form-data" } });
         const analyzedRoughPlan = { ...roughPlan, ...safeObject(data.rough_plan) };
         const merged = mergeFloorPlanAnalysis(data.annotations, annotations, settings);
+        if (!merged.some((item) => item.type === "line" && item.designRole === "wall")) {
+          throw new Error("No wall geometry could be identified in this floor-plan image.");
+        }
         const conversion = {
           schema_version: 1,
           source_snapshot_image_id: sourceSnapshotId,
@@ -240,7 +282,7 @@ export default function ProjectDesign3DWorkspace() {
         await persistWorkspace(merged, analyzedRoughPlan, settings, conversion);
         setMessage("3D reading complete. Review the walls and openings before relying on dimensions.");
       } catch (error) {
-        setMessage(`${errorMessage(error, "Could not analyze this floor plan.")} The saved editable walls are still available.`);
+        setMessage(errorMessage(error, "Automatic floor-plan elevation could not finish."));
       } finally {
         setAnalyzing(false);
         setSearchParams({}, { replace: true });
@@ -394,7 +436,7 @@ export default function ProjectDesign3DWorkspace() {
               <div className="max-w-sm text-center">
                 <SymbolIcon name="progress_activity" className="mx-auto animate-spin text-[30px] text-sky-700" />
                 <div className="mt-3 text-sm font-semibold text-slate-950">Reading floor-plan geometry</div>
-                <p className="mt-1 text-xs leading-5 text-slate-600">Matching wall centerlines to visible corners, openings, stairs, and confirmed + anchors.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">Detecting wall centerlines, connected corners, openings, stairs, and wall markup automatically.</p>
               </div>
             </div>
           ) : null}
