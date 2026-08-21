@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
-import { Design3DInspector, Design3DViewport } from "../components/Design3DStudio";
-import { DEFAULT_DESIGN_SETTINGS, createDesignTransform } from "../utils/designGeometry";
 import { SymbolIcon } from "../ui";
 
 const CANVAS_W = 1200;
@@ -21,7 +19,6 @@ const BASE_TOOLS = {
   text: { key: "text", label: "Text", icon: "title" },
   arrow: { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
-  wall: { key: "wall", label: "Wall", icon: "foundation" },
   freehand: { key: "freehand", label: "Pencil", icon: "draw" },
   pen: { key: "pen", label: "Pen", icon: "polyline" },
   penAdd: { key: "pen_add", label: "Add node", icon: "add" },
@@ -256,7 +253,6 @@ function fillMaterialPreviewStyle(material, fillColor, fillOpacity) {
 function annotationLayerLabel(item, index) {
   const fallback = `Layer ${index + 1}`;
   if (!item) return fallback;
-  if (item.semanticLabel) return item.semanticLabel;
   if (item.type === "text") return normalizeMarkupText(item.text) || "Text note";
   if (item.type === "measure") return normalizeMarkupText(item.text) || "Measurement";
   if (item.type === "pen") return item.closed ? "Pen shape" : "Pen path";
@@ -265,10 +261,9 @@ function annotationLayerLabel(item, index) {
   if (item.type === "rect") return "Rectangle";
   if (item.type === "circle") return "Circle";
   if (item.type === "arrow") return "Arrow";
-  if (item.type === "line") return item.designRole === "wall" ? (item.wallLabel || "Wall") : "Line";
-  if (item.type === "corner") return "Confirmed 3D corner";
+  if (item.type === "line") return "Line";
   if (item.type === "priority") return `Priority ${item.priorityNumber || index + 1}`;
-  if (["door", "window", "opening", "tree", "steps", "fence"].includes(item.type)) {
+  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
     return item.type.charAt(0).toUpperCase() + item.type.slice(1);
   }
   return fallback;
@@ -424,35 +419,7 @@ function annotationBounds(item) {
       y2: (item.y || 0) + radius,
     };
   }
-  if (item.type === "corner") {
-    const radius = 20;
-    return {
-      x1: (item.x || 0) - radius,
-      y1: (item.y || 0) - radius,
-      x2: (item.x || 0) + radius,
-      y2: (item.y || 0) + radius,
-    };
-  }
-  if (item.type === "steps" && Array.isArray(item.points) && item.points.length >= 4) {
-    const xs = item.points.map((point) => point.x);
-    const ys = item.points.map((point) => point.y);
-    return {
-      x1: Math.min(...xs),
-      y1: Math.min(...ys),
-      x2: Math.max(...xs),
-      y2: Math.max(...ys),
-    };
-  }
-  if (["door", "window", "opening"].includes(item.type) && (item.x2 !== item.x || item.y2 !== item.y)) {
-    const padding = item.type === "door" ? Math.max(18, lineLengthPx(item)) : 18;
-    return {
-      x1: Math.min(item.x || 0, item.x2 || 0) - padding,
-      y1: Math.min(item.y || 0, item.y2 || 0) - padding,
-      x2: Math.max(item.x || 0, item.x2 || 0) + padding,
-      y2: Math.max(item.y || 0, item.y2 || 0) + padding,
-    };
-  }
-  if (["door", "window", "opening", "tree", "steps", "fence"].includes(item.type)) {
+  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
     const size = item.type === "tree" ? 70 : 64;
     return {
       x1: (item.x || 0) - size / 2,
@@ -490,11 +457,9 @@ function allAnnotationBounds(items) {
 }
 
 function transformPointToDesignArea(point, transform) {
-  const scaleX = transform.scaleX ?? transform.scale;
-  const scaleY = transform.scaleY ?? transform.scale;
   return {
-    x: clamp(Math.round((point.x - transform.sourceX) * scaleX + transform.targetX), 0, CANVAS_W),
-    y: clamp(Math.round((point.y - transform.sourceY) * scaleY + transform.targetY), 0, CANVAS_H),
+    x: clamp(Math.round((point.x - transform.sourceX) * transform.scale + transform.targetX), 0, CANVAS_W),
+    y: clamp(Math.round((point.y - transform.sourceY) * transform.scale + transform.targetY), 0, CANVAS_H),
   };
 }
 
@@ -599,32 +564,9 @@ function cleanPlanMeasurementGeometry(roughPlan, imageDimensions = null) {
 
 function fitAnnotationsToImageBackgroundArea(items, imageDimensions = null) {
   const annotations = Array.isArray(items) ? items : [];
-  const semanticTrace = annotations.some((item) => item?.source === "ai_semantic_vector_trace");
-  const frame = backgroundImageFrame(imageDimensions);
-  if (semanticTrace) {
-    const transform = {
-      sourceX: 0,
-      sourceY: 0,
-      scaleX: frame.width / CANVAS_W,
-      scaleY: frame.height / CANVAS_H,
-      targetX: frame.x,
-      targetY: frame.y,
-    };
-    return annotations.map((item, index) => {
-      const transformed = transformAnnotationToDesignArea(item, transform);
-      return {
-        ...transformed,
-        id: transformed.id || `ai-clean-plan-vector-${Date.now()}-${index}`,
-        source: "ai_semantic_vector_trace",
-        strokeColor: safeHexColor(transformed.strokeColor || transformed.color || "#0369a1", "#0369a1"),
-        color: safeHexColor(transformed.strokeColor || transformed.color || "#0369a1", "#0369a1"),
-        strokeWidth: Math.min(Number(transformed.strokeWidth) || 2, 5),
-        fillOpacity: transformed.fillOpacity ?? 0.08,
-      };
-    });
-  }
   const bounds = allAnnotationBounds(annotations);
   if (!bounds) return annotations;
+  const frame = backgroundImageFrame(imageDimensions);
   const inset = Math.min(44, Math.max(18, Math.min(frame.width, frame.height) * 0.045));
   const sourceWidth = Math.max(1, bounds.x2 - bounds.x1);
   const sourceHeight = Math.max(1, bounds.y2 - bounds.y1);
@@ -652,113 +594,6 @@ function fitAnnotationsToImageBackgroundArea(items, imageDimensions = null) {
       fillOpacity: transformed.fillOpacity ?? 0.08,
     };
   });
-}
-
-function semanticVectorPlanFromAnnotations(items) {
-  const vectorItems = (Array.isArray(items) ? items : []).filter((item) =>
-    item?.semanticType ||
-    (item?.type === "line" && item?.designRole === "wall") ||
-    ["door", "window", "opening", "steps"].includes(item?.type),
-  );
-  if (!vectorItems.length) return null;
-
-  const nodes = new Map();
-  const ensureNode = (nodeId, point, elementId) => {
-    if (!nodeId || !point) return null;
-    const current = nodes.get(nodeId) || {
-      id: nodeId,
-      x: point.x,
-      y: point.y,
-      kind: "endpoint",
-      label: "Wall endpoint",
-      connected_element_ids: [],
-    };
-    if (!current.connected_element_ids.includes(elementId)) current.connected_element_ids.push(elementId);
-    nodes.set(nodeId, current);
-    return nodeId;
-  };
-
-  vectorItems
-    .filter((item) => item.type === "corner" && item.vectorNodeId)
-    .forEach((item) => {
-      nodes.set(item.vectorNodeId, {
-        id: item.vectorNodeId,
-        x: item.x || 0,
-        y: item.y || 0,
-        kind: item.cornerKind || "corner",
-        label: item.semanticLabel || item.text || "Wall corner",
-        connected_element_ids: Array.isArray(item.connectedElementIds) ? [...item.connectedElementIds] : [],
-      });
-    });
-
-  const elements = vectorItems.reduce((result, item, index) => {
-    if (item.type === "corner") return result;
-    const semanticType = item.semanticType || (item.type === "line" && item.designRole === "wall" ? "wall" : item.type === "steps" ? "stairs" : item.type);
-    if (!["wall", "door", "window", "opening", "stairs"].includes(semanticType)) return result;
-    const elementId = item.vectorElementId || `${semanticType}-${index + 1}`;
-    if (semanticType === "wall") {
-      const startNodeId = item.startNodeId || `${elementId}-start`;
-      const endNodeId = item.endNodeId || `${elementId}-end`;
-      ensureNode(startNodeId, { x: item.x || 0, y: item.y || 0 }, elementId);
-      ensureNode(endNodeId, { x: item.x2 ?? item.x ?? 0, y: item.y2 ?? item.y ?? 0 }, elementId);
-      result.push({
-        id: elementId,
-        type: "wall",
-        label: item.semanticLabel || item.wallLabel || "Wall",
-        x1: item.x || 0,
-        y1: item.y || 0,
-        x2: item.x2 ?? item.x ?? 0,
-        y2: item.y2 ?? item.y ?? 0,
-        start_node_id: startNodeId,
-        end_node_id: endNodeId,
-        wall_kind: item.wallKind || "existing",
-        thickness_px: Number(item.strokeWidth) || 2,
-        confidence: item.confidence ?? 1,
-      });
-      return result;
-    }
-    if (semanticType === "stairs") {
-      result.push({
-        id: elementId,
-        type: "stairs",
-        label: item.semanticLabel || "Stairs",
-        points: Array.isArray(item.points) ? item.points : [],
-        direction: item.direction || "up",
-        tread_count: Number(item.treadCount) || 8,
-        confidence: item.confidence ?? 1,
-      });
-      return result;
-    }
-    result.push({
-      id: elementId,
-      type: semanticType,
-      label: item.semanticLabel || semanticType.charAt(0).toUpperCase() + semanticType.slice(1),
-      x1: item.x || 0,
-      y1: item.y || 0,
-      x2: item.x2 ?? item.x ?? 0,
-      y2: item.y2 ?? item.y ?? 0,
-      parent_wall_id: item.parentWallId || null,
-      swing_direction: semanticType === "door" ? item.swingDirection || "left" : undefined,
-      confidence: item.confidence ?? 1,
-    });
-    return result;
-  }, []);
-
-  const normalizedNodes = Array.from(nodes.values()).map((node) => {
-    const count = node.connected_element_ids.length;
-    return {
-      ...node,
-      kind: count >= 3 ? "junction" : count === 2 ? "corner" : node.kind,
-      label: count >= 3 ? "Wall junction" : count === 2 ? "Wall corner" : node.label,
-    };
-  });
-  return {
-    schema_version: 1,
-    coordinate_space: { width: CANVAS_W, height: CANVAS_H, unit: "canvas_px" },
-    source_image_as_truth: true,
-    nodes: normalizedNodes,
-    elements,
-  };
 }
 
 function wrappedTextLines(text) {
@@ -1341,6 +1176,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
   const shouldShowLengths = showSegmentLengths || liveLength;
   const strokeWidth = baseStrokeWidth;
   const common = {
+    key: item.id,
     onPointerDown,
     onPointerEnter,
     onPointerLeave,
@@ -1352,7 +1188,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const { x1, y1, x2, y2 } = annotationBounds(item);
     const radii = rectCornerRadii(item, { x1, y1, x2, y2 });
     return (
-      <g key={item.id} {...common}>
+      <g {...common}>
         <path
           d={roundedRectPath({ x1, y1, x2, y2 }, radii)}
           fill={style.fill}
@@ -1372,7 +1208,6 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const cy = (y1 + y2) / 2;
     return (
       <ellipse
-        key={item.id}
         {...common}
         cx={cx}
         cy={cy}
@@ -1394,7 +1229,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
       .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
       .join(" ");
     return (
-      <g key={item.id} {...common}>
+      <g {...common}>
         <path
           d={d}
           fill="none"
@@ -1426,7 +1261,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
             .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
             .join(" ");
     return (
-      <g key={item.id} {...common}>
+      <g {...common}>
         {item.type === "pen" ? (
           <path
             d={d}
@@ -1473,7 +1308,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
   if (item.type === "priority") {
     const radius = 26;
     return (
-      <g key={item.id} {...common}>
+      <g {...common}>
         <circle
           cx={item.x}
           cy={item.y}
@@ -1495,27 +1330,6 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
         >
           {item.priorityNumber || 1}
         </text>
-      </g>
-    );
-  }
-
-  if (item.type === "corner") {
-    const markerStroke = selected ? MARKUP_SELECTION_COLOR : "#0284c7";
-    return (
-      <g key={item.id} {...common}>
-        <circle cx={item.x} cy={item.y} r="20" fill="transparent" pointerEvents="all" />
-        <circle cx={item.x} cy={item.y} r="12" fill="#ffffff" fillOpacity="0.92" stroke={markerStroke} strokeWidth="2" />
-        <path
-          d={`M ${(item.x || 0) - 8} ${item.y || 0} H ${(item.x || 0) + 8} M ${item.x || 0} ${(item.y || 0) - 8} V ${(item.y || 0) + 8}`}
-          fill="none"
-          stroke={markerStroke}
-          strokeWidth="3"
-          strokeLinecap="round"
-          pointerEvents="none"
-        />
-        {item.semanticLabel ? (
-          <SegmentLengthLabel x={item.x} y={(item.y || 0) - 29} label={item.semanticLabel} stroke={markerStroke} />
-        ) : null}
       </g>
     );
   }
@@ -1546,7 +1360,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const labelX = midX - box.width / 2;
     const labelY = midY - box.height - 5;
     return (
-      <g key={item.id} {...common}>
+      <g {...common}>
         {calibratedReference ? (
           <path
             d={linePathD(item)}
@@ -1578,14 +1392,6 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
           markerEnd={markerEnd}
           strokeDasharray={style.strokeDasharray}
         />
-        {item.semanticType === "wall" && item.semanticLabel && !editing ? (
-          <SegmentLengthLabel
-            x={midX}
-            y={midY + (shouldShowLengths ? 18 : -18)}
-            label={item.semanticLabel}
-            stroke={stroke}
-          />
-        ) : null}
         {item.type === "measure" ? (
           <>
             <line
@@ -1651,68 +1457,12 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     );
   }
 
-  if (["door", "window", "opening", "tree", "steps", "fence"].includes(item.type)) {
+  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
     const x = item.x || 0;
     const y = item.y || 0;
-    const x2 = item.x2 ?? x;
-    const y2 = item.y2 ?? y;
-    const dx = x2 - x;
-    const dy = y2 - y;
-    const segmentLength = Math.max(1, Math.hypot(dx, dy));
-    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-    const normalX = -dy / segmentLength;
-    const normalY = dx / segmentLength;
-    const labelX = (x + x2) / 2 + normalX * 22;
-    const labelY = (y + y2) / 2 + normalY * 22;
-    if (item.type === "door" && segmentLength > 4) {
-      const swingSign = item.swingDirection === "right" ? -1 : 1;
-      return (
-        <g key={item.id} {...common}>
-          <g transform={`translate(${x} ${y}) rotate(${angle})`}>
-            <line x1="0" y1="0" x2={segmentLength} y2="0" stroke="transparent" strokeWidth={Math.max(16, strokeWidth + 10)} />
-            <line x1="0" y1="0" x2="0" y2={swingSign * segmentLength} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
-            <path
-              d={`M ${segmentLength} 0 A ${segmentLength} ${segmentLength} 0 0 ${swingSign > 0 ? 1 : 0} 0 ${swingSign * segmentLength}`}
-              fill="none"
-              stroke={stroke}
-              strokeWidth={Math.max(1.5, strokeWidth - 0.5)}
-              strokeDasharray="6 5"
-            />
-            <circle cx="0" cy="0" r="3.5" fill="#ffffff" stroke={stroke} strokeWidth={Math.max(1.5, strokeWidth - 0.5)} />
-          </g>
-          <SegmentLengthLabel x={labelX} y={labelY} label={item.semanticLabel || "Door"} stroke={stroke} />
-        </g>
-      );
-    }
-    if (item.type === "window" && segmentLength > 4) {
-      return (
-        <g key={item.id} {...common}>
-          <g transform={`translate(${x} ${y}) rotate(${angle})`}>
-            <rect x="0" y="-8" width={segmentLength} height="16" fill="rgba(255,255,255,0.76)" stroke="transparent" />
-            <line x1="0" y1="-5" x2={segmentLength} y2="-5" stroke={stroke} strokeWidth={strokeWidth} />
-            <line x1="0" y1="0" x2={segmentLength} y2="0" stroke={stroke} strokeWidth={Math.max(1.25, strokeWidth - 0.75)} />
-            <line x1="0" y1="5" x2={segmentLength} y2="5" stroke={stroke} strokeWidth={strokeWidth} />
-            <line x1="0" y1="-9" x2="0" y2="9" stroke={stroke} strokeWidth={strokeWidth} />
-            <line x1={segmentLength} y1="-9" x2={segmentLength} y2="9" stroke={stroke} strokeWidth={strokeWidth} />
-          </g>
-          <SegmentLengthLabel x={labelX} y={labelY} label={item.semanticLabel || "Window"} stroke={stroke} />
-        </g>
-      );
-    }
-    if (item.type === "opening" && segmentLength > 4) {
-      return (
-        <g key={item.id} {...common}>
-          <line x1={x} y1={y} x2={x2} y2={y2} stroke="transparent" strokeWidth={Math.max(16, strokeWidth + 10)} />
-          <line x1={x} y1={y} x2={x2} y2={y2} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray="7 5" />
-          <line x1={x - normalX * 8} y1={y - normalY * 8} x2={x + normalX * 8} y2={y + normalY * 8} stroke={stroke} strokeWidth={strokeWidth} />
-          <line x1={x2 - normalX * 8} y1={y2 - normalY * 8} x2={x2 + normalX * 8} y2={y2 + normalY * 8} stroke={stroke} strokeWidth={strokeWidth} />
-          <SegmentLengthLabel x={labelX} y={labelY} label={item.semanticLabel || "Opening"} stroke={stroke} />
-        </g>
-      );
-    }
     if (item.type === "door") {
       return (
-        <g key={item.id} {...common}>
+        <g {...common}>
           <path d={`M ${x - 26} ${y + 28} L ${x - 26} ${y - 26} L ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
           <path d={`M ${x - 24} ${y + 24} A 54 54 0 0 1 ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} strokeDasharray="7 7" />
         </g>
@@ -1720,58 +1470,23 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     }
     if (item.type === "window") {
       return (
-        <g key={item.id} {...common}>
+        <g {...common}>
           <rect x={x - 32} y={y - 12} width="64" height="24" rx="3" fill="rgba(255,255,255,0.9)" stroke={stroke} strokeWidth={strokeWidth} />
           <line x1={x} y1={y - 12} x2={x} y2={y + 12} stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} />
         </g>
       );
     }
-    if (item.type === "opening") {
-      return (
-        <g key={item.id} {...common}>
-          <line x1={x - 30} y1={y} x2={x + 30} y2={y} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray="7 5" />
-          <SegmentLengthLabel x={x} y={y - 22} label={item.semanticLabel || "Opening"} stroke={stroke} />
-        </g>
-      );
-    }
     if (item.type === "tree") {
       return (
-        <g key={item.id} {...common}>
+        <g {...common}>
           <circle cx={x} cy={y - 8} r="28" fill={hexToRgba(stroke, 0.16)} stroke={stroke} strokeWidth={strokeWidth} />
           <path d={`M ${x} ${y + 20} L ${x} ${y + 36}`} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
         </g>
       );
     }
-    if (item.type === "steps" && Array.isArray(item.points) && item.points.length >= 4) {
-      const [p0, p1, p2, p3] = item.points;
-      const treadCount = clamp(Math.round(Number(item.treadCount) || 8), 2, 24);
-      const centerX = item.points.slice(0, 4).reduce((sum, point) => sum + point.x, 0) / 4;
-      const centerY = item.points.slice(0, 4).reduce((sum, point) => sum + point.y, 0) / 4;
-      return (
-        <g key={item.id} {...common}>
-          <polygon points={item.points.slice(0, 4).map((point) => `${point.x},${point.y}`).join(" ")} fill="rgba(255,255,255,0.38)" stroke={stroke} strokeWidth={strokeWidth} />
-          {Array.from({ length: treadCount + 1 }, (_, index) => {
-            const ratio = index / treadCount;
-            const sideA = { x: p0.x + (p1.x - p0.x) * ratio, y: p0.y + (p1.y - p0.y) * ratio };
-            const sideB = { x: p3.x + (p2.x - p3.x) * ratio, y: p3.y + (p2.y - p3.y) * ratio };
-            return <line key={`${item.id}-tread-${index}`} x1={sideA.x} y1={sideA.y} x2={sideB.x} y2={sideB.y} stroke={stroke} strokeWidth={Math.max(1, strokeWidth - 0.75)} />;
-          })}
-          <line
-            x1={(p0.x + p3.x) / 2}
-            y1={(p0.y + p3.y) / 2}
-            x2={(p1.x + p2.x) / 2}
-            y2={(p1.y + p2.y) / 2}
-            stroke={stroke}
-            strokeWidth={Math.max(1.5, strokeWidth)}
-            markerEnd={`url(#${markerIdForColor(stroke)})`}
-          />
-          <SegmentLengthLabel x={centerX} y={centerY - 20} label={item.semanticLabel || "Stairs"} stroke={stroke} />
-        </g>
-      );
-    }
     if (item.type === "steps") {
       return (
-        <g key={item.id} {...common}>
+        <g {...common}>
           {[0, 1, 2, 3].map((index) => (
             <rect key={`${item.id}-step-${index}`} x={x - 34 + index * 16} y={y - 24 + index * 12} width="48" height="10" fill="rgba(255,255,255,0.92)" stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} />
           ))}
@@ -1779,7 +1494,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
       );
     }
     return (
-      <g key={item.id} {...common}>
+      <g {...common}>
         <line x1={x - 34} y1={y - 18} x2={x + 34} y2={y - 18} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
         <line x1={x - 34} y1={y + 18} x2={x + 34} y2={y + 18} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
         {[-24, 0, 24].map((offset) => (
@@ -1804,7 +1519,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     );
   }
   return (
-    <g key={item.id} {...common}>
+    <g {...common}>
       <rect
         x={labelX}
         y={labelY}
@@ -1974,12 +1689,6 @@ export default function ProjectMarkupCanvas() {
   const [annotations, setAnnotations] = useState([]);
   const [tool, setTool] = useState("select");
   const [canvasMode, setCanvasMode] = useState("photo");
-  const [workspaceView, setWorkspaceView] = useState("2d");
-  const [designViewMode, setDesignViewMode] = useState("perspective");
-  const [designSettings, setDesignSettings] = useState(DEFAULT_DESIGN_SETTINGS);
-  const [designPrompt, setDesignPrompt] = useState("");
-  const [designProposal, setDesignProposal] = useState(null);
-  const [designPromptBusy, setDesignPromptBusy] = useState(false);
   const [activeColor, setActiveColor] = useState(DEFAULT_MARKUP_COLOR);
   const [activeFillColor, setActiveFillColor] = useState(DEFAULT_MARKUP_COLOR);
   const [activeFillMaterial, setActiveFillMaterial] = useState("flat");
@@ -2104,11 +1813,6 @@ export default function ProjectMarkupCanvas() {
       if (saved.backgroundUrl) setBackgroundUrl(saved.backgroundUrl);
       if (Array.isArray(saved.annotations)) setAnnotations(saved.annotations);
       if (saved.canvasMode === "rough_plan" || saved.canvasMode === "photo") setCanvasMode(saved.canvasMode);
-      setWorkspaceView("2d");
-      if (["perspective", "top", "elevation"].includes(saved.designViewMode)) setDesignViewMode(saved.designViewMode);
-      if (saved.designSettings && typeof saved.designSettings === "object") {
-        setDesignSettings((prev) => ({ ...prev, ...saved.designSettings }));
-      }
       if (saved.roughPlan && typeof saved.roughPlan === "object") {
         setRoughPlan((prev) => ({ ...prev, ...saved.roughPlan }));
       }
@@ -2135,9 +1839,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, designViewMode, designSettings, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, designSettings, designViewMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -2230,10 +1934,6 @@ export default function ProjectMarkupCanvas() {
             }
           }
         }
-        const savedDesign = selectedImageVersion?.design_3d || markup.design_3d;
-        if (savedDesign?.settings && typeof savedDesign.settings === "object") {
-          setDesignSettings((prev) => ({ ...prev, ...savedDesign.settings }));
-        }
       })
       .catch((err) => {
         if (alive) setMessage(normalizeError(err, "Could not load this project plan."));
@@ -2284,9 +1984,6 @@ export default function ProjectMarkupCanvas() {
             if (markupVersion.measurement_calibration.length != null) {
               setMeasurementCalibrationInputLength(String(markupVersion.measurement_calibration.length));
             }
-          }
-          if (markupVersion.design_3d?.settings && typeof markupVersion.design_3d.settings === "object") {
-            setDesignSettings((prev) => ({ ...prev, ...markupVersion.design_3d.settings }));
           }
         } else {
           setAnnotations([]);
@@ -2466,7 +2163,7 @@ export default function ProjectMarkupCanvas() {
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
       ...(isRoughPlan ? [] : [{ key: "background", tools: [BASE_TOOLS.backgroundEraser] }]),
-      { key: "geometry", tools: [BASE_TOOLS.wall, BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
+      { key: "geometry", tools: [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
       ...(isRoughPlan ? [{ key: "symbols", tools: SYMBOL_TOOLS }] : []),
       { key: "delete", tools: [BASE_TOOLS.delete] },
     ],
@@ -2506,7 +2203,6 @@ export default function ProjectMarkupCanvas() {
       layer: item.id,
       text: item.type === "text" || item.type === "measure" ? normalizeMarkupText(item.text) : item.text,
     }));
-    const vectorPlan = semanticVectorPlanFromAnnotations(normalizedAnnotations);
     const version = {
       id: `version-${Date.now()}`,
       name: versionOverrides.name || MARKUP_FLOOR_PLAN_NAME,
@@ -2518,16 +2214,11 @@ export default function ProjectMarkupCanvas() {
       snapshot_url: versionOverrides.snapshot_url || "",
       snapshot_image_id: versionOverrides.snapshot_image_id || null,
       annotations: normalizedAnnotations,
-      vector_plan: vectorPlan || undefined,
       rough_plan: isRoughPlan ? roughPlan : undefined,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
       annotation_count: normalizedAnnotations.length,
-      design_3d: {
-        schema_version: 1,
-        settings: designSettings,
-      },
     };
 
     return {
@@ -2538,14 +2229,9 @@ export default function ProjectMarkupCanvas() {
       rough_plan: isRoughPlan ? roughPlan : undefined,
       background_url: isRoughPlan ? "" : background_url,
       annotations: normalizedAnnotations,
-      vector_plan: vectorPlan || undefined,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
-      design_3d: {
-        schema_version: 1,
-        settings: designSettings,
-      },
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
     };
@@ -2608,154 +2294,6 @@ export default function ProjectMarkupCanvas() {
   function commitAnnotations(nextAnnotations) {
     setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
     setAnnotations(nextAnnotations);
-  }
-
-  function designBaselineFor(item) {
-    if (item?.designBaseline) return item.designBaseline;
-    return {
-      x: item?.x,
-      y: item?.y,
-      x2: item?.x2,
-      y2: item?.y2,
-      wallHeight: item?.wallHeight || designSettings.ceilingHeight,
-      wallThickness: item?.wallThickness || designSettings.wallThickness,
-      wallKind: item?.wallKind || "existing",
-      openingWidth: item?.openingWidth || 3,
-      openingHeight: item?.openingHeight || (item?.type === "door" ? 6.67 : 4),
-      sillHeight: item?.sillHeight ?? (item?.type === "window" ? 3 : 0),
-      stairWidth: item?.stairWidth || 3.5,
-      stairRun: item?.stairRun || 5,
-      stairRise: item?.stairRise || 3,
-    };
-  }
-
-  function beginDesignGeometryEdit() {
-    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
-  }
-
-  function previewDesignAnnotation(annotationId, patch) {
-    setAnnotations((prev) => prev.map((item) => (
-      item.id === annotationId
-        ? {
-            ...item,
-            ...(["line", "door", "window", "steps"].includes(item.type) ? { designBaseline: designBaselineFor(item) } : {}),
-            ...patch,
-          }
-        : item
-    )));
-  }
-
-  function changeDesignAnnotation(annotationId, patch) {
-    commitAnnotations(annotations.map((item) => (
-      item.id === annotationId
-        ? {
-            ...item,
-            ...(["line", "door", "window", "steps"].includes(item.type) ? { designBaseline: designBaselineFor(item) } : {}),
-            ...patch,
-          }
-        : item
-    )));
-  }
-
-  function changeDesignSettings(patch) {
-    setDesignSettings((prev) => ({ ...prev, ...patch }));
-  }
-
-  function changeDesignRoughPlan(patch) {
-    setDesignSettings((prev) => ({
-      ...prev,
-      baseFloorWidth: prev.baseFloorWidth ?? Number(roughPlan.width),
-      baseFloorLength: prev.baseFloorLength ?? Number(roughPlan.length),
-      baseFloorUnit: prev.baseFloorUnit || roughPlan.unit || "ft",
-    }));
-    setRoughPlan((prev) => ({ ...prev, ...patch }));
-  }
-
-  async function requestDesignProposal() {
-    if (!planId) {
-      setMessage("Save this design in a project planner before requesting an AI change preview.");
-      return;
-    }
-    const selectedAnnotation = annotations.find((item) => item.id === selectedId) || null;
-    setDesignPromptBusy(true);
-    setDesignProposal(null);
-    setMessage("");
-    try {
-      const { data } = await api.post(`/project-plans/${planId}/design-proposal/`, {
-        prompt: designPrompt,
-        selected_id: selectedId || "floor",
-        selected_element: selectedAnnotation,
-        design: {
-          settings: designSettings,
-          rough_plan: roughPlan,
-          annotations: annotations
-            .filter((item) => item.designRole === "wall" || item.type === "line" || ["door", "window", "steps"].includes(item.type))
-            .slice(0, 100),
-        },
-      });
-      setDesignProposal(data);
-    } catch (err) {
-      setMessage(normalizeError(err, "Could not prepare the proposed design changes."));
-    } finally {
-      setDesignPromptBusy(false);
-    }
-  }
-
-  function applyDesignProposal() {
-    const changes = Array.isArray(designProposal?.changes) ? designProposal.changes : [];
-    if (!changes.length) {
-      setDesignProposal(null);
-      return;
-    }
-    let nextSettings = { ...designSettings };
-    let nextAnnotations = [...annotations];
-    const transform = createDesignTransform(annotations, activeMeasurementGeometry, roughPlan);
-    const propertyMap = {
-      wall_height: "wallHeight",
-      wall_thickness: "wallThickness",
-      wall_kind: "wallKind",
-      opening_width: "openingWidth",
-      opening_height: "openingHeight",
-      sill_height: "sillHeight",
-      stair_width: "stairWidth",
-      stair_run: "stairRun",
-      stair_rise: "stairRise",
-    };
-    changes.forEach((change) => {
-      const value = change.value;
-      if (change.property === "ceiling_height") {
-        nextSettings.ceilingHeight = clamp(Number(value) || 8, 4, 30);
-        return;
-      }
-      if (change.property === "exterior") {
-        nextSettings.exterior = Boolean(value);
-        return;
-      }
-      const targetId = change.target_id || selectedId;
-      nextAnnotations = nextAnnotations.map((item) => {
-        if (item.id !== targetId) return item;
-        const baseline = ["line", "door", "window", "steps"].includes(item.type) ? designBaselineFor(item) : item.designBaseline;
-        if (propertyMap[change.property]) {
-          return { ...item, ...(baseline ? { designBaseline: baseline } : {}), [propertyMap[change.property]]: value };
-        }
-        if (change.property === "translate_x" || change.property === "translate_y") {
-          const axis = change.property === "translate_x" ? "x" : "z";
-          const amount = Number(value) || 0;
-          const start = transform.toWorld({ x: item.x, y: item.y });
-          const end = transform.toWorld({ x: item.x2, y: item.y2 });
-          const nextStart = transform.toCanvas({ ...start, [axis]: start[axis] + amount });
-          const nextEnd = transform.toCanvas({ ...end, [axis]: end[axis] + amount });
-          return { ...item, ...(baseline ? { designBaseline: baseline } : {}), x: nextStart.x, y: nextStart.y, x2: nextEnd.x, y2: nextEnd.y };
-        }
-        return item;
-      });
-    });
-    setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
-    setAnnotations(nextAnnotations);
-    setDesignSettings(nextSettings);
-    setDesignProposal(null);
-    setDesignPrompt("");
-    setMessage("Proposed design changes applied. Review the dimensions and save when ready.");
   }
 
   function undo() {
@@ -3064,7 +2602,7 @@ export default function ProjectMarkupCanvas() {
       let overlayNotes = "";
       if (overlaySource) {
         try {
-          setSketchStatus({ phase: "drafting", progress: 100, fileName: overlaySource.name, detail: "Tracing walls, joints, openings, and stairs as vectors." });
+          setSketchStatus({ phase: "drafting", progress: 100, fileName: overlaySource.name, detail: "Creating editable markup overlay." });
           const overlayData = await requestRoughPlanFromSketchSource(overlaySource, {
             overlayMode: "trace_clean_floor_plan",
           });
@@ -3080,17 +2618,17 @@ export default function ProjectMarkupCanvas() {
             ? ` Review note: ${overlayData.uncertainty_notes.slice(0, 2).join(" ")}`
             : "";
           overlayNotes = overlayAnnotations.length
-            ? ` Semantic vector overlay created on top.${uncertaintyNotes}`
-            : " Clean plan saved, but no semantic vector elements were detected.";
+            ? ` Editable markup overlay created on top.${uncertaintyNotes}`
+            : " Clean plan saved, but no editable overlay lines were detected.";
         } catch (overlayErr) {
           commitAnnotations([]);
-          overlayNotes = ` Clean plan saved, but the semantic vector overlay could not be created: ${normalizeError(overlayErr, "Try tracing the missing element manually.")}`;
+          overlayNotes = ` Clean plan saved, but the editable overlay could not be created: ${normalizeError(overlayErr, "Try adding markup manually.")}`;
         }
       } else {
         commitAnnotations([]);
       }
       setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME, detail: "" });
-      setMessage(`AI clean floor plan created and saved to the image library.${overlayNotes} The image remains the measurement reference; save when the vector overlay matches it.`);
+      setMessage(`AI clean floor plan created and saved to the image library.${overlayNotes} Save when the editable overlay looks right, or export PNG/PDF for a flattened preview.`);
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
@@ -3679,11 +3217,10 @@ export default function ProjectMarkupCanvas() {
     const id = `mark-${Date.now()}`;
     const nextPriorityNumber =
       annotations.filter((item) => item.type === "priority").length + 1;
-    const annotationType = tool === "wall" ? "line" : tool;
     const base = {
       id,
       layer: id,
-      type: annotationType,
+      type: tool,
       x: point.x,
       y: point.y,
       x2: point.x,
@@ -3704,12 +3241,6 @@ export default function ProjectMarkupCanvas() {
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
       canvasMode,
-      designRole: tool === "wall" ? "wall" : tool === "corner" ? "corner" : tool === "line" ? "note" : undefined,
-      designOrigin: tool === "wall" || tool === "corner" ? "proposed" : undefined,
-      cornerKind: tool === "corner" ? "wall_junction" : undefined,
-      wallKind: tool === "wall" ? "new" : undefined,
-      wallHeight: tool === "wall" ? designSettings.ceilingHeight : undefined,
-      wallThickness: tool === "wall" ? designSettings.wallThickness : undefined,
     };
 
     commitAnnotations([...annotations, base]);
@@ -3721,7 +3252,7 @@ export default function ProjectMarkupCanvas() {
       setDraft(null);
       return;
     }
-    if (tool === "text" || tool === "priority" || tool === "corner" || ["door", "window", "tree", "steps", "fence"].includes(tool)) return;
+    if (tool === "text" || tool === "priority" || ["door", "window", "tree", "steps", "fence"].includes(tool)) return;
     setDraft(id);
   }
 
@@ -4297,7 +3828,6 @@ export default function ProjectMarkupCanvas() {
             ? { ...item, text: normalizeMarkupText(item.text) }
             : item,
         );
-        const vectorPlan = semanticVectorPlanFromAnnotations(normalizedAnnotations);
         const previousExtraData =
           projectImage.extra_data && typeof projectImage.extra_data === "object"
             ? projectImage.extra_data
@@ -4314,16 +3844,11 @@ export default function ProjectMarkupCanvas() {
           snapshot_url: versionSnapshotUrl || previousExtraData.markup_version?.snapshot_url || "",
           snapshot_image_id: versionSnapshotImageId || previousExtraData.markup_version?.snapshot_image_id || null,
           annotations: normalizedAnnotations,
-          vector_plan: vectorPlan || undefined,
           rough_plan: isRoughPlan ? roughPlan : undefined,
           visible_layers: visibleLayers,
           locked_layers: lockedLayers,
           measurement_calibration: measurementCalibration,
           annotation_count: normalizedAnnotations.length,
-          design_3d: {
-            schema_version: 1,
-            settings: designSettings,
-          },
         };
         const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
           extra_data: {
@@ -4698,19 +4223,6 @@ export default function ProjectMarkupCanvas() {
     if (compactViewport) setMobileSettingsPanel("style");
   }
 
-  async function saveAndCreate3D() {
-    if (saving || savingEditable) return;
-    finishPenPath();
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    const saved = await saveToPlanner();
-    if (!saved) return;
-    if (isProjectImageMode) {
-      navigate(`/dashboard/projects/${projectId}/images/${imageId}/design-3d?analyze=1`);
-      return;
-    }
-    navigate(`/dashboard/planner/${planId}/design-3d?analyze=1`);
-  }
-
   function changeStrokeStyle(nextStyle) {
     if (selectedForEditing) updateSelected({ strokeStyle: nextStyle });
   }
@@ -4729,7 +4241,6 @@ export default function ProjectMarkupCanvas() {
   }
 
   const mobileSettingsItems = [
-    ...(workspaceView === "3d" ? [{ key: "design", label: "Design", icon: "view_in_ar", section: "design" }] : []),
     { key: "canvas", label: "Canvas", icon: "dashboard", section: "mode" },
     { key: "layers", label: "Layers", icon: "layers", section: "layers", count: annotations.length },
     { key: "style", label: "Style", icon: "palette", section: "stroke" },
@@ -4804,7 +4315,7 @@ export default function ProjectMarkupCanvas() {
               <SymbolIcon name="arrow_back" className="text-[22px]" />
             </Link>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">{workspaceView === "3d" ? "3D design" : "Markup canvas"}</h1>
+              <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">Markup canvas</h1>
               <p className="text-xs text-slate-500 max-lg:hidden">
                 {isProjectImageMode ? "Markup will stay on this project image" : `${modeLabel}: mark the area that needs work`}
               </p>
@@ -4812,27 +4323,6 @@ export default function ProjectMarkupCanvas() {
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 max-lg:gap-1">
-            {workspaceView === "3d" ? (
-              <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <button
-                  type="button"
-                  onClick={() => setWorkspaceView("2d")}
-                  className="inline-flex h-9 items-center gap-1 px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                  aria-label="Return to floor plan"
-                >
-                  <SymbolIcon name="floor_plan" className="text-[17px]" />
-                  <span className="max-sm:hidden">Floor plan</span>
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center gap-1 bg-slate-950 px-2.5 text-xs font-semibold text-white"
-                  aria-label="Interactive 3D design active"
-                >
-                  <SymbolIcon name="view_in_ar" className="text-[17px]" />
-                  <span className="max-sm:hidden">3D</span>
-                </button>
-              </div>
-            ) : null}
             <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
               <button
                 type="button"
@@ -5024,26 +4514,6 @@ export default function ProjectMarkupCanvas() {
                 <SymbolIcon name="close" className="text-[22px]" />
               </button>
             </div>
-            {workspaceView === "3d" && (!compactViewport || mobileSettingsPanel === "design") ? (
-              <Design3DInspector
-                annotations={annotations}
-                measurementGeometry={activeMeasurementGeometry}
-                roughPlan={roughPlan}
-                settings={designSettings}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                onSettingsChange={changeDesignSettings}
-                onRoughPlanChange={changeDesignRoughPlan}
-                onAnnotationChange={changeDesignAnnotation}
-                prompt={designPrompt}
-                onPromptChange={setDesignPrompt}
-                proposal={designProposal}
-                promptBusy={designPromptBusy}
-                onRequestProposal={requestDesignProposal}
-                onApplyProposal={applyDesignProposal}
-                onDiscardProposal={() => setDesignProposal(null)}
-              />
-            ) : null}
             <CollapsibleSection
               id="mode"
               title="Markup mode"
@@ -5310,7 +4780,7 @@ export default function ProjectMarkupCanvas() {
                                     ? "AI is creating a clean floor-plan image."
                                     : "Upload complete. AI is reading the sketch."
                                   : sketchPhase === "drafting"
-                                    ? "Building labeled semantic vector elements."
+                                    ? "Building editable rough-plan elements."
                                     : sketchPhase === "ready"
                                       ? sketchPlanMode === "clean"
                                         ? "Clean floor plan is saved to the image library."
@@ -6271,36 +5741,6 @@ export default function ProjectMarkupCanvas() {
               </div>
             ) : null}
             <div ref={canvasFrameRef} data-markup-canvas-frame className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:rounded-none max-lg:border-0">
-              {workspaceView === "2d" ? (
-                <button
-                  type="button"
-                  onClick={saveAndCreate3D}
-                  disabled={saving || savingEditable}
-                  className="absolute right-2 top-2 z-30 inline-flex h-11 items-center gap-2 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white shadow-xl hover:bg-slate-800 lg:right-3 lg:top-3 lg:h-10 lg:px-4"
-                  aria-label="Create 3D elevation from this floor plan"
-                  title="Create 3D elevation from this floor plan"
-                >
-                  <SymbolIcon name={saving ? "progress_activity" : "view_sidebar"} className={`text-[19px] ${saving ? "animate-spin" : ""}`} />
-                  <span className="max-sm:hidden">{saving ? "Creating 3D..." : "Create 3D elevation"}</span>
-                  <span className="sm:hidden">{saving ? "Creating..." : "3D"}</span>
-                </button>
-              ) : null}
-              {workspaceView === "3d" ? (
-                <div className="absolute inset-0 z-40">
-                  <Design3DViewport
-                    annotations={annotations}
-                    measurementGeometry={activeMeasurementGeometry}
-                    roughPlan={roughPlan}
-                    settings={designSettings}
-                    selectedId={selectedId}
-                    onSelect={setSelectedId}
-                    onBeginEdit={beginDesignGeometryEdit}
-                    onAnnotationPreview={previewDesignAnnotation}
-                    viewMode={designViewMode}
-                    onViewModeChange={setDesignViewMode}
-                  />
-                </div>
-              ) : null}
               {!isRoughPlan && !calibratedMeasurementGeometry ? (
                 <button
                   type="button"
