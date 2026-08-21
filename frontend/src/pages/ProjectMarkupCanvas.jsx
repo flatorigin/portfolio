@@ -1584,6 +1584,9 @@ export default function ProjectMarkupCanvas() {
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
+  const [pendingFloorPlanSave, setPendingFloorPlanSave] = useState(null);
+  const [savingFloorPlanBase, setSavingFloorPlanBase] = useState(false);
+  const [floorPlanSaveError, setFloorPlanSaveError] = useState("");
   const [hideTextAndMeasurements, setHideTextAndMeasurements] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
@@ -2325,11 +2328,19 @@ export default function ProjectMarkupCanvas() {
         setCanvasMode("photo");
         setBackgroundUrl(generatedUrl);
         commitAnnotations([]);
+        setTool("select");
         setSelectedId("");
         setEditingTextId("");
+        setVisibleLayers({});
+        setLockedLayers({});
+        setMeasurementCalibration(DEFAULT_MEASUREMENT_CALIBRATION);
+        setMeasurementCalibrationInputLength(DEFAULT_MEASUREMENT_CALIBRATION.length);
+        setMeasurementCalibrationPromptComplete(false);
+        setFloorPlanSaveError("");
+        setPendingFloorPlanSave({ image: generatedImage, url: generatedUrl });
       }
       setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME, detail: "" });
-      setMessage("AI floor-plan image created and saved. Use the Measure tool on its calibration reference before adding markup.");
+      setMessage("Floor-plan image created. Save the clean base before adding markup.");
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
@@ -2339,6 +2350,87 @@ export default function ProjectMarkupCanvas() {
       setMessage(detail);
     } finally {
       setSketchBusy(false);
+    }
+  }
+
+  async function saveGeneratedFloorPlanBase() {
+    if (!pendingFloorPlanSave?.image?.id || !pendingFloorPlanSave.url) return;
+
+    setSavingFloorPlanBase(true);
+    setFloorPlanSaveError("");
+    try {
+      const now = new Date().toISOString();
+      const imageIdToSave = pendingFloorPlanSave.image.id;
+
+      if (planId) {
+        const previousMarkup = safeMarkupData(plan?.markup_data);
+        const existingVersions = Array.isArray(previousMarkup.versions) ? previousMarkup.versions : [];
+        const baseVersionId = `floor-plan-base-${imageIdToSave}`;
+        const baseVersion = {
+          id: baseVersionId,
+          name: CLEAN_FLOOR_PLAN_NAME,
+          version_type: "photo_markup",
+          type_label: "Floor Plan",
+          created_at: pendingFloorPlanSave.image.created_at || now,
+          updated_at: now,
+          background_url: pendingFloorPlanSave.url,
+          source_image_id: imageIdToSave,
+          snapshot_url: "",
+          snapshot_image_id: null,
+          annotations: [],
+          visible_layers: {},
+          locked_layers: {},
+          measurement_calibration: DEFAULT_MEASUREMENT_CALIBRATION,
+          annotation_count: 0,
+        };
+        await patchMarkupData({
+          ...previousMarkup,
+          schema_version: 1,
+          canvas: { width: CANVAS_W, height: CANVAS_H },
+          canvas_mode: "photo",
+          version_type: "photo_markup",
+          background_url: pendingFloorPlanSave.url,
+          annotations: [],
+          visible_layers: {},
+          locked_layers: {},
+          measurement_calibration: DEFAULT_MEASUREMENT_CALIBRATION,
+          base_floor_plan: {
+            image_id: imageIdToSave,
+            image_url: pendingFloorPlanSave.url,
+            saved_at: now,
+          },
+          updated_at: now,
+          versions: [baseVersion, ...existingVersions.filter((version) => version.id !== baseVersionId)].slice(0, 8),
+        });
+      } else if (isProjectImageMode && projectId) {
+        const previousExtraData =
+          pendingFloorPlanSave.image.extra_data && typeof pendingFloorPlanSave.image.extra_data === "object"
+            ? pendingFloorPlanSave.image.extra_data
+            : {};
+        const { data } = await api.patch(`/projects/${projectId}/images/${imageIdToSave}/`, {
+          extra_data: {
+            ...previousExtraData,
+            source: previousExtraData.source || "ai_clean_floor_plan",
+            is_floor_plan_base: true,
+            base_floor_plan: {
+              image_id: imageIdToSave,
+              image_url: pendingFloorPlanSave.url,
+              saved_at: now,
+            },
+          },
+        });
+        setProjectImage(data);
+        setProjectImages((prev) => prev.map((image) => (String(image.id) === String(data.id) ? data : image)));
+      } else {
+        throw new Error("Open this from a saved planner or project image before saving the floor plan.");
+      }
+
+      setPendingFloorPlanSave(null);
+      setMessage("Floor plan saved as a clean base image. New markup will remain separate.");
+    } catch (err) {
+      setFloorPlanSaveError(normalizeError(err, "Could not save the clean floor plan. Try again."));
+    } finally {
+      setSavingFloorPlanBase(false);
     }
   }
 
@@ -4090,6 +4182,50 @@ export default function ProjectMarkupCanvas() {
         {message ? (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm max-lg:absolute max-lg:left-14 max-lg:right-2 max-lg:top-14 max-lg:z-[70] max-lg:mb-0 max-lg:max-h-20 max-lg:overflow-y-auto">
             {message}
+          </div>
+        ) : null}
+
+        {pendingFloorPlanSave ? (
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 px-4 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="floor-plan-save-title"
+            aria-describedby="floor-plan-save-description"
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <h2 id="floor-plan-save-title" className="text-base font-semibold text-slate-950">
+                  Save floor plan before markup
+                </h2>
+                <p id="floor-plan-save-description" className="mt-1 text-sm leading-5 text-slate-600">
+                  Save this clean image as the base floor plan. Markup added afterward will remain on separate editable layers.
+                </p>
+              </div>
+              <div className="bg-white p-4">
+                <div className="flex max-h-64 min-h-40 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                  <img
+                    src={pendingFloorPlanSave.url}
+                    alt="Generated floor plan ready to save"
+                    className="max-h-64 w-full object-contain"
+                  />
+                </div>
+                {floorPlanSaveError ? (
+                  <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {floorPlanSaveError}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={saveGeneratedFloorPlanBase}
+                  disabled={savingFloorPlanBase}
+                  className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <SymbolIcon name="save" className="text-[19px]" />
+                  {savingFloorPlanBase ? "Saving floor plan..." : "Save floor plan"}
+                </button>
+              </div>
+            </div>
           </div>
         ) : null}
 
