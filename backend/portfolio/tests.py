@@ -1193,6 +1193,14 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
         self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
+        prompt = mock_generate_image_from_image.call_args.kwargs["prompt"]
+        self.assertIn("solid thick black line or wall band", prompt)
+        self.assertIn("joint corners", prompt)
+        self.assertIn("thin door leaf, hinge point, and swing arc", prompt)
+        self.assertIn("thin parallel glazing lines", prompt)
+        self.assertIn("Include every clearly readable measurement", prompt)
+        self.assertIn("does not calibrate scale", prompt)
+        self.assertIn("12 x 18 ft", prompt)
         self.assertEqual(
             AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-image-test", status=AIUsageEvent.Status.SUCCESS).count(),
             1,
@@ -1263,3 +1271,11 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
         self.assertEqual(response.data["image"]["extra_data"]["source"], "ai_clean_floor_plan")
         self.assertEqual(project.images.count(), 2)
+        prompt = mock_generate_image_from_image.call_args.kwargs["prompt"]
+        self.assertIn("solid thick black line or wall band", prompt)
+        self.assertIn("joint corners", prompt)
+        self.assertIn("thin door leaf, hinge point, and swing arc", prompt)
+        self.assertIn("thin parallel glazing lines", prompt)
+        self.assertIn("Include every clearly readable measurement", prompt)
+        self.assertIn("does not calibrate scale", prompt)
+        self.assertIn("14 x 22 ft", prompt)
