@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { Design3DInspector, Design3DViewport } from "../components/Design3DStudio";
-import { DEFAULT_DESIGN_SETTINGS, buildDesignGeometry, createDesignTransform } from "../utils/designGeometry";
+import { DEFAULT_DESIGN_SETTINGS, createDesignTransform } from "../utils/designGeometry";
 import { SymbolIcon } from "../ui";
 
 const CANVAS_W = 1200;
@@ -2171,10 +2171,6 @@ export default function ProjectMarkupCanvas() {
   const activeMeasurementGeometry = isRoughPlan
     ? roughGeometry
     : calibratedMeasurementGeometry || (hasAiCleanPlanOverlay ? cleanPlanGeometry : null);
-  const currentDesignGeometry = useMemo(
-    () => buildDesignGeometry(annotations, activeMeasurementGeometry, roughPlan, designSettings),
-    [activeMeasurementGeometry, annotations, designSettings, roughPlan],
-  );
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
@@ -4441,22 +4437,6 @@ export default function ProjectMarkupCanvas() {
     dismissMeasurementCalibrationPrompt();
     setOpenSidebarSection("stroke");
     if (compactViewport) setMobileSettingsPanel("style");
-  }
-
-  function openFloorPlanIn3D(nextViewMode = "perspective") {
-    finishPenPath();
-    if (!currentDesignGeometry.walls.length) {
-      setWorkspaceView("2d");
-      setTool("wall");
-      setOpenToolGroup("");
-      setMessage("Add wall segments to this floor plan before creating its 3D elevation.");
-      return;
-    }
-    setDesignViewMode(nextViewMode);
-    setWorkspaceView("3d");
-    setOpenSidebarSection("design");
-    setMobileSettingsPanel("");
-    setMessage("");
   }
 
   async function saveAndCreate3D() {
