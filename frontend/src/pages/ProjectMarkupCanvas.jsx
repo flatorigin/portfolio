@@ -105,6 +105,52 @@ function formatPlanNumber(value) {
   return String(Number.isInteger(number) ? number : Number(number.toFixed(2)));
 }
 
+const PLAN_UNIT_INCHES = {
+  in: 1,
+  ft: 12,
+  cm: 1 / 2.54,
+  mm: 1 / 25.4,
+  m: 39.3700787402,
+};
+
+function parsePlanLengthToInches(value, unit = "ft") {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return 0;
+  const feetMatch = text.match(/(-?\d+(?:\.\d+)?)\s*(?:ft|')/);
+  const inchesMatch = text.match(/(-?\d+(?:\.\d+)?)\s*(?:in|")/);
+  if (feetMatch || inchesMatch) {
+    const feet = Number(feetMatch?.[1] || 0);
+    const inches = Number(inchesMatch?.[1] || 0);
+    return Math.max(0, feet * 12 + inches);
+  }
+  const number = Number(text);
+  const factor = PLAN_UNIT_INCHES[unit] || 0;
+  return Number.isFinite(number) && number > 0 ? number * factor : 0;
+}
+
+function formatPlanLengthFromInches(valueInches, unit = "ft") {
+  const value = Number(valueInches);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  if (unit === "ft") {
+    const feet = Math.floor(value / 12);
+    const inches = Number((value - feet * 12).toFixed(2));
+    return inches ? `${feet}'${formatPlanNumber(inches)}"` : `${feet}'`;
+  }
+  const factor = PLAN_UNIT_INCHES[unit] || 1;
+  const suffix = { in: '"', cm: " cm", mm: " mm", m: " m" }[unit] || ` ${unit}`;
+  return `${formatPlanNumber(value / factor)}${suffix}`;
+}
+
+function unclearDimensionInputs(geometry) {
+  const dimensions = Array.isArray(geometry?.dimensions) ? geometry.dimensions : [];
+  return dimensions.reduce((result, dimension) => {
+    if (dimension?.clarity === "unclear" && dimension?.id) {
+      result[dimension.id] = { value: "", unit: dimension.unit || geometry?.plan_bounds?.unit || "ft" };
+    }
+    return result;
+  }, {});
+}
+
 function readImageDimensions(url) {
   if (!url) return Promise.resolve(null);
   return new Promise((resolve) => {
@@ -1584,7 +1630,12 @@ export default function ProjectMarkupCanvas() {
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
+  const [showFloorPlanSetup, setShowFloorPlanSetup] = useState(false);
+  const [floorPlanSetup, setFloorPlanSetup] = useState({ width: "", length: "", unit: "ft" });
+  const [floorPlanSetupError, setFloorPlanSetupError] = useState("");
   const [pendingFloorPlanSave, setPendingFloorPlanSave] = useState(null);
+  const [dimensionInputs, setDimensionInputs] = useState({});
+  const [updatingFloorPlanDimensions, setUpdatingFloorPlanDimensions] = useState(false);
   const [savingFloorPlanBase, setSavingFloorPlanBase] = useState(false);
   const [floorPlanSaveError, setFloorPlanSaveError] = useState("");
   const [hideTextAndMeasurements, setHideTextAndMeasurements] = useState(false);
@@ -2262,10 +2313,35 @@ export default function ProjectMarkupCanvas() {
     setMessage("Project image selected. Confirm the source, then create the floor-plan image.");
   }
 
-  async function createCleanFloorPlanFromSketchSource() {
+  function openFloorPlanSetupDialog() {
     if (!sketchSource) {
       setSketchStatus({ phase: "error", progress: 0, fileName: "", detail: "Choose an uploaded image or upload a new sketch first." });
       setMessage("Choose an uploaded image or upload a new sketch first.");
+      return;
+    }
+    const bounds = plan?.plan_geometry?.plan_bounds;
+    setFloorPlanSetup((prev) => {
+      if (prev.width || prev.length || !Number(bounds?.width_inches) || !Number(bounds?.length_inches)) return prev;
+      const unit = bounds.unit && PLAN_UNIT_INCHES[bounds.unit] ? bounds.unit : prev.unit;
+      return {
+        width: formatPlanNumber(Number(bounds.width_inches) / PLAN_UNIT_INCHES[unit]),
+        length: formatPlanNumber(Number(bounds.length_inches) / PLAN_UNIT_INCHES[unit]),
+        unit,
+      };
+    });
+    setFloorPlanSetupError("");
+    setShowFloorPlanSetup(true);
+  }
+
+  async function createCleanFloorPlanFromSketchSource(setup = floorPlanSetup) {
+    if (!sketchSource) {
+      setSketchStatus({ phase: "error", progress: 0, fileName: "", detail: "Choose an uploaded image or upload a new sketch first." });
+      setMessage("Choose an uploaded image or upload a new sketch first.");
+      return;
+    }
+    if (!parsePlanLengthToInches(setup.width, setup.unit) || !parsePlanLengthToInches(setup.length, setup.unit)) {
+      setFloorPlanSetupError("Enter both the full width and full length before conversion.");
+      setShowFloorPlanSetup(true);
       return;
     }
     if (!planId && !isProjectImageMode) {
@@ -2275,6 +2351,7 @@ export default function ProjectMarkupCanvas() {
       return;
     }
 
+    setShowFloorPlanSetup(false);
     setSketchBusy(true);
     setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
     setMessage("");
@@ -2302,6 +2379,9 @@ export default function ProjectMarkupCanvas() {
         formData.append("source_width", String(sketchSource.width));
         formData.append("source_height", String(sketchSource.height));
       }
+      formData.append("gross_width", String(setup.width));
+      formData.append("gross_length", String(setup.length));
+      formData.append("gross_unit", setup.unit);
 
       const { data } = await api.post(endpoint, formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -2349,6 +2429,7 @@ export default function ProjectMarkupCanvas() {
         setMeasurementCalibrationInputLength(String(detectedCalibration.length || DEFAULT_MEASUREMENT_CALIBRATION.length));
         setMeasurementCalibrationPromptComplete(Number(detectedCalibration.scale || 0) > 0);
         setFloorPlanSaveError("");
+        setDimensionInputs(unclearDimensionInputs(detectedGeometry));
         setPendingFloorPlanSave({
           image: generatedImage,
           url: generatedUrl,
@@ -2367,6 +2448,63 @@ export default function ProjectMarkupCanvas() {
       setMessage(detail);
     } finally {
       setSketchBusy(false);
+    }
+  }
+
+  async function applyUnclearFloorPlanDimensions() {
+    if (!pendingFloorPlanSave?.image?.id) return;
+    const dimensions = Object.fromEntries(
+      Object.entries(dimensionInputs).filter(([, entry]) => parsePlanLengthToInches(entry?.value, entry?.unit) > 0),
+    );
+    if (!Object.keys(dimensions).length) {
+      setFloorPlanSaveError("Enter at least one unclear measurement before applying changes.");
+      return;
+    }
+
+    setUpdatingFloorPlanDimensions(true);
+    setFloorPlanSaveError("");
+    try {
+      const endpoint = planId
+        ? `/project-plans/${planId}/images/${pendingFloorPlanSave.image.id}/floor-plan-dimensions/`
+        : `/projects/${projectId}/images/${pendingFloorPlanSave.image.id}/floor-plan-dimensions/`;
+      const { data } = await api.post(endpoint, { dimensions });
+      const updatedImage = data.image || pendingFloorPlanSave.image;
+      const updatedGeometry = data.plan_geometry || pendingFloorPlanSave.planGeometry || {};
+      const updatedCalibration = data.measurement_calibration || pendingFloorPlanSave.measurementCalibration;
+      const updatedUrl = projectImageUrl(updatedImage) || pendingFloorPlanSave.url;
+
+      if (planId) {
+        setPlan((prev) =>
+          prev
+            ? {
+                ...prev,
+                plan_geometry: updatedGeometry,
+                images: (Array.isArray(prev.images) ? prev.images : []).map((image) =>
+                  String(image.id) === String(updatedImage.id) ? updatedImage : image,
+                ),
+              }
+            : prev,
+        );
+      } else {
+        setProjectImages((prev) =>
+          prev.map((image) => (String(image.id) === String(updatedImage.id) ? updatedImage : image)),
+        );
+      }
+      setBackgroundUrl(updatedUrl);
+      setMeasurementCalibration(updatedCalibration);
+      setMeasurementCalibrationInputLength(String(updatedCalibration?.length || DEFAULT_MEASUREMENT_CALIBRATION.length));
+      setDimensionInputs(unclearDimensionInputs(updatedGeometry));
+      setPendingFloorPlanSave({
+        image: updatedImage,
+        url: updatedUrl,
+        planGeometry: updatedGeometry,
+        measurementCalibration: updatedCalibration,
+      });
+      setMessage(`${data.applied_count || Object.keys(dimensions).length} measurement${(data.applied_count || Object.keys(dimensions).length) === 1 ? "" : "s"} added to the floor plan.`);
+    } catch (err) {
+      setFloorPlanSaveError(normalizeError(err, "Could not apply those measurements. Try again."));
+    } finally {
+      setUpdatingFloorPlanDimensions(false);
     }
   }
 
@@ -4112,6 +4250,16 @@ export default function ProjectMarkupCanvas() {
       done: sketchPhase === "ready",
     },
   ];
+  const floorPlanWidthInches = parsePlanLengthToInches(floorPlanSetup.width, floorPlanSetup.unit);
+  const floorPlanLengthInches = parsePlanLengthToInches(floorPlanSetup.length, floorPlanSetup.unit);
+  const floorPlanWorkspaceWidth = floorPlanWidthInches ? floorPlanWidthInches + 48 : 0;
+  const floorPlanWorkspaceLength = floorPlanLengthInches ? floorPlanLengthInches + 48 : 0;
+  const unclearFloorPlanDimensions = Array.isArray(pendingFloorPlanSave?.planGeometry?.dimensions)
+    ? pendingFloorPlanSave.planGeometry.dimensions.filter((dimension) => dimension?.clarity === "unclear")
+    : [];
+  const hasEnteredFloorPlanDimension = Object.values(dimensionInputs).some(
+    (entry) => parsePlanLengthToInches(entry?.value, entry?.unit) > 0,
+  );
 
   return (
     <div data-markup-editor className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50 max-lg:fixed max-lg:inset-0 max-lg:left-0 max-lg:right-0 max-lg:z-[100] max-lg:m-0 max-lg:flex max-lg:h-[100dvh] max-lg:min-h-0 max-lg:w-full max-lg:flex-col max-lg:overflow-hidden">
@@ -4209,6 +4357,142 @@ export default function ProjectMarkupCanvas() {
           </div>
         ) : null}
 
+        {showFloorPlanSetup ? (
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 px-4 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="floor-plan-setup-title"
+          >
+            <form
+              className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
+              onSubmit={(event) => {
+                event.preventDefault();
+                createCleanFloorPlanFromSketchSource(floorPlanSetup);
+              }}
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div>
+                  <h2 id="floor-plan-setup-title" className="text-base font-semibold text-slate-950">
+                    Set full plan size
+                  </h2>
+                  <p className="mt-1 text-sm leading-5 text-slate-600">
+                    Enter the gross width and length. The canvas will include 2 ft of open space on every side.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFloorPlanSetup(false)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200"
+                  aria-label="Close plan size"
+                >
+                  <SymbolIcon name="close" className="text-[20px]" />
+                </button>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-[1fr_1fr_82px] gap-2">
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-slate-600">Full width</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={floorPlanSetup.width}
+                      onChange={(event) => {
+                        setFloorPlanSetup((prev) => ({ ...prev, width: event.target.value }));
+                        setFloorPlanSetupError("");
+                      }}
+                      placeholder={floorPlanSetup.unit === "ft" ? "24'3\"" : "24.25"}
+                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                      autoFocus
+                    />
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-slate-600">Full length</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={floorPlanSetup.length}
+                      onChange={(event) => {
+                        setFloorPlanSetup((prev) => ({ ...prev, length: event.target.value }));
+                        setFloorPlanSetupError("");
+                      }}
+                      placeholder="30"
+                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                    />
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs font-medium text-slate-600">Unit</span>
+                    <select
+                      value={floorPlanSetup.unit}
+                      onChange={(event) => {
+                        const nextUnit = event.target.value;
+                        const widthInches = parsePlanLengthToInches(floorPlanSetup.width, floorPlanSetup.unit);
+                        const lengthInches = parsePlanLengthToInches(floorPlanSetup.length, floorPlanSetup.unit);
+                        setFloorPlanSetup({
+                          width: widthInches ? formatPlanNumber(widthInches / PLAN_UNIT_INCHES[nextUnit]) : "",
+                          length: lengthInches ? formatPlanNumber(lengthInches / PLAN_UNIT_INCHES[nextUnit]) : "",
+                          unit: nextUnit,
+                        });
+                        setFloorPlanSetupError("");
+                      }}
+                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                    >
+                      <option value="ft">ft</option>
+                      <option value="in">in</option>
+                      <option value="m">m</option>
+                      <option value="cm">cm</option>
+                      <option value="mm">mm</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  Feet and inches can be entered together, for example 24'3&quot;.
+                </p>
+                {floorPlanWorkspaceWidth && floorPlanWorkspaceLength ? (
+                  <div className="mt-3 border-y border-slate-200 py-3 text-sm text-slate-700">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Plan</span>
+                      <span className="font-semibold text-slate-950">
+                        {formatPlanLengthFromInches(floorPlanWidthInches, floorPlanSetup.unit)} x{" "}
+                        {formatPlanLengthFromInches(floorPlanLengthInches, floorPlanSetup.unit)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span>Canvas with margins</span>
+                      <span className="font-semibold text-slate-950">
+                        {formatPlanLengthFromInches(floorPlanWorkspaceWidth, floorPlanSetup.unit)} x{" "}
+                        {formatPlanLengthFromInches(floorPlanWorkspaceLength, floorPlanSetup.unit)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                {floorPlanSetupError ? (
+                  <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {floorPlanSetupError}
+                  </p>
+                ) : null}
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFloorPlanSetup(false)}
+                    className="inline-flex h-11 items-center justify-center rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!floorPlanWidthInches || !floorPlanLengthInches || sketchBusy}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <SymbolIcon name="architecture" className="text-[19px]" />
+                    Convert
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        ) : null}
+
         {pendingFloorPlanSave ? (
           <div
             className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 px-4 py-6"
@@ -4217,7 +4501,7 @@ export default function ProjectMarkupCanvas() {
             aria-labelledby="floor-plan-save-title"
             aria-describedby="floor-plan-save-description"
           >
-            <div className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
+            <div className="flex max-h-[calc(100dvh-3rem)] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <h2 id="floor-plan-save-title" className="text-base font-semibold text-slate-950">
                   Save floor plan before markup
@@ -4226,7 +4510,7 @@ export default function ProjectMarkupCanvas() {
                   Save this clean image as the base floor plan. Markup added afterward will remain on separate editable layers.
                 </p>
               </div>
-              <div className="bg-white p-4">
+              <div className="overflow-y-auto bg-white p-4">
                 <div className="flex max-h-64 min-h-40 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
                   <img
                     src={pendingFloorPlanSave.url}
@@ -4243,10 +4527,91 @@ export default function ProjectMarkupCanvas() {
                       {pendingFloorPlanSave.planGeometry.semantic_summary.window_count || 0} windows ·{" "}
                       {pendingFloorPlanSave.planGeometry.semantic_summary.stair_count || 0} stairs
                     </div>
-                    <div className={pendingFloorPlanSave.planGeometry.reference_measurement?.estimated ? "text-amber-700" : "text-emerald-700"}>
-                      {pendingFloorPlanSave.planGeometry.reference_measurement?.estimated ? "Estimated" : "Detected"} reference:{" "}
-                      {pendingFloorPlanSave.planGeometry.reference_measurement?.source_text || "Not available"}
+                    <div className="text-slate-700">
+                      Plan:{" "}
+                      <span className="font-semibold text-slate-900">
+                        {formatPlanLengthFromInches(
+                          pendingFloorPlanSave.planGeometry.plan_bounds?.width_inches,
+                          pendingFloorPlanSave.planGeometry.plan_bounds?.unit,
+                        )} x{" "}
+                        {formatPlanLengthFromInches(
+                          pendingFloorPlanSave.planGeometry.plan_bounds?.length_inches,
+                          pendingFloorPlanSave.planGeometry.plan_bounds?.unit,
+                        )}
+                      </span>
+                      {" "}with 2 ft on every side
                     </div>
+                  </div>
+                ) : null}
+                {unclearFloorPlanDimensions.length ? (
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">Enter unclear measurements</div>
+                        <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                          Clear sketch dimensions are already printed. Add only the values the sketch could not confirm.
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold text-amber-700">
+                        {unclearFloorPlanDimensions.length} unclear
+                      </span>
+                    </div>
+                    <div className="mt-3 max-h-52 divide-y divide-slate-200 overflow-y-auto border-y border-slate-200">
+                      {unclearFloorPlanDimensions.map((dimension) => (
+                        <div key={dimension.id} className="grid grid-cols-[minmax(0,1fr)_112px_72px] items-center gap-2 py-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-semibold capitalize text-slate-800">
+                              {String(dimension.kind || "other").replaceAll("_", " ")}
+                            </div>
+                            <div className="truncate text-xs text-slate-500">
+                              {dimension.source_text ? `Sketch text: ${dimension.source_text}` : "Value could not be read"}
+                            </div>
+                          </div>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={dimensionInputs[dimension.id]?.value || ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setDimensionInputs((prev) => ({
+                                ...prev,
+                                [dimension.id]: { value, unit: prev[dimension.id]?.unit || dimension.unit || "ft" },
+                              }));
+                              setFloorPlanSaveError("");
+                            }}
+                            placeholder="Length"
+                            aria-label={`Measurement for ${String(dimension.kind || "dimension").replaceAll("_", " ")}`}
+                            className="h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                          />
+                          <select
+                            value={dimensionInputs[dimension.id]?.unit || dimension.unit || "ft"}
+                            onChange={(event) =>
+                              setDimensionInputs((prev) => ({
+                                ...prev,
+                                [dimension.id]: { value: prev[dimension.id]?.value || "", unit: event.target.value },
+                              }))
+                            }
+                            aria-label="Measurement unit"
+                            className="h-9 rounded-md border border-slate-300 px-1 text-sm text-slate-900 outline-none focus:border-blue-500"
+                          >
+                            <option value="ft">ft</option>
+                            <option value="in">in</option>
+                            <option value="m">m</option>
+                            <option value="cm">cm</option>
+                            <option value="mm">mm</option>
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyUnclearFloorPlanDimensions}
+                      disabled={updatingFloorPlanDimensions || !hasEnteredFloorPlanDimension}
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <SymbolIcon name="straighten" className="text-[18px]" />
+                      {updatingFloorPlanDimensions ? "Applying measurements..." : "Apply entered measurements"}
+                    </button>
                   </div>
                 ) : null}
                 {floorPlanSaveError ? (
@@ -4591,7 +4956,7 @@ export default function ProjectMarkupCanvas() {
                     <button
                       type="button"
                       disabled={sketchBusy || !sketchSource}
-                      onClick={createCleanFloorPlanFromSketchSource}
+                      onClick={openFloorPlanSetupDialog}
                       className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                     >
                       <SymbolIcon name="floor_plan" className="text-[18px]" />

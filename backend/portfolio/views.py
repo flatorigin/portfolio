@@ -76,9 +76,11 @@ from .project_intake import (
     summarize_markup_notes,
 )
 from .floor_plan import (
+    apply_dimension_overrides,
     build_floor_plan_extraction_prompts,
     measurement_calibration_from_geometry,
     normalize_plan_geometry,
+    parse_length_to_inches,
     render_plan_geometry_png,
     source_image_dimensions,
 )
@@ -229,7 +231,22 @@ def infer_supported_image_content_type(file_name):
     return ""
 
 
-def extract_and_render_floor_plan(*, image_bytes, content_type, title, category, location="", notes=""):
+def validate_gross_plan_dimensions(data):
+    gross_width = str(data.get("gross_width") or "").strip()
+    gross_length = str(data.get("gross_length") or "").strip()
+    gross_unit = str(data.get("gross_unit") or "ft").strip().lower()
+    if gross_unit not in {"ft", "in", "m", "cm", "mm"}:
+        raise ValidationError({"gross_unit": "Choose a supported measurement unit."})
+    if parse_length_to_inches(gross_width, gross_unit) <= 0:
+        raise ValidationError({"gross_width": "Enter the full plan width before conversion."})
+    if parse_length_to_inches(gross_length, gross_unit) <= 0:
+        raise ValidationError({"gross_length": "Enter the full plan length before conversion."})
+    return gross_width, gross_length, gross_unit
+
+
+def extract_and_render_floor_plan(
+    *, image_bytes, content_type, title, category, location="", notes="", gross_width, gross_length, gross_unit
+):
     source_width, source_height = source_image_dimensions(image_bytes)
     system_prompt, user_prompt = build_floor_plan_extraction_prompts(
         title=title,
@@ -238,6 +255,9 @@ def extract_and_render_floor_plan(*, image_bytes, content_type, title, category,
         notes=notes,
         source_width=source_width,
         source_height=source_height,
+        gross_width=gross_width,
+        gross_length=gross_length,
+        gross_unit=gross_unit,
     )
     result = generate_text_with_image(
         feature=AIUsageEvent.Feature.PLANNER_DRAFT,
@@ -247,7 +267,12 @@ def extract_and_render_floor_plan(*, image_bytes, content_type, title, category,
         image_content_type=content_type,
     )
     payload = parse_ai_json(result["text"])
-    geometry = normalize_plan_geometry(payload)
+    geometry = normalize_plan_geometry(
+        payload,
+        gross_width=gross_width,
+        gross_length=gross_length,
+        gross_unit=gross_unit,
+    )
     return {
         "geometry": geometry,
         "measurement_calibration": measurement_calibration_from_geometry(geometry),
@@ -257,6 +282,22 @@ def extract_and_render_floor_plan(*, image_bytes, content_type, title, category,
         "prompt_chars": len(system_prompt) + len(user_prompt),
         "response_chars": len(result["text"]),
     }
+
+
+def replace_floor_plan_image_file(image_instance, image_bytes):
+    old_name = str(getattr(image_instance.image, "name", "") or "")
+    image_instance.image.save(
+        f"clean-floor-plan-{timezone.now().strftime('%Y%m%d%H%M%S%f')}.png",
+        ContentFile(image_bytes),
+        save=False,
+    )
+    image_instance.save()
+    new_name = str(getattr(image_instance.image, "name", "") or "")
+    if old_name and old_name != new_name and default_storage.exists(old_name):
+        try:
+            default_storage.delete(old_name)
+        except Exception:
+            logger.warning("Could not delete replaced floor-plan image %s", old_name, exc_info=True)
 
 
 class FeedbackTicketListCreateView(generics.ListCreateAPIView):
@@ -979,6 +1020,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if project.owner_id != request.user.id:
             raise PermissionDenied("Only the project owner can create a clean floor plan from this image.")
 
+        gross_width, gross_length, gross_unit = validate_gross_plan_dimensions(request.data)
         feature = AIUsageEvent.Feature.PLANNER_DRAFT
         _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
         sketch = request.FILES.get("sketch") or request.FILES.get("image")
@@ -1022,6 +1064,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 category=project.category,
                 location=project.location,
                 notes=project.summary or project.job_summary or "",
+                gross_width=gross_width,
+                gross_length=gross_length,
+                gross_unit=gross_unit,
             )
             model_name = result["model"]
             generated = ProjectImage.objects.create(
@@ -1070,6 +1115,39 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 "measurement_calibration": result["measurement_calibration"],
             },
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="images/(?P<img_id>[^/.]+)/floor-plan-dimensions")
+    def image_floor_plan_dimensions(self, request, pk=None, img_id=None):
+        project = self.get_object()
+        if project.owner_id != request.user.id:
+            raise PermissionDenied("Only the project owner can update floor-plan dimensions.")
+        generated = get_object_or_404(ProjectImage, id=img_id, project=project)
+        extra_data = generated.extra_data if isinstance(generated.extra_data, dict) else {}
+        geometry = extra_data.get("plan_geometry")
+        try:
+            updated_geometry, applied_count = apply_dimension_overrides(
+                geometry,
+                request.data.get("dimensions"),
+            )
+        except ValueError as exc:
+            raise ValidationError({"dimensions": str(exc)})
+        if applied_count <= 0:
+            raise ValidationError({"dimensions": "Enter at least one valid unclear measurement."})
+        calibration = measurement_calibration_from_geometry(updated_geometry)
+        generated.extra_data = {
+            **extra_data,
+            "plan_geometry": updated_geometry,
+            "measurement_calibration": calibration,
+        }
+        replace_floor_plan_image_file(generated, render_plan_geometry_png(updated_geometry))
+        return Response(
+            {
+                "image": ProjectImageSerializer(generated, context={"request": request}).data,
+                "plan_geometry": updated_geometry,
+                "measurement_calibration": calibration,
+                "applied_count": applied_count,
+            }
         )
 
     def _clean_string_list(self, values):
@@ -1397,6 +1475,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="sketch-to-clean-floor-plan")
     def sketch_to_clean_floor_plan(self, request, pk=None):
         plan = self.get_object()
+        gross_width, gross_length, gross_unit = validate_gross_plan_dimensions(request.data)
         feature = AIUsageEvent.Feature.PLANNER_DRAFT
         _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
         sketch = request.FILES.get("sketch") or request.FILES.get("image")
@@ -1442,6 +1521,9 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 category=plan.project_type,
                 location=plan.house_location,
                 notes=plan.issue_summary or plan.notes or "",
+                gross_width=gross_width,
+                gross_length=gross_length,
+                gross_unit=gross_unit,
             )
             model_name = result["model"]
             generated = ProjectPlanImage.objects.create(
@@ -1485,6 +1567,32 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 "measurement_calibration": result["measurement_calibration"],
             },
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="images/(?P<img_id>[^/.]+)/floor-plan-dimensions")
+    def floor_plan_dimensions(self, request, pk=None, img_id=None):
+        plan = self.get_object()
+        generated = get_object_or_404(ProjectPlanImage, id=img_id, project_plan=plan)
+        try:
+            updated_geometry, applied_count = apply_dimension_overrides(
+                plan.plan_geometry,
+                request.data.get("dimensions"),
+            )
+        except ValueError as exc:
+            raise ValidationError({"dimensions": str(exc)})
+        if applied_count <= 0:
+            raise ValidationError({"dimensions": "Enter at least one valid unclear measurement."})
+        calibration = measurement_calibration_from_geometry(updated_geometry)
+        plan.plan_geometry = updated_geometry
+        plan.save(update_fields=["plan_geometry", "updated_at"])
+        replace_floor_plan_image_file(generated, render_plan_geometry_png(updated_geometry))
+        return Response(
+            {
+                "image": ProjectPlanImageSerializer(generated, context={"request": request}).data,
+                "plan_geometry": updated_geometry,
+                "measurement_calibration": calibration,
+                "applied_count": applied_count,
+            }
         )
 
     def _build_plan_text(self, plan):

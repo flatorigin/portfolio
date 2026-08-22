@@ -59,6 +59,34 @@ def semantic_floor_plan_ai_result():
                 ],
                 "stairs": [],
                 "rooms": [{"id": "r1", "label": "Kitchen", "x": 430, "y": 280, "confidence": 0.85}],
+                "dimensions": [
+                    {
+                        "id": "dim-clear",
+                        "x1": 100,
+                        "y1": 100,
+                        "x2": 500,
+                        "y2": 100,
+                        "value": 12,
+                        "unit": "ft",
+                        "source_text": "12'",
+                        "kind": "wall_segment",
+                        "clarity": "clear",
+                        "confidence": 0.91,
+                    },
+                    {
+                        "id": "dim-unclear",
+                        "x1": 500,
+                        "y1": 100,
+                        "x2": 900,
+                        "y2": 100,
+                        "value": None,
+                        "unit": "ft",
+                        "source_text": "1?'",
+                        "kind": "wall_segment",
+                        "clarity": "unclear",
+                        "confidence": 0.35,
+                    },
+                ],
                 "reference_measurement": {"wall_id": "w1", "value": 24, "unit": "in", "source_text": "24\"", "confidence": 0.94},
                 "uncertainty_notes": [],
             }
@@ -1218,7 +1246,7 @@ class ProjectPlannerTests(APITestCase):
         self.client.force_authenticate(user=self.homeowner)
         response = self.client.post(
             f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
-            {"sketch": sketch, "width": "12", "length": "18", "unit": "ft"},
+            {"sketch": sketch, "gross_width": "24'3\"", "gross_length": "30", "gross_unit": "ft"},
             format="multipart",
         )
 
@@ -1229,16 +1257,70 @@ class ProjectPlannerTests(APITestCase):
         self.assertIn("shared node", prompt)
         self.assertIn("angles, offsets, recesses, extensions", prompt)
         self.assertIn("select exactly one clearest dimension", prompt)
+        self.assertIn("User-confirmed gross plan size: 24'3\" x 30 ft", prompt)
+        self.assertIn("Return unclear dimensions too", prompt)
         plan.refresh_from_db()
         self.assertEqual(plan.plan_geometry["schema_version"], 1)
         self.assertEqual(plan.plan_geometry["semantic_summary"]["wall_count"], 6)
         self.assertEqual(plan.plan_geometry["semantic_summary"]["door_count"], 1)
-        self.assertEqual(response.data["measurement_calibration"]["length"], 24)
+        self.assertEqual(plan.plan_geometry["plan_bounds"]["width_inches"], 291)
+        self.assertEqual(plan.plan_geometry["workspace"]["width_inches"], 339)
+        self.assertEqual(plan.plan_geometry["semantic_summary"]["clear_dimension_count"], 3)
+        self.assertEqual(plan.plan_geometry["semantic_summary"]["unclear_dimension_count"], 1)
+        self.assertEqual(response.data["measurement_calibration"]["length"], 24.25)
         self.assertFalse(response.data["plan_geometry"]["reference_measurement"]["estimated"])
         self.assertEqual(
             AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-test", status=AIUsageEvent.Status.SUCCESS).count(),
             1,
         )
+
+    @patch("portfolio.views.generate_text_with_image")
+    def test_clean_floor_plan_requires_gross_dimensions_before_ai(self, mock_generate_text_with_image):
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
+            {"sketch": sketch},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("full plan width", str(response.data))
+        mock_generate_text_with_image.assert_not_called()
+
+    @patch("portfolio.views.generate_text_with_image")
+    def test_unclear_floor_plan_dimension_can_be_entered_without_another_ai_call(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        created = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
+            {"sketch": sketch, "gross_width": "24", "gross_length": "30", "gross_unit": "ft"},
+            format="multipart",
+        )
+        image_id = created.data["image"]["id"]
+        original_image_name = ProjectPlanImage.objects.get(id=image_id).image.name
+
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/images/{image_id}/floor-plan-dimensions/",
+            {"dimensions": {"dim-unclear": {"value": "13'6\"", "unit": "ft"}}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["applied_count"], 1)
+        corrected = next(item for item in response.data["plan_geometry"]["dimensions"] if item["id"] == "dim-unclear")
+        self.assertEqual(corrected["value_inches"], 162)
+        self.assertEqual(corrected["clarity"], "user_entered")
+        self.assertEqual(response.data["plan_geometry"]["semantic_summary"]["unclear_dimension_count"], 0)
+        plan.refresh_from_db()
+        self.assertEqual(plan.plan_geometry["semantic_summary"]["unclear_dimension_count"], 0)
+        self.assertNotEqual(ProjectPlanImage.objects.get(id=image_id).image.name, original_image_name)
+        self.assertEqual(mock_generate_text_with_image.call_count, 1)
 
     @patch("portfolio.views.generate_text_with_image")
     def test_project_image_sketch_to_rough_plan_uses_existing_image(self, mock_generate_text_with_image):
@@ -1293,7 +1375,12 @@ class ProjectPlannerTests(APITestCase):
         self.client.force_authenticate(user=self.homeowner)
         response = self.client.post(
             f"/api/projects/{project.id}/images/{project_image.id}/sketch-to-clean-floor-plan/",
-            {"source_image_id": str(project_image.id)},
+            {
+                "source_image_id": str(project_image.id),
+                "gross_width": "24",
+                "gross_length": "30",
+                "gross_unit": "ft",
+            },
             format="multipart",
         )
 

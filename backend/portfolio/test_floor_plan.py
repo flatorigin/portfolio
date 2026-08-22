@@ -1,11 +1,14 @@
 from io import BytesIO
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 from PIL import Image
 
 from .floor_plan import (
+    apply_dimension_overrides,
     measurement_calibration_from_geometry,
     normalize_plan_geometry,
+    parse_length_to_inches,
     render_plan_geometry_png,
 )
 
@@ -39,9 +42,40 @@ class FloorPlanGeometryTests(SimpleTestCase):
                 {"id": "s1", "points": [{"x": 200, "y": 200}, {"x": 350, "y": 200}, {"x": 350, "y": 400}, {"x": 200, "y": 400}], "direction": "up", "step_count": 8, "confidence": 0.8}
             ],
             "rooms": [{"id": "r1", "label": "Living", "x": 500, "y": 300, "confidence": 0.8}],
+            "dimensions": [
+                {
+                    "id": "dim-clear",
+                    "x1": 100,
+                    "y1": 100,
+                    "x2": 800,
+                    "y2": 100,
+                    "value": 24,
+                    "unit": "in",
+                    "source_text": '24"',
+                    "kind": "wall_segment",
+                    "clarity": "clear",
+                    "confidence": 0.95,
+                },
+                {
+                    "id": "dim-unclear",
+                    "x1": 800,
+                    "y1": 100,
+                    "x2": 900,
+                    "y2": 400,
+                    "value": None,
+                    "unit": "in",
+                    "source_text": '3?"',
+                    "kind": "opening",
+                    "clarity": "unclear",
+                    "confidence": 0.35,
+                },
+            ],
             "reference_measurement": reference,
             "uncertainty_notes": [],
         }
+
+    def test_mixed_feet_and_inches_are_parsed(self):
+        self.assertEqual(parse_length_to_inches("24'3\"", "ft"), 291)
 
     def test_reference_scales_every_wall_proportionally_and_preserves_angles(self):
         geometry = normalize_plan_geometry(
@@ -67,6 +101,49 @@ class FloorPlanGeometryTests(SimpleTestCase):
         self.assertTrue(geometry["review_required"])
         self.assertIn("1 ft proportional reference", geometry["reference_measurement"]["source_text"])
 
+    def test_gross_dimensions_define_plan_and_workspace_with_two_feet_per_side(self):
+        geometry = normalize_plan_geometry(
+            self.payload({"wall_id": "w1", "value": 24, "unit": "in", "source_text": '24"'}),
+            gross_width="24'3\"",
+            gross_length="30",
+            gross_unit="ft",
+        )
+
+        self.assertEqual(geometry["plan_bounds"]["width_inches"], 291)
+        self.assertEqual(geometry["plan_bounds"]["length_inches"], 360)
+        self.assertEqual(geometry["workspace"]["margin_inches_each_side"], 24)
+        self.assertEqual(geometry["workspace"]["width_inches"], 339)
+        self.assertEqual(geometry["workspace"]["length_inches"], 408)
+        self.assertEqual(geometry["reference_measurement"]["dimension_id"], "gross-width")
+        self.assertEqual(geometry["reference_measurement"]["value"], 24.25)
+        self.assertEqual(geometry["semantic_summary"]["clear_dimension_count"], 3)
+        self.assertEqual(geometry["semantic_summary"]["unclear_dimension_count"], 1)
+
+    def test_unclear_dimension_can_be_entered_without_changing_clear_dimensions(self):
+        geometry = normalize_plan_geometry(
+            self.payload(),
+            gross_width="24",
+            gross_length="30",
+            gross_unit="ft",
+        )
+        clear_before = next(item for item in geometry["dimensions"] if item["id"] == "dim-clear")
+
+        updated, applied = apply_dimension_overrides(
+            geometry,
+            {
+                "dim-clear": {"value": "30", "unit": "in"},
+                "dim-unclear": {"value": "36", "unit": "in"},
+            },
+        )
+
+        clear_after = next(item for item in updated["dimensions"] if item["id"] == "dim-clear")
+        corrected = next(item for item in updated["dimensions"] if item["id"] == "dim-unclear")
+        self.assertEqual(applied, 1)
+        self.assertEqual(clear_after["value_inches"], clear_before["value_inches"])
+        self.assertEqual(corrected["value_inches"], 36)
+        self.assertEqual(corrected["clarity"], "user_entered")
+        self.assertEqual(updated["semantic_summary"]["unclear_dimension_count"], 0)
+
     def test_renderer_outputs_canvas_png_and_calibration(self):
         geometry = normalize_plan_geometry(
             self.payload({"wall_id": "w1", "value": 2, "unit": "ft", "source_text": "2 ft", "confidence": 0.95})
@@ -80,3 +157,16 @@ class FloorPlanGeometryTests(SimpleTestCase):
         self.assertEqual(calibration["length"], 2)
         self.assertEqual(calibration["unit"], "ft")
         self.assertGreater(calibration["scale"], 0)
+
+    @patch("portfolio.floor_plan._draw_dimension")
+    def test_renderer_prints_every_clear_dimension(self, mock_draw_dimension):
+        geometry = normalize_plan_geometry(
+            self.payload(),
+            gross_width="24",
+            gross_length="30",
+            gross_unit="ft",
+        )
+
+        render_plan_geometry_png(geometry)
+
+        self.assertEqual(mock_draw_dimension.call_count, 3)

@@ -1,5 +1,7 @@
 from io import BytesIO
+import copy
 import math
+import re
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 
@@ -8,6 +10,7 @@ PLAN_CANVAS_WIDTH = 1200
 PLAN_CANVAS_HEIGHT = 760
 PLAN_MARGIN = 82
 FALLBACK_REFERENCE_INCHES = 12.0
+WORKSPACE_MARGIN_INCHES = 24.0
 
 
 def _number(value, default=0.0, minimum=None, maximum=None):
@@ -52,6 +55,21 @@ def _unit_to_inches(value, unit):
     return _number(value, 0, 0) * factors.get(str(unit or "").strip().lower(), 0)
 
 
+def parse_length_to_inches(value, unit="ft"):
+    if isinstance(value, (int, float)):
+        return _unit_to_inches(value, _canonical_unit(unit))
+    text = str(value or "").strip().lower().replace("feet", "ft").replace("foot", "ft")
+    if not text:
+        return 0
+    feet_match = re.search(r"(-?\d+(?:\.\d+)?)\s*(?:ft|')", text)
+    inches_match = re.search(r"(-?\d+(?:\.\d+)?)\s*(?:in|\")", text)
+    if feet_match or inches_match:
+        feet = _number(feet_match.group(1), 0) if feet_match else 0
+        inches = _number(inches_match.group(1), 0) if inches_match else 0
+        return max(0, feet * 12 + inches)
+    return _unit_to_inches(text, _canonical_unit(unit))
+
+
 def _canonical_unit(unit):
     normalized = str(unit or "").strip().lower()
     aliases = {
@@ -62,6 +80,26 @@ def _canonical_unit(unit):
     }
     normalized = aliases.get(normalized, normalized)
     return normalized if normalized in {"in", "ft", "cm", "mm", "m"} else "in"
+
+
+def format_length_from_inches(value_inches, unit="ft"):
+    value_inches = _number(value_inches, 0, 0)
+    unit = _canonical_unit(unit)
+    if unit == "ft":
+        whole_feet = int(value_inches // 12)
+        inches = round(value_inches - whole_feet * 12, 2)
+        if abs(inches) < 0.01:
+            return f"{whole_feet}'"
+        inches_text = f"{inches:g}"
+        return f"{whole_feet}'{inches_text}\""
+    values = {
+        "in": value_inches,
+        "cm": value_inches * 2.54,
+        "mm": value_inches * 25.4,
+        "m": value_inches / 39.3700787402,
+    }
+    suffix = {"in": '"', "cm": " cm", "mm": " mm", "m": " m"}[unit]
+    return f"{values[unit]:.2f}".rstrip("0").rstrip(".") + suffix
 
 
 def source_image_dimensions(image_bytes):
@@ -81,6 +119,9 @@ def build_floor_plan_extraction_prompts(
     notes="",
     source_width=0,
     source_height=0,
+    gross_width="",
+    gross_length="",
+    gross_unit="ft",
 ):
     coordinate_width = 1000
     coordinate_height = (
@@ -101,6 +142,7 @@ Project category: {category or 'general project'}
 Project location: {location or 'not provided'}
 Project notes: {notes or 'not provided'}
 Source image pixels: {source_width or 'unknown'} x {source_height or 'unknown'}
+User-confirmed gross plan size: {gross_width} x {gross_length} {gross_unit}
 
 GEOMETRY RULES
 1. Use a coordinate plane {coordinate_width} wide by {coordinate_height} high. X increases right and Y increases down. Preserve the source aspect ratio.
@@ -110,6 +152,13 @@ GEOMETRY RULES
 5. Detect doors, windows, and open passages. Anchor every opening to one wall using position_ratio from 0 to 1 at its center and width_ratio relative to that wall.
 6. Detect stairs as an outline polygon, direction when visible, and step count when countable.
 7. Preserve room labels only when legible or strongly implied. Never invent a room label from furniture alone.
+
+DIMENSION RULES
+1. Detect every visible dimension line and associate it with the two geometry endpoints it measures.
+2. Return clear dimensions with numeric value, unit, exact source_text, kind, and confidence.
+3. Return unclear dimensions too, but use value null, clarity "unclear", and retain any partially legible source_text. Never guess unclear digits.
+4. Classify kind as overall_width, overall_length, wall_segment, opening, room, or other.
+5. The user-confirmed gross width and length above are authoritative. Do not replace them with a conflicting sketch reading.
 
 REFERENCE SCALE RULES
 1. Read all written dimensions, but select exactly one clearest dimension that is tied to a specific wall segment as reference_measurement.
@@ -125,23 +174,30 @@ Return exactly this JSON shape:
   "openings": [{{"id": "d1", "type": "door", "wall_id": "w1", "position_ratio": 0.5, "width_ratio": 0.15, "hinge": "start", "swing_side": "left", "label": "", "confidence": 0.85}}],
   "stairs": [{{"id": "s1", "points": [{{"x": 100, "y": 100}}, {{"x": 220, "y": 100}}, {{"x": 220, "y": 300}}, {{"x": 100, "y": 300}}], "direction": "up", "step_count": 10, "confidence": 0.8}}],
   "rooms": [{{"id": "r1", "label": "Kitchen", "x": 300, "y": 300, "confidence": 0.8}}],
+  "dimensions": [{{"id": "dim1", "x1": 100, "y1": 100, "x2": 900, "y2": 100, "value": 24.25, "unit": "ft", "source_text": "24'3\"", "kind": "overall_width", "clarity": "clear", "confidence": 0.95}}],
   "reference_measurement": {{"wall_id": "w1", "value": 24, "unit": "in", "source_text": "24\"", "confidence": 0.9}},
   "uncertainty_notes": ["Short factual uncertainty"]
 }}
 
 Allowed opening types: door, window, opening. Allowed hinge values: start, end, unknown. Allowed swing_side values: left, right, unknown.
-Return every array even when empty. Use reference_measurement null when unavailable. Return JSON only, without markdown.
+Return every array, including dimensions, even when empty. Use reference_measurement null when unavailable. Return JSON only, without markdown.
 """.strip()
     return system_prompt, user_prompt
 
 
-def normalize_plan_geometry(payload):
+def normalize_plan_geometry(payload, *, gross_width="", gross_length="", gross_unit="ft"):
     if not isinstance(payload, dict):
         raise ValueError("The floor-plan analysis did not return an object.")
     source = payload.get("plan_geometry") if isinstance(payload.get("plan_geometry"), dict) else payload
     coordinate_system = source.get("coordinate_system") if isinstance(source.get("coordinate_system"), dict) else {}
     source_width = _number(coordinate_system.get("width"), 1000, 100, 10000)
     source_height = _number(coordinate_system.get("height"), 1000, 100, 10000)
+    gross_unit = _canonical_unit(gross_unit)
+    gross_width_inches = parse_length_to_inches(gross_width, gross_unit)
+    gross_length_inches = parse_length_to_inches(gross_length, gross_unit)
+    if bool(gross_width_inches) != bool(gross_length_inches):
+        raise ValueError("Enter both the gross width and gross length before creating the floor plan.")
+    has_gross_dimensions = gross_width_inches > 0 and gross_length_inches > 0
 
     raw_nodes = source.get("nodes") if isinstance(source.get("nodes"), list) else []
     nodes = []
@@ -226,15 +282,49 @@ def normalize_plan_geometry(payload):
     max_y = max(node["source_y"] for node in nodes)
     extent_width = max(1, max_x - min_x)
     extent_height = max(1, max_y - min_y)
-    drawable_width = PLAN_CANVAS_WIDTH - (PLAN_MARGIN * 2)
-    drawable_height = PLAN_CANVAS_HEIGHT - (PLAN_MARGIN * 2)
-    scale = min(drawable_width / extent_width, drawable_height / extent_height)
-    offset_x = (PLAN_CANVAS_WIDTH - extent_width * scale) / 2
-    offset_y = (PLAN_CANVAS_HEIGHT - extent_height * scale) / 2
+    if has_gross_dimensions:
+        workspace_width_inches = gross_width_inches + WORKSPACE_MARGIN_INCHES * 2
+        workspace_length_inches = gross_length_inches + WORKSPACE_MARGIN_INCHES * 2
+        pixels_per_inch = min(
+            (PLAN_CANVAS_WIDTH - 20) / workspace_width_inches,
+            (PLAN_CANVAS_HEIGHT - 20) / workspace_length_inches,
+        )
+        workspace_pixel_width = workspace_width_inches * pixels_per_inch
+        workspace_pixel_height = workspace_length_inches * pixels_per_inch
+        workspace_left = (PLAN_CANVAS_WIDTH - workspace_pixel_width) / 2
+        workspace_top = (PLAN_CANVAS_HEIGHT - workspace_pixel_height) / 2
+        plan_left = workspace_left + WORKSPACE_MARGIN_INCHES * pixels_per_inch
+        plan_top = workspace_top + WORKSPACE_MARGIN_INCHES * pixels_per_inch
+        plan_pixel_width = gross_width_inches * pixels_per_inch
+        plan_pixel_height = gross_length_inches * pixels_per_inch
+
+        def transform_source_xy(source_x, source_y):
+            return {
+                "x": round(plan_left + ((source_x - min_x) / extent_width) * plan_pixel_width, 2),
+                "y": round(plan_top + ((source_y - min_y) / extent_height) * plan_pixel_height, 2),
+            }
+    else:
+        drawable_width = PLAN_CANVAS_WIDTH - (PLAN_MARGIN * 2)
+        drawable_height = PLAN_CANVAS_HEIGHT - (PLAN_MARGIN * 2)
+        source_scale = min(drawable_width / extent_width, drawable_height / extent_height)
+        plan_left = (PLAN_CANVAS_WIDTH - extent_width * source_scale) / 2
+        plan_top = (PLAN_CANVAS_HEIGHT - extent_height * source_scale) / 2
+        plan_pixel_width = extent_width * source_scale
+        plan_pixel_height = extent_height * source_scale
+        workspace_left = plan_left
+        workspace_top = plan_top
+        workspace_pixel_width = plan_pixel_width
+        workspace_pixel_height = plan_pixel_height
+
+        def transform_source_xy(source_x, source_y):
+            return {
+                "x": round(plan_left + (source_x - min_x) * source_scale, 2),
+                "y": round(plan_top + (source_y - min_y) * source_scale, 2),
+            }
 
     for node in nodes:
-        node["x"] = round(offset_x + (node.pop("source_x") - min_x) * scale, 2)
-        node["y"] = round(offset_y + (node.pop("source_y") - min_y) * scale, 2)
+        transformed = transform_source_xy(node.pop("source_x"), node.pop("source_y"))
+        node.update(transformed)
 
     for wall in walls:
         start = node_by_id[wall["start_node_id"]]
@@ -247,7 +337,27 @@ def normalize_plan_geometry(payload):
 
     raw_reference = source.get("reference_measurement")
     reference = None
-    if isinstance(raw_reference, dict):
+    if has_gross_dimensions:
+        gross_value = gross_width_inches / {
+            "in": 1,
+            "ft": 12,
+            "cm": 1 / 2.54,
+            "mm": 1 / 25.4,
+            "m": 39.3700787402,
+        }[gross_unit]
+        reference = {
+            "wall_id": "",
+            "dimension_id": "gross-width",
+            "value": round(gross_value, 4),
+            "unit": gross_unit,
+            "value_inches": round(gross_width_inches, 4),
+            "source_text": format_length_from_inches(gross_width_inches, gross_unit),
+            "confidence": 1,
+            "estimated": False,
+            "source": "user_gross_dimensions",
+            "pixel_length": round(plan_pixel_width, 3),
+        }
+    elif isinstance(raw_reference, dict):
         wall_id = _clean_text(raw_reference.get("wall_id"), 64)
         unit = _canonical_unit(raw_reference.get("unit"))
         value = _number(raw_reference.get("value"), 0, 0)
@@ -255,31 +365,32 @@ def normalize_plan_geometry(payload):
         if wall_id in wall_by_id and value_inches > 0:
             reference = {
                 "wall_id": wall_id,
+                "dimension_id": "",
                 "value": round(value, 4),
                 "unit": unit,
                 "value_inches": round(value_inches, 4),
                 "source_text": _clean_text(raw_reference.get("source_text"), 40) or f"{value:g} {unit}",
                 "confidence": _confidence(raw_reference.get("confidence"), 0.7),
                 "estimated": False,
+                "source": "sketch",
             }
     if reference is None:
-        fallback_wall = max(
-            walls,
-            key=lambda wall: (wall["kind"] == "exterior", wall["pixel_length"]),
-        )
+        fallback_wall = max(walls, key=lambda wall: (wall["kind"] == "exterior", wall["pixel_length"]))
         reference = {
             "wall_id": fallback_wall["id"],
+            "dimension_id": "",
             "value": 1,
             "unit": "ft",
             "value_inches": FALLBACK_REFERENCE_INCHES,
             "source_text": "1 ft proportional reference",
             "confidence": 0,
             "estimated": True,
+            "source": "fallback",
         }
-
-    reference_wall = wall_by_id[reference["wall_id"]]
-    pixels_per_inch = reference_wall["pixel_length"] / reference["value_inches"]
-    reference["pixel_length"] = reference_wall["pixel_length"]
+    if not has_gross_dimensions:
+        reference_wall = wall_by_id[reference["wall_id"]]
+        pixels_per_inch = reference_wall["pixel_length"] / reference["value_inches"]
+        reference["pixel_length"] = reference_wall["pixel_length"]
     reference["pixels_per_inch"] = round(pixels_per_inch, 6)
     for wall in walls:
         wall["length_inches"] = round(wall["pixel_length"] / pixels_per_inch, 3)
@@ -322,10 +433,10 @@ def normalize_plan_geometry(payload):
         )
 
     def transform_point(raw_point):
-        return {
-            "x": round(offset_x + (_number(raw_point.get("x"), min_x, 0, source_width) - min_x) * scale, 2),
-            "y": round(offset_y + (_number(raw_point.get("y"), min_y, 0, source_height) - min_y) * scale, 2),
-        }
+        return transform_source_xy(
+            _number(raw_point.get("x"), min_x, 0, source_width),
+            _number(raw_point.get("y"), min_y, 0, source_height),
+        )
 
     raw_stairs = source.get("stairs") if isinstance(source.get("stairs"), list) else []
     stairs = []
@@ -362,6 +473,84 @@ def normalize_plan_geometry(payload):
             }
         )
 
+    dimensions = []
+    if has_gross_dimensions:
+        dimensions.extend(
+            [
+                {
+                    "id": "gross-width",
+                    "x1": round(plan_left, 2),
+                    "y1": round(plan_top, 2),
+                    "x2": round(plan_left + plan_pixel_width, 2),
+                    "y2": round(plan_top, 2),
+                    "value_inches": round(gross_width_inches, 4),
+                    "unit": gross_unit,
+                    "source_text": format_length_from_inches(gross_width_inches, gross_unit),
+                    "kind": "overall_width",
+                    "clarity": "user_confirmed",
+                    "confidence": 1,
+                    "source": "user",
+                },
+                {
+                    "id": "gross-length",
+                    "x1": round(plan_left, 2),
+                    "y1": round(plan_top, 2),
+                    "x2": round(plan_left, 2),
+                    "y2": round(plan_top + plan_pixel_height, 2),
+                    "value_inches": round(gross_length_inches, 4),
+                    "unit": gross_unit,
+                    "source_text": format_length_from_inches(gross_length_inches, gross_unit),
+                    "kind": "overall_length",
+                    "clarity": "user_confirmed",
+                    "confidence": 1,
+                    "source": "user",
+                },
+            ]
+        )
+
+    raw_dimensions = source.get("dimensions") if isinstance(source.get("dimensions"), list) else []
+    dimension_ids = {dimension["id"] for dimension in dimensions}
+    for index, raw in enumerate(raw_dimensions[:160]):
+        if not isinstance(raw, dict):
+            continue
+        kind = str(raw.get("kind") or "other").strip().lower()
+        if has_gross_dimensions and kind in {"overall_width", "overall_length"}:
+            continue
+        start = transform_source_xy(
+            _number(raw.get("x1"), min_x, 0, source_width),
+            _number(raw.get("y1"), min_y, 0, source_height),
+        )
+        end = transform_source_xy(
+            _number(raw.get("x2"), max_x, 0, source_width),
+            _number(raw.get("y2"), max_y, 0, source_height),
+        )
+        if math.hypot(end["x"] - start["x"], end["y"] - start["y"]) < 4:
+            continue
+        dimension_id = _clean_id(raw.get("id"), "dim", index)
+        if dimension_id in dimension_ids:
+            dimension_id = f"{dimension_id}-{index + 1}"
+        dimension_ids.add(dimension_id)
+        unit = _canonical_unit(raw.get("unit") or gross_unit)
+        value_inches = parse_length_to_inches(raw.get("value"), unit)
+        clarity = str(raw.get("clarity") or "unclear").strip().lower()
+        is_clear = clarity == "clear" and value_inches > 0
+        dimensions.append(
+            {
+                "id": dimension_id,
+                "x1": start["x"],
+                "y1": start["y"],
+                "x2": end["x"],
+                "y2": end["y"],
+                "value_inches": round(value_inches, 4) if is_clear else None,
+                "unit": unit,
+                "source_text": _clean_text(raw.get("source_text"), 40),
+                "kind": kind if kind in {"overall_width", "overall_length", "wall_segment", "opening", "room", "other"} else "other",
+                "clarity": "clear" if is_clear else "unclear",
+                "confidence": _confidence(raw.get("confidence")),
+                "source": "sketch",
+            }
+        )
+
     uncertainty_notes = []
     for note in source.get("uncertainty_notes") if isinstance(source.get("uncertainty_notes"), list) else []:
         cleaned = _clean_text(note, 180)
@@ -373,17 +562,34 @@ def normalize_plan_geometry(payload):
         uncertainty_notes.insert(0, "No legible dimension was tied to a wall; a 1 ft proportional reference was applied.")
 
     low_confidence_count = sum(1 for item in [*walls, *openings, *stairs] if item["confidence"] < 0.6)
+    unclear_dimension_count = sum(1 for dimension in dimensions if dimension["clarity"] == "unclear")
     return {
         "schema_version": 1,
         "canvas": {"width": PLAN_CANVAS_WIDTH, "height": PLAN_CANVAS_HEIGHT, "unit": "px"},
+        "plan_bounds": {
+            "width_inches": round(gross_width_inches, 4) if has_gross_dimensions else None,
+            "length_inches": round(gross_length_inches, 4) if has_gross_dimensions else None,
+            "unit": gross_unit,
+            "source": "user" if has_gross_dimensions else "reference",
+        },
+        "workspace": {
+            "margin_inches_each_side": WORKSPACE_MARGIN_INCHES if has_gross_dimensions else None,
+            "width_inches": round(gross_width_inches + WORKSPACE_MARGIN_INCHES * 2, 4) if has_gross_dimensions else None,
+            "length_inches": round(gross_length_inches + WORKSPACE_MARGIN_INCHES * 2, 4) if has_gross_dimensions else None,
+            "left": round(workspace_left, 2),
+            "top": round(workspace_top, 2),
+            "pixel_width": round(workspace_pixel_width, 2),
+            "pixel_height": round(workspace_pixel_height, 2),
+        },
         "nodes": nodes,
         "walls": walls,
         "openings": openings,
         "stairs": stairs,
         "rooms": rooms,
+        "dimensions": dimensions,
         "reference_measurement": reference,
         "uncertainty_notes": uncertainty_notes,
-        "review_required": bool(reference["estimated"] or low_confidence_count),
+        "review_required": bool(reference["estimated"] or low_confidence_count or unclear_dimension_count),
         "semantic_summary": {
             "wall_count": len(walls),
             "door_count": sum(1 for opening in openings if opening["type"] == "door"),
@@ -393,6 +599,8 @@ def normalize_plan_geometry(payload):
             "room_count": len(rooms),
             "low_confidence_count": low_confidence_count,
             "merged_corner_count": merged_node_count,
+            "clear_dimension_count": sum(1 for dimension in dimensions if dimension["clarity"] != "unclear"),
+            "unclear_dimension_count": unclear_dimension_count,
         },
     }
 
@@ -407,10 +615,55 @@ def measurement_calibration_from_geometry(geometry):
         "unit": display_unit,
         "scale": round(reference["pixel_length"] / _number(reference.get("value"), 1, 0.0001), 6),
         "referencePx": reference["pixel_length"],
-        "referenceLineId": f"plan-reference-{reference.get('wall_id', '')}",
+        "referenceLineId": f"plan-reference-{reference.get('dimension_id') or reference.get('wall_id', '')}",
         "source": "plan_geometry",
         "estimated": bool(reference.get("estimated")),
     }
+
+
+def apply_dimension_overrides(geometry, overrides):
+    if not isinstance(geometry, dict) or geometry.get("schema_version") != 1:
+        raise ValueError("A valid saved floor-plan geometry is required.")
+    if not isinstance(overrides, dict):
+        raise ValueError("Dimension corrections must be an object.")
+    updated = copy.deepcopy(geometry)
+    dimensions = updated.get("dimensions") if isinstance(updated.get("dimensions"), list) else []
+    dimension_by_id = {str(item.get("id")): item for item in dimensions if isinstance(item, dict)}
+    applied = 0
+    for dimension_id, raw_override in list(overrides.items())[:160]:
+        dimension = dimension_by_id.get(str(dimension_id))
+        if not dimension or dimension.get("clarity") != "unclear":
+            continue
+        if isinstance(raw_override, dict):
+            raw_value = raw_override.get("value")
+            unit = _canonical_unit(raw_override.get("unit") or dimension.get("unit"))
+        else:
+            raw_value = raw_override
+            unit = _canonical_unit(dimension.get("unit"))
+        value_inches = parse_length_to_inches(raw_value, unit)
+        if value_inches <= 0:
+            continue
+        dimension.update(
+            {
+                "value_inches": round(value_inches, 4),
+                "unit": unit,
+                "source_text": format_length_from_inches(value_inches, unit),
+                "clarity": "user_entered",
+                "confidence": 1,
+                "source": "user_correction",
+            }
+        )
+        applied += 1
+    summary = updated.setdefault("semantic_summary", {})
+    unclear_count = sum(1 for item in dimensions if item.get("clarity") == "unclear")
+    summary["unclear_dimension_count"] = unclear_count
+    summary["clear_dimension_count"] = sum(1 for item in dimensions if item.get("clarity") != "unclear")
+    updated["review_required"] = bool(
+        unclear_count
+        or summary.get("low_confidence_count")
+        or updated.get("reference_measurement", {}).get("estimated")
+    )
+    return updated, applied
 
 
 def _font(size, bold=False):
@@ -481,6 +734,48 @@ def _draw_stairs(draw, stair):
     direction = stair.get("direction")
     if direction in {"up", "down"}:
         draw.text((left + 6, top + 6), direction.upper(), fill="#334155", font=_font(13, bold=True))
+
+
+def _draw_dimension(draw, dimension, center, offset=18):
+    start = (dimension["x1"], dimension["y1"])
+    end = (dimension["x2"], dimension["y2"])
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.hypot(dx, dy)
+    if length < 4:
+        return
+    nx, ny = -dy / length, dx / length
+    midpoint = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
+    if (midpoint[0] - center[0]) * nx + (midpoint[1] - center[1]) * ny < 0:
+        nx, ny = -nx, -ny
+    dim_start = (start[0] + nx * offset, start[1] + ny * offset)
+    dim_end = (end[0] + nx * offset, end[1] + ny * offset)
+    draw.line([start, dim_start], fill="#94a3b8", width=1)
+    draw.line([end, dim_end], fill="#94a3b8", width=1)
+    draw.line([dim_start, dim_end], fill="#475569", width=2)
+    tick = 4
+    draw.line(
+        [(dim_start[0] - nx * tick, dim_start[1] - ny * tick), (dim_start[0] + nx * tick, dim_start[1] + ny * tick)],
+        fill="#475569",
+        width=2,
+    )
+    draw.line(
+        [(dim_end[0] - nx * tick, dim_end[1] - ny * tick), (dim_end[0] + nx * tick, dim_end[1] + ny * tick)],
+        fill="#475569",
+        width=2,
+    )
+    label = _clean_text(dimension.get("source_text"), 40)
+    if not label and dimension.get("value_inches"):
+        label = format_length_from_inches(dimension["value_inches"], dimension.get("unit"))
+    if not label:
+        return
+    label_font = _font(13, bold=dimension.get("source") == "user")
+    label_box = draw.textbbox((0, 0), label, font=label_font)
+    label_width = label_box[2] - label_box[0]
+    label_height = label_box[3] - label_box[1]
+    label_x = max(4, min(PLAN_CANVAS_WIDTH - label_width - 4, midpoint[0] + nx * offset - label_width / 2))
+    label_y = max(4, min(PLAN_CANVAS_HEIGHT - label_height - 4, midpoint[1] + ny * offset - label_height / 2 - 2))
+    draw.rectangle((label_x - 4, label_y - 2, label_x + label_width + 4, label_y + label_height + 2), fill="white")
+    draw.text((label_x, label_y), label, fill="#334155", font=label_font)
 
 
 def render_plan_geometry_png(geometry):
@@ -559,37 +854,50 @@ def render_plan_geometry_png(geometry):
         bbox = draw.textbbox((0, 0), label, font=room_font)
         draw.text((room["x"] - (bbox[2] - bbox[0]) / 2, room["y"] - (bbox[3] - bbox[1]) / 2), label, fill="#475569", font=room_font)
 
-    reference = geometry["reference_measurement"]
-    wall = next(item for item in geometry["walls"] if item["id"] == reference["wall_id"])
-    start_node = nodes[wall["start_node_id"]]
-    end_node = nodes[wall["end_node_id"]]
-    start = (start_node["x"], start_node["y"])
-    end = (end_node["x"], end_node["y"])
-    dx, dy = end[0] - start[0], end[1] - start[1]
-    length = math.hypot(dx, dy) or 1
-    nx, ny = -dy / length, dx / length
     center_x = sum(node["x"] for node in geometry["nodes"]) / len(geometry["nodes"])
     center_y = sum(node["y"] for node in geometry["nodes"]) / len(geometry["nodes"])
-    midpoint = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
-    if (midpoint[0] - center_x) * nx + (midpoint[1] - center_y) * ny < 0:
-        nx, ny = -nx, -ny
-    offset = 28
-    dim_start = (start[0] + nx * offset, start[1] + ny * offset)
-    dim_end = (end[0] + nx * offset, end[1] + ny * offset)
-    draw.line([start, dim_start], fill="#94a3b8", width=1)
-    draw.line([end, dim_end], fill="#94a3b8", width=1)
-    draw.line([dim_start, dim_end], fill="#475569", width=2)
-    tick = 5
-    draw.line([(dim_start[0] - nx * tick, dim_start[1] - ny * tick), (dim_start[0] + nx * tick, dim_start[1] + ny * tick)], fill="#475569", width=2)
-    draw.line([(dim_end[0] - nx * tick, dim_end[1] - ny * tick), (dim_end[0] + nx * tick, dim_end[1] + ny * tick)], fill="#475569", width=2)
-    prefix = "EST. REFERENCE" if reference["estimated"] else "REFERENCE"
-    label = f"{prefix}: {reference['source_text']}"
-    label_font = _font(14, bold=True)
-    label_box = draw.textbbox((0, 0), label, font=label_font)
-    label_x = (dim_start[0] + dim_end[0]) / 2 - (label_box[2] - label_box[0]) / 2
-    label_y = (dim_start[1] + dim_end[1]) / 2 - (label_box[3] - label_box[1]) / 2 - 4
-    draw.rectangle((label_x - 5, label_y - 3, label_x + (label_box[2] - label_box[0]) + 5, label_y + (label_box[3] - label_box[1]) + 3), fill="white")
-    draw.text((label_x, label_y), label, fill="#334155", font=label_font)
+    clear_dimensions = [
+        dimension
+        for dimension in geometry.get("dimensions", [])
+        if dimension.get("clarity") in {"clear", "user_confirmed", "user_entered"}
+        and dimension.get("value_inches")
+    ]
+    if not clear_dimensions:
+        reference = geometry["reference_measurement"]
+        wall = next((item for item in geometry["walls"] if item["id"] == reference.get("wall_id")), None)
+        if wall:
+            start_node = nodes[wall["start_node_id"]]
+            end_node = nodes[wall["end_node_id"]]
+            clear_dimensions = [
+                {
+                    "x1": start_node["x"],
+                    "y1": start_node["y"],
+                    "x2": end_node["x"],
+                    "y2": end_node["y"],
+                    "value_inches": reference["value_inches"],
+                    "unit": reference["unit"],
+                    "source_text": reference["source_text"],
+                    "source": "fallback",
+                }
+            ]
+    segment_line_counts = {}
+    for dimension in clear_dimensions:
+        if dimension.get("kind") in {"overall_width", "overall_length"}:
+            offset = 36
+        else:
+            line_key = tuple(
+                round(value / 8)
+                for value in (
+                    dimension.get("x1", 0),
+                    dimension.get("y1", 0),
+                    dimension.get("x2", 0),
+                    dimension.get("y2", 0),
+                )
+            )
+            repeated_line_count = segment_line_counts.get(line_key, 0)
+            segment_line_counts[line_key] = repeated_line_count + 1
+            offset = 12 + min(repeated_line_count, 3) * 16
+        _draw_dimension(draw, dimension, (center_x, center_y), offset=offset)
 
     buffer = BytesIO()
     image.save(buffer, format="PNG", optimize=True)
