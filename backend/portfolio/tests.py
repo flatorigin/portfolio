@@ -32,6 +32,42 @@ TINY_PNG_BYTES = base64.b64decode(
 )
 
 
+def semantic_floor_plan_ai_result():
+    return {
+        "text": json.dumps(
+            {
+                "coordinate_system": {"width": 1000, "height": 700},
+                "nodes": [
+                    {"id": "n1", "x": 100, "y": 100, "confidence": 0.98},
+                    {"id": "n2", "x": 900, "y": 100, "confidence": 0.98},
+                    {"id": "n3", "x": 900, "y": 600, "confidence": 0.95},
+                    {"id": "n4", "x": 500, "y": 600, "confidence": 0.95},
+                    {"id": "n5", "x": 500, "y": 450, "confidence": 0.9},
+                    {"id": "n6", "x": 100, "y": 450, "confidence": 0.95},
+                ],
+                "walls": [
+                    {"id": "w1", "start_node_id": "n1", "end_node_id": "n2", "kind": "exterior", "confidence": 0.98},
+                    {"id": "w2", "start_node_id": "n2", "end_node_id": "n3", "kind": "exterior", "confidence": 0.96},
+                    {"id": "w3", "start_node_id": "n3", "end_node_id": "n4", "kind": "exterior", "confidence": 0.94},
+                    {"id": "w4", "start_node_id": "n4", "end_node_id": "n5", "kind": "exterior", "confidence": 0.91},
+                    {"id": "w5", "start_node_id": "n5", "end_node_id": "n6", "kind": "exterior", "confidence": 0.93},
+                    {"id": "w6", "start_node_id": "n6", "end_node_id": "n1", "kind": "exterior", "confidence": 0.96},
+                ],
+                "openings": [
+                    {"id": "d1", "type": "door", "wall_id": "w1", "position_ratio": 0.3, "width_ratio": 0.12, "hinge": "start", "swing_side": "left", "confidence": 0.9},
+                    {"id": "win1", "type": "window", "wall_id": "w2", "position_ratio": 0.5, "width_ratio": 0.2, "hinge": "unknown", "swing_side": "unknown", "confidence": 0.88},
+                ],
+                "stairs": [],
+                "rooms": [{"id": "r1", "label": "Kitchen", "x": 430, "y": 280, "confidence": 0.85}],
+                "reference_measurement": {"wall_id": "w1", "value": 24, "unit": "in", "source_text": "24\"", "confidence": 0.94},
+                "uncertainty_notes": [],
+            }
+        ),
+        "model": "gpt-test",
+        "usage": {"input_tokens": 100, "output_tokens": 60},
+    }
+
+
 def set_profile_type(user, profile_type, **defaults):
     profile, _ = Profile.objects.update_or_create(
         user=user,
@@ -1173,13 +1209,9 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("JPG, PNG, or WebP", str(response.data))
 
-    @patch("portfolio.views.generate_image_from_image")
-    def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_image_from_image):
-        mock_generate_image_from_image.return_value = {
-            "image_bytes": TINY_PNG_BYTES,
-            "content_type": "image/png",
-            "model": "gpt-image-test",
-        }
+    @patch("portfolio.views.generate_text_with_image")
+    def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
         sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
 
@@ -1193,19 +1225,18 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
         self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
-        prompt = mock_generate_image_from_image.call_args.kwargs["prompt"]
-        self.assertIn("solid thick black line or wall band", prompt)
-        self.assertIn("joint corners", prompt)
-        self.assertIn("thin door leaf, hinge point, and swing arc", prompt)
-        self.assertIn("thin parallel glazing lines", prompt)
-        self.assertIn("authoritative geometric constraints", prompt)
-        self.assertIn("Do not print dimension strings", prompt)
-        self.assertIn("exactly one compact calibration reference", prompt)
-        self.assertIn("CALIBRATION: <exact source value and original unit>", prompt)
-        self.assertIn("Actual markup calibration happens later", prompt)
-        self.assertIn("12 x 18 ft", prompt)
+        prompt = mock_generate_text_with_image.call_args.kwargs["user_prompt"]
+        self.assertIn("shared node", prompt)
+        self.assertIn("angles, offsets, recesses, extensions", prompt)
+        self.assertIn("select exactly one clearest dimension", prompt)
+        plan.refresh_from_db()
+        self.assertEqual(plan.plan_geometry["schema_version"], 1)
+        self.assertEqual(plan.plan_geometry["semantic_summary"]["wall_count"], 6)
+        self.assertEqual(plan.plan_geometry["semantic_summary"]["door_count"], 1)
+        self.assertEqual(response.data["measurement_calibration"]["length"], 24)
+        self.assertFalse(response.data["plan_geometry"]["reference_measurement"]["estimated"])
         self.assertEqual(
-            AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-image-test", status=AIUsageEvent.Status.SUCCESS).count(),
+            AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-test", status=AIUsageEvent.Status.SUCCESS).count(),
             1,
         )
 
@@ -1246,13 +1277,9 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.data["annotations"][0]["type"], "rect")
         self.assertEqual(response.data["uncertainty_notes"], ["Confirm final dimensions on site."])
 
-    @patch("portfolio.views.generate_image_from_image")
-    def test_project_image_sketch_to_clean_floor_plan_saves_generated_project_image(self, mock_generate_image_from_image):
-        mock_generate_image_from_image.return_value = {
-            "image_bytes": TINY_PNG_BYTES,
-            "content_type": "image/png",
-            "model": "gpt-image-test",
-        }
+    @patch("portfolio.views.generate_text_with_image")
+    def test_project_image_sketch_to_clean_floor_plan_saves_generated_project_image(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
         project = Project.objects.create(
             owner=self.homeowner,
             title="Deck project",
@@ -1273,16 +1300,8 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
         self.assertEqual(response.data["image"]["extra_data"]["source"], "ai_clean_floor_plan")
+        self.assertEqual(response.data["image"]["extra_data"]["plan_geometry"]["semantic_summary"]["window_count"], 1)
         self.assertEqual(project.images.count(), 2)
-        prompt = mock_generate_image_from_image.call_args.kwargs["prompt"]
-        self.assertIn("solid thick black line or wall band", prompt)
-        self.assertIn("joint corners", prompt)
-        self.assertIn("thin door leaf, hinge point, and swing arc", prompt)
-        self.assertIn("thin parallel glazing lines", prompt)
-        self.assertIn("authoritative geometric constraints", prompt)
-        self.assertIn("Do not print dimension strings", prompt)
-        self.assertIn("exactly one compact calibration reference", prompt)
-        self.assertIn("CALIBRATION: <exact source value and original unit>", prompt)
-        self.assertIn("Actual markup calibration happens later", prompt)
-        self.assertIn("No overall footprint was explicitly supplied", prompt)
-        self.assertNotIn("20 x 30", prompt)
+        prompt = mock_generate_text_with_image.call_args.kwargs["user_prompt"]
+        self.assertIn("Anchor every opening to one wall", prompt)
+        self.assertIn("All other lengths will be derived proportionally", prompt)

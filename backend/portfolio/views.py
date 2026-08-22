@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from accounts.ai import AIServiceError, generate_image_from_image, generate_text, generate_text_with_image
+from accounts.ai import AIServiceError, generate_text, generate_text_with_image
 from accounts.geo_distance import get_request_origin, sort_by_distance
 from accounts.models import (
     AIConfiguration,
@@ -74,6 +74,13 @@ from .project_intake import (
     iter_answer_lines,
     load_project_intake_templates,
     summarize_markup_notes,
+)
+from .floor_plan import (
+    build_floor_plan_extraction_prompts,
+    measurement_calibration_from_geometry,
+    normalize_plan_geometry,
+    render_plan_geometry_png,
+    source_image_dimensions,
 )
 
 logger = logging.getLogger(__name__)
@@ -222,46 +229,34 @@ def infer_supported_image_content_type(file_name):
     return ""
 
 
-def clean_floor_plan_prompt(*, title, category, location="", notes="", width="", length="", unit="ft"):
-    size_line = (
-        f"Explicitly supplied overall footprint: {width} x {length} {unit or 'ft'}."
-        if width and length
-        else "No overall footprint was explicitly supplied; use only measurements that are clearly legible in the source image."
+def extract_and_render_floor_plan(*, image_bytes, content_type, title, category, location="", notes=""):
+    source_width, source_height = source_image_dimensions(image_bytes)
+    system_prompt, user_prompt = build_floor_plan_extraction_prompts(
+        title=title,
+        category=category,
+        location=location,
+        notes=notes,
+        source_width=source_width,
+        source_height=source_height,
     )
-    return (
-        "Convert the supplied homeowner sketch into one clean, presentation-ready, black-and-white architectural floor-plan "
-        "image shown in a true top-down orthographic view on a plain white background. This output must be one flat image, not an "
-        "editable overlay, diagram, vector display, or 3D rendering. Faithfully trace the source: preserve its footprint, room "
-        "relationships, wall positions and lengths, openings, doors, windows, stairs, labels, and overall proportions. Do not "
-        "redesign the plan, add new spaces or openings, or remove visible structural information. "
-        "Before drawing, read every clearly legible source measurement and use the complete set as authoritative geometric "
-        "constraints. Keep one uniform scale across the entire plan so equal real-world lengths have equal drawn lengths. Resolve "
-        "wall lengths, room sizes, opening positions, and relative proportions from those measurements. Use explicitly supplied "
-        "overall dimensions as outer constraints when present. Never estimate, average, convert, or invent missing dimensions. "
-        "Follow these floor-plan drafting rules exactly. Draw every wall as a consistent solid thick black line or wall band, "
-        "clearly heavier than symbols, dimensions, and labels. Connect intersecting walls into continuous clean square or mitered "
-        "joint corners with no gaps, overlaps, doubled corners, loose endpoints, or stray line fragments. Represent each hinged "
-        "door with a correctly placed wall opening, jamb, thin door leaf, hinge point, and swing arc matching the source; use the "
-        "appropriate standard plan symbol when a sliding or pocket door is clearly shown. Represent each window as a clean break "
-        "in the wall with aligned jambs and thin parallel glazing lines centered within the wall thickness. Preserve stairs and "
-        "other clearly recognizable built elements using conventional architectural plan symbols. "
-        "Do not print dimension strings, room measurements, measurement notes, or measurement text anywhere on the floor plan. "
-        "The only exception is exactly one compact calibration reference. Choose one unobstructed straight wall or outer edge with "
-        "a clearly readable source dimension and place one small thin dimension line immediately outside that segment, labeled "
-        "'CALIBRATION: <exact source value and original unit>'. Prefer the longest unambiguous horizontal segment. If no source "
-        "dimension is readable but an overall footprint was explicitly supplied, use one outer footprint edge. If neither exists, "
-        "omit the calibration reference rather than guessing. All other measurements must influence geometry without appearing in "
-        "the image. Actual markup calibration happens later by drawing over this single reference. Use simple room or area labels "
-        "only when they are legible or unambiguous in the source. Avoid photorealistic "
-        "rendering, furniture staging, textures, colors, shadows, decorative styling, perspective, 3D elements, grids, legends, "
-        "title blocks, annotations about uncertainty, or explanatory prose. This is a contractor communication preview, not a "
-        "permit, CAD, design, engineering, or construction drawing. "
-        f"Project title: {title or 'Untitled project'}. "
-        f"Project category/type: {category or 'general project'}. "
-        f"Project location/context: {location or 'not provided'}. "
-        f"Project notes: {notes or 'not provided'}. "
-        f"{size_line}"
+    result = generate_text_with_image(
+        feature=AIUsageEvent.Feature.PLANNER_DRAFT,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        image_bytes=image_bytes,
+        image_content_type=content_type,
     )
+    payload = parse_ai_json(result["text"])
+    geometry = normalize_plan_geometry(payload)
+    return {
+        "geometry": geometry,
+        "measurement_calibration": measurement_calibration_from_geometry(geometry),
+        "image_bytes": render_plan_geometry_png(geometry),
+        "model": result["model"],
+        "usage": result.get("usage"),
+        "prompt_chars": len(system_prompt) + len(user_prompt),
+        "response_chars": len(result["text"]),
+    }
 
 
 class FeedbackTicketListCreateView(generics.ListCreateAPIView):
@@ -1018,23 +1013,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
             if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
                 raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
 
-        prompt = clean_floor_plan_prompt(
-            title=project.title,
-            category=project.category,
-            location=project.location,
-            notes=project.summary or project.job_summary or "",
-            width=request.data.get("width") or "",
-            length=request.data.get("length") or "",
-            unit=request.data.get("unit") or "ft",
-        )
         model_name = ""
         try:
-            result = generate_image_from_image(
-                feature=feature,
-                prompt=prompt,
+            result = extract_and_render_floor_plan(
                 image_bytes=image_bytes,
-                image_content_type=content_type,
-                image_name=image_name,
+                content_type=content_type,
+                title=project.title,
+                category=project.category,
+                location=project.location,
+                notes=project.summary or project.job_summary or "",
             )
             model_name = result["model"]
             generated = ProjectImage.objects.create(
@@ -1048,6 +1035,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     "source_project_image_id": source_image.id,
                     "source_image_name": image_name,
                     "ai_model": model_name,
+                    "plan_geometry": result["geometry"],
+                    "measurement_calibration": result["measurement_calibration"],
                 },
             )
             record_ai_usage_event(
@@ -1055,17 +1044,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 feature=feature,
                 model_name=model_name,
                 status_value=AIUsageEvent.Status.SUCCESS,
-                prompt_chars=len(prompt),
-                response_chars=0,
+                prompt_chars=result["prompt_chars"],
+                response_chars=result["response_chars"],
                 usage=result.get("usage"),
             )
-        except AIServiceError as exc:
+        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
             record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
                 status_value=AIUsageEvent.Status.ERROR,
-                prompt_chars=len(prompt),
+                prompt_chars=0,
                 response_chars=0,
             )
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -1077,6 +1066,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 "remaining_today": remaining_after,
                 "daily_limit": daily_limit,
                 "model": model_name,
+                "plan_geometry": result["geometry"],
+                "measurement_calibration": result["measurement_calibration"],
             },
             status=status.HTTP_201_CREATED,
         )
@@ -1442,23 +1433,15 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         else:
             raise ValidationError({"sketch": "Choose an uploaded project image or upload a new sketch first."})
 
-        prompt = clean_floor_plan_prompt(
-            title=plan.title,
-            category=plan.project_type,
-            location=plan.house_location,
-            notes=plan.issue_summary or plan.notes or "",
-            width=request.data.get("width") or "",
-            length=request.data.get("length") or "",
-            unit=request.data.get("unit") or "ft",
-        )
         model_name = ""
         try:
-            result = generate_image_from_image(
-                feature=feature,
-                prompt=prompt,
+            result = extract_and_render_floor_plan(
                 image_bytes=image_bytes,
-                image_content_type=content_type,
-                image_name=image_name,
+                content_type=content_type,
+                title=plan.title,
+                category=plan.project_type,
+                location=plan.house_location,
+                notes=plan.issue_summary or plan.notes or "",
             )
             model_name = result["model"]
             generated = ProjectPlanImage.objects.create(
@@ -1468,22 +1451,24 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 order=plan.images.count(),
                 is_cover=not plan.images.filter(is_cover=True).exists(),
             )
+            plan.plan_geometry = result["geometry"]
+            plan.save(update_fields=["plan_geometry", "updated_at"])
             record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
                 status_value=AIUsageEvent.Status.SUCCESS,
-                prompt_chars=len(prompt),
-                response_chars=0,
+                prompt_chars=result["prompt_chars"],
+                response_chars=result["response_chars"],
                 usage=result.get("usage"),
             )
-        except AIServiceError as exc:
+        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
             record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
                 status_value=AIUsageEvent.Status.ERROR,
-                prompt_chars=len(prompt),
+                prompt_chars=0,
                 response_chars=0,
             )
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -1496,6 +1481,8 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 "remaining_today": remaining_after,
                 "daily_limit": daily_limit,
                 "model": model_name,
+                "plan_geometry": result["geometry"],
+                "measurement_calibration": result["measurement_calibration"],
             },
             status=status.HTTP_201_CREATED,
         )

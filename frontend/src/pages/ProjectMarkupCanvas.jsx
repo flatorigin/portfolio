@@ -2058,6 +2058,7 @@ export default function ProjectMarkupCanvas() {
       : [];
     const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
+    const planGeometry = plan?.plan_geometry || previousMarkup.plan_geometry || {};
     const normalizedAnnotations = annotations.map((item) => ({
       ...item,
       layer: item.id,
@@ -2078,6 +2079,7 @@ export default function ProjectMarkupCanvas() {
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
+      plan_geometry: planGeometry,
       annotation_count: normalizedAnnotations.length,
     };
 
@@ -2092,6 +2094,7 @@ export default function ProjectMarkupCanvas() {
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
+      plan_geometry: planGeometry,
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
     };
@@ -2315,10 +2318,19 @@ export default function ProjectMarkupCanvas() {
       });
       const generatedImage = data.image || {};
       const generatedUrl = projectImageUrl(generatedImage);
+      const detectedGeometry = data.plan_geometry && typeof data.plan_geometry === "object" ? data.plan_geometry : {};
+      const detectedCalibration =
+        data.measurement_calibration && Number(data.measurement_calibration.scale || 0) > 0
+          ? data.measurement_calibration
+          : DEFAULT_MEASUREMENT_CALIBRATION;
       if (planId) {
         setPlan((prev) =>
           prev
-            ? { ...prev, images: [...(Array.isArray(prev.images) ? prev.images : []), generatedImage] }
+            ? {
+                ...prev,
+                plan_geometry: detectedGeometry,
+                images: [...(Array.isArray(prev.images) ? prev.images : []), generatedImage],
+              }
             : prev,
         );
       } else if (isProjectImageMode) {
@@ -2333,18 +2345,23 @@ export default function ProjectMarkupCanvas() {
         setEditingTextId("");
         setVisibleLayers({});
         setLockedLayers({});
-        setMeasurementCalibration(DEFAULT_MEASUREMENT_CALIBRATION);
-        setMeasurementCalibrationInputLength(DEFAULT_MEASUREMENT_CALIBRATION.length);
-        setMeasurementCalibrationPromptComplete(false);
+        setMeasurementCalibration(detectedCalibration);
+        setMeasurementCalibrationInputLength(String(detectedCalibration.length || DEFAULT_MEASUREMENT_CALIBRATION.length));
+        setMeasurementCalibrationPromptComplete(Number(detectedCalibration.scale || 0) > 0);
         setFloorPlanSaveError("");
-        setPendingFloorPlanSave({ image: generatedImage, url: generatedUrl });
+        setPendingFloorPlanSave({
+          image: generatedImage,
+          url: generatedUrl,
+          planGeometry: detectedGeometry,
+          measurementCalibration: detectedCalibration,
+        });
       }
       setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME, detail: "" });
       setMessage("Floor-plan image created. Save the clean base before adding markup.");
     } catch (err) {
       const statusCode = err?.response?.status;
       const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
-      const detailPrefix = statusCode >= 500 ? "AI image generation failed" : "Image upload or API request failed";
+      const detailPrefix = statusCode >= 500 ? "Floor-plan analysis failed" : "Image upload or API request failed";
       const detail = `${detailPrefix}${statusCode ? ` (${statusCode})` : ""}: ${providerDetail}`;
       setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: sketchSource.name || "Sketch image", detail }));
       setMessage(detail);
@@ -2361,6 +2378,8 @@ export default function ProjectMarkupCanvas() {
     try {
       const now = new Date().toISOString();
       const imageIdToSave = pendingFloorPlanSave.image.id;
+      const baseCalibration = pendingFloorPlanSave.measurementCalibration || measurementCalibration;
+      const baseGeometry = pendingFloorPlanSave.planGeometry || plan?.plan_geometry || {};
 
       if (planId) {
         const previousMarkup = safeMarkupData(plan?.markup_data);
@@ -2380,7 +2399,8 @@ export default function ProjectMarkupCanvas() {
           annotations: [],
           visible_layers: {},
           locked_layers: {},
-          measurement_calibration: DEFAULT_MEASUREMENT_CALIBRATION,
+          measurement_calibration: baseCalibration,
+          plan_geometry: baseGeometry,
           annotation_count: 0,
         };
         await patchMarkupData({
@@ -2393,7 +2413,8 @@ export default function ProjectMarkupCanvas() {
           annotations: [],
           visible_layers: {},
           locked_layers: {},
-          measurement_calibration: DEFAULT_MEASUREMENT_CALIBRATION,
+          measurement_calibration: baseCalibration,
+          plan_geometry: baseGeometry,
           base_floor_plan: {
             image_id: imageIdToSave,
             image_url: pendingFloorPlanSave.url,
@@ -2411,6 +2432,8 @@ export default function ProjectMarkupCanvas() {
           extra_data: {
             ...previousExtraData,
             source: previousExtraData.source || "ai_clean_floor_plan",
+            plan_geometry: baseGeometry,
+            measurement_calibration: baseCalibration,
             is_floor_plan_base: true,
             base_floor_plan: {
               image_id: imageIdToSave,
@@ -3641,6 +3664,7 @@ export default function ProjectMarkupCanvas() {
           visible_layers: visibleLayers,
           locked_layers: lockedLayers,
           measurement_calibration: measurementCalibration,
+          plan_geometry: previousExtraData.plan_geometry || {},
           annotation_count: normalizedAnnotations.length,
         };
         const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
@@ -4210,6 +4234,21 @@ export default function ProjectMarkupCanvas() {
                     className="max-h-64 w-full object-contain"
                   />
                 </div>
+                {pendingFloorPlanSave.planGeometry?.semantic_summary ? (
+                  <div className="mt-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-600">
+                    <div className="font-semibold text-slate-900">Detected plan elements</div>
+                    <div>
+                      {pendingFloorPlanSave.planGeometry.semantic_summary.wall_count || 0} walls ·{" "}
+                      {pendingFloorPlanSave.planGeometry.semantic_summary.door_count || 0} doors ·{" "}
+                      {pendingFloorPlanSave.planGeometry.semantic_summary.window_count || 0} windows ·{" "}
+                      {pendingFloorPlanSave.planGeometry.semantic_summary.stair_count || 0} stairs
+                    </div>
+                    <div className={pendingFloorPlanSave.planGeometry.reference_measurement?.estimated ? "text-amber-700" : "text-emerald-700"}>
+                      {pendingFloorPlanSave.planGeometry.reference_measurement?.estimated ? "Estimated" : "Detected"} reference:{" "}
+                      {pendingFloorPlanSave.planGeometry.reference_measurement?.source_text || "Not available"}
+                    </div>
+                  </div>
+                ) : null}
                 {floorPlanSaveError ? (
                   <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                     {floorPlanSaveError}

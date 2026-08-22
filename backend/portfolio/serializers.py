@@ -622,6 +622,7 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             "links",
             "options",
             "markup_data",
+            "plan_geometry",
             "selected_option_key",
             "ai_generated_issue_summary",
             "ai_suggested_contractor_types",
@@ -662,6 +663,16 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
             return {}
         if not isinstance(value, dict):
             raise serializers.ValidationError("Markup data must be an object.")
+        return value
+
+    def validate_plan_geometry(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Plan geometry must be an object.")
+        schema_version = value.get("schema_version")
+        if value and schema_version != 1:
+            raise serializers.ValidationError("Unsupported plan geometry schema version.")
         return value
 
     def validate_project_type(self, value):
