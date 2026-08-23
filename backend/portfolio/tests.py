@@ -32,70 +32,6 @@ TINY_PNG_BYTES = base64.b64decode(
 )
 
 
-def semantic_floor_plan_ai_result():
-    return {
-        "text": json.dumps(
-            {
-                "coordinate_system": {"width": 1000, "height": 700},
-                "nodes": [
-                    {"id": "n1", "x": 100, "y": 100, "confidence": 0.98},
-                    {"id": "n2", "x": 900, "y": 100, "confidence": 0.98},
-                    {"id": "n3", "x": 900, "y": 600, "confidence": 0.95},
-                    {"id": "n4", "x": 500, "y": 600, "confidence": 0.95},
-                    {"id": "n5", "x": 500, "y": 450, "confidence": 0.9},
-                    {"id": "n6", "x": 100, "y": 450, "confidence": 0.95},
-                ],
-                "walls": [
-                    {"id": "w1", "start_node_id": "n1", "end_node_id": "n2", "kind": "exterior", "confidence": 0.98},
-                    {"id": "w2", "start_node_id": "n2", "end_node_id": "n3", "kind": "exterior", "confidence": 0.96},
-                    {"id": "w3", "start_node_id": "n3", "end_node_id": "n4", "kind": "exterior", "confidence": 0.94},
-                    {"id": "w4", "start_node_id": "n4", "end_node_id": "n5", "kind": "exterior", "confidence": 0.91},
-                    {"id": "w5", "start_node_id": "n5", "end_node_id": "n6", "kind": "exterior", "confidence": 0.93},
-                    {"id": "w6", "start_node_id": "n6", "end_node_id": "n1", "kind": "exterior", "confidence": 0.96},
-                ],
-                "openings": [
-                    {"id": "d1", "type": "door", "wall_id": "w1", "position_ratio": 0.3, "width_ratio": 0.12, "hinge": "start", "swing_side": "left", "confidence": 0.9},
-                    {"id": "win1", "type": "window", "wall_id": "w2", "position_ratio": 0.5, "width_ratio": 0.2, "hinge": "unknown", "swing_side": "unknown", "confidence": 0.88},
-                ],
-                "stairs": [],
-                "rooms": [{"id": "r1", "label": "Kitchen", "x": 430, "y": 280, "confidence": 0.85}],
-                "dimensions": [
-                    {
-                        "id": "dim-clear",
-                        "x1": 100,
-                        "y1": 100,
-                        "x2": 500,
-                        "y2": 100,
-                        "value": 12,
-                        "unit": "ft",
-                        "source_text": "12'",
-                        "kind": "wall_segment",
-                        "clarity": "clear",
-                        "confidence": 0.91,
-                    },
-                    {
-                        "id": "dim-unclear",
-                        "x1": 500,
-                        "y1": 100,
-                        "x2": 900,
-                        "y2": 100,
-                        "value": None,
-                        "unit": "ft",
-                        "source_text": "1?'",
-                        "kind": "wall_segment",
-                        "clarity": "unclear",
-                        "confidence": 0.35,
-                    },
-                ],
-                "reference_measurement": {"wall_id": "w1", "value": 24, "unit": "in", "source_text": "24\"", "confidence": 0.94},
-                "uncertainty_notes": [],
-            }
-        ),
-        "model": "gpt-test",
-        "usage": {"input_tokens": 100, "output_tokens": 60},
-    }
-
-
 def set_profile_type(user, profile_type, **defaults):
     profile, _ = Profile.objects.update_or_create(
         user=user,
@@ -1237,90 +1173,30 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("JPG, PNG, or WebP", str(response.data))
 
-    @patch("portfolio.views.generate_text_with_image")
-    def _removed_semantic_floor_plan_saves_generated_planner_image(self, mock_generate_text_with_image):
-        mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
+    @patch("portfolio.views.generate_image_from_image")
+    def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_image_from_image):
+        mock_generate_image_from_image.return_value = {
+            "image_bytes": TINY_PNG_BYTES,
+            "content_type": "image/png",
+            "model": "gpt-image-test",
+        }
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
         sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
 
         self.client.force_authenticate(user=self.homeowner)
         response = self.client.post(
             f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
-            {"sketch": sketch, "gross_width": "24'3\"", "gross_length": "30", "gross_unit": "ft"},
+            {"sketch": sketch, "width": "12", "length": "18", "unit": "ft"},
             format="multipart",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
         self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
-        prompt = mock_generate_text_with_image.call_args.kwargs["user_prompt"]
-        self.assertIn("shared node", prompt)
-        self.assertIn("angles, offsets, recesses, extensions", prompt)
-        self.assertIn("select exactly one clearest dimension", prompt)
-        self.assertIn("User-confirmed gross plan size: 24'3\" x 30 ft", prompt)
-        self.assertIn("Return unclear dimensions too", prompt)
-        plan.refresh_from_db()
-        self.assertEqual(plan.plan_geometry["schema_version"], 1)
-        self.assertEqual(plan.plan_geometry["semantic_summary"]["wall_count"], 6)
-        self.assertEqual(plan.plan_geometry["semantic_summary"]["door_count"], 1)
-        self.assertEqual(plan.plan_geometry["plan_bounds"]["width_inches"], 291)
-        self.assertEqual(plan.plan_geometry["workspace"]["width_inches"], 339)
-        self.assertEqual(plan.plan_geometry["semantic_summary"]["clear_dimension_count"], 3)
-        self.assertEqual(plan.plan_geometry["semantic_summary"]["unclear_dimension_count"], 1)
-        self.assertEqual(response.data["measurement_calibration"]["length"], 24.25)
-        self.assertFalse(response.data["plan_geometry"]["reference_measurement"]["estimated"])
         self.assertEqual(
-            AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-test", status=AIUsageEvent.Status.SUCCESS).count(),
+            AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-image-test", status=AIUsageEvent.Status.SUCCESS).count(),
             1,
         )
-
-    @patch("portfolio.views.generate_text_with_image")
-    def _removed_clean_floor_plan_requires_gross_dimensions_before_ai(self, mock_generate_text_with_image):
-        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
-        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
-
-        self.client.force_authenticate(user=self.homeowner)
-        response = self.client.post(
-            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
-            {"sketch": sketch},
-            format="multipart",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("full plan width", str(response.data))
-        mock_generate_text_with_image.assert_not_called()
-
-    @patch("portfolio.views.generate_text_with_image")
-    def _removed_unclear_floor_plan_dimension_can_be_entered_without_another_ai_call(self, mock_generate_text_with_image):
-        mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
-        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
-        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
-
-        self.client.force_authenticate(user=self.homeowner)
-        created = self.client.post(
-            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
-            {"sketch": sketch, "gross_width": "24", "gross_length": "30", "gross_unit": "ft"},
-            format="multipart",
-        )
-        image_id = created.data["image"]["id"]
-        original_image_name = ProjectPlanImage.objects.get(id=image_id).image.name
-
-        response = self.client.post(
-            f"/api/project-plans/{plan.id}/images/{image_id}/floor-plan-dimensions/",
-            {"dimensions": {"dim-unclear": {"value": "13'6\"", "unit": "ft"}}},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["applied_count"], 1)
-        corrected = next(item for item in response.data["plan_geometry"]["dimensions"] if item["id"] == "dim-unclear")
-        self.assertEqual(corrected["value_inches"], 162)
-        self.assertEqual(corrected["clarity"], "user_entered")
-        self.assertEqual(response.data["plan_geometry"]["semantic_summary"]["unclear_dimension_count"], 0)
-        plan.refresh_from_db()
-        self.assertEqual(plan.plan_geometry["semantic_summary"]["unclear_dimension_count"], 0)
-        self.assertNotEqual(ProjectPlanImage.objects.get(id=image_id).image.name, original_image_name)
-        self.assertEqual(mock_generate_text_with_image.call_count, 1)
 
     @patch("portfolio.views.generate_text_with_image")
     def _removed_project_image_sketch_to_rough_plan_uses_existing_image(self, mock_generate_text_with_image):
@@ -1359,9 +1235,13 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.data["annotations"][0]["type"], "rect")
         self.assertEqual(response.data["uncertainty_notes"], ["Confirm final dimensions on site."])
 
-    @patch("portfolio.views.generate_text_with_image")
-    def _removed_project_image_semantic_floor_plan_saves_generated_project_image(self, mock_generate_text_with_image):
-        mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
+    @patch("portfolio.views.generate_image_from_image")
+    def test_project_image_sketch_to_clean_floor_plan_saves_generated_project_image(self, mock_generate_image_from_image):
+        mock_generate_image_from_image.return_value = {
+            "image_bytes": TINY_PNG_BYTES,
+            "content_type": "image/png",
+            "model": "gpt-image-test",
+        }
         project = Project.objects.create(
             owner=self.homeowner,
             title="Deck project",
@@ -1375,99 +1255,34 @@ class ProjectPlannerTests(APITestCase):
         self.client.force_authenticate(user=self.homeowner)
         response = self.client.post(
             f"/api/projects/{project.id}/images/{project_image.id}/sketch-to-clean-floor-plan/",
-            {
-                "source_image_id": str(project_image.id),
-                "gross_width": "24",
-                "gross_length": "30",
-                "gross_unit": "ft",
-            },
+            {"source_image_id": str(project_image.id), "width": "14", "length": "22", "unit": "ft"},
             format="multipart",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
         self.assertEqual(response.data["image"]["extra_data"]["source"], "ai_clean_floor_plan")
-        self.assertEqual(response.data["image"]["extra_data"]["plan_geometry"]["semantic_summary"]["window_count"], 1)
-        self.assertEqual(project.images.count(), 2)
-        prompt = mock_generate_text_with_image.call_args.kwargs["user_prompt"]
-        self.assertIn("Anchor every opening to one wall", prompt)
-        self.assertIn("All other lengths will be derived proportionally", prompt)
-
-    @patch("portfolio.views.generate_image_from_image")
-    def test_sketch_creates_only_a_floor_plan_image(self, mock_generate_image):
-        mock_generate_image.return_value = {
-            "image_bytes": TINY_PNG_BYTES,
-            "content_type": "image/png",
-            "model": "gpt-image-test",
-            "usage": {"input_tokens": 100, "output_tokens": 40},
-        }
-        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
-        sketch = SimpleUploadedFile("sketch.png", TINY_PNG_BYTES, content_type="image/png")
-
-        self.client.force_authenticate(user=self.homeowner)
-        response = self.client.post(
-            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
-            {"sketch": sketch},
-            format="multipart",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
-        self.assertNotIn("plan_geometry", response.data)
-        self.assertNotIn("measurement_calibration", response.data)
-        self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
-        prompt = mock_generate_image.call_args.kwargs["prompt"]
-        self.assertIn("Copy every clearly legible written measurement exactly", prompt)
-        self.assertIn("Do not create editable geometry, vectors, SVG, CAD layers", prompt)
-
-    @patch("portfolio.views.generate_image_from_image")
-    def test_project_sketch_creates_image_without_schematic_metadata(self, mock_generate_image):
-        mock_generate_image.return_value = {
-            "image_bytes": TINY_PNG_BYTES,
-            "content_type": "image/png",
-            "model": "gpt-image-test",
-            "usage": {"input_tokens": 100, "output_tokens": 40},
-        }
-        project = Project.objects.create(
-            owner=self.homeowner,
-            title="Deck project",
-            summary="Back deck layout sketch.",
-            category="deck",
-            location="Back yard",
-        )
-        source = project.images.create(
-            image=SimpleUploadedFile("deck-plan.png", TINY_PNG_BYTES, content_type="image/png"),
-            caption="Deck sketch",
-        )
-
-        self.client.force_authenticate(user=self.homeowner)
-        response = self.client.post(
-            f"/api/projects/{project.id}/images/{source.id}/sketch-to-clean-floor-plan/",
-            {"source_image_id": str(source.id)},
-            format="multipart",
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        metadata = response.data["image"]["extra_data"]
-        self.assertEqual(metadata["output_kind"], "floor_plan_image")
-        self.assertNotIn("plan_geometry", metadata)
-        self.assertNotIn("measurement_calibration", metadata)
         self.assertEqual(project.images.count(), 2)
 
     def test_editable_floor_plan_routes_are_removed(self):
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        project = Project.objects.create(owner=self.homeowner, title="Deck project")
+        image = project.images.create(
+            image=SimpleUploadedFile("deck-plan.png", TINY_PNG_BYTES, content_type="image/png"),
+            caption="Deck sketch",
+        )
         self.client.force_authenticate(user=self.homeowner)
 
-        rough_response = self.client.post(
+        planner_response = self.client.post(
             f"/api/project-plans/{plan.id}/sketch-to-rough-plan/",
             {},
             format="json",
         )
-        dimensions_response = self.client.post(
-            f"/api/project-plans/{plan.id}/images/999/floor-plan-dimensions/",
+        project_response = self.client.post(
+            f"/api/projects/{project.id}/images/{image.id}/sketch-to-rough-plan/",
             {},
             format="json",
         )
 
-        self.assertIn(rough_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})
-        self.assertIn(dimensions_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})
+        self.assertIn(planner_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})
+        self.assertIn(project_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})

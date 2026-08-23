@@ -1036,7 +1036,7 @@ export default function ProjectPlanDetail() {
               <div>
                 <h2 id="floor-plan-image-title" className="text-lg font-semibold text-slate-950">Create Floor Plan Image</h2>
                 <p className="mt-1 text-sm leading-5 text-slate-500">
-                  Choose one sketch. The result is a single saved image, not an editable schematic.
+                  Choose one sketch. The result is one saved PNG floor-plan image.
                 </p>
               </div>
               <button
