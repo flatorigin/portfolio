@@ -3,6 +3,11 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { SymbolIcon } from "../ui";
 import {
+  enforceLockedEraserOpacity,
+  eraserStrokeOpacity,
+  lockedAnnotationGroupOpacity,
+} from "../utils/markupLock";
+import {
   WALL_STROKE_OUTLINE_WIDTH,
   isWallStroke,
   supportsWallStroke,
@@ -1189,7 +1194,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
     onPointerLeave: locked ? undefined : onPointerLeave,
     onDoubleClick: locked ? undefined : onDoubleClick,
     className: locked ? "pointer-events-none cursor-default" : selected ? "cursor-move" : "cursor-pointer",
-    opacity: locked ? 0.45 : undefined,
+    opacity: lockedAnnotationGroupOpacity(item, locked),
     pointerEvents: locked ? "none" : undefined,
   };
 
@@ -1252,7 +1257,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
           d={d}
           fill="none"
           stroke="#ffffff"
-          strokeOpacity={item.strokeOpacity ?? 1}
+          strokeOpacity={eraserStrokeOpacity(item, locked)}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -2247,11 +2252,14 @@ export default function ProjectMarkupCanvas() {
       : [];
     const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
-    const normalizedAnnotations = annotations.map((item) => ({
-      ...item,
-      layer: item.id,
-      text: item.type === "text" || item.type === "measure" ? normalizeMarkupText(item.text) : item.text,
-    }));
+    const normalizedAnnotations = annotations.map((item) => {
+      const normalizedItem = enforceLockedEraserOpacity(item, !!lockedLayers[item.id]);
+      return {
+        ...normalizedItem,
+        layer: item.id,
+        text: item.type === "text" || item.type === "measure" ? normalizeMarkupText(item.text) : item.text,
+      };
+    });
     const version = {
       id: `version-${Date.now()}`,
       name: versionOverrides.name || MARKUP_FLOOR_PLAN_NAME,
@@ -2301,6 +2309,9 @@ export default function ProjectMarkupCanvas() {
   function toggleAnnotationLayerLock(annotationId) {
     const nextLocked = !lockedLayers[annotationId];
     setLockedLayers((prev) => ({ ...prev, [annotationId]: !prev[annotationId] }));
+    setAnnotations((prev) =>
+      prev.map((item) => (item.id === annotationId ? enforceLockedEraserOpacity(item, true) : item)),
+    );
     if (!nextLocked) return;
     if (penDraftId === annotationId) finishPenPath();
     if (selectedId === annotationId) setSelectedId("");
@@ -3670,11 +3681,12 @@ export default function ProjectMarkupCanvas() {
       if (!quiet) setMessage("");
       try {
         const now = new Date().toISOString();
-        const normalizedAnnotations = annotations.map((item) =>
-          item.type === "text" || item.type === "measure"
-            ? { ...item, text: normalizeMarkupText(item.text) }
-            : item,
-        );
+        const normalizedAnnotations = annotations.map((item) => {
+          const normalizedItem = enforceLockedEraserOpacity(item, !!lockedLayers[item.id]);
+          return item.type === "text" || item.type === "measure"
+            ? { ...normalizedItem, text: normalizeMarkupText(item.text) }
+            : normalizedItem;
+        });
         const previousExtraData =
           projectImage.extra_data && typeof projectImage.extra_data === "object"
             ? projectImage.extra_data

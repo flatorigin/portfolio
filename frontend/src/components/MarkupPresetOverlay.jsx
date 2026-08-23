@@ -1,3 +1,4 @@
+import { eraserStrokeOpacity, lockedAnnotationGroupOpacity } from "../utils/markupLock";
 import {
   WALL_STROKE_OUTLINE_WIDTH,
   isWallStroke,
@@ -278,7 +279,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
     onPointerLeave: locked ? undefined : onPointerLeave,
     onDoubleClick: locked ? undefined : onDoubleClick,
     className: locked ? "pointer-events-none cursor-default" : selected ? "cursor-move" : "cursor-pointer",
-    opacity: locked ? 0.45 : undefined,
+    opacity: lockedAnnotationGroupOpacity(item, locked),
     pointerEvents: locked ? "none" : undefined,
   };
 
@@ -294,7 +295,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
 
   if (item.type === "background_eraser") {
     const d = (Array.isArray(item.points) ? item.points : []).map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-    return <g {...common}><path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" /><path d={d} fill="none" stroke="#ffffff" strokeOpacity={item.strokeOpacity ?? 1} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" /></g>;
+    return <g {...common}><path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" /><path d={d} fill="none" stroke="#ffffff" strokeOpacity={eraserStrokeOpacity(item, locked)} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" /></g>;
   }
 
   if (item.type === "freehand" || item.type === "pen") {
