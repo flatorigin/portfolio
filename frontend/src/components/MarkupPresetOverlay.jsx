@@ -1,9 +1,5 @@
 import { eraserStrokeOpacity, lockedAnnotationGroupOpacity } from "../utils/markupLock";
-import {
-  WALL_STROKE_OUTLINE_WIDTH,
-  isWallStroke,
-  wallOutlinePathD,
-} from "../utils/wallStroke";
+import { isWallStroke, wallOutlinePathD, wallOutlineWidthFor } from "../utils/wallStroke";
 
 export const MARKUP_CANVAS_WIDTH = 1200;
 export const MARKUP_CANVAS_HEIGHT = 760;
@@ -267,6 +263,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
   const style = styleFor(item);
   const stroke = style.strokeColor;
   const strokeWidth = strokeWidthFor(item);
+  const wallOutlineWidth = wallOutlineWidthFor(item, strokeWidth);
   const shouldShowLengths = showSegmentLengths || liveLength;
   const common = {
     key: item.id,
@@ -283,7 +280,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
     const bounds = annotationBounds(item);
     const centerlinePath = roundedRectPath(bounds, rectCornerRadii(item, bounds));
     const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
-    return <g {...common}>{wallPath ? <><path d={centerlinePath} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" /><path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinejoin="miter" strokeMiterlimit="4" /></> : <path d={centerlinePath} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />}</g>;
+    return <g {...common}>{wallPath ? <><path d={centerlinePath} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" /><path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={wallOutlineWidth} strokeLinejoin="miter" strokeMiterlimit="4" /></> : <path d={centerlinePath} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />}</g>;
   }
 
   if (item.type === "circle") {
@@ -293,7 +290,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
     const rx = Math.max(10, Math.abs(x2 - x1) / 2);
     const ry = Math.max(10, Math.abs(y2 - y1) / 2);
     const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
-    return <g {...common}>{wallPath ? <><ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" /><path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} /></> : <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />}</g>;
+    return <g {...common}>{wallPath ? <><ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" /><path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={wallOutlineWidth} /></> : <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />}</g>;
   }
 
   if (item.type === "background_eraser") {
@@ -309,7 +306,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
       <g {...common}>
         {item.type === "pen" || wallPath ? <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" /> : null}
         {wallPath ? (
-          <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
+          <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={wallOutlineWidth} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
         ) : (
           <path d={d} fill={item.type === "pen" && item.closed ? style.fill : "none"} fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={style.strokeDasharray} />
         )}
@@ -344,7 +341,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
         {calibratedReference ? <path d={linePathD(item)} fill="none" stroke="#10b981" strokeOpacity="0.95" strokeWidth={Math.max(strokeWidth + 7, 10)} strokeLinecap="round" strokeDasharray="8 6" pointerEvents="none" /> : null}
         <path d={linePathD(item)} fill="none" stroke="transparent" strokeWidth={Math.max(10, strokeWidth + 8)} strokeLinecap="round" pointerEvents="stroke" />
         {wallPath ? (
-          <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
+          <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={wallOutlineWidth} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
         ) : (
           <path d={linePathD(item)} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" markerEnd={markerEnd} strokeDasharray={style.strokeDasharray} />
         )}

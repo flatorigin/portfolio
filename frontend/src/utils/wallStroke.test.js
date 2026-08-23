@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { supportsWallStroke, wallCenterlinePoints, wallOutlinePathD } from "./wallStroke.js";
+import {
+  supportsWallStroke,
+  wallCenterlinePoints,
+  wallOutlineMaxWidth,
+  wallOutlinePathD,
+  wallOutlineWidthFor,
+} from "./wallStroke.js";
 
 test("open wall creates parallel boundaries with perpendicular end caps", () => {
   const path = wallOutlinePathD({ type: "line", x: 0, y: 0, x2: 100, y2: 0 }, 6);
@@ -68,4 +74,22 @@ test("wall style is available to every supported geometry-menu drawing tool", ()
   assert.equal(supportsWallStroke({ type: "rect" }), true);
   assert.equal(supportsWallStroke({ type: "circle" }), true);
   assert.equal(supportsWallStroke({ type: "line" }), true);
+});
+
+test("custom wall outlines preserve total thickness and a hollow center", () => {
+  const item = {
+    type: "line",
+    x: 0,
+    y: 0,
+    x2: 100,
+    y2: 0,
+    wallOutlineWidth: 3,
+  };
+  assert.equal(wallOutlineWidthFor(item, 10), 3);
+  assert.equal(wallOutlinePathD(item, 10), "M 0 3.5 L 100 3.5 L 100 -3.5 L 0 -3.5 Z");
+});
+
+test("wall outline width is clamped before it closes the hollow center", () => {
+  assert.equal(wallOutlineMaxWidth(10), 4.5);
+  assert.equal(wallOutlineWidthFor({ wallOutlineWidth: 6 }, 10), 4.5);
 });

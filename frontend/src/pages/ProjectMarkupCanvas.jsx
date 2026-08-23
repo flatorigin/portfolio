@@ -11,7 +11,9 @@ import {
   WALL_STROKE_OUTLINE_WIDTH,
   isWallStroke,
   supportsWallStroke,
+  wallOutlineMaxWidth,
   wallOutlinePathD,
+  wallOutlineWidthFor,
 } from "../utils/wallStroke";
 
 const CANVAS_W = 1200;
@@ -1186,6 +1188,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
   const baseStrokeWidth = strokeWidthFor(item);
   const shouldShowLengths = showSegmentLengths || liveLength;
   const strokeWidth = baseStrokeWidth;
+  const wallOutlineWidth = wallOutlineWidthFor(item, strokeWidth);
   const common = {
     key: item.id,
     onPointerDown: locked ? undefined : onPointerDown,
@@ -1207,7 +1210,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
         {wallPath ? (
           <>
             <path d={centerlinePath} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" />
-            <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinejoin="miter" strokeMiterlimit="4" />
+            <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={wallOutlineWidth} strokeLinejoin="miter" strokeMiterlimit="4" />
           </>
         ) : (
           <path
@@ -1236,7 +1239,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
         {wallPath ? (
           <>
             <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" />
-            <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} />
+            <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={wallOutlineWidth} />
           </>
         ) : (
           <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />
@@ -1302,7 +1305,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
             fill="none"
             stroke={stroke}
             strokeOpacity={style.strokeOpacity}
-            strokeWidth={WALL_STROKE_OUTLINE_WIDTH}
+            strokeWidth={wallOutlineWidth}
             strokeLinecap="butt"
             strokeLinejoin="miter"
             strokeMiterlimit="4"
@@ -1416,7 +1419,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
             fill="none"
             stroke={stroke}
             strokeOpacity={style.strokeOpacity}
-            strokeWidth={WALL_STROKE_OUTLINE_WIDTH}
+            strokeWidth={wallOutlineWidth}
             strokeLinecap="butt"
             strokeLinejoin="miter"
             strokeMiterlimit="4"
@@ -1744,6 +1747,7 @@ export default function ProjectMarkupCanvas() {
     }
   });
   const [activeStrokeWidth, setActiveStrokeWidth] = useState(DEFAULT_STROKE_WIDTH);
+  const [activeWallOutlineWidth, setActiveWallOutlineWidth] = useState(WALL_STROKE_OUTLINE_WIDTH);
   const [activeStrokeOpacity, setActiveStrokeOpacity] = useState(DEFAULT_STROKE_OPACITY);
   const [activeStrokeStyle, setActiveStrokeStyle] = useState("solid");
   const [activeFillOpacity, setActiveFillOpacity] = useState(DEFAULT_FILL_OPACITY);
@@ -1859,6 +1863,9 @@ export default function ProjectMarkupCanvas() {
         setRoughPlan((prev) => ({ ...prev, ...saved.roughPlan }));
       }
       if (saved.activeStrokeWidth) setActiveStrokeWidth(clamp(Number(saved.activeStrokeWidth) || DEFAULT_STROKE_WIDTH, 1, 18));
+      if (saved.activeWallOutlineWidth != null) {
+        setActiveWallOutlineWidth(clamp(Number(saved.activeWallOutlineWidth) || WALL_STROKE_OUTLINE_WIDTH, 0.5, 6));
+      }
       if (saved.activeColor) setActiveColor(saved.activeColor);
       if (saved.activeFillColor) setActiveFillColor(saved.activeFillColor);
       if (isFillMaterialKey(saved.activeFillMaterial)) setActiveFillMaterial(saved.activeFillMaterial);
@@ -1881,9 +1888,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeWallOutlineWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, activeWallOutlineWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -3179,6 +3186,7 @@ export default function ProjectMarkupCanvas() {
       fillMaterial: activeFillMaterial,
       colorLabel: selectedColorMeta.label,
       strokeWidth: tool === "background_eraser" ? DEFAULT_ERASER_WIDTH : activeStrokeWidth,
+      wallOutlineWidth: supportsWallStroke({ type: tool }) && activeStrokeStyle === "wall" ? activeWallOutlineWidth : undefined,
       strokeOpacity: tool === "background_eraser" ? 1 : activeStrokeOpacity,
       fillOpacity: tool === "pen" ? 0 : activeFillOpacity,
       strokeStyle: supportsWallStroke({ type: tool }) ? activeStrokeStyle : "solid",
@@ -3898,6 +3906,11 @@ export default function ProjectMarkupCanvas() {
   const currentStrokeOpacity = selectedStyle?.strokeOpacity ?? activeStrokeOpacity;
   const currentFillOpacity = selectedStyle?.fillOpacity ?? activeFillOpacity;
   const currentStrokeStyle = selectedForEditing ? selectedStyle.strokeStyle : activeStrokeStyle;
+  const currentWallOutlineWidth = wallOutlineWidthFor(
+    selectedForEditing || { wallOutlineWidth: activeWallOutlineWidth },
+    currentStrokeWidth,
+  );
+  const currentWallOutlineMax = wallOutlineMaxWidth(currentStrokeWidth);
   const selectedReferenceLine = selectedForEditing && isLineLike(selectedForEditing) ? selectedForEditing : null;
   const selectedReferenceLineId = selectedReferenceLine?.id || "";
   const selectedReferencePixelLength = selectedReferenceLine ? lineLengthPx(selectedReferenceLine) : 0;
@@ -3940,7 +3953,22 @@ export default function ProjectMarkupCanvas() {
     const fallbackWidth = selectedForEditing?.type === "background_eraser" ? DEFAULT_ERASER_WIDTH : DEFAULT_STROKE_WIDTH;
     const width = clamp(Number(nextWidth) || fallbackWidth, 1, maxWidth);
     setActiveStrokeWidth(width);
-    if (selectedForEditing) updateSelected({ strokeWidth: width });
+    if (currentStrokeStyle === "wall") {
+      const adjustedWallOutlineWidth = wallOutlineWidthFor(
+        selectedForEditing || { wallOutlineWidth: activeWallOutlineWidth },
+        width,
+      );
+      setActiveWallOutlineWidth(adjustedWallOutlineWidth);
+      if (selectedForEditing) updateSelected({ strokeWidth: width, wallOutlineWidth: adjustedWallOutlineWidth });
+    } else if (selectedForEditing) {
+      updateSelected({ strokeWidth: width });
+    }
+  }
+
+  function changeWallOutlineWidth(nextWidth) {
+    const outlineWidth = wallOutlineWidthFor({ wallOutlineWidth: nextWidth }, currentStrokeWidth);
+    setActiveWallOutlineWidth(outlineWidth);
+    if (selectedForEditing) updateSelected({ wallOutlineWidth: outlineWidth });
   }
 
   function changeStrokeColor(nextColor) {
@@ -4836,7 +4864,7 @@ export default function ProjectMarkupCanvas() {
 
                 <label className="block">
                   <span className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
-                    <span>{selectedForEditing?.type === "background_eraser" ? "Eraser width" : "Stroke"}</span>
+                    <span>{selectedForEditing?.type === "background_eraser" ? "Eraser width" : currentStrokeStyle === "wall" ? "Wall thickness" : "Stroke"}</span>
                     <span className="text-slate-700">{currentStrokeWidth}px</span>
                   </span>
                   <div className="grid grid-cols-[1fr_64px] gap-2">
@@ -4901,6 +4929,37 @@ export default function ProjectMarkupCanvas() {
                     ))}
                   </div>
                 </div>
+
+                {currentStrokeStyle === "wall" ? (
+                  <label className="block">
+                    <span className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
+                      <span>Outline width</span>
+                      <span className="text-slate-700">{currentWallOutlineWidth}px</span>
+                    </span>
+                    <div className="grid grid-cols-[1fr_64px] gap-2">
+                      <input
+                        type="range"
+                        min="0.5"
+                        max={currentWallOutlineMax}
+                        step="0.5"
+                        value={currentWallOutlineWidth}
+                        onChange={(event) => changeWallOutlineWidth(event.target.value)}
+                        className="w-full accent-blue-600"
+                        aria-label="Wall outline width"
+                      />
+                      <input
+                        type="number"
+                        min="0.5"
+                        max={currentWallOutlineMax}
+                        step="0.5"
+                        value={currentWallOutlineWidth}
+                        onChange={(event) => changeWallOutlineWidth(event.target.value)}
+                        className="h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                        aria-label="Wall outline width number"
+                      />
+                    </div>
+                  </label>
+                ) : null}
 
                 {(selectedForEditing && isLineLike(selectedForEditing)) || ["line", "measure"].includes(tool) ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -4983,6 +5042,8 @@ export default function ProjectMarkupCanvas() {
                         height: `${Math.max(3, currentStrokeWidth)}px`,
                         maxHeight: "18px",
                         borderColor: hexToRgba(currentStrokeColor, currentStrokeOpacity),
+                        borderTopWidth: `${currentWallOutlineWidth}px`,
+                        borderBottomWidth: `${currentWallOutlineWidth}px`,
                       }}
                     />
                   ) : (

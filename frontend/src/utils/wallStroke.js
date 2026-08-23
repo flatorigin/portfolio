@@ -1,5 +1,8 @@
 const EPSILON = 0.001;
 const WALL_OUTLINE_WIDTH = 1;
+const WALL_MIN_OUTLINE_WIDTH = 0.5;
+const WALL_MAX_OUTLINE_WIDTH = 6;
+const WALL_MIN_HOLLOW_WIDTH = 1;
 const WALL_MIN_TOTAL_WIDTH = 3;
 const WALL_MITER_LIMIT = 4;
 
@@ -279,7 +282,8 @@ function circleWallPathD(item, centerOffset) {
 
 export function wallOutlinePathD(item, requestedWidth) {
   const totalWidth = Math.max(WALL_MIN_TOTAL_WIDTH, Number(requestedWidth) || WALL_MIN_TOTAL_WIDTH);
-  const centerOffset = (totalWidth - WALL_OUTLINE_WIDTH) / 2;
+  const outlineWidth = wallOutlineWidthFor(item, totalWidth);
+  const centerOffset = (totalWidth - outlineWidth) / 2;
   if (item?.type === "rect") return rectangleWallPathD(item, centerOffset);
   if (item?.type === "circle") return circleWallPathD(item, centerOffset);
 
@@ -301,6 +305,24 @@ export function supportsWallStroke(item) {
 
 export function isWallStroke(item) {
   return item?.strokeStyle === "wall" && supportsWallStroke(item);
+}
+
+export function wallOutlineMaxWidth(requestedWidth) {
+  const totalWidth = Math.max(WALL_MIN_TOTAL_WIDTH, Number(requestedWidth) || WALL_MIN_TOTAL_WIDTH);
+  return clamp(
+    (totalWidth - WALL_MIN_HOLLOW_WIDTH) / 2,
+    WALL_MIN_OUTLINE_WIDTH,
+    WALL_MAX_OUTLINE_WIDTH,
+  );
+}
+
+export function wallOutlineWidthFor(item, requestedWidth) {
+  const requestedOutline = Number(item?.wallOutlineWidth ?? WALL_OUTLINE_WIDTH);
+  return clamp(
+    Number.isFinite(requestedOutline) ? requestedOutline : WALL_OUTLINE_WIDTH,
+    WALL_MIN_OUTLINE_WIDTH,
+    wallOutlineMaxWidth(requestedWidth),
+  );
 }
 
 export const WALL_STROKE_OUTLINE_WIDTH = WALL_OUTLINE_WIDTH;
