@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { SymbolIcon } from "../ui";
+import {
+  WALL_STROKE_OUTLINE_WIDTH,
+  isWallStroke,
+  supportsWallStroke,
+  wallOutlinePathD,
+} from "../utils/wallStroke";
 
 const CANVAS_W = 1200;
 const CANVAS_H = 760;
@@ -174,7 +180,7 @@ function styleFor(item) {
   const strokeColor = item.strokeColor || item.color || DEFAULT_MARKUP_COLOR;
   const fillColor = item.fillColor || item.color || strokeColor;
   const fillMaterial = isFillMaterialKey(item.fillMaterial) ? item.fillMaterial : "flat";
-  const strokeStyle = item.strokeStyle === "dashed" ? "dashed" : "solid";
+  const strokeStyle = ["dashed", "wall"].includes(item.strokeStyle) ? item.strokeStyle : "solid";
   const strokeOpacity = clamp(Number(item.strokeOpacity ?? DEFAULT_STROKE_OPACITY), 0, 1);
   const fillOpacity = clamp(Number(item.fillOpacity ?? DEFAULT_FILL_OPACITY), 0, 1);
   return {
@@ -183,6 +189,7 @@ function styleFor(item) {
     fillMaterial,
     strokeOpacity,
     fillOpacity,
+    strokeStyle,
     fill: fillMaterial === "flat" ? hexToRgba(fillColor, fillOpacity) : `url(#fill-material-${fillMaterial})`,
     svgFillOpacity: fillMaterial === "flat" ? 1 : fillOpacity,
     strokeDasharray: strokeStyle === "dashed" ? "12 8" : undefined,
@@ -1262,9 +1269,10 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
         : points
             .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
             .join(" ");
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
     return (
       <g {...common}>
-        {item.type === "pen" ? (
+        {item.type === "pen" || wallPath ? (
           <path
             d={d}
             fill="none"
@@ -1275,19 +1283,32 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
             pointerEvents="stroke"
           />
         ) : null}
-        <path
-          d={d}
-          fill={item.type === "pen" && item.closed ? style.fill : "none"}
-          fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined}
-          stroke={stroke}
-          strokeOpacity={style.strokeOpacity}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeDasharray={style.strokeDasharray}
-          markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
-          markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
-        />
+        {wallPath ? (
+          <path
+            d={wallPath}
+            fill="none"
+            stroke={stroke}
+            strokeOpacity={style.strokeOpacity}
+            strokeWidth={WALL_STROKE_OUTLINE_WIDTH}
+            strokeLinecap="butt"
+            strokeLinejoin="miter"
+            strokeMiterlimit="4"
+          />
+        ) : (
+          <path
+            d={d}
+            fill={item.type === "pen" && item.closed ? style.fill : "none"}
+            fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined}
+            stroke={stroke}
+            strokeOpacity={style.strokeOpacity}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={style.strokeDasharray}
+            markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
+            markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
+          />
+        )}
         {shouldShowLengths && item.type === "pen"
           ? points.slice(0, -1).map((point, index) => {
               const nextPoint = points[index + 1];
@@ -1361,6 +1382,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
     const box = labelBox(label, MARKUP_MEASURE_FONT_SIZE);
     const labelX = midX - box.width / 2;
     const labelY = midY - box.height - 5;
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
     return (
       <g {...common}>
         {calibratedReference ? (
@@ -1383,17 +1405,30 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
           strokeLinecap="round"
           pointerEvents="stroke"
         />
-        <path
-          d={linePathD(item)}
-          fill="none"
-          stroke={stroke}
-          strokeOpacity={style.strokeOpacity}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          markerStart={markerStart}
-          markerEnd={markerEnd}
-          strokeDasharray={style.strokeDasharray}
-        />
+        {wallPath ? (
+          <path
+            d={wallPath}
+            fill="none"
+            stroke={stroke}
+            strokeOpacity={style.strokeOpacity}
+            strokeWidth={WALL_STROKE_OUTLINE_WIDTH}
+            strokeLinecap="butt"
+            strokeLinejoin="miter"
+            strokeMiterlimit="4"
+          />
+        ) : (
+          <path
+            d={linePathD(item)}
+            fill="none"
+            stroke={stroke}
+            strokeOpacity={style.strokeOpacity}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            markerStart={markerStart}
+            markerEnd={markerEnd}
+            strokeDasharray={style.strokeDasharray}
+          />
+        )}
         {item.type === "measure" ? (
           <>
             <line
@@ -1706,6 +1741,7 @@ export default function ProjectMarkupCanvas() {
   });
   const [activeStrokeWidth, setActiveStrokeWidth] = useState(DEFAULT_STROKE_WIDTH);
   const [activeStrokeOpacity, setActiveStrokeOpacity] = useState(DEFAULT_STROKE_OPACITY);
+  const [activeStrokeStyle, setActiveStrokeStyle] = useState("solid");
   const [activeFillOpacity, setActiveFillOpacity] = useState(DEFAULT_FILL_OPACITY);
   const [roughPlan, setRoughPlan] = useState(ROUGH_PLAN_DEFAULTS);
   const [expanded, setExpanded] = useState(false);
@@ -3136,7 +3172,7 @@ export default function ProjectMarkupCanvas() {
       strokeAlign: "center",
       startEndpoint: "none",
       endEndpoint: tool === "arrow" ? "arrow" : "none",
-      strokeStyle: "solid",
+      strokeStyle: supportsWallStroke({ type: tool }) ? activeStrokeStyle : "solid",
       points: tool === "freehand" || tool === "background_eraser" ? [point] : tool === "pen" ? [point, point] : undefined,
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
@@ -3849,7 +3885,7 @@ export default function ProjectMarkupCanvas() {
   const currentFillMaterial = selectedStyle?.fillMaterial || activeFillMaterial;
   const currentStrokeOpacity = selectedStyle?.strokeOpacity ?? activeStrokeOpacity;
   const currentFillOpacity = selectedStyle?.fillOpacity ?? activeFillOpacity;
-  const currentStrokeStyle = selectedForEditing?.strokeStyle || "solid";
+  const currentStrokeStyle = selectedForEditing ? selectedStyle.strokeStyle : activeStrokeStyle;
   const currentStrokeAlign = selectedForEditing?.strokeAlign || "center";
   const currentStartEndpoint = selectedForEditing?.startEndpoint || "none";
   const currentEndEndpoint = selectedForEditing?.endEndpoint || (selectedForEditing?.type === "arrow" ? "arrow" : "none");
@@ -3878,7 +3914,9 @@ export default function ProjectMarkupCanvas() {
   const currentFillMaterialOption =
     fillMaterialLibrary.find((material) => material.key === currentFillMaterial) || FILL_MATERIALS[0];
   const selectedSupportsEndpoints =
-    !selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type);
+    (!selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type)) &&
+    currentStrokeStyle !== "wall";
+  const wallStyleAvailable = supportsWallStroke(selectedForEditing);
 
   useEffect(() => {
     if (selectedReferencePixelLength <= 0) {
@@ -4035,7 +4073,10 @@ export default function ProjectMarkupCanvas() {
   }
 
   function changeStrokeStyle(nextStyle) {
-    if (selectedForEditing) updateSelected({ strokeStyle: nextStyle });
+    const normalizedStyle = ["solid", "dashed", "wall"].includes(nextStyle) ? nextStyle : "solid";
+    if (normalizedStyle === "wall" && !wallStyleAvailable) return;
+    setActiveStrokeStyle(normalizedStyle);
+    if (selectedForEditing) updateSelected({ strokeStyle: normalizedStyle });
   }
 
   function changeStrokeAlign(nextAlign) {
@@ -4843,15 +4884,16 @@ export default function ProjectMarkupCanvas() {
 
                 <div>
                   <div className="mb-2 text-xs font-medium text-slate-500">Line style</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["solid", "dashed"].map((itemStyle) => (
+                  <div className="grid grid-cols-3 gap-2">
+                    {["solid", "dashed", "wall"].map((itemStyle) => (
                       <button
                         key={itemStyle}
                         type="button"
                         onClick={() => changeStrokeStyle(itemStyle)}
-                        disabled={!selectedForEditing}
+                        disabled={itemStyle === "wall" && !wallStyleAvailable}
+                        title={itemStyle === "wall" && !wallStyleAvailable ? "Wall style is available for lines, pencil paths, and pen paths" : undefined}
                         className={
-                          "h-9 rounded-xl border px-3 text-sm capitalize transition disabled:opacity-50 " +
+                          "h-9 rounded-xl border px-2 text-xs capitalize transition disabled:opacity-40 " +
                           (currentStrokeStyle === itemStyle
                             ? "border-slate-950 bg-slate-950 text-white"
                             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
@@ -4993,10 +5035,25 @@ export default function ProjectMarkupCanvas() {
                 ) : null}
 
                 <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <div
-                    className="rounded-full"
-                    style={{ height: `${currentStrokeWidth}px`, maxHeight: "18px", backgroundColor: hexToRgba(currentStrokeColor, currentStrokeOpacity) }}
-                  />
+                  {currentStrokeStyle === "wall" ? (
+                    <div
+                      className="border-y border-solid bg-transparent"
+                      style={{
+                        height: `${Math.max(3, currentStrokeWidth)}px`,
+                        maxHeight: "18px",
+                        borderColor: hexToRgba(currentStrokeColor, currentStrokeOpacity),
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className={currentStrokeStyle === "dashed" ? "border-t-2 border-dashed" : "rounded-full"}
+                      style={
+                        currentStrokeStyle === "dashed"
+                          ? { height: `${Math.max(2, currentStrokeWidth)}px`, borderColor: hexToRgba(currentStrokeColor, currentStrokeOpacity) }
+                          : { height: `${currentStrokeWidth}px`, maxHeight: "18px", backgroundColor: hexToRgba(currentStrokeColor, currentStrokeOpacity) }
+                      }
+                    />
+                  )}
                 </div>
               </div>
             </CollapsibleSection>

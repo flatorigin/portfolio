@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { MarkupCanvasPreview } from "../components/MarkupPresetOverlay";
 import { Badge, Button, Card, GhostButton, Input, SymbolIcon, Textarea } from "../ui";
+import { WALL_STROKE_OUTLINE_WIDTH, isWallStroke, wallOutlinePathD } from "../utils/wallStroke";
 
 function emptyPlan(data = {}) {
   return {
@@ -105,6 +106,12 @@ function markupVersionSvg(version, planTitle) {
       const stroke = item.strokeColor || item.color || "#0f172a";
       const fill = item.fillColor ? `${item.fillColor}33` : "transparent";
       const dash = item.strokeStyle === "dashed" ? ' stroke-dasharray="10 8"' : "";
+      if (isWallStroke(item)) {
+        const wallPath = wallOutlinePathD(item, item.strokeWidth || 4);
+        return wallPath
+          ? `<path d="${wallPath}" fill="none" stroke="${stroke}" stroke-width="${WALL_STROKE_OUTLINE_WIDTH}" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="4"/>`
+          : "";
+      }
       if (item.type === "rect") {
         const x = Math.min(item.x || 0, item.x2 || 0);
         const y = Math.min(item.y || 0, item.y2 || 0);

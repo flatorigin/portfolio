@@ -1,3 +1,9 @@
+import {
+  WALL_STROKE_OUTLINE_WIDTH,
+  isWallStroke,
+  wallOutlinePathD,
+} from "../utils/wallStroke";
+
 export const MARKUP_CANVAS_WIDTH = 1200;
 export const MARKUP_CANVAS_HEIGHT = 760;
 
@@ -44,6 +50,7 @@ function styleFor(item) {
   const strokeColor = item.strokeColor || item.color || DEFAULT_MARKUP_COLOR;
   const fillColor = item.fillColor || item.color || strokeColor;
   const fillMaterial = isFillMaterialKey(item.fillMaterial) ? item.fillMaterial : "flat";
+  const strokeStyle = ["dashed", "wall"].includes(item.strokeStyle) ? item.strokeStyle : "solid";
   const strokeOpacity = clamp(Number(item.strokeOpacity ?? DEFAULT_STROKE_OPACITY), 0, 1);
   const fillOpacity = clamp(Number(item.fillOpacity ?? DEFAULT_FILL_OPACITY), 0, 1);
   return {
@@ -52,6 +59,7 @@ function styleFor(item) {
     fillMaterial,
     strokeOpacity,
     fillOpacity,
+    strokeStyle,
     fill: fillMaterial === "flat" ? hexToRgba(fillColor, fillOpacity) : `url(#fill-material-${fillMaterial})`,
     svgFillOpacity: fillMaterial === "flat" ? 1 : fillOpacity,
     strokeDasharray: item.strokeStyle === "dashed" ? "12 8" : undefined,
@@ -292,10 +300,15 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
   if (item.type === "freehand" || item.type === "pen") {
     const points = Array.isArray(item.points) ? item.points : [];
     const d = item.type === "pen" ? penPathD(item) : points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
     return (
       <g {...common}>
-        {item.type === "pen" ? <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" /> : null}
-        <path d={d} fill={item.type === "pen" && item.closed ? style.fill : "none"} fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={style.strokeDasharray} markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined} markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined} />
+        {item.type === "pen" || wallPath ? <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke" /> : null}
+        {wallPath ? (
+          <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
+        ) : (
+          <path d={d} fill={item.type === "pen" && item.closed ? style.fill : "none"} fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={style.strokeDasharray} markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined} markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined} />
+        )}
         {shouldShowLengths && item.type === "pen" ? points.slice(0, -1).map((point, index) => {
           const nextPoint = points[index + 1];
           return <SegmentLengthLabel key={`${item.id}-segment-label-${index}`} x={(point.x + nextPoint.x) / 2} y={(point.y + nextPoint.y) / 2 - 18} label={formatSegmentLength(Math.hypot(point.x - nextPoint.x, point.y - nextPoint.y), measurementGeometry)} stroke={stroke} />;
@@ -322,11 +335,16 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
     const box = labelBox(label, MARKUP_MEASURE_FONT_SIZE);
     const labelX = labelPoint.x - box.width / 2;
     const labelY = labelPoint.y - box.height - 5;
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
     return (
       <g {...common}>
         {calibratedReference ? <path d={linePathD(item)} fill="none" stroke="#10b981" strokeOpacity="0.95" strokeWidth={Math.max(strokeWidth + 7, 10)} strokeLinecap="round" strokeDasharray="8 6" pointerEvents="none" /> : null}
         <path d={linePathD(item)} fill="none" stroke="transparent" strokeWidth={Math.max(10, strokeWidth + 8)} strokeLinecap="round" pointerEvents="stroke" />
-        <path d={linePathD(item)} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" markerStart={markerStart} markerEnd={markerEnd} strokeDasharray={style.strokeDasharray} />
+        {wallPath ? (
+          <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
+        ) : (
+          <path d={linePathD(item)} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" markerStart={markerStart} markerEnd={markerEnd} strokeDasharray={style.strokeDasharray} />
+        )}
         {item.type === "measure" ? <><line x1={(item.x || 0) - capX} y1={(item.y || 0) - capY} x2={(item.x || 0) + capX} y2={(item.y || 0) + capY} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="square" strokeDasharray={style.strokeDasharray} /><line x1={(item.x2 || 0) - capX} y1={(item.y2 || 0) - capY} x2={(item.x2 || 0) + capX} y2={(item.y2 || 0) + capY} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="square" strokeDasharray={style.strokeDasharray} /></> : null}
         {((item.type === "measure" && (liveLength || item.text || showSegmentLengths)) || (item.type === "line" && shouldShowLengths)) && !editing && label ? <g><rect x={labelPoint.x - box.width / 2} y={labelY} width={box.width} height={box.height} rx="5" fill="rgba(255,255,255,0.76)" stroke={hexToRgba(stroke, 0.34)} strokeWidth="0.85" /><text x={labelX + box.paddingX} y={labelY + box.paddingY + MARKUP_MEASURE_FONT_SIZE} fill="#0f172a" fontSize={MARKUP_MEASURE_FONT_SIZE} fontWeight="550">{box.lines.map((line, index) => <tspan key={`${item.id}-line-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>{line}</tspan>)}</text></g> : null}
         {calibratedReference ? <SegmentLengthLabel x={labelPoint.x} y={labelY - 18} label="Reference" stroke="#059669" /> : null}
