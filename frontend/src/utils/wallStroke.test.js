@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { wallCenterlinePoints, wallOutlinePathD } from "./wallStroke.js";
+import { supportsWallStroke, wallCenterlinePoints, wallOutlinePathD } from "./wallStroke.js";
 
 test("open wall creates parallel boundaries with perpendicular end caps", () => {
   const path = wallOutlinePathD({ type: "line", x: 0, y: 0, x2: 100, y2: 0 }, 6);
@@ -43,4 +43,29 @@ test("curved centerlines are sampled before offsetting", () => {
   assert.ok(points.length > 6);
   assert.deepEqual(points[0], { x: 0, y: 0 });
   assert.deepEqual(points.at(-1), { x: 100, y: 0 });
+});
+
+test("rectangle wall creates rounded inner and outer boundaries", () => {
+  const path = wallOutlinePathD(
+    { type: "rect", x: 10, y: 20, x2: 110, y2: 80, cornerRadius: 10 },
+    6,
+  );
+  assert.equal((path.match(/M /g) || []).length, 2);
+  assert.equal((path.match(/Z/g) || []).length, 2);
+  assert.match(path, /Q /);
+  assert.doesNotMatch(path, /NaN|Infinity/);
+});
+
+test("circle wall creates concentric inner and outer boundaries", () => {
+  const path = wallOutlinePathD({ type: "circle", x: 10, y: 20, x2: 110, y2: 80 }, 8);
+  assert.equal((path.match(/M /g) || []).length, 2);
+  assert.equal((path.match(/A /g) || []).length, 4);
+  assert.equal((path.match(/Z/g) || []).length, 2);
+  assert.doesNotMatch(path, /NaN|Infinity/);
+});
+
+test("wall style is available to every supported geometry-menu drawing tool", () => {
+  assert.equal(supportsWallStroke({ type: "rect" }), true);
+  assert.equal(supportsWallStroke({ type: "circle" }), true);
+  assert.equal(supportsWallStroke({ type: "line" }), true);
 });

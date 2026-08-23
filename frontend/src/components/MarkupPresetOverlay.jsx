@@ -281,12 +281,19 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
 
   if (item.type === "rect") {
     const bounds = annotationBounds(item);
-    return <g {...common}><path d={roundedRectPath(bounds, rectCornerRadii(item, bounds))} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} /></g>;
+    const centerlinePath = roundedRectPath(bounds, rectCornerRadii(item, bounds));
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
+    return <g {...common}>{wallPath ? <><path d={centerlinePath} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" /><path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinejoin="miter" strokeMiterlimit="4" /></> : <path d={centerlinePath} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />}</g>;
   }
 
   if (item.type === "circle") {
     const { x1, y1, x2, y2 } = annotationBounds(item);
-    return <ellipse {...common} cx={(x1 + x2) / 2} cy={(y1 + y2) / 2} rx={Math.max(10, Math.abs(x2 - x1) / 2)} ry={Math.max(10, Math.abs(y2 - y1) / 2)} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />;
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+    const rx = Math.max(10, Math.abs(x2 - x1) / 2);
+    const ry = Math.max(10, Math.abs(y2 - y1) / 2);
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
+    return <g {...common}>{wallPath ? <><ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" /><path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} /></> : <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />}</g>;
   }
 
   if (item.type === "background_eraser") {

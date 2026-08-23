@@ -1200,17 +1200,26 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
   if (item.type === "rect") {
     const { x1, y1, x2, y2 } = annotationBounds(item);
     const radii = rectCornerRadii(item, { x1, y1, x2, y2 });
+    const centerlinePath = roundedRectPath({ x1, y1, x2, y2 }, radii);
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
     return (
       <g {...common}>
-        <path
-          d={roundedRectPath({ x1, y1, x2, y2 }, radii)}
-          fill={style.fill}
-          fillOpacity={style.svgFillOpacity}
-          stroke={stroke}
-          strokeOpacity={style.strokeOpacity}
-          strokeWidth={strokeWidth}
-          strokeDasharray={style.strokeDasharray}
-        />
+        {wallPath ? (
+          <>
+            <path d={centerlinePath} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" />
+            <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinejoin="miter" strokeMiterlimit="4" />
+          </>
+        ) : (
+          <path
+            d={centerlinePath}
+            fill={style.fill}
+            fillOpacity={style.svgFillOpacity}
+            stroke={stroke}
+            strokeOpacity={style.strokeOpacity}
+            strokeWidth={strokeWidth}
+            strokeDasharray={style.strokeDasharray}
+          />
+        )}
       </g>
     );
   }
@@ -1219,20 +1228,20 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
     const { x1, y1, x2, y2 } = annotationBounds(item);
     const cx = (x1 + x2) / 2;
     const cy = (y1 + y2) / 2;
+    const rx = Math.max(10, Math.abs(x2 - x1) / 2);
+    const ry = Math.max(10, Math.abs(y2 - y1) / 2);
+    const wallPath = isWallStroke(item) ? wallOutlinePathD(item, strokeWidth) : "";
     return (
-      <ellipse
-        {...common}
-        cx={cx}
-        cy={cy}
-        rx={Math.max(10, Math.abs(x2 - x1) / 2)}
-        ry={Math.max(10, Math.abs(y2 - y1) / 2)}
-        fill={style.fill}
-        fillOpacity={style.svgFillOpacity}
-        stroke={stroke}
-        strokeOpacity={style.strokeOpacity}
-        strokeWidth={strokeWidth}
-        strokeDasharray={style.strokeDasharray}
-      />
+      <g {...common}>
+        {wallPath ? (
+          <>
+            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="transparent" strokeWidth={Math.max(18, strokeWidth + 10)} pointerEvents="stroke" />
+            <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} />
+          </>
+        ) : (
+          <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={style.fill} fillOpacity={style.svgFillOpacity} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeDasharray={style.strokeDasharray} />
+        )}
+      </g>
     );
   }
 
@@ -4879,7 +4888,7 @@ export default function ProjectMarkupCanvas() {
                         type="button"
                         onClick={() => changeStrokeStyle(itemStyle)}
                         disabled={itemStyle === "wall" && !wallStyleAvailable}
-                        title={itemStyle === "wall" && !wallStyleAvailable ? "Wall style is available for lines, pencil paths, and pen paths" : undefined}
+                        title={itemStyle === "wall" && !wallStyleAvailable ? "Wall style is available for Rectangle, Circle, Line, Pencil, and Pen" : undefined}
                         className={
                           "h-9 rounded-xl border px-2 text-xs capitalize transition disabled:opacity-40 " +
                           (currentStrokeStyle === itemStyle
