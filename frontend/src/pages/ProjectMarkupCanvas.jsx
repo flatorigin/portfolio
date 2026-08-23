@@ -1725,7 +1725,6 @@ export default function ProjectMarkupCanvas() {
   const [viewportZoom, setViewportZoom] = useState(1);
   const [viewportOrigin, setViewportOrigin] = useState({ x: 0, y: 0 });
   const [canvasFrameAspect, setCanvasFrameAspect] = useState(CANVAS_W / CANVAS_H);
-  const [saving, setSaving] = useState(false);
   const [savingEditable, setSavingEditable] = useState(false);
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
@@ -1901,12 +1900,16 @@ export default function ProjectMarkupCanvas() {
           if (selectedImageVersion.rough_plan && typeof selectedImageVersion.rough_plan === "object") {
             setRoughPlan((prev) => ({ ...prev, ...selectedImageVersion.rough_plan }));
           }
-          if (selectedImageVersion.visible_layers && typeof selectedImageVersion.visible_layers === "object") {
-            setVisibleLayers((prev) => ({ ...prev, ...selectedImageVersion.visible_layers }));
-          }
-          if (selectedImageVersion.locked_layers && typeof selectedImageVersion.locked_layers === "object") {
-            setLockedLayers((prev) => ({ ...prev, ...selectedImageVersion.locked_layers }));
-          }
+          setVisibleLayers(
+            selectedImageVersion.visible_layers && typeof selectedImageVersion.visible_layers === "object"
+              ? selectedImageVersion.visible_layers
+              : {},
+          );
+          setLockedLayers(
+            selectedImageVersion.locked_layers && typeof selectedImageVersion.locked_layers === "object"
+              ? selectedImageVersion.locked_layers
+              : {},
+          );
           if (selectedImageVersion.measurement_calibration && typeof selectedImageVersion.measurement_calibration === "object") {
             setMeasurementCalibration((prev) => ({ ...prev, ...selectedImageVersion.measurement_calibration }));
             if (selectedImageVersion.measurement_calibration.length != null) {
@@ -1915,6 +1918,8 @@ export default function ProjectMarkupCanvas() {
           }
         } else if (selectedImage) {
           setAnnotations([]);
+          setVisibleLayers({});
+          setLockedLayers({});
           setBackgroundUrl(selectedImage.image_url || "");
           setCanvasMode("photo");
         } else {
@@ -1924,12 +1929,8 @@ export default function ProjectMarkupCanvas() {
           if (markup.rough_plan && typeof markup.rough_plan === "object") {
             setRoughPlan((prev) => ({ ...prev, ...markup.rough_plan }));
           }
-          if (markup.visible_layers && typeof markup.visible_layers === "object") {
-            setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
-          }
-          if (markup.locked_layers && typeof markup.locked_layers === "object") {
-            setLockedLayers((prev) => ({ ...prev, ...markup.locked_layers }));
-          }
+          setVisibleLayers(markup.visible_layers && typeof markup.visible_layers === "object" ? markup.visible_layers : {});
+          setLockedLayers(markup.locked_layers && typeof markup.locked_layers === "object" ? markup.locked_layers : {});
           if (markup.measurement_calibration && typeof markup.measurement_calibration === "object") {
             setMeasurementCalibration((prev) => ({ ...prev, ...markup.measurement_calibration }));
             if (markup.measurement_calibration.length != null) {
@@ -1976,12 +1977,8 @@ export default function ProjectMarkupCanvas() {
           if (markupVersion.rough_plan && typeof markupVersion.rough_plan === "object") {
             setRoughPlan((prev) => ({ ...prev, ...markupVersion.rough_plan }));
           }
-          if (markupVersion.visible_layers && typeof markupVersion.visible_layers === "object") {
-            setVisibleLayers((prev) => ({ ...prev, ...markupVersion.visible_layers }));
-          }
-          if (markupVersion.locked_layers && typeof markupVersion.locked_layers === "object") {
-            setLockedLayers((prev) => ({ ...prev, ...markupVersion.locked_layers }));
-          }
+          setVisibleLayers(markupVersion.visible_layers && typeof markupVersion.visible_layers === "object" ? markupVersion.visible_layers : {});
+          setLockedLayers(markupVersion.locked_layers && typeof markupVersion.locked_layers === "object" ? markupVersion.locked_layers : {});
           if (markupVersion.measurement_calibration && typeof markupVersion.measurement_calibration === "object") {
             setMeasurementCalibration((prev) => ({ ...prev, ...markupVersion.measurement_calibration }));
             if (markupVersion.measurement_calibration.length != null) {
@@ -1990,6 +1987,8 @@ export default function ProjectMarkupCanvas() {
           }
         } else {
           setAnnotations([]);
+          setVisibleLayers({});
+          setLockedLayers({});
           setBackgroundUrl(url || "");
           setCanvasMode("photo");
         }
@@ -2277,6 +2276,16 @@ export default function ProjectMarkupCanvas() {
     if (editingTextId === annotationId) setEditingTextId("");
     if (focusedSidebarInputId === annotationId) setFocusedSidebarInputId("");
     if (drag?.id === annotationId) setDrag(null);
+  }
+
+  function unlockAllAnnotationLayers() {
+    const lockedCount = annotations.reduce(
+      (count, item) => count + (lockedLayers[item.id] ? 1 : 0),
+      0,
+    );
+    if (!lockedCount) return;
+    setLockedLayers({});
+    setMessage(`${lockedCount} markup layer${lockedCount === 1 ? "" : "s"} unlocked.`);
   }
 
   function moveAnnotationLayer(annotationId, direction) {
@@ -3580,94 +3589,15 @@ export default function ProjectMarkupCanvas() {
     }
   }
 
-  async function saveToPlanner() {
-    if (isProjectImageMode) {
-      if (!projectId || !projectImage?.id) {
-        setMessage("Open this canvas from a project image before saving a markup snapshot.");
-        return false;
-      }
-      setSaving(true);
-      setMessage("");
-      try {
-        const blob = await svgToPngBlob();
-        const formData = new FormData();
-        formData.append("images", new File([blob], `${MARKUP_FLOOR_PLAN_NAME}-${Date.now()}.png`, { type: "image/png" }));
-        formData.append("captions", MARKUP_FLOOR_PLAN_NAME);
-        const { data: uploadedImages } = await api.post(`/projects/${projectId}/images/`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        const savedImage = Array.isArray(uploadedImages) ? uploadedImages[0] : null;
-        const snapshotUrl = savedImage?.url || savedImage?.image || "";
-        const snapshotImageId = savedImage?.id || null;
-
-        const savedOriginal = await saveEditableCanvas({
-          quiet: true,
-          versionSnapshotUrl: snapshotUrl,
-          versionSnapshotImageId: snapshotImageId,
-        });
-        if (snapshotImageId) {
-          await api.patch(`/projects/${projectId}/images/${snapshotImageId}/`, {
-            extra_data: {
-              source: "project_image_markup_snapshot",
-              source_project_image_id: projectImage.id,
-              is_markup_snapshot: true,
-            },
-          });
-        }
-        setMessage("Marked-up image added to this project.");
-        return true;
-      } catch (err) {
-        setMessage(normalizeError(err, "Could not save the marked-up image to this project."));
-        return false;
-      } finally {
-        setSaving(false);
-      }
-    }
-
-    if (!planId) {
-      setMessage("Open this canvas from a project planner to save it back to the project file.");
-      return;
-    }
-    setSaving(true);
-    setMessage("");
-    try {
-      const blob = await svgToPngBlob();
-      const formData = new FormData();
-      formData.append("images", new File([blob], `${MARKUP_FLOOR_PLAN_NAME}-${Date.now()}.png`, { type: "image/png" }));
-      formData.append("captions", MARKUP_FLOOR_PLAN_NAME);
-      const { data: uploadedImages } = await api.post(`/project-plans/${planId}/images/`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const snapshotUrl = Array.isArray(uploadedImages) ? uploadedImages[0]?.image_url : "";
-      const snapshotImageId = Array.isArray(uploadedImages) ? uploadedImages[0]?.id : null;
-      await saveEditableCanvas({ quiet: true, versionSnapshotUrl: snapshotUrl, versionSnapshotImageId: snapshotImageId });
-      setMessage("Editable markup and image snapshot saved to this project planner.");
-      return true;
-    } catch (err) {
-      setMessage(normalizeError(err, "Could not save this markup. Try downloading SVG instead."));
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function saveAndBack() {
-    if (isProjectImageMode) {
-      const saved = await saveToPlanner();
-      if (saved && projectId) navigate(`/projects/${projectId}`);
-      return;
-    }
-
-    const saved = await saveToPlanner();
-    if (saved && planId) navigate(`/dashboard/planner/${planId}`);
+    const saved = await saveEditableCanvas();
+    if (!saved) return;
+    if (isProjectImageMode && projectId) navigate(`/projects/${projectId}`);
+    else if (planId) navigate(`/dashboard/planner/${planId}`);
   }
 
   async function handleSave() {
-    if (isProjectImageMode) {
-      await saveEditableCanvas();
-      return;
-    }
-    await saveToPlanner();
+    await saveEditableCanvas();
   }
 
   async function deletePlanner() {
@@ -3793,12 +3723,8 @@ export default function ProjectMarkupCanvas() {
     } else if (version.background_url) {
       setBackgroundUrl(version.background_url);
     }
-    if (version.visible_layers && typeof version.visible_layers === "object") {
-      setVisibleLayers((prev) => ({ ...prev, ...version.visible_layers }));
-    }
-    if (version.locked_layers && typeof version.locked_layers === "object") {
-      setLockedLayers((prev) => ({ ...prev, ...version.locked_layers }));
-    }
+    setVisibleLayers(version.visible_layers && typeof version.visible_layers === "object" ? version.visible_layers : {});
+    setLockedLayers(version.locked_layers && typeof version.locked_layers === "object" ? version.locked_layers : {});
     if (version.measurement_calibration && typeof version.measurement_calibration === "object") {
       setMeasurementCalibration((prev) => ({ ...prev, ...version.measurement_calibration }));
     }
@@ -3862,6 +3788,10 @@ export default function ProjectMarkupCanvas() {
       label: annotationLayerLabel(item, index),
     }))
     .reverse();
+  const lockedAnnotationCount = annotationLayers.reduce(
+    (count, { item }) => count + (lockedLayers[item.id] ? 1 : 0),
+    0,
+  );
   const penDraft = penDraftId ? annotations.find((item) => item.id === penDraftId) || null : null;
   const selectedForEditing = selected?.id === penDraftId ? null : selected;
   const selectedLocked = !!(selectedForEditing && lockedLayers[selectedForEditing.id]);
@@ -4243,24 +4173,24 @@ export default function ProjectMarkupCanvas() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={savingEditable || saving}
+              disabled={savingEditable}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 max-lg:w-10 max-lg:justify-center max-lg:px-0"
               aria-label="Save markup"
               title="Save"
             >
               <SymbolIcon name="save" className="text-[18px]" />
-              <span className="max-lg:hidden">{savingEditable || saving ? "Saving..." : "Save"}</span>
+              <span className="max-lg:hidden">{savingEditable ? "Saving..." : "Save"}</span>
             </button>
             <button
               type="button"
               onClick={saveAndBack}
-              disabled={saving || savingEditable}
+              disabled={savingEditable}
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60 max-lg:w-10 max-lg:justify-center max-lg:px-0"
               aria-label="Save and return"
               title="Save and return"
             >
               <SymbolIcon name="check" className="text-[18px]" />
-              <span className="max-lg:hidden">{saving || savingEditable ? "Saving..." : "Save & back"}</span>
+              <span className="max-lg:hidden">{savingEditable ? "Saving..." : "Save & back"}</span>
             </button>
           </div>
         </div>
@@ -4726,7 +4656,23 @@ export default function ProjectMarkupCanvas() {
               onToggle={toggleSidebarSection}
               onPin={toggleSidebarPin}
             >
-              <div className="mt-3 space-y-2">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-slate-500">
+                  {lockedAnnotationCount ? `${lockedAnnotationCount} locked` : "Markup layers"}
+                </span>
+                <button
+                  type="button"
+                  disabled={!lockedAnnotationCount}
+                  onClick={unlockAllAnnotationLayers}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Unlock all markup layers"
+                  title="Unlock all markup layers"
+                >
+                  <SymbolIcon name="lock_open" className="text-[17px]" />
+                  Unlock all
+                </button>
+              </div>
+              <div className="space-y-2">
                 {annotationLayers.length ? annotationLayers.map(({ item, index, label }, stackIndex) => {
                   const visible = visibleLayers[item.id] !== false;
                   const locked = !!lockedLayers[item.id];
@@ -5363,8 +5309,9 @@ export default function ProjectMarkupCanvas() {
                               }}
                             />
                           ) : (
-                            <div className="flex h-16 items-center px-3 text-xs text-slate-500">
-                              Save with image snapshot to create a preview.
+                            <div className="flex h-16 items-center gap-2 px-3 text-xs text-slate-500">
+                              <SymbolIcon name="edit_note" className="text-[18px]" />
+                              {version.annotation_count || 0} editable markup layer{version.annotation_count === 1 ? "" : "s"}
                             </div>
                           )}
                           <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm">

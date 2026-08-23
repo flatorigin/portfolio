@@ -1030,6 +1030,38 @@ class ProjectPlannerTests(APITestCase):
         response = self.client.get("/api/project-plans/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_editable_markup_and_layer_locks_round_trip(self):
+        self.client.force_authenticate(user=self.homeowner)
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Kitchen floor plan")
+        markup_data = {
+            "schema_version": 1,
+            "background_url": "https://example.com/floor-plan.png",
+            "annotations": [
+                {
+                    "id": "mark-pen",
+                    "type": "pen",
+                    "points": [{"x": 10, "y": 20}, {"x": 80, "y": 20}],
+                    "strokeColor": "#2563eb",
+                },
+                {"id": "mark-rect", "type": "rect", "x": 20, "y": 30, "x2": 90, "y2": 100},
+            ],
+            "visible_layers": {"mark-pen": True, "mark-rect": True},
+            "locked_layers": {"mark-pen": True, "mark-rect": False},
+        }
+
+        update_response = self.client.patch(
+            f"/api/project-plans/{plan.id}/",
+            {"markup_data": markup_data},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+
+        load_response = self.client.get(f"/api/project-plans/{plan.id}/")
+        self.assertEqual(load_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(load_response.data["markup_data"]["background_url"], markup_data["background_url"])
+        self.assertEqual(load_response.data["markup_data"]["annotations"], markup_data["annotations"])
+        self.assertEqual(load_response.data["markup_data"]["locked_layers"], markup_data["locked_layers"])
+
     def test_convert_plan_to_private_draft_job_post(self):
         plan = ProjectPlan.objects.create(
             owner=self.homeowner,
@@ -1060,6 +1092,8 @@ class ProjectPlannerTests(APITestCase):
                     "annotation_count": 2,
                     "annotations": [{"type": "arrow", "x": 10, "y": 20}],
                     "visible_layers": {"scope": True},
+                    "locked_layers": {"scope": True},
+                    "measurement_calibration": {"scale": 2.5, "unit": "ft"},
                 }
             ]
         }
@@ -1088,6 +1122,11 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(copied_image.extra_data["source_plan_id"], plan.id)
         self.assertEqual(copied_image.extra_data["markup_version"]["id"], "version-test")
         self.assertEqual(copied_image.extra_data["markup_version"]["annotation_count"], 2)
+        self.assertEqual(copied_image.extra_data["markup_version"]["locked_layers"], {"scope": True})
+        self.assertEqual(
+            copied_image.extra_data["markup_version"]["measurement_calibration"],
+            {"scale": 2.5, "unit": "ft"},
+        )
 
     @patch("portfolio.views.generate_text")
     def test_planner_ai_action_uses_shared_quota(self, mock_generate_text):

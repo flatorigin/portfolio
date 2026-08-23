@@ -1730,6 +1730,8 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                         "annotation_count": markup_version.get("annotation_count") or 0,
                         "annotations": markup_version.get("annotations") or [],
                         "visible_layers": markup_version.get("visible_layers") or {},
+                        "locked_layers": markup_version.get("locked_layers") or {},
+                        "measurement_calibration": markup_version.get("measurement_calibration") or {},
                     }
                 image.image.open("rb")
                 copied_images.append(
