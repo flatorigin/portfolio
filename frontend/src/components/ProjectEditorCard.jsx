@@ -764,18 +764,6 @@ export default function ProjectEditorCard({
 	                              <SymbolIcon name="draw" className="text-[18px]" />
 	                            </a>
 	                          )}
-	                          {markupSnapshotUrl && (
-	                            <a
-	                              href={markupSnapshotUrl}
-	                              target="_blank"
-	                              rel="noreferrer"
-	                              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm transition hover:bg-emerald-50 sm:h-9 sm:w-9"
-	                              title="Open markup preview"
-	                              aria-label="Open markup preview"
-	                            >
-	                              <SymbolIcon name="visibility" className="text-[18px]" />
-	                            </a>
-	                          )}
 	                          {mediaType === "image" && !isCover && (
 	                            <button
 	                              type="button"
