@@ -158,6 +158,12 @@ function normalizeMarkupText(value) {
   return String(value || "").replace(/[ \t]+$/gm, "").replace(/\s+$/g, "");
 }
 
+function withoutLegacyStrokeAlignment(item) {
+  const normalized = { ...item };
+  delete normalized.strokeAlign;
+  return normalized;
+}
+
 function hexToRgba(hex, alpha = 1) {
   const normalized = String(hex || DEFAULT_MARKUP_COLOR).replace("#", "");
   if (!/^[0-9a-f]{6}$/i.test(normalized)) return `rgba(15, 23, 42, ${alpha})`;
@@ -2253,7 +2259,9 @@ export default function ProjectMarkupCanvas() {
     const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
     const normalizedAnnotations = annotations.map((item) => {
-      const normalizedItem = enforceLockedEraserOpacity(item, !!lockedLayers[item.id]);
+      const normalizedItem = withoutLegacyStrokeAlignment(
+        enforceLockedEraserOpacity(item, !!lockedLayers[item.id]),
+      );
       return {
         ...normalizedItem,
         layer: item.id,
@@ -3180,7 +3188,6 @@ export default function ProjectMarkupCanvas() {
       strokeWidth: tool === "background_eraser" ? DEFAULT_ERASER_WIDTH : activeStrokeWidth,
       strokeOpacity: tool === "background_eraser" ? 1 : activeStrokeOpacity,
       fillOpacity: tool === "pen" ? 0 : activeFillOpacity,
-      strokeAlign: "center",
       startEndpoint: "none",
       endEndpoint: tool === "arrow" ? "arrow" : "none",
       strokeStyle: supportsWallStroke({ type: tool }) ? activeStrokeStyle : "solid",
@@ -3682,7 +3689,9 @@ export default function ProjectMarkupCanvas() {
       try {
         const now = new Date().toISOString();
         const normalizedAnnotations = annotations.map((item) => {
-          const normalizedItem = enforceLockedEraserOpacity(item, !!lockedLayers[item.id]);
+          const normalizedItem = withoutLegacyStrokeAlignment(
+            enforceLockedEraserOpacity(item, !!lockedLayers[item.id]),
+          );
           return item.type === "text" || item.type === "measure"
             ? { ...normalizedItem, text: normalizeMarkupText(item.text) }
             : normalizedItem;
@@ -3898,7 +3907,6 @@ export default function ProjectMarkupCanvas() {
   const currentStrokeOpacity = selectedStyle?.strokeOpacity ?? activeStrokeOpacity;
   const currentFillOpacity = selectedStyle?.fillOpacity ?? activeFillOpacity;
   const currentStrokeStyle = selectedForEditing ? selectedStyle.strokeStyle : activeStrokeStyle;
-  const currentStrokeAlign = selectedForEditing?.strokeAlign || "center";
   const currentStartEndpoint = selectedForEditing?.startEndpoint || "none";
   const currentEndEndpoint = selectedForEditing?.endEndpoint || (selectedForEditing?.type === "arrow" ? "arrow" : "none");
   const selectedReferenceLine = selectedForEditing && isLineLike(selectedForEditing) ? selectedForEditing : null;
@@ -4089,10 +4097,6 @@ export default function ProjectMarkupCanvas() {
     if (normalizedStyle === "wall" && !wallStyleAvailable) return;
     setActiveStrokeStyle(normalizedStyle);
     if (selectedForEditing) updateSelected({ strokeStyle: normalizedStyle });
-  }
-
-  function changeStrokeAlign(nextAlign) {
-    if (selectedForEditing) updateSelected({ strokeAlign: nextAlign });
   }
 
   function changeEndpoint(position, value) {
@@ -4912,28 +4916,6 @@ export default function ProjectMarkupCanvas() {
                         }
                       >
                         {itemStyle}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-2 text-xs font-medium text-slate-500">Stroke alignment</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {["inside", "center", "outside"].map((align) => (
-                      <button
-                        key={align}
-                        type="button"
-                        onClick={() => changeStrokeAlign(align)}
-                        disabled={!selectedForEditing}
-                        className={
-                          "h-8 rounded-lg border px-2 text-xs capitalize transition disabled:opacity-50 " +
-                          (currentStrokeAlign === align
-                            ? "border-slate-950 bg-slate-950 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
-                        }
-                      >
-                        {align}
                       </button>
                     ))}
                   </div>
