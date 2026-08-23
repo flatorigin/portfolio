@@ -4582,9 +4582,8 @@ export default function ProjectMarkupCanvas() {
                       type="button"
                       disabled={sketchBusy || !sketchSource}
                       onClick={createCleanFloorPlanFromSketchSource}
-                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                      className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                     >
-                      <SymbolIcon name="floor_plan" className="text-[18px]" />
                       {sketchBusy ? "Creating floor-plan PNG..." : "Create floor-plan PNG"}
                     </button>
                     {sketchPhase !== "idle" ? (
