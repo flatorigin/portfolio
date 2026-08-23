@@ -74,11 +74,6 @@ const MARKUP_LABEL_FONT_SIZE = 10;
 const MARKUP_MEASURE_FONT_SIZE = 10;
 const MARKUP_SEGMENT_FONT_SIZE = 9;
 const CURVE_HANDLE_OFFSET = 34;
-const LINE_ENDPOINT_OPTIONS = [
-  { key: "none", label: "None" },
-  { key: "arrow", label: "Arrow" },
-  { key: "dot", label: "Dot" },
-];
 const ROUGH_GRID_SIZE = 40;
 const ROUGH_SOFT_SNAP_DISTANCE = 9;
 const ROUGH_PLAN_GRID_MARGIN_UNITS = 4;
@@ -158,9 +153,11 @@ function normalizeMarkupText(value) {
   return String(value || "").replace(/[ \t]+$/gm, "").replace(/\s+$/g, "");
 }
 
-function withoutLegacyStrokeAlignment(item) {
+function withoutLegacyStrokeOptions(item) {
   const normalized = { ...item };
   delete normalized.strokeAlign;
+  delete normalized.startEndpoint;
+  delete normalized.endEndpoint;
   return normalized;
 }
 
@@ -215,10 +212,6 @@ function strokeWidthFor(item) {
 
 function markerIdForColor(color) {
   return `arrow-${String(color || DEFAULT_MARKUP_COLOR).replace(/[^a-z0-9]/gi, "")}`;
-}
-
-function dotMarkerIdForColor(color) {
-  return `dot-${String(color || DEFAULT_MARKUP_COLOR).replace(/[^a-z0-9]/gi, "")}`;
 }
 
 function svgToDataUrl(svg) {
@@ -1316,8 +1309,6 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeDasharray={style.strokeDasharray}
-            markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
-            markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined}
           />
         )}
         {shouldShowLengths && item.type === "pen"
@@ -1369,13 +1360,7 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
   }
 
   if (item.type === "line" || item.type === "arrow" || item.type === "measure") {
-    const markerStart = item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined;
-    const markerEnd =
-      item.type === "arrow" || item.endEndpoint === "arrow"
-        ? `url(#${markerIdForColor(stroke)})`
-        : item.endEndpoint === "dot"
-          ? `url(#${dotMarkerIdForColor(stroke)})`
-          : undefined;
+    const markerEnd = item.type === "arrow" ? `url(#${markerIdForColor(stroke)})` : undefined;
     const labelPoint = quadraticPoint(item, 0.5);
     const midX = labelPoint.x;
     const midY = labelPoint.y;
@@ -1435,7 +1420,6 @@ function renderAnnotation(item, { selected = false, editing = false, locked = fa
             strokeOpacity={style.strokeOpacity}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
-            markerStart={markerStart}
             markerEnd={markerEnd}
             strokeDasharray={style.strokeDasharray}
           />
@@ -2259,7 +2243,7 @@ export default function ProjectMarkupCanvas() {
     const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
     const normalizedAnnotations = annotations.map((item) => {
-      const normalizedItem = withoutLegacyStrokeAlignment(
+      const normalizedItem = withoutLegacyStrokeOptions(
         enforceLockedEraserOpacity(item, !!lockedLayers[item.id]),
       );
       return {
@@ -3188,8 +3172,6 @@ export default function ProjectMarkupCanvas() {
       strokeWidth: tool === "background_eraser" ? DEFAULT_ERASER_WIDTH : activeStrokeWidth,
       strokeOpacity: tool === "background_eraser" ? 1 : activeStrokeOpacity,
       fillOpacity: tool === "pen" ? 0 : activeFillOpacity,
-      startEndpoint: "none",
-      endEndpoint: tool === "arrow" ? "arrow" : "none",
       strokeStyle: supportsWallStroke({ type: tool }) ? activeStrokeStyle : "solid",
       points: tool === "freehand" || tool === "background_eraser" ? [point] : tool === "pen" ? [point, point] : undefined,
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
@@ -3689,7 +3671,7 @@ export default function ProjectMarkupCanvas() {
       try {
         const now = new Date().toISOString();
         const normalizedAnnotations = annotations.map((item) => {
-          const normalizedItem = withoutLegacyStrokeAlignment(
+          const normalizedItem = withoutLegacyStrokeOptions(
             enforceLockedEraserOpacity(item, !!lockedLayers[item.id]),
           );
           return item.type === "text" || item.type === "measure"
@@ -3907,8 +3889,6 @@ export default function ProjectMarkupCanvas() {
   const currentStrokeOpacity = selectedStyle?.strokeOpacity ?? activeStrokeOpacity;
   const currentFillOpacity = selectedStyle?.fillOpacity ?? activeFillOpacity;
   const currentStrokeStyle = selectedForEditing ? selectedStyle.strokeStyle : activeStrokeStyle;
-  const currentStartEndpoint = selectedForEditing?.startEndpoint || "none";
-  const currentEndEndpoint = selectedForEditing?.endEndpoint || (selectedForEditing?.type === "arrow" ? "arrow" : "none");
   const selectedReferenceLine = selectedForEditing && isLineLike(selectedForEditing) ? selectedForEditing : null;
   const selectedReferenceLineId = selectedReferenceLine?.id || "";
   const selectedReferencePixelLength = selectedReferenceLine ? lineLengthPx(selectedReferenceLine) : 0;
@@ -3933,9 +3913,6 @@ export default function ProjectMarkupCanvas() {
   );
   const currentFillMaterialOption =
     fillMaterialLibrary.find((material) => material.key === currentFillMaterial) || FILL_MATERIALS[0];
-  const selectedSupportsEndpoints =
-    (!selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type)) &&
-    currentStrokeStyle !== "wall";
   const wallStyleAvailable = supportsWallStroke(selectedForEditing);
 
   useEffect(() => {
@@ -4097,11 +4074,6 @@ export default function ProjectMarkupCanvas() {
     if (normalizedStyle === "wall" && !wallStyleAvailable) return;
     setActiveStrokeStyle(normalizedStyle);
     if (selectedForEditing) updateSelected({ strokeStyle: normalizedStyle });
-  }
-
-  function changeEndpoint(position, value) {
-    if (!selectedForEditing) return;
-    updateSelected(position === "start" ? { startEndpoint: value } : { endEndpoint: value });
   }
 
   function isSidebarSectionOpen(sectionId) {
@@ -4921,40 +4893,6 @@ export default function ProjectMarkupCanvas() {
                   </div>
                 </div>
 
-                {selectedSupportsEndpoints ? (
-                  <div>
-                    <div className="mb-2 text-xs font-medium text-slate-500">Endpoints</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="block">
-                        <span className="mb-1 block text-[11px] text-slate-400">Start</span>
-                        <select
-                          value={currentStartEndpoint}
-                          onChange={(event) => changeEndpoint("start", event.target.value)}
-                          disabled={!selectedForEditing}
-                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none disabled:opacity-50"
-                        >
-                          {LINE_ENDPOINT_OPTIONS.map((item) => (
-                            <option key={item.key} value={item.key}>{item.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block">
-                        <span className="mb-1 block text-[11px] text-slate-400">End</span>
-                        <select
-                          value={currentEndEndpoint}
-                          onChange={(event) => changeEndpoint("end", event.target.value)}
-                          disabled={!selectedForEditing}
-                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none disabled:opacity-50"
-                        >
-                          {LINE_ENDPOINT_OPTIONS.map((item) => (
-                            <option key={item.key} value={item.key}>{item.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                ) : null}
-
                 {(selectedForEditing && isLineLike(selectedForEditing)) || ["line", "measure"].includes(tool) ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between gap-2">
@@ -5690,16 +5628,6 @@ export default function ProjectMarkupCanvas() {
                       markerUnits="strokeWidth"
                     >
                       <path d="M2,2 L10,6 L2,10 Z" fill={itemColor} />
-                    </marker>
-                    <marker
-                      id={dotMarkerIdForColor(itemColor)}
-                      markerWidth="8"
-                      markerHeight="8"
-                      refX="4"
-                      refY="4"
-                      markerUnits="strokeWidth"
-                    >
-                      <circle cx="4" cy="4" r="3" fill={itemColor} />
                     </marker>
                   </g>
                 ))}

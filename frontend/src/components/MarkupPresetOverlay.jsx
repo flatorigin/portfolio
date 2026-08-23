@@ -79,10 +79,6 @@ function markerIdForColor(color) {
   return `arrow-${String(color || DEFAULT_MARKUP_COLOR).replace(/[^a-z0-9]/gi, "")}`;
 }
 
-function dotMarkerIdForColor(color) {
-  return `dot-${String(color || DEFAULT_MARKUP_COLOR).replace(/[^a-z0-9]/gi, "")}`;
-}
-
 function annotationBounds(item) {
   if (["freehand", "pen", "background_eraser"].includes(item?.type) && Array.isArray(item.points) && item.points.length) {
     const curvePoints =
@@ -308,7 +304,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
         {wallPath ? (
           <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
         ) : (
-          <path d={d} fill={item.type === "pen" && item.closed ? style.fill : "none"} fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={style.strokeDasharray} markerStart={item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined} markerEnd={item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined} />
+          <path d={d} fill={item.type === "pen" && item.closed ? style.fill : "none"} fillOpacity={item.type === "pen" && item.closed ? style.svgFillOpacity : undefined} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={style.strokeDasharray} />
         )}
         {shouldShowLengths && item.type === "pen" ? points.slice(0, -1).map((point, index) => {
           const nextPoint = points[index + 1];
@@ -323,8 +319,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
   }
 
   if (["line", "arrow", "measure"].includes(item.type)) {
-    const markerStart = item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined;
-    const markerEnd = item.type === "arrow" || item.endEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.endEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined;
+    const markerEnd = item.type === "arrow" ? `url(#${markerIdForColor(stroke)})` : undefined;
     const labelPoint = quadraticPoint(item, 0.5);
     const dx = (item.x2 || 0) - (item.x || 0);
     const dy = (item.y2 || 0) - (item.y || 0);
@@ -344,7 +339,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
         {wallPath ? (
           <path d={wallPath} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={WALL_STROKE_OUTLINE_WIDTH} strokeLinecap="butt" strokeLinejoin="miter" strokeMiterlimit="4" />
         ) : (
-          <path d={linePathD(item)} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" markerStart={markerStart} markerEnd={markerEnd} strokeDasharray={style.strokeDasharray} />
+          <path d={linePathD(item)} fill="none" stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="round" markerEnd={markerEnd} strokeDasharray={style.strokeDasharray} />
         )}
         {item.type === "measure" ? <><line x1={(item.x || 0) - capX} y1={(item.y || 0) - capY} x2={(item.x || 0) + capX} y2={(item.y || 0) + capY} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="square" strokeDasharray={style.strokeDasharray} /><line x1={(item.x2 || 0) - capX} y1={(item.y2 || 0) - capY} x2={(item.x2 || 0) + capX} y2={(item.y2 || 0) + capY} stroke={stroke} strokeOpacity={style.strokeOpacity} strokeWidth={strokeWidth} strokeLinecap="square" strokeDasharray={style.strokeDasharray} /></> : null}
         {((item.type === "measure" && (liveLength || item.text || showSegmentLengths)) || (item.type === "line" && shouldShowLengths)) && !editing && label ? <g><rect x={labelPoint.x - box.width / 2} y={labelY} width={box.width} height={box.height} rx="5" fill="rgba(255,255,255,0.76)" stroke={hexToRgba(stroke, 0.34)} strokeWidth="0.85" /><text x={labelX + box.paddingX} y={labelY + box.paddingY + MARKUP_MEASURE_FONT_SIZE} fill="#0f172a" fontSize={MARKUP_MEASURE_FONT_SIZE} fontWeight="550">{box.lines.map((line, index) => <tspan key={`${item.id}-line-${index}`} x={labelX + box.paddingX} dy={index === 0 ? 0 : box.lineHeight}>{line}</tspan>)}</text></g> : null}
@@ -374,7 +369,7 @@ export function renderMarkupAnnotation(item, { selected = false, editing = false
 function MarkupCanvasDefs({ colors }) {
   return (
     <defs>
-      {colors.map((color) => <g key={color}><marker id={markerIdForColor(color)} markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L10,6 L2,10 Z" fill={color} /></marker><marker id={dotMarkerIdForColor(color)} markerWidth="8" markerHeight="8" refX="4" refY="4" markerUnits="strokeWidth"><circle cx="4" cy="4" r="3" fill={color} /></marker></g>)}
+      {colors.map((color) => <marker key={color} id={markerIdForColor(color)} markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L10,6 L2,10 Z" fill={color} /></marker>)}
       <pattern id="fill-material-deck" width="34" height="34" patternUnits="userSpaceOnUse"><rect width="34" height="34" fill="#fff" /><rect x="0" y="0" width="15" height="34" fill="#f1f5f9" /><rect x="16" y="0" width="16" height="34" fill="#fff" /><line x1="16" y1="0" x2="16" y2="34" stroke="#111827" strokeWidth="2" opacity="0.8" /><line x1="33" y1="0" x2="33" y2="34" stroke="#475569" strokeWidth="1.5" opacity="0.65" /></pattern>
       <pattern id="fill-material-gravel" width="42" height="42" patternUnits="userSpaceOnUse"><rect width="42" height="42" fill="#fff" /><circle cx="8" cy="11" r="3" fill="#111827" opacity="0.72" /><circle cx="23" cy="8" r="2.4" fill="#94a3b8" opacity="0.9" /><circle cx="34" cy="19" r="3.3" fill="#0f172a" opacity="0.58" /><circle cx="15" cy="31" r="2.8" fill="#64748b" opacity="0.78" /><circle cx="31" cy="35" r="2.2" fill="#111827" opacity="0.62" /></pattern>
       <pattern id="fill-material-concrete" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#f8fafc" /><circle cx="10" cy="14" r="1.2" fill="#64748b" opacity="0.65" /><circle cx="33" cy="11" r="1" fill="#cbd5e1" opacity="0.9" /><circle cx="22" cy="32" r="1.4" fill="#64748b" opacity="0.55" /><path d="M2 40 C 12 35, 20 44, 31 38 S 43 37, 48 33" stroke="#94a3b8" strokeWidth="1" fill="none" opacity="0.8" /></pattern>

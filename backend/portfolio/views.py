@@ -163,8 +163,6 @@ def normalize_sketch_annotations_payload(payload):
             "strokeWidth": sketch_float(raw.get("strokeWidth"), 2, 1, 18),
             "strokeOpacity": sketch_float(raw.get("strokeOpacity"), 1, 0, 1),
             "fillOpacity": sketch_float(raw.get("fillOpacity"), 0.12 if item_type in {"rect", "circle"} else 0, 0, 1),
-            "startEndpoint": str(raw.get("startEndpoint") or "none") if str(raw.get("startEndpoint") or "none") in {"none", "arrow", "dot"} else "none",
-            "endEndpoint": "arrow" if item_type == "arrow" else (str(raw.get("endEndpoint") or "none") if str(raw.get("endEndpoint") or "none") in {"none", "arrow", "dot"} else "none"),
             "strokeStyle": "dashed" if str(raw.get("strokeStyle") or "").lower() == "dashed" else "solid",
             "canvasMode": "rough_plan",
         }
