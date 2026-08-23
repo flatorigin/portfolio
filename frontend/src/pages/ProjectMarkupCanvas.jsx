@@ -101,8 +101,18 @@ function safeMarkupData(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function isLegacySchematicVersion(version) {
+  return ["assisted_trace", "rough_plan"].includes(version?.version_type);
+}
+
 function withoutAutomaticTrace(items) {
-  return Array.isArray(items) ? items.filter((item) => item?.source !== "ai_clean_plan_trace") : [];
+  return Array.isArray(items)
+    ? items.filter((item) => (
+        item?.source !== "ai_clean_plan_trace" &&
+        item?.source !== "assisted_trace" &&
+        item?.canvasMode !== "rough_plan"
+      ))
+    : [];
 }
 
 function isPersistableUrl(value) {
@@ -1707,10 +1717,7 @@ export default function ProjectMarkupCanvas() {
   const isProjectImageMode = Boolean(projectId && imageId);
   const storageKey = `${STORAGE_PREFIX}:${planId ? `plan:${planId}` : isProjectImageMode ? `project:${projectId}:${imageId}` : "standalone"}`;
   const selectedImageId = useMemo(() => new URLSearchParams(location.search).get("image") || "", [location.search]);
-  const sketchUploadRequested = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get("trace") === "1" || params.get("sketch") === "1";
-  }, [location.search]);
+  const sketchUploadRequested = false;
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1023px)");
@@ -1777,10 +1784,7 @@ export default function ProjectMarkupCanvas() {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "{}");
       if (saved.backgroundUrl) setBackgroundUrl(saved.backgroundUrl);
       if (Array.isArray(saved.annotations)) setAnnotations(withoutAutomaticTrace(saved.annotations));
-      if (saved.canvasMode === "rough_plan" || saved.canvasMode === "photo") setCanvasMode(saved.canvasMode);
-      if (saved.roughPlan && typeof saved.roughPlan === "object") {
-        setRoughPlan((prev) => ({ ...prev, ...saved.roughPlan }));
-      }
+      setCanvasMode("photo");
       if (saved.activeStrokeWidth) setActiveStrokeWidth(clamp(Number(saved.activeStrokeWidth) || DEFAULT_STROKE_WIDTH, 1, 18));
       if (saved.activeColor) setActiveColor(saved.activeColor);
       if (saved.activeFillColor) setActiveFillColor(saved.activeFillColor);
@@ -1795,9 +1799,6 @@ export default function ProjectMarkupCanvas() {
           setMeasurementCalibrationInputLength(String(saved.measurementCalibration.length));
         }
       }
-      if (saved.traceSettings && typeof saved.traceSettings === "object") {
-        setTraceSettings((prev) => ({ ...prev, ...saved.traceSettings }));
-      }
       if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
       // Ignore broken session drafts.
@@ -1807,9 +1808,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, traceSettings, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode: "photo", activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, traceSettings, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, hideTextAndMeasurements, lockedLayers, measurementCalibration, storageKey, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -1823,7 +1824,7 @@ export default function ProjectMarkupCanvas() {
 
   useEffect(() => {
     let alive = true;
-    if (!backgroundUrl || canvasMode === "rough_plan") {
+    if (!backgroundUrl) {
       setBackgroundImageDimensions(null);
       return () => {
         alive = false;
@@ -1836,7 +1837,7 @@ export default function ProjectMarkupCanvas() {
     return () => {
       alive = false;
     };
-  }, [backgroundUrl, canvasMode]);
+  }, [backgroundUrl]);
 
   useEffect(() => {
     if (!planId) return;
@@ -1854,6 +1855,7 @@ export default function ProjectMarkupCanvas() {
         const selectedImageVersion =
           selectedImage && Array.isArray(markup.versions)
             ? markup.versions.find((version) => {
+                if (isLegacySchematicVersion(version)) return false;
                 if (version.source_image_id && String(version.source_image_id) === String(selectedImage.id)) return true;
                 return version.background_url && version.background_url === selectedImage.image_url;
               })
@@ -1862,10 +1864,7 @@ export default function ProjectMarkupCanvas() {
         if (selectedImageVersion) {
           setAnnotations(withoutAutomaticTrace(selectedImageVersion.annotations));
           setBackgroundUrl(selectedImageVersion.background_url || selectedImage.image_url || "");
-          setCanvasMode(selectedImageVersion.version_type === "rough_plan" ? "rough_plan" : "photo");
-          if (selectedImageVersion.rough_plan && typeof selectedImageVersion.rough_plan === "object") {
-            setRoughPlan((prev) => ({ ...prev, ...selectedImageVersion.rough_plan }));
-          }
+          setCanvasMode("photo");
           if (selectedImageVersion.visible_layers && typeof selectedImageVersion.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...selectedImageVersion.visible_layers }));
           }
@@ -1878,9 +1877,6 @@ export default function ProjectMarkupCanvas() {
               setMeasurementCalibrationInputLength(String(selectedImageVersion.measurement_calibration.length));
             }
           }
-          if (selectedImageVersion.trace_settings && typeof selectedImageVersion.trace_settings === "object") {
-            setTraceSettings((prev) => ({ ...prev, ...selectedImageVersion.trace_settings, active: true }));
-          }
         } else if (selectedImage) {
           setAnnotations([]);
           setBackgroundUrl(selectedImage.image_url || "");
@@ -1888,10 +1884,7 @@ export default function ProjectMarkupCanvas() {
         } else {
           if (Array.isArray(markup.annotations)) setAnnotations(withoutAutomaticTrace(markup.annotations));
           if (markup.background_url) setBackgroundUrl(markup.background_url);
-          if (markup.canvas_mode === "rough_plan" || markup.version_type === "rough_plan") setCanvasMode("rough_plan");
-          if (markup.rough_plan && typeof markup.rough_plan === "object") {
-            setRoughPlan((prev) => ({ ...prev, ...markup.rough_plan }));
-          }
+          setCanvasMode("photo");
           if (markup.visible_layers && typeof markup.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...markup.visible_layers }));
           }
@@ -1903,9 +1896,6 @@ export default function ProjectMarkupCanvas() {
             if (markup.measurement_calibration.length != null) {
               setMeasurementCalibrationInputLength(String(markup.measurement_calibration.length));
             }
-          }
-          if (markup.trace_settings && typeof markup.trace_settings === "object") {
-            setTraceSettings((prev) => ({ ...prev, ...markup.trace_settings, active: true }));
           }
         }
       })
@@ -1940,13 +1930,10 @@ export default function ProjectMarkupCanvas() {
         setProjectImage(image);
         const url = projectImageUrl(image);
         const markupVersion = image.extra_data?.markup_version;
-        if (markupVersion && typeof markupVersion === "object") {
+        if (markupVersion && typeof markupVersion === "object" && !isLegacySchematicVersion(markupVersion)) {
           setAnnotations(withoutAutomaticTrace(markupVersion.annotations));
           setBackgroundUrl(markupVersion.background_url || url || "");
-          setCanvasMode(markupVersion.version_type === "rough_plan" ? "rough_plan" : "photo");
-          if (markupVersion.rough_plan && typeof markupVersion.rough_plan === "object") {
-            setRoughPlan((prev) => ({ ...prev, ...markupVersion.rough_plan }));
-          }
+          setCanvasMode("photo");
           if (markupVersion.visible_layers && typeof markupVersion.visible_layers === "object") {
             setVisibleLayers((prev) => ({ ...prev, ...markupVersion.visible_layers }));
           }
@@ -1958,9 +1945,6 @@ export default function ProjectMarkupCanvas() {
             if (markupVersion.measurement_calibration.length != null) {
               setMeasurementCalibrationInputLength(String(markupVersion.measurement_calibration.length));
             }
-          }
-          if (markupVersion.trace_settings && typeof markupVersion.trace_settings === "object") {
-            setTraceSettings((prev) => ({ ...prev, ...markupVersion.trace_settings, active: true }));
           }
         } else {
           setAnnotations([]);
@@ -2072,8 +2056,8 @@ export default function ProjectMarkupCanvas() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [history, annotations, selectedId]);
 
-  const isRoughPlan = canvasMode === "rough_plan";
-  const isAssistedTrace = !isRoughPlan && traceSettings.active;
+  const isRoughPlan = false;
+  const isAssistedTrace = false;
   const roughGeometry = useMemo(() => roughPlanGeometry(roughPlan), [roughPlan]);
   const calibratedMeasurementGeometry = useMemo(() => {
     const scale = Number(measurementCalibration?.scale || 0);
@@ -2162,7 +2146,9 @@ export default function ProjectMarkupCanvas() {
 
   const savedVersions = useMemo(() => {
     const markup = safeMarkupData(plan?.markup_data);
-    return Array.isArray(markup.versions) ? markup.versions : [];
+    return Array.isArray(markup.versions)
+      ? markup.versions.filter((version) => !isLegacySchematicVersion(version))
+      : [];
   }, [plan]);
   const sketchSourceImages = useMemo(() => {
     const images = isProjectImageMode
@@ -2182,7 +2168,7 @@ export default function ProjectMarkupCanvas() {
     const now = new Date().toISOString();
     const background_url = isPersistableUrl(backgroundUrl) ? backgroundUrl : "";
     const existingVersions = Array.isArray(previousMarkup.versions)
-      ? previousMarkup.versions
+      ? previousMarkup.versions.filter((version) => !isLegacySchematicVersion(version))
       : [];
     const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
@@ -2194,34 +2180,30 @@ export default function ProjectMarkupCanvas() {
     const version = {
       id: `version-${Date.now()}`,
       name: versionOverrides.name || MARKUP_FLOOR_PLAN_NAME,
-      version_type: isRoughPlan ? "rough_plan" : isAssistedTrace ? "assisted_trace" : "photo_markup",
-      type_label: modeLabel,
+      version_type: "photo_markup",
+      type_label: "Photo markup",
       created_at: now,
-      background_url: isRoughPlan ? "" : background_url,
-      source_image_id: traceSettings.sourceImageId || sourceImage?.id || null,
+      background_url,
+      source_image_id: sourceImage?.id || null,
       snapshot_url: versionOverrides.snapshot_url || "",
       snapshot_image_id: versionOverrides.snapshot_image_id || null,
       annotations: normalizedAnnotations,
-      rough_plan: isRoughPlan ? roughPlan : undefined,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
-      trace_settings: isAssistedTrace ? traceSettings : undefined,
       annotation_count: normalizedAnnotations.length,
     };
 
     return {
       schema_version: 1,
       canvas: { width: CANVAS_W, height: CANVAS_H },
-      canvas_mode: canvasMode,
-      version_type: isRoughPlan ? "rough_plan" : isAssistedTrace ? "assisted_trace" : "photo_markup",
-      rough_plan: isRoughPlan ? roughPlan : undefined,
-      background_url: isRoughPlan ? "" : background_url,
+      canvas_mode: "photo",
+      version_type: "photo_markup",
+      background_url,
       annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
-      trace_settings: isAssistedTrace ? traceSettings : undefined,
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
     };
@@ -2623,22 +2605,6 @@ export default function ProjectMarkupCanvas() {
       return;
     }
     selectTool(toolKey);
-  }
-
-  function switchCanvasMode(nextMode) {
-    if (nextMode === canvasMode) return;
-    if (annotations.length && !window.confirm("Switch modes and clear the current unsaved annotations? Save first if you need this version.")) {
-      return;
-    }
-    commitAnnotations([]);
-    setSelectedId("");
-    setEditingTextId("");
-    setCanvasMode(nextMode);
-    setTool("select");
-    if (nextMode === "rough_plan") {
-      setBackgroundUrl("");
-      setTraceSettings((prev) => ({ ...prev, active: false }));
-    }
   }
 
   function finishPenPath({ exitTool = false, closed = false } = {}) {
@@ -3760,20 +3726,18 @@ export default function ProjectMarkupCanvas() {
         const markupVersion = {
           id: previousExtraData.markup_version?.id || `project-image-markup-${Date.now()}`,
           name: previousExtraData.markup_version?.name || MARKUP_FLOOR_PLAN_NAME,
-          version_type: isRoughPlan ? "rough_plan" : isAssistedTrace ? "assisted_trace" : "photo_markup",
-          type_label: modeLabel,
+          version_type: "photo_markup",
+          type_label: "Photo markup",
           created_at: previousExtraData.markup_version?.created_at || now,
           updated_at: now,
-          source_image_id: traceSettings.sourceImageId || projectImage.id,
-          background_url: isRoughPlan ? "" : isPersistableUrl(backgroundUrl) ? backgroundUrl : (projectImage.url || ""),
+          source_image_id: projectImage.id,
+          background_url: isPersistableUrl(backgroundUrl) ? backgroundUrl : (projectImage.url || ""),
           snapshot_url: versionSnapshotUrl || previousExtraData.markup_version?.snapshot_url || "",
           snapshot_image_id: versionSnapshotImageId || previousExtraData.markup_version?.snapshot_image_id || null,
           annotations: normalizedAnnotations,
-          rough_plan: isRoughPlan ? roughPlan : undefined,
           visible_layers: visibleLayers,
           locked_layers: lockedLayers,
           measurement_calibration: measurementCalibration,
-          trace_settings: isAssistedTrace ? traceSettings : undefined,
           annotation_count: normalizedAnnotations.length,
         };
         const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
@@ -3826,16 +3790,10 @@ export default function ProjectMarkupCanvas() {
   }
 
   function restoreVersion(version) {
-    if (!version) return;
+    if (!version || isLegacySchematicVersion(version)) return;
     if (Array.isArray(version.annotations)) commitAnnotations(withoutAutomaticTrace(version.annotations));
-    const nextMode = version.version_type === "rough_plan" ? "rough_plan" : "photo";
-    setCanvasMode(nextMode);
-    if (nextMode === "rough_plan") {
-      setBackgroundUrl("");
-      if (version.rough_plan && typeof version.rough_plan === "object") {
-        setRoughPlan((prev) => ({ ...prev, ...version.rough_plan }));
-      }
-    } else if (version.background_url) {
+    setCanvasMode("photo");
+    if (version.background_url) {
       setBackgroundUrl(version.background_url);
     }
     if (version.visible_layers && typeof version.visible_layers === "object") {
@@ -3850,11 +3808,7 @@ export default function ProjectMarkupCanvas() {
         setMeasurementCalibrationInputLength(String(version.measurement_calibration.length));
       }
     }
-    if (version.version_type === "assisted_trace" || version.trace_settings) {
-      setTraceSettings((prev) => ({ ...prev, ...(version.trace_settings || {}), active: true }));
-    } else {
-      setTraceSettings((prev) => ({ ...prev, active: false }));
-    }
+    setTraceSettings((prev) => ({ ...prev, active: false }));
     setSelectedId("");
     setEditingTextId("");
     setMessage("Version restored locally. Save editable canvas to keep it as the current version.");
@@ -4474,38 +4428,12 @@ export default function ProjectMarkupCanvas() {
             </div>
             <CollapsibleSection
               id="mode"
-              title="Markup mode"
+              title="Measurement scale"
               open={isSidebarSectionOpen("mode")}
               pinned={pinnedSidebarSections.has("mode")}
               onToggle={toggleSidebarSection}
               onPin={toggleSidebarPin}
             >
-              {isAssistedTrace || sketchUploadRequested ? (
-                <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-900">
-                  Assisted tracing
-                </div>
-              ) : (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => switchCanvasMode("photo")}
-                  className={`h-10 rounded-xl border px-3 text-sm font-medium ${
-                    !isRoughPlan ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  Photo Markup
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchCanvasMode("rough_plan")}
-                  className={`h-10 rounded-xl border px-3 text-sm font-medium ${
-                    isRoughPlan ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  Create Plan
-                </button>
-              </div>
-              )}
               {!isRoughPlan ? (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="flex items-center justify-between gap-2">

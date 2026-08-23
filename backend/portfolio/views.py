@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from accounts.ai import AIServiceError, generate_text, generate_text_with_image
+from accounts.ai import AIServiceError, generate_image_from_image, generate_text
 from accounts.geo_distance import get_request_origin, sort_by_distance
 from accounts.models import (
     AIConfiguration,
@@ -75,16 +75,6 @@ from .project_intake import (
     load_project_intake_templates,
     summarize_markup_notes,
 )
-from .floor_plan import (
-    apply_dimension_overrides,
-    build_floor_plan_extraction_prompts,
-    measurement_calibration_from_geometry,
-    normalize_plan_geometry,
-    parse_length_to_inches,
-    render_plan_geometry_png,
-    source_image_dimensions,
-)
-
 logger = logging.getLogger(__name__)
 SUPPORTED_PROJECT_IMAGE_CONTENT_TYPES = {
     "image/jpeg",
@@ -111,113 +101,6 @@ SUPPORTED_PROJECT_IMAGE_EXTENSIONS = (
 )
 SUPPORTED_SKETCH_PLAN_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_SKETCH_PLAN_IMAGE_SIZE = 15 * 1024 * 1024
-MARKUP_CANVAS_WIDTH = 1200
-MARKUP_CANVAS_HEIGHT = 760
-
-
-def sketch_float(value, default=0, min_value=0, max_value=MARKUP_CANVAS_WIDTH):
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        number = default
-    return max(min_value, min(max_value, number))
-
-
-def normalize_sketch_rough_plan_payload(payload):
-    source = payload.get("rough_plan") if isinstance(payload, dict) else {}
-    if not isinstance(source, dict):
-        source = {}
-    width = sketch_float(source.get("width"), 20, 1, 500)
-    length = sketch_float(source.get("length"), 30, 1, 500)
-    unit = str(source.get("unit") or "ft").strip().lower()
-    if unit not in {"ft", "in", "m"}:
-        unit = "ft"
-    scale_source = str(source.get("scale_source") or source.get("scaleSource") or "measured").strip().lower()
-    if scale_source not in {"measured", "image_aspect", "requested"}:
-        scale_source = "measured"
-    grid_visible = True
-    return {
-        "width": str(int(width) if width.is_integer() else round(width, 2)),
-        "length": str(int(length) if length.is_integer() else round(length, 2)),
-        "unit": unit,
-        "snap": grid_visible,
-        "zoom": 100,
-        "grid_visible": grid_visible,
-        "scale_source": scale_source,
-    }
-
-
-def normalize_sketch_annotations_payload(payload):
-    items = payload.get("annotations") if isinstance(payload, dict) else []
-    if not isinstance(items, list):
-        return []
-    allowed = {"line", "arrow", "rect", "circle", "text", "measure", "door", "window", "tree", "steps", "fence", "pen"}
-    normalized = []
-    for index, raw in enumerate(items[:80]):
-        if not isinstance(raw, dict):
-            continue
-        item_type = str(raw.get("type") or "").strip().lower()
-        if item_type not in allowed:
-            continue
-        item_id = f"ai-sketch-{timezone.now().strftime('%Y%m%d%H%M%S')}-{index}"
-        base = {
-            "id": item_id,
-            "layer": item_id,
-            "type": item_type,
-            "color": "#111827",
-            "strokeColor": "#111827",
-            "fillColor": "#111827",
-            "fillMaterial": "flat",
-            "colorLabel": "AI rough plan",
-            "strokeWidth": sketch_float(raw.get("strokeWidth"), 2, 1, 18),
-            "strokeOpacity": sketch_float(raw.get("strokeOpacity"), 1, 0, 1),
-            "fillOpacity": sketch_float(raw.get("fillOpacity"), 0.12 if item_type in {"rect", "circle"} else 0, 0, 1),
-            "strokeAlign": "center",
-            "startEndpoint": str(raw.get("startEndpoint") or "none") if str(raw.get("startEndpoint") or "none") in {"none", "arrow", "dot"} else "none",
-            "endEndpoint": "arrow" if item_type == "arrow" else (str(raw.get("endEndpoint") or "none") if str(raw.get("endEndpoint") or "none") in {"none", "arrow", "dot"} else "none"),
-            "strokeStyle": "dashed" if str(raw.get("strokeStyle") or "").lower() == "dashed" else "solid",
-            "canvasMode": "rough_plan",
-        }
-
-        if item_type == "pen":
-            points = raw.get("points") if isinstance(raw.get("points"), list) else []
-            clean_points = [
-                {
-                    "x": sketch_float(point.get("x"), 0, 0, MARKUP_CANVAS_WIDTH),
-                    "y": sketch_float(point.get("y"), 0, 0, MARKUP_CANVAS_HEIGHT),
-                }
-                for point in points
-                if isinstance(point, dict)
-            ][:40]
-            if len(clean_points) < 2:
-                continue
-            base.update(
-                {
-                    "x": clean_points[0]["x"],
-                    "y": clean_points[0]["y"],
-                    "x2": clean_points[-1]["x"],
-                    "y2": clean_points[-1]["y"],
-                    "points": clean_points,
-                    "closed": bool(raw.get("closed")) and len(clean_points) >= 3,
-                    "fillOpacity": sketch_float(raw.get("fillOpacity"), 0.1 if raw.get("closed") else 0, 0, 1),
-                    "text": str(raw.get("text") or "").strip()[:120],
-                }
-            )
-            normalized.append(base)
-            continue
-
-        x = sketch_float(raw.get("x"), raw.get("x1", 120), 0, MARKUP_CANVAS_WIDTH)
-        y = sketch_float(raw.get("y"), raw.get("y1", 120), 0, MARKUP_CANVAS_HEIGHT)
-        x2 = sketch_float(raw.get("x2"), x + sketch_float(raw.get("w"), 120, 8, 500), 0, MARKUP_CANVAS_WIDTH)
-        y2 = sketch_float(raw.get("y2"), y + sketch_float(raw.get("h"), 80, 8, 500), 0, MARKUP_CANVAS_HEIGHT)
-        text = str(raw.get("text") or raw.get("label") or "").strip()[:160]
-
-        if item_type in {"door", "window", "tree", "steps", "fence", "text"}:
-            base.update({"x": x, "y": y, "x2": x, "y2": y, "text": text or ("Add note" if item_type == "text" else "")})
-        else:
-            base.update({"x": x, "y": y, "x2": x2, "y2": y2, "text": text or ("measurement" if item_type == "measure" else "")})
-        normalized.append(base)
-    return normalized
 
 
 def infer_supported_image_content_type(file_name):
@@ -231,73 +114,21 @@ def infer_supported_image_content_type(file_name):
     return ""
 
 
-def validate_gross_plan_dimensions(data):
-    gross_width = str(data.get("gross_width") or "").strip()
-    gross_length = str(data.get("gross_length") or "").strip()
-    gross_unit = str(data.get("gross_unit") or "ft").strip().lower()
-    if gross_unit not in {"ft", "in", "m", "cm", "mm"}:
-        raise ValidationError({"gross_unit": "Choose a supported measurement unit."})
-    if parse_length_to_inches(gross_width, gross_unit) <= 0:
-        raise ValidationError({"gross_width": "Enter the full plan width before conversion."})
-    if parse_length_to_inches(gross_length, gross_unit) <= 0:
-        raise ValidationError({"gross_length": "Enter the full plan length before conversion."})
-    return gross_width, gross_length, gross_unit
-
-
-def extract_and_render_floor_plan(
-    *, image_bytes, content_type, title, category, location="", notes="", gross_width, gross_length, gross_unit
-):
-    source_width, source_height = source_image_dimensions(image_bytes)
-    system_prompt, user_prompt = build_floor_plan_extraction_prompts(
-        title=title,
-        category=category,
-        location=location,
-        notes=notes,
-        source_width=source_width,
-        source_height=source_height,
-        gross_width=gross_width,
-        gross_length=gross_length,
-        gross_unit=gross_unit,
+def clean_floor_plan_image_prompt(*, title, category, location="", notes=""):
+    return (
+        "Convert the supplied homeowner sketch into one clean, accurate, top-down floor-plan image. "
+        "Preserve the sketch's complete footprint, wall locations, angles, offsets, recesses, extensions, room relationships, doors, windows, openings, and stairs. "
+        "Draw walls as solid architectural wall lines with clean joined corners. Use conventional floor-plan symbols for doors, windows, openings, and stairs. "
+        "Copy every clearly legible written measurement exactly as shown and attach it to the same segment with a conventional dimension line. "
+        "If any measurement or label is unclear, omit it instead of guessing or changing digits. Do not add dimensions that are not visible in the source. "
+        "Use crisp black linework and readable black labels on a plain white background. Produce only one cohesive floor plan filling the image. "
+        "Do not create editable geometry, vectors, SVG, CAD layers, alternate layouts, explanatory panels, furniture staging, color, texture, shadows, 3D, perspective, or decorative styling. "
+        "This is a schematic image for project communication, not a permit, engineering, or construction drawing. "
+        f"Project title: {title or 'Untitled project'}. "
+        f"Project category/type: {category or 'general project'}. "
+        f"Project location/context: {location or 'not provided'}. "
+        f"Project notes: {notes or 'not provided'}."
     )
-    result = generate_text_with_image(
-        feature=AIUsageEvent.Feature.PLANNER_DRAFT,
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        image_bytes=image_bytes,
-        image_content_type=content_type,
-    )
-    payload = parse_ai_json(result["text"])
-    geometry = normalize_plan_geometry(
-        payload,
-        gross_width=gross_width,
-        gross_length=gross_length,
-        gross_unit=gross_unit,
-    )
-    return {
-        "geometry": geometry,
-        "measurement_calibration": measurement_calibration_from_geometry(geometry),
-        "image_bytes": render_plan_geometry_png(geometry),
-        "model": result["model"],
-        "usage": result.get("usage"),
-        "prompt_chars": len(system_prompt) + len(user_prompt),
-        "response_chars": len(result["text"]),
-    }
-
-
-def replace_floor_plan_image_file(image_instance, image_bytes):
-    old_name = str(getattr(image_instance.image, "name", "") or "")
-    image_instance.image.save(
-        f"clean-floor-plan-{timezone.now().strftime('%Y%m%d%H%M%S%f')}.png",
-        ContentFile(image_bytes),
-        save=False,
-    )
-    image_instance.save()
-    new_name = str(getattr(image_instance.image, "name", "") or "")
-    if old_name and old_name != new_name and default_storage.exists(old_name):
-        try:
-            default_storage.delete(old_name)
-        except Exception:
-            logger.warning("Could not delete replaced floor-plan image %s", old_name, exc_info=True)
 
 
 class FeedbackTicketListCreateView(generics.ListCreateAPIView):
@@ -869,146 +700,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ser.save()
         return Response(ser.data, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=["post"], url_path="images/(?P<img_id>[^/.]+)/sketch-to-rough-plan")
-    def image_sketch_to_rough_plan(self, request, pk=None, img_id=None):
-        project = self.get_object()
-        try:
-            source_image = ProjectImage.objects.get(id=img_id, project=project)
-        except ProjectImage.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        if project.owner_id != request.user.id:
-            raise PermissionDenied("Only the project owner can create a rough plan from this image.")
-
-        feature = AIUsageEvent.Feature.PLANNER_DRAFT
-        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
-
-        sketch = request.FILES.get("sketch") or request.FILES.get("image")
-        source_image_id = str(request.data.get("source_image_id") or "").strip()
-        image_bytes = None
-        content_type = ""
-        image_name = ""
-
-        if sketch:
-            content_type = str(getattr(sketch, "content_type", "") or "").lower()
-            image_name = getattr(sketch, "name", "") or "uploaded sketch"
-            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
-                raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
-            if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
-                raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
-            image_bytes = sketch.read()
-        else:
-            if source_image_id and source_image_id != str(source_image.id):
-                try:
-                    source_image = ProjectImage.objects.get(id=source_image_id, project=project)
-                except ProjectImage.DoesNotExist:
-                    raise ValidationError({"source_image_id": "Could not find that project image."})
-            image_name = source_image.caption or getattr(source_image.image, "name", "") or "project image"
-            content_type = "image/jpeg"
-            lower_name = str(getattr(source_image.image, "name", "") or "").lower()
-            if lower_name.endswith(".png"):
-                content_type = "image/png"
-            elif lower_name.endswith(".webp"):
-                content_type = "image/webp"
-            elif not lower_name.endswith((".jpg", ".jpeg")):
-                raise ValidationError({"source_image_id": "Use a JPG, PNG, or WebP project image for plan creation."})
-            try:
-                with source_image.image.open("rb") as fh:
-                    image_bytes = fh.read(MAX_SKETCH_PLAN_IMAGE_SIZE + 1)
-            except Exception:
-                raise ValidationError({"source_image_id": "Could not read that project image."})
-            if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
-                raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
-
-        requested_width = request.data.get("width") or "20"
-        requested_length = request.data.get("length") or "30"
-        requested_unit = request.data.get("unit") or "ft"
-        source_width = request.data.get("source_width") or ""
-        source_height = request.data.get("source_height") or ""
-        trace_clean_floor_plan = str(request.data.get("overlay_mode") or "").strip() == "trace_clean_floor_plan"
-        system_prompt = (
-            "You convert homeowner project images or sketch images into simple editable rough-plan JSON for FlatOrigin. "
-            "This is not CAD, design, engineering, permitting, or construction documentation. "
-            "Return strict JSON only. Do not include markdown. Use approximate homeowner-friendly geometry."
-        )
-        user_prompt = (
-            f"Project title: {project.title or 'Untitled project'}\n"
-            f"Project category: {project.category or ''}\n"
-            f"Project location: {project.location or ''}\n"
-            f"Project summary: {project.summary or project.job_summary or ''}\n"
-            f"Image source: {image_name}\n"
-            f"Preferred rough plan size: {requested_width} x {requested_length} {requested_unit}\n\n"
-            f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
-            "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
-            "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
-            "Treat width and length as the measured full sketch/design area. The interface adds a 4-unit grid margin on every side, "
-            "so keep the actual plan geometry inside the centered design area, not against the outer grid edge. Set grid_visible true.\n"
-            f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
-            "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
-            "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
-            "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
-            "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
-            "For pen use points as [{x,y}], closed true only for clear enclosed shapes. "
-            "Use black strokes, strokeWidth 2, simple labels, and approximate measurements only when readable from the image. "
-            "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
-        )
-        if trace_clean_floor_plan:
-            user_prompt += (
-                "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
-                "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
-                "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
-                "Prefer pen annotations with multiple points for continuous connected linework and line annotations for straight independent segments. "
-                "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
-                "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
-                "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "
-                "Coordinates should match the supplied image layout closely in the full canvas, preserving the plan proportions and relative positions."
-            )
-        model_name = ""
-        try:
-            result = generate_text_with_image(
-                feature=feature,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                image_bytes=image_bytes,
-                image_content_type=content_type,
-            )
-            model_name = result["model"]
-            payload = parse_ai_json(result["text"])
-            rough_plan = normalize_sketch_rough_plan_payload(payload)
-            annotations = normalize_sketch_annotations_payload(payload)
-            uncertainty_notes = self._clean_string_list(payload.get("uncertainty_notes") if isinstance(payload, dict) else [])
-            record_ai_usage_event(
-                user=request.user,
-                feature=feature,
-                model_name=model_name,
-                status_value=AIUsageEvent.Status.SUCCESS,
-                prompt_chars=len(system_prompt) + len(user_prompt),
-                response_chars=len(result["text"]),
-                usage=result.get("usage"),
-            )
-        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            record_ai_usage_event(
-                user=request.user,
-                feature=feature,
-                model_name=model_name,
-                status_value=AIUsageEvent.Status.ERROR,
-                prompt_chars=len(system_prompt) + len(user_prompt),
-                response_chars=0,
-            )
-            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
-
-        remaining_after, _ = get_ai_remaining_today(request.user)
-        return Response(
-            {
-                "rough_plan": rough_plan,
-                "annotations": annotations,
-                "uncertainty_notes": uncertainty_notes,
-                "remaining_today": remaining_after,
-                "daily_limit": daily_limit,
-                "model": model_name,
-            }
-        )
-
     @action(detail=True, methods=["post"], url_path="images/(?P<img_id>[^/.]+)/sketch-to-clean-floor-plan")
     def image_sketch_to_clean_floor_plan(self, request, pk=None, img_id=None):
         project = self.get_object()
@@ -1020,7 +711,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if project.owner_id != request.user.id:
             raise PermissionDenied("Only the project owner can create a clean floor plan from this image.")
 
-        gross_width, gross_length, gross_unit = validate_gross_plan_dimensions(request.data)
         feature = AIUsageEvent.Feature.PLANNER_DRAFT
         _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
         sketch = request.FILES.get("sketch") or request.FILES.get("image")
@@ -1055,18 +745,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
             if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
                 raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
 
+        prompt = clean_floor_plan_image_prompt(
+            title=project.title,
+            category=project.category,
+            location=project.location,
+            notes=project.summary or project.job_summary or "",
+        )
         model_name = ""
         try:
-            result = extract_and_render_floor_plan(
+            result = generate_image_from_image(
+                feature=feature,
+                prompt=prompt,
                 image_bytes=image_bytes,
-                content_type=content_type,
-                title=project.title,
-                category=project.category,
-                location=project.location,
-                notes=project.summary or project.job_summary or "",
-                gross_width=gross_width,
-                gross_length=gross_length,
-                gross_unit=gross_unit,
+                image_content_type=content_type,
+                image_name=image_name,
             )
             model_name = result["model"]
             generated = ProjectImage.objects.create(
@@ -1080,8 +772,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     "source_project_image_id": source_image.id,
                     "source_image_name": image_name,
                     "ai_model": model_name,
-                    "plan_geometry": result["geometry"],
-                    "measurement_calibration": result["measurement_calibration"],
+                    "output_kind": "floor_plan_image",
                 },
             )
             record_ai_usage_event(
@@ -1089,11 +780,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 feature=feature,
                 model_name=model_name,
                 status_value=AIUsageEvent.Status.SUCCESS,
-                prompt_chars=result["prompt_chars"],
-                response_chars=result["response_chars"],
+                prompt_chars=len(prompt),
+                response_chars=0,
                 usage=result.get("usage"),
             )
-        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        except AIServiceError as exc:
             record_ai_usage_event(
                 user=request.user,
                 feature=feature,
@@ -1111,43 +802,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 "remaining_today": remaining_after,
                 "daily_limit": daily_limit,
                 "model": model_name,
-                "plan_geometry": result["geometry"],
-                "measurement_calibration": result["measurement_calibration"],
             },
             status=status.HTTP_201_CREATED,
-        )
-
-    @action(detail=True, methods=["post"], url_path="images/(?P<img_id>[^/.]+)/floor-plan-dimensions")
-    def image_floor_plan_dimensions(self, request, pk=None, img_id=None):
-        project = self.get_object()
-        if project.owner_id != request.user.id:
-            raise PermissionDenied("Only the project owner can update floor-plan dimensions.")
-        generated = get_object_or_404(ProjectImage, id=img_id, project=project)
-        extra_data = generated.extra_data if isinstance(generated.extra_data, dict) else {}
-        geometry = extra_data.get("plan_geometry")
-        try:
-            updated_geometry, applied_count = apply_dimension_overrides(
-                geometry,
-                request.data.get("dimensions"),
-            )
-        except ValueError as exc:
-            raise ValidationError({"dimensions": str(exc)})
-        if applied_count <= 0:
-            raise ValidationError({"dimensions": "Enter at least one valid unclear measurement."})
-        calibration = measurement_calibration_from_geometry(updated_geometry)
-        generated.extra_data = {
-            **extra_data,
-            "plan_geometry": updated_geometry,
-            "measurement_calibration": calibration,
-        }
-        replace_floor_plan_image_file(generated, render_plan_geometry_png(updated_geometry))
-        return Response(
-            {
-                "image": ProjectImageSerializer(generated, context={"request": request}).data,
-                "plan_geometry": updated_geometry,
-                "measurement_calibration": calibration,
-                "applied_count": applied_count,
-            }
         )
 
     def _clean_string_list(self, values):
@@ -1475,7 +1131,6 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="sketch-to-clean-floor-plan")
     def sketch_to_clean_floor_plan(self, request, pk=None):
         plan = self.get_object()
-        gross_width, gross_length, gross_unit = validate_gross_plan_dimensions(request.data)
         feature = AIUsageEvent.Feature.PLANNER_DRAFT
         _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
         sketch = request.FILES.get("sketch") or request.FILES.get("image")
@@ -1512,18 +1167,20 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         else:
             raise ValidationError({"sketch": "Choose an uploaded project image or upload a new sketch first."})
 
+        prompt = clean_floor_plan_image_prompt(
+            title=plan.title,
+            category=plan.project_type,
+            location=plan.house_location,
+            notes=plan.issue_summary or plan.notes or "",
+        )
         model_name = ""
         try:
-            result = extract_and_render_floor_plan(
+            result = generate_image_from_image(
+                feature=feature,
+                prompt=prompt,
                 image_bytes=image_bytes,
-                content_type=content_type,
-                title=plan.title,
-                category=plan.project_type,
-                location=plan.house_location,
-                notes=plan.issue_summary or plan.notes or "",
-                gross_width=gross_width,
-                gross_length=gross_length,
-                gross_unit=gross_unit,
+                image_content_type=content_type,
+                image_name=image_name,
             )
             model_name = result["model"]
             generated = ProjectPlanImage.objects.create(
@@ -1533,18 +1190,16 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 order=plan.images.count(),
                 is_cover=not plan.images.filter(is_cover=True).exists(),
             )
-            plan.plan_geometry = result["geometry"]
-            plan.save(update_fields=["plan_geometry", "updated_at"])
             record_ai_usage_event(
                 user=request.user,
                 feature=feature,
                 model_name=model_name,
                 status_value=AIUsageEvent.Status.SUCCESS,
-                prompt_chars=result["prompt_chars"],
-                response_chars=result["response_chars"],
+                prompt_chars=len(prompt),
+                response_chars=0,
                 usage=result.get("usage"),
             )
-        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        except AIServiceError as exc:
             record_ai_usage_event(
                 user=request.user,
                 feature=feature,
@@ -1563,36 +1218,8 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 "remaining_today": remaining_after,
                 "daily_limit": daily_limit,
                 "model": model_name,
-                "plan_geometry": result["geometry"],
-                "measurement_calibration": result["measurement_calibration"],
             },
             status=status.HTTP_201_CREATED,
-        )
-
-    @action(detail=True, methods=["post"], url_path="images/(?P<img_id>[^/.]+)/floor-plan-dimensions")
-    def floor_plan_dimensions(self, request, pk=None, img_id=None):
-        plan = self.get_object()
-        generated = get_object_or_404(ProjectPlanImage, id=img_id, project_plan=plan)
-        try:
-            updated_geometry, applied_count = apply_dimension_overrides(
-                plan.plan_geometry,
-                request.data.get("dimensions"),
-            )
-        except ValueError as exc:
-            raise ValidationError({"dimensions": str(exc)})
-        if applied_count <= 0:
-            raise ValidationError({"dimensions": "Enter at least one valid unclear measurement."})
-        calibration = measurement_calibration_from_geometry(updated_geometry)
-        plan.plan_geometry = updated_geometry
-        plan.save(update_fields=["plan_geometry", "updated_at"])
-        replace_floor_plan_image_file(generated, render_plan_geometry_png(updated_geometry))
-        return Response(
-            {
-                "image": ProjectPlanImageSerializer(generated, context={"request": request}).data,
-                "plan_geometry": updated_geometry,
-                "measurement_calibration": calibration,
-                "applied_count": applied_count,
-            }
         )
 
     def _build_plan_text(self, plan):
@@ -1633,107 +1260,6 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
             prompt_chars=prompt_chars,
             response_chars=response_chars,
             usage=usage,
-        )
-
-    @action(detail=True, methods=["post"], url_path="sketch-to-rough-plan")
-    def sketch_to_rough_plan(self, request, pk=None):
-        plan = self.get_object()
-        feature = AIUsageEvent.Feature.PLANNER_DRAFT
-        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
-        sketch = request.FILES.get("sketch") or request.FILES.get("image")
-        if not sketch:
-            raise ValidationError({"sketch": "Upload a sketch image."})
-        content_type = str(getattr(sketch, "content_type", "") or "").lower()
-        if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
-            raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
-        if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
-            raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
-
-        requested_width = request.data.get("width") or "20"
-        requested_length = request.data.get("length") or "30"
-        requested_unit = request.data.get("unit") or "ft"
-        source_width = request.data.get("source_width") or ""
-        source_height = request.data.get("source_height") or ""
-        trace_clean_floor_plan = str(request.data.get("overlay_mode") or "").strip() == "trace_clean_floor_plan"
-        system_prompt = (
-            "You convert homeowner sketch images into simple editable rough-plan JSON for FlatOrigin. "
-            "This is not CAD, design, engineering, permitting, or construction documentation. "
-            "Return strict JSON only. Do not include markdown. Use approximate homeowner-friendly geometry."
-        )
-        user_prompt = (
-            f"Project title: {plan.title or 'Untitled project'}\n"
-            f"Project type: {plan.project_type or ''}\n"
-            f"Project notes: {plan.issue_summary or plan.notes or ''}\n"
-            f"Preferred rough plan size: {requested_width} x {requested_length} {requested_unit}\n\n"
-            f"Source image pixel size when available: {source_width or 'unknown'} x {source_height or 'unknown'}.\n"
-            "Return JSON with keys rough_plan, annotations, uncertainty_notes.\n"
-            "rough_plan: {width, length, unit, scale_source, grid_visible}. Use ft unless the image clearly specifies another unit. "
-            "Treat width and length as the measured full sketch/design area. The interface adds a 4-unit grid margin on every side, "
-            "so keep the actual plan geometry inside the centered design area, not against the outer grid edge. Set grid_visible true.\n"
-            f"annotations must be editable primitives within a {MARKUP_CANVAS_WIDTH} by {MARKUP_CANVAS_HEIGHT} canvas. "
-            "Keep coordinates inside x 82..1118 and y 82..678 when practical.\n"
-            "Allowed annotation types: line, rect, circle, text, measure, door, window, tree, steps, fence, pen.\n"
-            "Use measure annotations for plan boundary segments and important interior segments so lengths are visible. "
-            "For line/measure/rect/circle use x,y,x2,y2,text. Leave measure text blank unless the exact segment length is readable. For text and symbols use x,y,text. "
-            "For pen use points as [{x,y}], closed true only for clear enclosed shapes. "
-            "Use black strokes, strokeWidth 2, simple labels, and approximate measurements only when readable from the sketch. "
-            "Do not invent exact dimensions when unclear; add short uncertainty_notes instead."
-        )
-        if trace_clean_floor_plan:
-            user_prompt += (
-                "\n\nOverlay trace mode: this image is already an AI-enhanced clean floor plan. "
-                "Trace the visible floor-plan linework as completely as practical, not just the outside rectangle. "
-                "Capture the exterior perimeter, interior partition lines, visible wall segments, openings, steps, fence/deck/landscape lines, and obvious symbols. "
-                "Prefer pen annotations with multiple points for continuous connected linework and line annotations for straight independent segments. "
-                "Use measure annotations only for dimension strings that are visibly present or clearly tied to a segment; otherwise do not invent measurement text. "
-                "Use text annotations only for labels that are already visible and relevant. Keep text short and sparse. "
-                "Use strokeWidth 1 where possible so the overlay matches floor-plan line weight. "
-                "Coordinates should match the supplied image layout closely in the full canvas, preserving the plan proportions and relative positions."
-            )
-        model_name = ""
-        try:
-            result = generate_text_with_image(
-                feature=feature,
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                image_bytes=sketch.read(),
-                image_content_type=content_type,
-            )
-            model_name = result["model"]
-            payload = parse_ai_json(result["text"])
-            rough_plan = normalize_sketch_rough_plan_payload(payload)
-            annotations = normalize_sketch_annotations_payload(payload)
-            uncertainty_notes = self._clean_string_list(payload.get("uncertainty_notes") if isinstance(payload, dict) else [])
-            self._record_ai_event(
-                user=request.user,
-                feature=feature,
-                model_name=model_name,
-                prompt_chars=len(system_prompt) + len(user_prompt),
-                response_chars=len(result["text"]),
-                status_value=AIUsageEvent.Status.SUCCESS,
-                usage=result.get("usage"),
-            )
-        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            self._record_ai_event(
-                user=request.user,
-                feature=feature,
-                model_name=model_name,
-                prompt_chars=len(system_prompt) + len(user_prompt),
-                response_chars=0,
-                status_value=AIUsageEvent.Status.ERROR,
-            )
-            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
-
-        remaining_after, _ = get_ai_remaining_today(request.user)
-        return Response(
-            {
-                "rough_plan": rough_plan,
-                "annotations": annotations,
-                "uncertainty_notes": uncertainty_notes,
-                "remaining_today": remaining_after,
-                "daily_limit": daily_limit,
-                "model": model_name,
-            }
         )
 
     @action(detail=True, methods=["post"], url_path="ai")

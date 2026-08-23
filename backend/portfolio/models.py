@@ -257,7 +257,6 @@ class ProjectPlan(models.Model):
     links = models.JSONField(blank=True, default=list)
     options = models.JSONField(blank=True, default=list)
     markup_data = models.JSONField(blank=True, default=dict)
-    plan_geometry = models.JSONField(blank=True, default=dict)
     selected_option_key = models.CharField(max_length=80, blank=True, default="")
     ai_generated_issue_summary = models.TextField(blank=True, default="")
     ai_suggested_contractor_types = models.JSONField(blank=True, default=list)

@@ -1186,7 +1186,7 @@ class ProjectPlannerTests(APITestCase):
         )
 
     @patch("portfolio.views.generate_text_with_image")
-    def test_sketch_to_rough_plan_returns_editable_annotations(self, mock_generate_text_with_image):
+    def _removed_sketch_to_rough_plan_returns_editable_annotations(self, mock_generate_text_with_image):
         mock_generate_text_with_image.return_value = {
             "text": json.dumps(
                 {
@@ -1223,7 +1223,7 @@ class ProjectPlannerTests(APITestCase):
             1,
         )
 
-    def test_sketch_to_rough_plan_rejects_unsupported_file_type(self):
+    def _removed_sketch_to_rough_plan_rejects_unsupported_file_type(self):
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
         sketch = SimpleUploadedFile("sketch.gif", b"fake-gif", content_type="image/gif")
 
@@ -1238,7 +1238,7 @@ class ProjectPlannerTests(APITestCase):
         self.assertIn("JPG, PNG, or WebP", str(response.data))
 
     @patch("portfolio.views.generate_text_with_image")
-    def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_text_with_image):
+    def _removed_semantic_floor_plan_saves_generated_planner_image(self, mock_generate_text_with_image):
         mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
         sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
@@ -1275,7 +1275,7 @@ class ProjectPlannerTests(APITestCase):
         )
 
     @patch("portfolio.views.generate_text_with_image")
-    def test_clean_floor_plan_requires_gross_dimensions_before_ai(self, mock_generate_text_with_image):
+    def _removed_clean_floor_plan_requires_gross_dimensions_before_ai(self, mock_generate_text_with_image):
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
         sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
 
@@ -1291,7 +1291,7 @@ class ProjectPlannerTests(APITestCase):
         mock_generate_text_with_image.assert_not_called()
 
     @patch("portfolio.views.generate_text_with_image")
-    def test_unclear_floor_plan_dimension_can_be_entered_without_another_ai_call(self, mock_generate_text_with_image):
+    def _removed_unclear_floor_plan_dimension_can_be_entered_without_another_ai_call(self, mock_generate_text_with_image):
         mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
         plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
         sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
@@ -1323,7 +1323,7 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(mock_generate_text_with_image.call_count, 1)
 
     @patch("portfolio.views.generate_text_with_image")
-    def test_project_image_sketch_to_rough_plan_uses_existing_image(self, mock_generate_text_with_image):
+    def _removed_project_image_sketch_to_rough_plan_uses_existing_image(self, mock_generate_text_with_image):
         mock_generate_text_with_image.return_value = {
             "text": json.dumps(
                 {
@@ -1360,7 +1360,7 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.data["uncertainty_notes"], ["Confirm final dimensions on site."])
 
     @patch("portfolio.views.generate_text_with_image")
-    def test_project_image_sketch_to_clean_floor_plan_saves_generated_project_image(self, mock_generate_text_with_image):
+    def _removed_project_image_semantic_floor_plan_saves_generated_project_image(self, mock_generate_text_with_image):
         mock_generate_text_with_image.return_value = semantic_floor_plan_ai_result()
         project = Project.objects.create(
             owner=self.homeowner,
@@ -1392,3 +1392,82 @@ class ProjectPlannerTests(APITestCase):
         prompt = mock_generate_text_with_image.call_args.kwargs["user_prompt"]
         self.assertIn("Anchor every opening to one wall", prompt)
         self.assertIn("All other lengths will be derived proportionally", prompt)
+
+    @patch("portfolio.views.generate_image_from_image")
+    def test_sketch_creates_only_a_floor_plan_image(self, mock_generate_image):
+        mock_generate_image.return_value = {
+            "image_bytes": TINY_PNG_BYTES,
+            "content_type": "image/png",
+            "model": "gpt-image-test",
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+        }
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        sketch = SimpleUploadedFile("sketch.png", TINY_PNG_BYTES, content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
+            {"sketch": sketch},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
+        self.assertNotIn("plan_geometry", response.data)
+        self.assertNotIn("measurement_calibration", response.data)
+        self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
+        prompt = mock_generate_image.call_args.kwargs["prompt"]
+        self.assertIn("Copy every clearly legible written measurement exactly", prompt)
+        self.assertIn("Do not create editable geometry, vectors, SVG, CAD layers", prompt)
+
+    @patch("portfolio.views.generate_image_from_image")
+    def test_project_sketch_creates_image_without_schematic_metadata(self, mock_generate_image):
+        mock_generate_image.return_value = {
+            "image_bytes": TINY_PNG_BYTES,
+            "content_type": "image/png",
+            "model": "gpt-image-test",
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+        }
+        project = Project.objects.create(
+            owner=self.homeowner,
+            title="Deck project",
+            summary="Back deck layout sketch.",
+            category="deck",
+            location="Back yard",
+        )
+        source = project.images.create(
+            image=SimpleUploadedFile("deck-plan.png", TINY_PNG_BYTES, content_type="image/png"),
+            caption="Deck sketch",
+        )
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/projects/{project.id}/images/{source.id}/sketch-to-clean-floor-plan/",
+            {"source_image_id": str(source.id)},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        metadata = response.data["image"]["extra_data"]
+        self.assertEqual(metadata["output_kind"], "floor_plan_image")
+        self.assertNotIn("plan_geometry", metadata)
+        self.assertNotIn("measurement_calibration", metadata)
+        self.assertEqual(project.images.count(), 2)
+
+    def test_editable_floor_plan_routes_are_removed(self):
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        self.client.force_authenticate(user=self.homeowner)
+
+        rough_response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-rough-plan/",
+            {},
+            format="json",
+        )
+        dimensions_response = self.client.post(
+            f"/api/project-plans/{plan.id}/images/999/floor-plan-dimensions/",
+            {},
+            format="json",
+        )
+
+        self.assertIn(rough_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})
+        self.assertIn(dimensions_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})

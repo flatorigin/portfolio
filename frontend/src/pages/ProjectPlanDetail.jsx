@@ -33,7 +33,9 @@ function answerIsComplete(question, answer) {
 }
 
 function getMarkupVersions(markupData) {
-  return Array.isArray(markupData?.versions) ? markupData.versions : [];
+  return Array.isArray(markupData?.versions)
+    ? markupData.versions.filter((version) => !["assisted_trace", "rough_plan"].includes(version?.version_type))
+    : [];
 }
 
 function projectTypeLabel(template) {
@@ -156,6 +158,10 @@ export default function ProjectPlanDetail() {
   const [finalDetailsFinished, setFinalDetailsFinished] = useState(false);
   const [projectPreviewOpen, setProjectPreviewOpen] = useState(false);
   const [guidedPanelOpen, setGuidedPanelOpen] = useState(false);
+  const [floorPlanOpen, setFloorPlanOpen] = useState(false);
+  const [floorPlanSourceId, setFloorPlanSourceId] = useState("");
+  const [floorPlanFile, setFloorPlanFile] = useState(null);
+  const [floorPlanBusy, setFloorPlanBusy] = useState(false);
 
   async function loadPlan() {
     setLoading(true);
@@ -215,6 +221,10 @@ export default function ProjectPlanDetail() {
   const showProjectPreview = finalReady && projectPreviewOpen;
   const guidedRows = guidedAnswerRows(activeTemplate, plan?.guided_answers_json);
   const packetStatus = packetReadinessLabel(plan, plan?.images || [], markupVersions);
+  const floorPlanSourceImages = useMemo(
+    () => (plan?.images || []).filter((image) => !["clean-floor-plan", MARKUP_FLOOR_PLAN_NAME].includes(image.caption)),
+    [plan?.images],
+  );
 
   async function patchPlan(patch, successMessage = "Saved.") {
     setSaving(true);
@@ -345,8 +355,53 @@ export default function ProjectPlanDetail() {
     navigate(`/dashboard/planner/${planId}/markup${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
-  function openSketchPlanBuilder() {
-    navigate(`/dashboard/planner/${planId}/markup?trace=1`);
+  function openFloorPlanImageCreator() {
+    setFloorPlanFile(null);
+    setFloorPlanSourceId(floorPlanSourceImages[0]?.id ? String(floorPlanSourceImages[0].id) : "");
+    setFloorPlanOpen(true);
+  }
+
+  async function createFloorPlanImage() {
+    if (!floorPlanFile && !floorPlanSourceId) {
+      setError("Choose a sketch image first.");
+      return;
+    }
+    if (floorPlanFile) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(floorPlanFile.type)) {
+        setError("Use a JPG, PNG, or WebP sketch.");
+        return;
+      }
+      if (floorPlanFile.size > 15 * 1024 * 1024) {
+        setError("Sketch images must be 15MB or smaller.");
+        return;
+      }
+    }
+
+    setFloorPlanBusy(true);
+    setError("");
+    setStatusMessage("");
+    try {
+      const formData = new FormData();
+      if (floorPlanFile) formData.append("sketch", floorPlanFile);
+      else formData.append("source_image_id", floorPlanSourceId);
+      const { data } = await api.post(`/project-plans/${planId}/sketch-to-clean-floor-plan/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setPlan((prev) => emptyPlan({
+        ...prev,
+        images: [...(prev?.images || []), data.image],
+        ai_remaining_today: data.remaining_today,
+        ai_daily_limit: data.daily_limit,
+      }));
+      setFloorPlanOpen(false);
+      setFloorPlanFile(null);
+      setFloorPlanSourceId("");
+      setStatusMessage("Floor-plan image created and saved to this project.");
+    } catch (err) {
+      setError(normalizeError(err, "Could not create the floor-plan image."));
+    } finally {
+      setFloorPlanBusy(false);
+    }
   }
 
   function downloadMarkupSvg(version) {
@@ -865,9 +920,14 @@ export default function ProjectPlanDetail() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <GhostButton type="button" onClick={openSketchPlanBuilder} className="h-10 px-4">
+            <GhostButton
+              type="button"
+              onClick={openFloorPlanImageCreator}
+              disabled={aiDisabled || floorPlanBusy}
+              className="h-10 px-4"
+            >
               <SymbolIcon name="architecture" className="text-[18px]" />
-              Trace Plan from Sketch
+              Create Floor Plan Image
             </GhostButton>
             <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white">
               <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
@@ -896,7 +956,9 @@ export default function ProjectPlanDetail() {
                   </button>
                   <div className="mt-3 flex items-start justify-between gap-2">
                     <div>
-                      <div className="text-xs font-medium text-slate-700">{image.caption || "Project photo"}</div>
+                      <div className="text-xs font-medium text-slate-700">
+                        {image.caption === "clean-floor-plan" ? "Floor plan image" : image.caption || "Project photo"}
+                      </div>
                       {markedVersion ? (
                         <div className="mt-1 text-xs text-emerald-700">
                           {markedVersion.annotation_count ?? 0} markups saved
@@ -966,6 +1028,86 @@ export default function ProjectPlanDetail() {
           </div>
         ) : null}
       </Card>
+
+      {floorPlanOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6" role="dialog" aria-modal="true" aria-labelledby="floor-plan-image-title">
+          <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 id="floor-plan-image-title" className="text-lg font-semibold text-slate-950">Create Floor Plan Image</h2>
+                <p className="mt-1 text-sm leading-5 text-slate-500">
+                  Choose one sketch. The result is a single saved image, not an editable schematic.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFloorPlanOpen(false)}
+                disabled={floorPlanBusy}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                aria-label="Close floor plan image creator"
+              >
+                <SymbolIcon name="close" className="text-[20px]" />
+              </button>
+            </div>
+
+            <div className="space-y-5 px-5 py-5">
+              {floorPlanSourceImages.length ? (
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Use a project image</div>
+                  <div className="mt-3 grid max-h-56 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
+                    {floorPlanSourceImages.map((image) => {
+                      const selected = !floorPlanFile && String(image.id) === String(floorPlanSourceId);
+                      return (
+                        <button
+                          key={image.id}
+                          type="button"
+                          onClick={() => {
+                            setFloorPlanFile(null);
+                            setFloorPlanSourceId(String(image.id));
+                          }}
+                          className={`overflow-hidden rounded-lg border bg-white text-left ${selected ? "border-blue-600 ring-2 ring-blue-600/20" : "border-slate-200 hover:border-slate-400"}`}
+                        >
+                          <img src={image.image_url} alt="" className="h-24 w-full object-cover" />
+                          <span className="block truncate px-2 py-2 text-xs font-medium text-slate-700">{image.caption || "Project image"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className={floorPlanSourceImages.length ? "border-t border-slate-200 pt-5" : ""}>
+                <div className="text-sm font-semibold text-slate-900">Or upload a sketch</div>
+                <label className="mt-3 flex min-h-20 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 text-sm font-medium text-slate-600 hover:border-slate-400 hover:bg-white">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      setFloorPlanFile(file);
+                      if (file) setFloorPlanSourceId("");
+                      event.target.value = "";
+                    }}
+                  />
+                  <SymbolIcon name="upload" className="text-[19px]" />
+                  {floorPlanFile ? floorPlanFile.name : "Choose JPG, PNG, or WebP"}
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={createFloorPlanImage}
+                disabled={floorPlanBusy || (!floorPlanFile && !floorPlanSourceId)}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <SymbolIcon name={floorPlanBusy ? "hourglass_empty" : "image"} className={`text-[19px] ${floorPlanBusy ? "animate-spin" : ""}`} />
+                {floorPlanBusy ? "Creating image..." : "Create Floor Plan Image"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showProjectPreview ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6">
