@@ -6,7 +6,6 @@ import { SymbolIcon } from "../ui";
 const CANVAS_W = 1200;
 const CANVAS_H = 760;
 const STORAGE_PREFIX = "flatorigin_project_markup";
-const CLEAN_FLOOR_PLAN_NAME = "clean-floor-plan";
 const MARKUP_FLOOR_PLAN_NAME = "markup-floor-plan";
 
 const BASE_TOOLS = {
@@ -19,6 +18,7 @@ const BASE_TOOLS = {
   text: { key: "text", label: "Text", icon: "title" },
   arrow: { key: "arrow", label: "Arrow", icon: "arrow_right_alt" },
   line: { key: "line", label: "Line", icon: "horizontal_rule" },
+  wall: { key: "wall", label: "Wall", icon: "architecture" },
   freehand: { key: "freehand", label: "Pencil", icon: "draw" },
   pen: { key: "pen", label: "Pen", icon: "polyline" },
   penAdd: { key: "pen_add", label: "Add node", icon: "add" },
@@ -36,6 +36,7 @@ const SYMBOL_TOOLS = [
   { key: "steps", label: "Steps", icon: "stairs" },
   { key: "fence", label: "Fence", icon: "fence" },
 ];
+const TRACE_OPENING_TOOLS = SYMBOL_TOOLS.filter((item) => ["door", "window"].includes(item.key));
 
 const MARKUP_COLORS = [
   { key: "blue", label: "General notes", color: "#2563eb" },
@@ -74,6 +75,15 @@ const ROUGH_PLAN_GRID_MARGIN_UNITS = 4;
 const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100, showGrid: true, scaleSource: "manual" };
 const ROUGH_PLAN_PADDING = 82;
 const DEFAULT_MEASUREMENT_CALIBRATION = { referenceLineId: "", length: "36", unit: "in", referencePx: 0, scale: 0 };
+const DEFAULT_TRACE_SETTINGS = {
+  active: false,
+  sourceImageId: null,
+  referenceVisible: true,
+  referenceOpacity: 0.42,
+  gridVisible: true,
+  snap: true,
+  snapIncrement: 6,
+};
 const MARKUP_SELECTION_COLOR = "#2563eb";
 const MARKUP_SELECTION_SOFT_FILL = "#eff6ff";
 const SELECTABLE_NODE_HANDLE_KINDS = new Set(["point", "endpoint", "corner"]);
@@ -89,6 +99,10 @@ function normalizeError(err, fallback) {
 
 function safeMarkupData(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function withoutAutomaticTrace(items) {
+  return Array.isArray(items) ? items.filter((item) => item?.source !== "ai_clean_plan_trace") : [];
 }
 
 function isPersistableUrl(value) {
@@ -128,27 +142,16 @@ function parsePlanLengthToInches(value, unit = "ft") {
   return Number.isFinite(number) && number > 0 ? number * factor : 0;
 }
 
-function formatPlanLengthFromInches(valueInches, unit = "ft") {
-  const value = Number(valueInches);
-  if (!Number.isFinite(value) || value <= 0) return "";
-  if (unit === "ft") {
-    const feet = Math.floor(value / 12);
-    const inches = Number((value - feet * 12).toFixed(2));
-    return inches ? `${feet}'${formatPlanNumber(inches)}"` : `${feet}'`;
-  }
+function parsePlanLengthInUnit(value, unit = "ft") {
+  const inches = parsePlanLengthToInches(value, unit);
   const factor = PLAN_UNIT_INCHES[unit] || 1;
-  const suffix = { in: '"', cm: " cm", mm: " mm", m: " m" }[unit] || ` ${unit}`;
-  return `${formatPlanNumber(value / factor)}${suffix}`;
+  return inches > 0 ? inches / factor : 0;
 }
 
-function unclearDimensionInputs(geometry) {
-  const dimensions = Array.isArray(geometry?.dimensions) ? geometry.dimensions : [];
-  return dimensions.reduce((result, dimension) => {
-    if (dimension?.clarity === "unclear" && dimension?.id) {
-      result[dimension.id] = { value: "", unit: dimension.unit || geometry?.plan_bounds?.unit || "ft" };
-    }
-    return result;
-  }, {});
+function defaultTraceSnapIncrement(unit) {
+  if (unit === "ft") return 0.5;
+  if (unit === "m") return 0.25;
+  return 6;
 }
 
 function readImageDimensions(url) {
@@ -280,8 +283,11 @@ function annotationLayerLabel(item, index) {
   if (item.type === "circle") return "Circle";
   if (item.type === "arrow") return "Arrow";
   if (item.type === "line") return "Line";
+  if (item.type === "wall") return "Wall";
+  if (item.type === "door") return "Door";
+  if (item.type === "window") return "Window";
   if (item.type === "priority") return `Priority ${item.priorityNumber || index + 1}`;
-  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+  if (["tree", "steps", "fence"].includes(item.type)) {
     return item.type.charAt(0).toUpperCase() + item.type.slice(1);
   }
   return fallback;
@@ -343,6 +349,16 @@ function distanceToSegment(point, start, end) {
   if (!lengthSq) return distanceBetween(point, start);
   const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq, 0, 1);
   return distanceBetween(point, { x: start.x + dx * t, y: start.y + dy * t });
+}
+
+function closestPointOnSegment(point, start, end) {
+  if (!point || !start || !end) return null;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (!lengthSq) return { x: start.x, y: start.y };
+  const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq, 0, 1);
+  return { x: start.x + dx * t, y: start.y + dy * t };
 }
 
 function nearestPenHit(item, point, tolerance = 18) {
@@ -437,7 +453,7 @@ function annotationBounds(item) {
       y2: (item.y || 0) + radius,
     };
   }
-  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+  if (["tree", "steps", "fence"].includes(item.type)) {
     const size = item.type === "tree" ? 70 : 64;
     return {
       x1: (item.x || 0) - size / 2,
@@ -474,29 +490,6 @@ function backgroundImageFrame(imageDimensions = null) {
     y: (CANVAS_H - renderedHeight) / 2,
     width: renderedWidth,
     height: renderedHeight,
-  };
-}
-
-function cleanPlanMeasurementGeometry(roughPlan, imageDimensions = null) {
-  const widthUnits = Math.max(1, Number(roughPlan?.width) || Number(ROUGH_PLAN_DEFAULTS.width) || 20);
-  const lengthUnits = Math.max(1, Number(roughPlan?.length) || Number(ROUGH_PLAN_DEFAULTS.length) || 30);
-  const frame = backgroundImageFrame(imageDimensions);
-  const inset = Math.min(34, Math.max(16, Math.min(frame.width, frame.height) * 0.035));
-  const designWidthPx = Math.max(1, frame.width - inset * 2);
-  const designHeightPx = Math.max(1, frame.height - inset * 2);
-  return {
-    x: frame.x,
-    y: frame.y,
-    widthPx: frame.width,
-    heightPx: frame.height,
-    designX: frame.x + inset,
-    designY: frame.y + inset,
-    designWidthPx,
-    designHeightPx,
-    widthUnits,
-    lengthUnits,
-    scale: Math.min(designWidthPx / widthUnits, designHeightPx / lengthUnits),
-    unit: roughPlan?.unit || "ft",
   };
 }
 
@@ -540,6 +533,16 @@ function formatSegmentLength(pxLength, geometry) {
   if (!geometry?.scale) return `${Math.round(pxLength)} px`;
   const units = pxLength / geometry.scale;
   if (!Number.isFinite(units) || units <= 0) return "";
+  if (geometry.unit === "ft") {
+    const totalInches = Math.round(units * 12 * 8) / 8;
+    const feet = Math.floor(totalInches / 12);
+    const inches = Number((totalInches - feet * 12).toFixed(3));
+    return inches ? `${feet}'${formatPlanNumber(inches)}\"` : `${feet}'`;
+  }
+  if (geometry.unit === "in") {
+    const inches = Math.round(units * 8) / 8;
+    return `${formatPlanNumber(inches)}\"`;
+  }
   const rounded = units >= 10 ? Math.round(units * 10) / 10 : Math.round(units * 100) / 100;
   return `${formatPlanNumber(rounded)} ${geometry.unit}`;
 }
@@ -623,7 +626,7 @@ function labelPosition(item) {
 }
 
 function isLineLike(item) {
-  return item?.type === "line" || item?.type === "arrow" || item?.type === "measure";
+  return ["line", "arrow", "measure", "wall", "door", "window"].includes(item?.type);
 }
 
 function curveControlPoint(item) {
@@ -1238,7 +1241,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     );
   }
 
-  if (item.type === "line" || item.type === "arrow" || item.type === "measure") {
+  if (isLineLike(item)) {
     const markerStart = item.startEndpoint === "arrow" ? `url(#${markerIdForColor(stroke)})` : item.startEndpoint === "dot" ? `url(#${dotMarkerIdForColor(stroke)})` : undefined;
     const markerEnd =
       item.type === "arrow" || item.endEndpoint === "arrow"
@@ -1252,12 +1255,15 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     const dx = (item.x2 || 0) - (item.x || 0);
     const dy = (item.y2 || 0) - (item.y || 0);
     const length = Math.hypot(dx, dy) || 1;
+    const normalX = -dy / length;
+    const normalY = dx / length;
     const capX = (-dy / length) * 22;
     const capY = (dx / length) * 22;
     const computedLabel = formatSegmentLength(length, roughGeometry);
+    const tracedSegment = ["wall", "door", "window"].includes(item.type);
     const label = item.type === "measure" && shouldShowLengths && shouldUseComputedMeasureLabel(item.text)
       ? computedLabel
-      : item.type === "line" && shouldShowLengths
+      : (item.type === "line" || tracedSegment) && shouldShowLengths
         ? computedLabel || item.text || ""
         : item.text || "measurement";
     const box = labelBox(label, MARKUP_MEASURE_FONT_SIZE);
@@ -1267,6 +1273,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
       <g {...common}>
         {calibratedReference ? (
           <path
+            className="editing-only"
             d={linePathD(item)}
             fill="none"
             stroke="#10b981"
@@ -1285,17 +1292,83 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
           strokeLinecap="round"
           pointerEvents="stroke"
         />
-        <path
-          d={linePathD(item)}
-          fill="none"
-          stroke={stroke}
-          strokeOpacity={style.strokeOpacity}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          markerStart={markerStart}
-          markerEnd={markerEnd}
-          strokeDasharray={style.strokeDasharray}
-        />
+        {item.type === "window" ? (
+          <>
+            <path d={linePathD(item)} fill="none" stroke="white" strokeWidth={Math.max(10, strokeWidth + 7)} strokeLinecap="square" />
+            <line
+              x1={(item.x || 0) + normalX * 3}
+              y1={(item.y || 0) + normalY * 3}
+              x2={(item.x2 || 0) + normalX * 3}
+              y2={(item.y2 || 0) + normalY * 3}
+              stroke={stroke}
+              strokeWidth={Math.max(2, strokeWidth - 1)}
+            />
+            <line
+              x1={(item.x || 0) - normalX * 3}
+              y1={(item.y || 0) - normalY * 3}
+              x2={(item.x2 || 0) - normalX * 3}
+              y2={(item.y2 || 0) - normalY * 3}
+              stroke={stroke}
+              strokeWidth={Math.max(2, strokeWidth - 1)}
+            />
+          </>
+        ) : item.type === "door" ? (
+          (() => {
+            const swingDirection = item.swingSide === "right" ? -1 : 1;
+            const leafEndX = (item.x || 0) + normalX * length * swingDirection;
+            const leafEndY = (item.y || 0) + normalY * length * swingDirection;
+            return (
+              <>
+                <path
+                  d={linePathD(item)}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth={Math.max(12, strokeWidth + 9)}
+                  strokeLinecap="square"
+                />
+                <line
+                  x1={item.x || 0}
+                  y1={item.y || 0}
+                  x2={item.x2 || 0}
+                  y2={item.y2 || 0}
+                  stroke={stroke}
+                  strokeOpacity="0.28"
+                  strokeWidth="2"
+                  strokeDasharray="6 5"
+                />
+                <line
+                  x1={item.x || 0}
+                  y1={item.y || 0}
+                  x2={leafEndX}
+                  y2={leafEndY}
+                  stroke={stroke}
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
+                />
+                <path
+                  d={`M ${leafEndX} ${leafEndY} A ${length} ${length} 0 0 ${swingDirection > 0 ? 1 : 0} ${item.x2 || 0} ${item.y2 || 0}`}
+                  fill="none"
+                  stroke={stroke}
+                  strokeOpacity="0.72"
+                  strokeWidth={Math.max(2, strokeWidth - 1)}
+                  strokeDasharray="6 5"
+                />
+              </>
+            );
+          })()
+        ) : (
+          <path
+            d={linePathD(item)}
+            fill="none"
+            stroke={stroke}
+            strokeOpacity={style.strokeOpacity}
+            strokeWidth={strokeWidth}
+            strokeLinecap={item.type === "wall" ? "square" : "round"}
+            markerStart={markerStart}
+            markerEnd={markerEnd}
+            strokeDasharray={style.strokeDasharray}
+          />
+        )}
         {item.type === "measure" ? (
           <>
             <line
@@ -1322,7 +1395,7 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
             />
           </>
         ) : null}
-        {((item.type === "measure" && (liveLength || item.text || showSegmentLengths)) || (item.type === "line" && shouldShowLengths)) && !editing && label ? (
+        {((item.type === "measure" && (liveLength || item.text || showSegmentLengths)) || ((item.type === "line" || tracedSegment) && shouldShowLengths)) && !editing && label ? (
           <g>
             <rect
               x={midX - box.width / 2}
@@ -1350,36 +1423,22 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
           </g>
         ) : null}
         {calibratedReference ? (
-          <SegmentLengthLabel
-            x={midX}
-            y={labelY - 18}
-            label="Reference"
-            stroke="#059669"
-          />
+          <g className="editing-only">
+            <SegmentLengthLabel
+              x={midX}
+              y={labelY - 18}
+              label="Reference"
+              stroke="#059669"
+            />
+          </g>
         ) : null}
       </g>
     );
   }
 
-  if (["door", "window", "tree", "steps", "fence"].includes(item.type)) {
+  if (["tree", "steps", "fence"].includes(item.type)) {
     const x = item.x || 0;
     const y = item.y || 0;
-    if (item.type === "door") {
-      return (
-        <g {...common}>
-          <path d={`M ${x - 26} ${y + 28} L ${x - 26} ${y - 26} L ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
-          <path d={`M ${x - 24} ${y + 24} A 54 54 0 0 1 ${x + 28} ${y - 26}`} fill="none" stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} strokeDasharray="7 7" />
-        </g>
-      );
-    }
-    if (item.type === "window") {
-      return (
-        <g {...common}>
-          <rect x={x - 32} y={y - 12} width="64" height="24" rx="3" fill="rgba(255,255,255,0.9)" stroke={stroke} strokeWidth={strokeWidth} />
-          <line x1={x} y1={y - 12} x2={x} y2={y + 12} stroke={stroke} strokeWidth={Math.max(2, strokeWidth - 1)} />
-        </g>
-      );
-    }
     if (item.type === "tree") {
       return (
         <g {...common}>
@@ -1630,14 +1689,7 @@ export default function ProjectMarkupCanvas() {
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
-  const [showFloorPlanSetup, setShowFloorPlanSetup] = useState(false);
-  const [floorPlanSetup, setFloorPlanSetup] = useState({ width: "", length: "", unit: "ft" });
-  const [floorPlanSetupError, setFloorPlanSetupError] = useState("");
-  const [pendingFloorPlanSave, setPendingFloorPlanSave] = useState(null);
-  const [dimensionInputs, setDimensionInputs] = useState({});
-  const [updatingFloorPlanDimensions, setUpdatingFloorPlanDimensions] = useState(false);
-  const [savingFloorPlanBase, setSavingFloorPlanBase] = useState(false);
-  const [floorPlanSaveError, setFloorPlanSaveError] = useState("");
+  const [traceSettings, setTraceSettings] = useState(DEFAULT_TRACE_SETTINGS);
   const [hideTextAndMeasurements, setHideTextAndMeasurements] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
@@ -1655,8 +1707,10 @@ export default function ProjectMarkupCanvas() {
   const isProjectImageMode = Boolean(projectId && imageId);
   const storageKey = `${STORAGE_PREFIX}:${planId ? `plan:${planId}` : isProjectImageMode ? `project:${projectId}:${imageId}` : "standalone"}`;
   const selectedImageId = useMemo(() => new URLSearchParams(location.search).get("image") || "", [location.search]);
-  const requestedCanvasMode = useMemo(() => new URLSearchParams(location.search).get("mode") || "", [location.search]);
-  const sketchUploadRequested = useMemo(() => new URLSearchParams(location.search).get("sketch") === "1", [location.search]);
+  const sketchUploadRequested = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("trace") === "1" || params.get("sketch") === "1";
+  }, [location.search]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1023px)");
@@ -1722,7 +1776,7 @@ export default function ProjectMarkupCanvas() {
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) || "{}");
       if (saved.backgroundUrl) setBackgroundUrl(saved.backgroundUrl);
-      if (Array.isArray(saved.annotations)) setAnnotations(saved.annotations);
+      if (Array.isArray(saved.annotations)) setAnnotations(withoutAutomaticTrace(saved.annotations));
       if (saved.canvasMode === "rough_plan" || saved.canvasMode === "photo") setCanvasMode(saved.canvasMode);
       if (saved.roughPlan && typeof saved.roughPlan === "object") {
         setRoughPlan((prev) => ({ ...prev, ...saved.roughPlan }));
@@ -1741,6 +1795,9 @@ export default function ProjectMarkupCanvas() {
           setMeasurementCalibrationInputLength(String(saved.measurementCalibration.length));
         }
       }
+      if (saved.traceSettings && typeof saved.traceSettings === "object") {
+        setTraceSettings((prev) => ({ ...prev, ...saved.traceSettings }));
+      }
       if (typeof saved.hideTextAndMeasurements === "boolean") setHideTextAndMeasurements(saved.hideTextAndMeasurements);
     } catch {
       // Ignore broken session drafts.
@@ -1750,9 +1807,9 @@ export default function ProjectMarkupCanvas() {
   useEffect(() => {
     sessionStorage.setItem(
       storageKey,
-      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, hideTextAndMeasurements }),
+      JSON.stringify({ backgroundUrl, annotations, canvasMode, roughPlan, activeColor, activeFillColor, activeFillMaterial, activeStrokeWidth, activeStrokeOpacity, activeFillOpacity, visibleLayers, lockedLayers, measurementCalibration, traceSettings, hideTextAndMeasurements }),
     );
-  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, visibleLayers]);
+  }, [activeColor, activeFillColor, activeFillMaterial, activeFillOpacity, activeStrokeOpacity, activeStrokeWidth, annotations, backgroundUrl, canvasMode, hideTextAndMeasurements, lockedLayers, measurementCalibration, roughPlan, storageKey, traceSettings, visibleLayers]);
 
   useEffect(() => {
     localStorage.setItem(TEXTURE_LIBRARY_STORAGE_KEY, JSON.stringify(fillTextureLibrary));
@@ -1803,7 +1860,7 @@ export default function ProjectMarkupCanvas() {
             : null;
 
         if (selectedImageVersion) {
-          setAnnotations(Array.isArray(selectedImageVersion.annotations) ? selectedImageVersion.annotations : []);
+          setAnnotations(withoutAutomaticTrace(selectedImageVersion.annotations));
           setBackgroundUrl(selectedImageVersion.background_url || selectedImage.image_url || "");
           setCanvasMode(selectedImageVersion.version_type === "rough_plan" ? "rough_plan" : "photo");
           if (selectedImageVersion.rough_plan && typeof selectedImageVersion.rough_plan === "object") {
@@ -1821,12 +1878,15 @@ export default function ProjectMarkupCanvas() {
               setMeasurementCalibrationInputLength(String(selectedImageVersion.measurement_calibration.length));
             }
           }
+          if (selectedImageVersion.trace_settings && typeof selectedImageVersion.trace_settings === "object") {
+            setTraceSettings((prev) => ({ ...prev, ...selectedImageVersion.trace_settings, active: true }));
+          }
         } else if (selectedImage) {
           setAnnotations([]);
           setBackgroundUrl(selectedImage.image_url || "");
           setCanvasMode("photo");
         } else {
-          if (Array.isArray(markup.annotations)) setAnnotations(markup.annotations);
+          if (Array.isArray(markup.annotations)) setAnnotations(withoutAutomaticTrace(markup.annotations));
           if (markup.background_url) setBackgroundUrl(markup.background_url);
           if (markup.canvas_mode === "rough_plan" || markup.version_type === "rough_plan") setCanvasMode("rough_plan");
           if (markup.rough_plan && typeof markup.rough_plan === "object") {
@@ -1843,6 +1903,9 @@ export default function ProjectMarkupCanvas() {
             if (markup.measurement_calibration.length != null) {
               setMeasurementCalibrationInputLength(String(markup.measurement_calibration.length));
             }
+          }
+          if (markup.trace_settings && typeof markup.trace_settings === "object") {
+            setTraceSettings((prev) => ({ ...prev, ...markup.trace_settings, active: true }));
           }
         }
       })
@@ -1878,7 +1941,7 @@ export default function ProjectMarkupCanvas() {
         const url = projectImageUrl(image);
         const markupVersion = image.extra_data?.markup_version;
         if (markupVersion && typeof markupVersion === "object") {
-          setAnnotations(Array.isArray(markupVersion.annotations) ? markupVersion.annotations : []);
+          setAnnotations(withoutAutomaticTrace(markupVersion.annotations));
           setBackgroundUrl(markupVersion.background_url || url || "");
           setCanvasMode(markupVersion.version_type === "rough_plan" ? "rough_plan" : "photo");
           if (markupVersion.rough_plan && typeof markupVersion.rough_plan === "object") {
@@ -1895,6 +1958,9 @@ export default function ProjectMarkupCanvas() {
             if (markupVersion.measurement_calibration.length != null) {
               setMeasurementCalibrationInputLength(String(markupVersion.measurement_calibration.length));
             }
+          }
+          if (markupVersion.trace_settings && typeof markupVersion.trace_settings === "object") {
+            setTraceSettings((prev) => ({ ...prev, ...markupVersion.trace_settings, active: true }));
           }
         } else {
           setAnnotations([]);
@@ -1914,18 +1980,12 @@ export default function ProjectMarkupCanvas() {
   }, [imageId, isProjectImageMode, projectId]);
 
   useEffect(() => {
-    if (loadingPlan || requestedCanvasMode !== "rough_plan" || modeRequestHandledRef.current) return;
+    if (loadingPlan || !sketchUploadRequested || modeRequestHandledRef.current) return;
     modeRequestHandledRef.current = true;
-    setCanvasMode("rough_plan");
-    setBackgroundUrl("");
-    setOpenSidebarSection("mode");
-    if (sketchUploadRequested) {
-      setAnnotations([]);
-      setSelectedId("");
-      setEditingTextId("");
-      setMessage("Upload a sketch in the Create from sketch panel. AI will create a floor-plan image for review.");
-    }
-  }, [loadingPlan, requestedCanvasMode, sketchUploadRequested]);
+    setCanvasMode("photo");
+    setOpenSidebarSection("background");
+    setMessage("Choose a sketch as the tracing reference, then calibrate one known measurement before drawing walls.");
+  }, [loadingPlan, sketchUploadRequested]);
 
   const selected = useMemo(
     () => annotations.find((item) => item.id === selectedId) || null,
@@ -2013,12 +2073,8 @@ export default function ProjectMarkupCanvas() {
   }, [history, annotations, selectedId]);
 
   const isRoughPlan = canvasMode === "rough_plan";
+  const isAssistedTrace = !isRoughPlan && traceSettings.active;
   const roughGeometry = useMemo(() => roughPlanGeometry(roughPlan), [roughPlan]);
-  const hasAiCleanPlanOverlay = !isRoughPlan && annotations.some((item) => item?.source === "ai_clean_plan_trace");
-  const cleanPlanGeometry = useMemo(
-    () => cleanPlanMeasurementGeometry(roughPlan, backgroundImageDimensions),
-    [backgroundImageDimensions, roughPlan],
-  );
   const calibratedMeasurementGeometry = useMemo(() => {
     const scale = Number(measurementCalibration?.scale || 0);
     return scale > 0
@@ -2029,13 +2085,23 @@ export default function ProjectMarkupCanvas() {
         }
       : null;
   }, [measurementCalibration?.referenceLineId, measurementCalibration?.scale, measurementCalibration?.unit]);
-  const showPlanSegmentLengths = !hideTextAndMeasurements && (isRoughPlan || hasAiCleanPlanOverlay);
+  const traceReferenceAnnotation = annotations.find((item) => item.id === measurementCalibration.referenceLineId);
+  const traceSnapGeometry = isAssistedTrace && calibratedMeasurementGeometry
+    ? {
+        x: traceReferenceAnnotation?.x || 0,
+        y: traceReferenceAnnotation?.y || 0,
+        scale: calibratedMeasurementGeometry.scale * Math.max(0.001, Number(traceSettings.snapIncrement) || 1),
+      }
+    : null;
+  const traceReferenceFrame = backgroundImageFrame(backgroundImageDimensions);
+  const showPlanSegmentLengths = !hideTextAndMeasurements && (isRoughPlan || isAssistedTrace);
   const activeMeasurementGeometry = isRoughPlan
     ? roughGeometry
-    : calibratedMeasurementGeometry || (hasAiCleanPlanOverlay ? cleanPlanGeometry : null);
-  const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
+    : calibratedMeasurementGeometry;
+  const modeLabel = isRoughPlan ? "Rough Plan" : isAssistedTrace ? "Assisted Trace" : "Photo Markup";
   const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
   const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
+  const canSnapTrace = Boolean(isAssistedTrace && calibratedMeasurementGeometry && traceSettings.snap);
   const viewportBase = useMemo(() => {
     const aspect = clamp(canvasFrameAspect, 0.35, 3);
     const width = Math.min(CANVAS_W, CANVAS_H * aspect);
@@ -2073,12 +2139,21 @@ export default function ProjectMarkupCanvas() {
       { key: "view", tools: [BASE_TOOLS.hand] },
       { key: "text", tools: [BASE_TOOLS.text] },
       { key: "draw", tools: [BASE_TOOLS.freehand, BASE_TOOLS.pen, BASE_TOOLS.penAdd, BASE_TOOLS.penRemove] },
-      ...(isRoughPlan ? [] : [{ key: "background", tools: [BASE_TOOLS.backgroundEraser] }]),
-      { key: "geometry", tools: [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure] },
-      ...(isRoughPlan ? [{ key: "symbols", tools: SYMBOL_TOOLS }] : []),
+      ...(isRoughPlan || isAssistedTrace ? [] : [{ key: "background", tools: [BASE_TOOLS.backgroundEraser] }]),
+      {
+        key: "geometry",
+        tools: isAssistedTrace
+          ? [BASE_TOOLS.wall, BASE_TOOLS.measure, BASE_TOOLS.line]
+          : [BASE_TOOLS.rect, BASE_TOOLS.circle, BASE_TOOLS.arrow, BASE_TOOLS.line, BASE_TOOLS.measure],
+      },
+      ...(isAssistedTrace
+        ? [{ key: "symbols", tools: TRACE_OPENING_TOOLS }]
+        : isRoughPlan
+          ? [{ key: "symbols", tools: SYMBOL_TOOLS }]
+          : []),
       { key: "delete", tools: [BASE_TOOLS.delete] },
     ],
-    [isRoughPlan],
+    [isAssistedTrace, isRoughPlan],
   );
   const markerColors = useMemo(
     () => Array.from(new Set([...MARKUP_COLORS.map((item) => item.color), ...annotations.map((item) => styleFor(item).strokeColor)])),
@@ -2090,15 +2165,17 @@ export default function ProjectMarkupCanvas() {
     return Array.isArray(markup.versions) ? markup.versions : [];
   }, [plan]);
   const sketchSourceImages = useMemo(() => {
-    if (isProjectImageMode) {
-      return projectImages
+    const images = isProjectImageMode
+      ? projectImages
         .map((image) => {
           const url = projectImageUrl(image);
           return url ? { ...image, image_url: url } : null;
         })
-        .filter(Boolean);
-    }
-    return Array.isArray(plan?.images) ? plan.images : [];
+        .filter(Boolean)
+      : Array.isArray(plan?.images) ? plan.images : [];
+    return images.filter((image) => (
+      image.caption !== MARKUP_FLOOR_PLAN_NAME && image.extra_data?.is_markup_snapshot !== true
+    ));
   }, [isProjectImageMode, plan?.images, projectImages]);
 
   function makeMarkupPayload(previousMarkup = {}, versionOverrides = {}) {
@@ -2109,7 +2186,6 @@ export default function ProjectMarkupCanvas() {
       : [];
     const sourceImage = (plan?.images || []).find((image) => image.image_url && image.image_url === background_url);
     const nextVersionNumber = existingVersions.length + 1;
-    const planGeometry = plan?.plan_geometry || previousMarkup.plan_geometry || {};
     const normalizedAnnotations = annotations.map((item) => ({
       ...item,
       layer: item.id,
@@ -2118,11 +2194,11 @@ export default function ProjectMarkupCanvas() {
     const version = {
       id: `version-${Date.now()}`,
       name: versionOverrides.name || MARKUP_FLOOR_PLAN_NAME,
-      version_type: isRoughPlan ? "rough_plan" : "photo_markup",
+      version_type: isRoughPlan ? "rough_plan" : isAssistedTrace ? "assisted_trace" : "photo_markup",
       type_label: modeLabel,
       created_at: now,
       background_url: isRoughPlan ? "" : background_url,
-      source_image_id: sourceImage?.id || null,
+      source_image_id: traceSettings.sourceImageId || sourceImage?.id || null,
       snapshot_url: versionOverrides.snapshot_url || "",
       snapshot_image_id: versionOverrides.snapshot_image_id || null,
       annotations: normalizedAnnotations,
@@ -2130,7 +2206,7 @@ export default function ProjectMarkupCanvas() {
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
-      plan_geometry: planGeometry,
+      trace_settings: isAssistedTrace ? traceSettings : undefined,
       annotation_count: normalizedAnnotations.length,
     };
 
@@ -2138,14 +2214,14 @@ export default function ProjectMarkupCanvas() {
       schema_version: 1,
       canvas: { width: CANVAS_W, height: CANVAS_H },
       canvas_mode: canvasMode,
-      version_type: isRoughPlan ? "rough_plan" : "photo_markup",
+      version_type: isRoughPlan ? "rough_plan" : isAssistedTrace ? "assisted_trace" : "photo_markup",
       rough_plan: isRoughPlan ? roughPlan : undefined,
       background_url: isRoughPlan ? "" : background_url,
       annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
-      plan_geometry: planGeometry,
+      trace_settings: isAssistedTrace ? traceSettings : undefined,
       updated_at: now,
       versions: [version, ...existingVersions].slice(0, 8),
     };
@@ -2239,11 +2315,26 @@ export default function ProjectMarkupCanvas() {
   function handleFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
+    const validationError = validateSketchFile(file);
+    if (validationError) {
+      setMessage(validationError);
+      event.target.value = "";
+      return;
+    }
     const url = URL.createObjectURL(file);
     setBackgroundUrl((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
       return url;
     });
+    setSketchSource((prev) => {
+      if (prev?.previewUrl?.startsWith("blob:") && prev.previewUrl !== url) URL.revokeObjectURL(prev.previewUrl);
+      return { kind: "upload", file, previewUrl: url, name: file.name || "Sketch image" };
+    });
+    readImageDimensions(url).then((dimensions) => {
+      if (!dimensions?.width || !dimensions?.height) return;
+      setSketchSource((prev) => prev?.previewUrl === url ? { ...prev, ...dimensions } : prev);
+    });
+    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "Sketch image", detail: "Sketch selected as the tracing reference." });
     event.target.value = "";
   }
 
@@ -2282,8 +2373,8 @@ export default function ProjectMarkupCanvas() {
           : prev,
       );
     });
-    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected. Create the floor-plan image when ready." });
-    setMessage("New sketch selected for plan creation. It has not been saved as a project image.");
+    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected as the tracing reference." });
+    setMessage("New sketch selected. It will be saved to the project when assisted tracing starts.");
   }
 
   function selectExistingSketchImage(image) {
@@ -2309,289 +2400,106 @@ export default function ProjectMarkupCanvas() {
           : prev,
       );
     });
-    setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected. Create the floor-plan image when ready." });
-    setMessage("Project image selected. Confirm the source, then create the floor-plan image.");
+    setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected as the tracing reference." });
+    setMessage("Project image selected. Start assisted tracing when ready.");
   }
 
-  function openFloorPlanSetupDialog() {
+  async function startAssistedTracing() {
     if (!sketchSource) {
       setSketchStatus({ phase: "error", progress: 0, fileName: "", detail: "Choose an uploaded image or upload a new sketch first." });
       setMessage("Choose an uploaded image or upload a new sketch first.");
-      return;
-    }
-    const bounds = plan?.plan_geometry?.plan_bounds;
-    setFloorPlanSetup((prev) => {
-      if (prev.width || prev.length || !Number(bounds?.width_inches) || !Number(bounds?.length_inches)) return prev;
-      const unit = bounds.unit && PLAN_UNIT_INCHES[bounds.unit] ? bounds.unit : prev.unit;
-      return {
-        width: formatPlanNumber(Number(bounds.width_inches) / PLAN_UNIT_INCHES[unit]),
-        length: formatPlanNumber(Number(bounds.length_inches) / PLAN_UNIT_INCHES[unit]),
-        unit,
-      };
-    });
-    setFloorPlanSetupError("");
-    setShowFloorPlanSetup(true);
-  }
-
-  async function createCleanFloorPlanFromSketchSource(setup = floorPlanSetup) {
-    if (!sketchSource) {
-      setSketchStatus({ phase: "error", progress: 0, fileName: "", detail: "Choose an uploaded image or upload a new sketch first." });
-      setMessage("Choose an uploaded image or upload a new sketch first.");
-      return;
-    }
-    if (!parsePlanLengthToInches(setup.width, setup.unit) || !parsePlanLengthToInches(setup.length, setup.unit)) {
-      setFloorPlanSetupError("Enter both the full width and full length before conversion.");
-      setShowFloorPlanSetup(true);
       return;
     }
     if (!planId && !isProjectImageMode) {
-      const detail = "Open this from a saved project planner or project image before creating a clean floor plan.";
+      const detail = "Open this from a saved project planner or project image before tracing a floor plan.";
       setSketchStatus({ phase: "error", progress: 0, fileName: sketchSource.name || "", detail });
       setMessage(detail);
       return;
     }
+    if (annotations.length && !window.confirm("Start a new assisted trace and clear the current unsaved annotations?")) return;
 
-    setShowFloorPlanSetup(false);
     setSketchBusy(true);
     setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
     setMessage("");
     try {
-      const endpoint = planId
-        ? `/project-plans/${planId}/sketch-to-clean-floor-plan/`
-        : `/projects/${projectId}/images/${imageId}/sketch-to-clean-floor-plan/`;
-      const file =
-        sketchSource.kind === "upload"
-          ? sketchSource.file
-          : isProjectImageMode
-            ? null
-            : null;
-      const formData = new FormData();
-      if (file) {
-        const validationError = validateSketchFile(file);
+      let sourceImage = sketchSource.kind === "existing" ? sketchSource : null;
+      if (sketchSource.kind === "upload") {
+        const validationError = validateSketchFile(sketchSource.file);
         if (validationError) throw new Error(validationError);
-        formData.append("sketch", file);
-      } else if (sketchSource.kind === "existing") {
-        formData.append("source_image_id", sketchSource.imageId);
-      } else {
-        throw new Error("Choose an uploaded image or upload a new sketch first.");
-      }
-      if (sketchSource.width && sketchSource.height) {
-        formData.append("source_width", String(sketchSource.width));
-        formData.append("source_height", String(sketchSource.height));
-      }
-      formData.append("gross_width", String(setup.width));
-      formData.append("gross_length", String(setup.length));
-      formData.append("gross_unit", setup.unit);
-
-      const { data } = await api.post(endpoint, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (progressEvent) => {
-          const total = progressEvent.total || file?.size || 0;
-          const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
-          setSketchStatus({
-            phase: progress >= 100 ? "analyzing" : "uploading",
-            progress,
-            fileName: sketchSource.name || file?.name || "Sketch image",
-            detail: "",
-          });
-        },
-      });
-      const generatedImage = data.image || {};
-      const generatedUrl = projectImageUrl(generatedImage);
-      const detectedGeometry = data.plan_geometry && typeof data.plan_geometry === "object" ? data.plan_geometry : {};
-      const detectedCalibration =
-        data.measurement_calibration && Number(data.measurement_calibration.scale || 0) > 0
-          ? data.measurement_calibration
-          : DEFAULT_MEASUREMENT_CALIBRATION;
-      if (planId) {
-        setPlan((prev) =>
-          prev
-            ? {
-                ...prev,
-                plan_geometry: detectedGeometry,
-                images: [...(Array.isArray(prev.images) ? prev.images : []), generatedImage],
-              }
-            : prev,
-        );
-      } else if (isProjectImageMode) {
-        setProjectImages((prev) => [...prev, generatedImage]);
-      }
-      if (generatedUrl) {
-        setCanvasMode("photo");
-        setBackgroundUrl(generatedUrl);
-        commitAnnotations([]);
-        setTool("select");
-        setSelectedId("");
-        setEditingTextId("");
-        setVisibleLayers({});
-        setLockedLayers({});
-        setMeasurementCalibration(detectedCalibration);
-        setMeasurementCalibrationInputLength(String(detectedCalibration.length || DEFAULT_MEASUREMENT_CALIBRATION.length));
-        setMeasurementCalibrationPromptComplete(Number(detectedCalibration.scale || 0) > 0);
-        setFloorPlanSaveError("");
-        setDimensionInputs(unclearDimensionInputs(detectedGeometry));
-        setPendingFloorPlanSave({
-          image: generatedImage,
-          url: generatedUrl,
-          planGeometry: detectedGeometry,
-          measurementCalibration: detectedCalibration,
+        const formData = new FormData();
+        formData.append("images", sketchSource.file);
+        formData.append("captions", "trace-source-sketch");
+        const endpoint = planId ? `/project-plans/${planId}/images/` : `/projects/${projectId}/images/`;
+        const { data } = await api.post(endpoint, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (progressEvent) => {
+            const total = progressEvent.total || sketchSource.file.size || 0;
+            const progress = total ? Math.min(100, Math.round((progressEvent.loaded / total) * 100)) : 0;
+            setSketchStatus({ phase: "uploading", progress, fileName: sketchSource.name || "Sketch image", detail: "" });
+          },
+        });
+        const uploadedImage = Array.isArray(data) ? data[0] : data;
+        const uploadedUrl = projectImageUrl(uploadedImage);
+        if (!uploadedImage?.id || !uploadedUrl) throw new Error("The sketch uploaded, but its image URL was not returned.");
+        sourceImage = {
+          kind: "existing",
+          imageId: uploadedImage.id,
+          imageUrl: uploadedUrl,
+          previewUrl: uploadedUrl,
+          name: uploadedImage.caption || sketchSource.name || "Trace source sketch",
+          width: sketchSource.width,
+          height: sketchSource.height,
+        };
+        if (planId) {
+          setPlan((prev) => prev ? { ...prev, images: [...(Array.isArray(prev.images) ? prev.images : []), uploadedImage] } : prev);
+        } else {
+          setProjectImages((prev) => [...prev, uploadedImage]);
+        }
+        setSketchSource((prev) => {
+          if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
+          return sourceImage;
         });
       }
-      setSketchStatus({ phase: "ready", progress: 100, fileName: generatedImage.caption || CLEAN_FLOOR_PLAN_NAME, detail: "" });
-      setMessage("Floor-plan image created. Save the clean base before adding markup.");
+
+      const sourceUrl = sourceImage?.imageUrl || sourceImage?.previewUrl || "";
+      if (!sourceUrl) throw new Error("Could not load the selected sketch as a tracing reference.");
+      setCanvasMode("photo");
+      setBackgroundUrl(sourceUrl);
+      commitAnnotations([]);
+      setSelectedId("");
+      setSelectedNodes({ annotationId: "", handleKeys: [] });
+      setEditingTextId("");
+      setVisibleLayers({});
+      setLockedLayers({});
+      setActiveColor("#111827");
+      setActiveFillColor("#111827");
+      setActiveStrokeWidth(8);
+      const nextCalibration = { ...DEFAULT_MEASUREMENT_CALIBRATION, length: "", referenceLineId: "", referencePx: 0, scale: 0 };
+      setMeasurementCalibration(nextCalibration);
+      setMeasurementCalibrationInputLength("");
+      setMeasurementCalibrationPromptComplete(false);
+      measurementCalibrationPromptShownRef.current = true;
+      setTraceSettings({
+        ...DEFAULT_TRACE_SETTINGS,
+        active: true,
+        sourceImageId: sourceImage?.imageId || null,
+        snapIncrement: defaultTraceSnapIncrement(nextCalibration.unit),
+      });
+      setTool("measure");
+      setShowMeasurementCalibrationPrompt(true);
+      setSketchStatus({
+        phase: "ready",
+        progress: 100,
+        fileName: sourceImage?.name || "Sketch image",
+        detail: "Sketch loaded as a locked reference. Calibrate one known length before tracing.",
+      });
+      setMessage("Draw a measure over one known sketch dimension, enter its real length, and apply it as the reference scale.");
     } catch (err) {
-      const statusCode = err?.response?.status;
-      const providerDetail = normalizeError(err, "Could not create a clean floor plan from this sketch.");
-      const detailPrefix = statusCode >= 500 ? "Floor-plan analysis failed" : "Image upload or API request failed";
-      const detail = `${detailPrefix}${statusCode ? ` (${statusCode})` : ""}: ${providerDetail}`;
+      const detail = normalizeError(err, "Could not start assisted tracing with this sketch.");
       setSketchStatus((prev) => ({ phase: "error", progress: prev.progress || 0, fileName: sketchSource.name || "Sketch image", detail }));
       setMessage(detail);
     } finally {
       setSketchBusy(false);
-    }
-  }
-
-  async function applyUnclearFloorPlanDimensions() {
-    if (!pendingFloorPlanSave?.image?.id) return;
-    const dimensions = Object.fromEntries(
-      Object.entries(dimensionInputs).filter(([, entry]) => parsePlanLengthToInches(entry?.value, entry?.unit) > 0),
-    );
-    if (!Object.keys(dimensions).length) {
-      setFloorPlanSaveError("Enter at least one unclear measurement before applying changes.");
-      return;
-    }
-
-    setUpdatingFloorPlanDimensions(true);
-    setFloorPlanSaveError("");
-    try {
-      const endpoint = planId
-        ? `/project-plans/${planId}/images/${pendingFloorPlanSave.image.id}/floor-plan-dimensions/`
-        : `/projects/${projectId}/images/${pendingFloorPlanSave.image.id}/floor-plan-dimensions/`;
-      const { data } = await api.post(endpoint, { dimensions });
-      const updatedImage = data.image || pendingFloorPlanSave.image;
-      const updatedGeometry = data.plan_geometry || pendingFloorPlanSave.planGeometry || {};
-      const updatedCalibration = data.measurement_calibration || pendingFloorPlanSave.measurementCalibration;
-      const updatedUrl = projectImageUrl(updatedImage) || pendingFloorPlanSave.url;
-
-      if (planId) {
-        setPlan((prev) =>
-          prev
-            ? {
-                ...prev,
-                plan_geometry: updatedGeometry,
-                images: (Array.isArray(prev.images) ? prev.images : []).map((image) =>
-                  String(image.id) === String(updatedImage.id) ? updatedImage : image,
-                ),
-              }
-            : prev,
-        );
-      } else {
-        setProjectImages((prev) =>
-          prev.map((image) => (String(image.id) === String(updatedImage.id) ? updatedImage : image)),
-        );
-      }
-      setBackgroundUrl(updatedUrl);
-      setMeasurementCalibration(updatedCalibration);
-      setMeasurementCalibrationInputLength(String(updatedCalibration?.length || DEFAULT_MEASUREMENT_CALIBRATION.length));
-      setDimensionInputs(unclearDimensionInputs(updatedGeometry));
-      setPendingFloorPlanSave({
-        image: updatedImage,
-        url: updatedUrl,
-        planGeometry: updatedGeometry,
-        measurementCalibration: updatedCalibration,
-      });
-      setMessage(`${data.applied_count || Object.keys(dimensions).length} measurement${(data.applied_count || Object.keys(dimensions).length) === 1 ? "" : "s"} added to the floor plan.`);
-    } catch (err) {
-      setFloorPlanSaveError(normalizeError(err, "Could not apply those measurements. Try again."));
-    } finally {
-      setUpdatingFloorPlanDimensions(false);
-    }
-  }
-
-  async function saveGeneratedFloorPlanBase() {
-    if (!pendingFloorPlanSave?.image?.id || !pendingFloorPlanSave.url) return;
-
-    setSavingFloorPlanBase(true);
-    setFloorPlanSaveError("");
-    try {
-      const now = new Date().toISOString();
-      const imageIdToSave = pendingFloorPlanSave.image.id;
-      const baseCalibration = pendingFloorPlanSave.measurementCalibration || measurementCalibration;
-      const baseGeometry = pendingFloorPlanSave.planGeometry || plan?.plan_geometry || {};
-
-      if (planId) {
-        const previousMarkup = safeMarkupData(plan?.markup_data);
-        const existingVersions = Array.isArray(previousMarkup.versions) ? previousMarkup.versions : [];
-        const baseVersionId = `floor-plan-base-${imageIdToSave}`;
-        const baseVersion = {
-          id: baseVersionId,
-          name: CLEAN_FLOOR_PLAN_NAME,
-          version_type: "photo_markup",
-          type_label: "Floor Plan",
-          created_at: pendingFloorPlanSave.image.created_at || now,
-          updated_at: now,
-          background_url: pendingFloorPlanSave.url,
-          source_image_id: imageIdToSave,
-          snapshot_url: "",
-          snapshot_image_id: null,
-          annotations: [],
-          visible_layers: {},
-          locked_layers: {},
-          measurement_calibration: baseCalibration,
-          plan_geometry: baseGeometry,
-          annotation_count: 0,
-        };
-        await patchMarkupData({
-          ...previousMarkup,
-          schema_version: 1,
-          canvas: { width: CANVAS_W, height: CANVAS_H },
-          canvas_mode: "photo",
-          version_type: "photo_markup",
-          background_url: pendingFloorPlanSave.url,
-          annotations: [],
-          visible_layers: {},
-          locked_layers: {},
-          measurement_calibration: baseCalibration,
-          plan_geometry: baseGeometry,
-          base_floor_plan: {
-            image_id: imageIdToSave,
-            image_url: pendingFloorPlanSave.url,
-            saved_at: now,
-          },
-          updated_at: now,
-          versions: [baseVersion, ...existingVersions.filter((version) => version.id !== baseVersionId)].slice(0, 8),
-        });
-      } else if (isProjectImageMode && projectId) {
-        const previousExtraData =
-          pendingFloorPlanSave.image.extra_data && typeof pendingFloorPlanSave.image.extra_data === "object"
-            ? pendingFloorPlanSave.image.extra_data
-            : {};
-        const { data } = await api.patch(`/projects/${projectId}/images/${imageIdToSave}/`, {
-          extra_data: {
-            ...previousExtraData,
-            source: previousExtraData.source || "ai_clean_floor_plan",
-            plan_geometry: baseGeometry,
-            measurement_calibration: baseCalibration,
-            is_floor_plan_base: true,
-            base_floor_plan: {
-              image_id: imageIdToSave,
-              image_url: pendingFloorPlanSave.url,
-              saved_at: now,
-            },
-          },
-        });
-        setProjectImage(data);
-        setProjectImages((prev) => prev.map((image) => (String(image.id) === String(data.id) ? data : image)));
-      } else {
-        throw new Error("Open this from a saved planner or project image before saving the floor plan.");
-      }
-
-      setPendingFloorPlanSave(null);
-      setMessage("Floor plan saved as a clean base image. New markup will remain separate.");
-    } catch (err) {
-      setFloorPlanSaveError(normalizeError(err, "Could not save the clean floor plan. Try again."));
-    } finally {
-      setSavingFloorPlanBase(false);
     }
   }
 
@@ -2638,8 +2546,46 @@ export default function ProjectMarkupCanvas() {
     reader.readAsText(file);
   }
 
+  function snapAssistedTracePoint(point) {
+    if (!canSnapTrace) return point;
+    let snapped = softSnapPoint(point, true, traceSnapGeometry);
+    const activeDraft = draft ? annotations.find((item) => item.id === draft) : null;
+    const activeItemId = activeDraft?.id || drag?.id || "";
+    if (activeDraft && ["wall", "door", "window"].includes(activeDraft.type)) {
+      const alignmentTolerance = 10 / Math.max(1, viewport.zoom);
+      if (Math.abs(snapped.x - activeDraft.x) <= alignmentTolerance) snapped = { ...snapped, x: activeDraft.x };
+      if (Math.abs(snapped.y - activeDraft.y) <= alignmentTolerance) snapped = { ...snapped, y: activeDraft.y };
+    }
+
+    const endpointTolerance = 14 / Math.max(1, viewport.zoom);
+    const endpoints = annotations
+      .filter((item) => ["wall", "door", "window"].includes(item.type) && item.id !== activeItemId)
+      .flatMap((item) => [
+        { x: item.x || 0, y: item.y || 0 },
+        { x: item.x2 ?? item.x ?? 0, y: item.y2 ?? item.y ?? 0 },
+      ]);
+    const nearest = endpoints
+      .map((endpoint) => ({ endpoint, distance: distanceBetween(snapped, endpoint) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (nearest?.distance <= endpointTolerance) return nearest.endpoint;
+
+    const wallSnapTolerance = 10 / Math.max(1, viewport.zoom);
+    const nearestWallPoint = annotations
+      .filter((item) => item.type === "wall" && item.id !== activeItemId)
+      .map((item) => closestPointOnSegment(
+        snapped,
+        { x: item.x || 0, y: item.y || 0 },
+        { x: item.x2 ?? item.x ?? 0, y: item.y2 ?? item.y ?? 0 },
+      ))
+      .filter(Boolean)
+      .map((wallPoint) => ({ wallPoint, distance: distanceBetween(snapped, wallPoint) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    return nearestWallPoint?.distance <= wallSnapTolerance ? nearestWallPoint.wallPoint : snapped;
+  }
+
   function canvasPointFromEvent(event) {
     const point = pointFromEvent(event, svgRef.current, viewport);
+    if (isAssistedTrace) return snapAssistedTracePoint(point);
     return softSnapPoint(point, canSnapRoughPlan, roughGeometry);
   }
 
@@ -2689,7 +2635,10 @@ export default function ProjectMarkupCanvas() {
     setEditingTextId("");
     setCanvasMode(nextMode);
     setTool("select");
-    if (nextMode === "rough_plan") setBackgroundUrl("");
+    if (nextMode === "rough_plan") {
+      setBackgroundUrl("");
+      setTraceSettings((prev) => ({ ...prev, active: false }));
+    }
   }
 
   function finishPenPath({ exitTool = false, closed = false } = {}) {
@@ -2738,6 +2687,12 @@ export default function ProjectMarkupCanvas() {
   function selectTool(nextTool) {
     resetNodeMultiSelectSequence();
     if (nextTool !== "pen") finishPenPath();
+    if (isAssistedTrace && ["wall", "door", "window"].includes(nextTool) && !calibratedMeasurementGeometry) {
+      setTool("measure");
+      setMessage("Calibrate one known sketch length before tracing walls, doors, or windows.");
+      setShowMeasurementCalibrationPrompt(true);
+      return;
+    }
     maybeShowMeasurementCalibrationPrompt(nextTool);
     setTool(nextTool);
   }
@@ -3179,12 +3134,19 @@ export default function ProjectMarkupCanvas() {
       y: point.y,
       x2: point.x,
       y2: point.y,
-      color: activeColor,
-      strokeColor: activeColor,
+      color: ["wall", "door", "window"].includes(tool) ? "#111827" : activeColor,
+      strokeColor: ["wall", "door", "window"].includes(tool) ? "#111827" : activeColor,
       fillColor: activeFillColor,
       fillMaterial: activeFillMaterial,
       colorLabel: selectedColorMeta.label,
-      strokeWidth: tool === "background_eraser" ? DEFAULT_ERASER_WIDTH : activeStrokeWidth,
+      strokeWidth:
+        tool === "background_eraser"
+          ? DEFAULT_ERASER_WIDTH
+          : tool === "wall"
+            ? 9
+            : ["door", "window"].includes(tool)
+              ? 3
+              : activeStrokeWidth,
       strokeOpacity: tool === "background_eraser" ? 1 : activeStrokeOpacity,
       fillOpacity: tool === "pen" ? 0 : activeFillOpacity,
       strokeAlign: "center",
@@ -3195,6 +3157,7 @@ export default function ProjectMarkupCanvas() {
       priorityNumber: tool === "priority" ? nextPriorityNumber : undefined,
       text: tool === "text" ? "Add note" : tool === "measure" ? "measurement" : "",
       canvasMode,
+      source: isAssistedTrace && ["wall", "door", "window", "measure"].includes(tool) ? "assisted_trace" : undefined,
     };
 
     commitAnnotations([...annotations, base]);
@@ -3206,7 +3169,7 @@ export default function ProjectMarkupCanvas() {
       setDraft(null);
       return;
     }
-    if (tool === "text" || tool === "priority" || ["door", "window", "tree", "steps", "fence"].includes(tool)) return;
+    if (tool === "text" || tool === "priority" || ["tree", "steps", "fence"].includes(tool)) return;
     setDraft(id);
   }
 
@@ -3330,6 +3293,8 @@ export default function ProjectMarkupCanvas() {
         // Pointer may already be released by the browser.
       }
     }
+    const completedDraftId = draft;
+    const completedDraft = completedDraftId ? annotations.find((item) => item.id === completedDraftId) : null;
     if (!penDraftId && tool !== "pen") setDraft(null);
     const activeNodeSelection = activeNodeSelectionRef.current;
     if (activeNodeSelection) {
@@ -3337,6 +3302,12 @@ export default function ProjectMarkupCanvas() {
       activeNodeSelectionRef.current = null;
     }
     setDrag(null);
+    if (isAssistedTrace && completedDraft?.type === "measure" && !calibratedMeasurementGeometry) {
+      setSelectedId(completedDraft.id);
+      setMeasurementCalibrationPromptComplete(false);
+      setShowMeasurementCalibrationPrompt(true);
+      setMessage("Enter the real length represented by the selected measure, then use it as the reference scale.");
+    }
   }
 
   function startMove(event, item) {
@@ -3565,7 +3536,7 @@ export default function ProjectMarkupCanvas() {
     if (!clone) return "";
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("viewBox", `0 0 ${CANVAS_W} ${CANVAS_H}`);
-    clone.querySelectorAll(".editing-only").forEach((node) => node.remove());
+    clone.querySelectorAll(".editing-only, .reference-only").forEach((node) => node.remove());
     return new XMLSerializer().serializeToString(clone);
   }
 
@@ -3575,7 +3546,7 @@ export default function ProjectMarkupCanvas() {
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
     clone.setAttribute("viewBox", `0 0 ${CANVAS_W} ${CANVAS_H}`);
-    clone.querySelectorAll(".editing-only").forEach((node) => node.remove());
+    clone.querySelectorAll(".editing-only, .reference-only").forEach((node) => node.remove());
 
     const imageNodes = Array.from(clone.querySelectorAll("image"));
     await Promise.all(
@@ -3622,7 +3593,7 @@ export default function ProjectMarkupCanvas() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setMessage(normalizeError(err, "Could not export PNG. Try SVG instead."));
+      setMessage(normalizeError(err, "Could not export PNG."));
     }
   }
 
@@ -3714,10 +3685,10 @@ export default function ProjectMarkupCanvas() {
       const snapshotUrl = Array.isArray(uploadedImages) ? uploadedImages[0]?.image_url : "";
       const snapshotImageId = Array.isArray(uploadedImages) ? uploadedImages[0]?.id : null;
       await saveEditableCanvas({ quiet: true, versionSnapshotUrl: snapshotUrl, versionSnapshotImageId: snapshotImageId });
-      setMessage("Editable markup and image snapshot saved to this project planner.");
+      setMessage(isAssistedTrace ? "Traced floor-plan image and editable geometry saved." : "Editable markup and image snapshot saved to this project planner.");
       return true;
     } catch (err) {
-      setMessage(normalizeError(err, "Could not save this markup. Try downloading SVG instead."));
+      setMessage(normalizeError(err, "Could not save this markup image."));
       return false;
     } finally {
       setSaving(false);
@@ -3736,7 +3707,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   async function handleSave() {
-    if (isProjectImageMode) {
+    if (isProjectImageMode && !isAssistedTrace) {
       await saveEditableCanvas();
       return;
     }
@@ -3789,11 +3760,11 @@ export default function ProjectMarkupCanvas() {
         const markupVersion = {
           id: previousExtraData.markup_version?.id || `project-image-markup-${Date.now()}`,
           name: previousExtraData.markup_version?.name || MARKUP_FLOOR_PLAN_NAME,
-          version_type: isRoughPlan ? "rough_plan" : "photo_markup",
+          version_type: isRoughPlan ? "rough_plan" : isAssistedTrace ? "assisted_trace" : "photo_markup",
           type_label: modeLabel,
           created_at: previousExtraData.markup_version?.created_at || now,
           updated_at: now,
-          source_image_id: projectImage.id,
+          source_image_id: traceSettings.sourceImageId || projectImage.id,
           background_url: isRoughPlan ? "" : isPersistableUrl(backgroundUrl) ? backgroundUrl : (projectImage.url || ""),
           snapshot_url: versionSnapshotUrl || previousExtraData.markup_version?.snapshot_url || "",
           snapshot_image_id: versionSnapshotImageId || previousExtraData.markup_version?.snapshot_image_id || null,
@@ -3802,7 +3773,7 @@ export default function ProjectMarkupCanvas() {
           visible_layers: visibleLayers,
           locked_layers: lockedLayers,
           measurement_calibration: measurementCalibration,
-          plan_geometry: previousExtraData.plan_geometry || {},
+          trace_settings: isAssistedTrace ? traceSettings : undefined,
           annotation_count: normalizedAnnotations.length,
         };
         const { data } = await api.patch(`/projects/${projectId}/images/${projectImage.id}/`, {
@@ -3856,7 +3827,7 @@ export default function ProjectMarkupCanvas() {
 
   function restoreVersion(version) {
     if (!version) return;
-    if (Array.isArray(version.annotations)) commitAnnotations(version.annotations);
+    if (Array.isArray(version.annotations)) commitAnnotations(withoutAutomaticTrace(version.annotations));
     const nextMode = version.version_type === "rough_plan" ? "rough_plan" : "photo";
     setCanvasMode(nextMode);
     if (nextMode === "rough_plan") {
@@ -3875,6 +3846,14 @@ export default function ProjectMarkupCanvas() {
     }
     if (version.measurement_calibration && typeof version.measurement_calibration === "object") {
       setMeasurementCalibration((prev) => ({ ...prev, ...version.measurement_calibration }));
+      if (version.measurement_calibration.length != null) {
+        setMeasurementCalibrationInputLength(String(version.measurement_calibration.length));
+      }
+    }
+    if (version.version_type === "assisted_trace" || version.trace_settings) {
+      setTraceSettings((prev) => ({ ...prev, ...(version.trace_settings || {}), active: true }));
+    } else {
+      setTraceSettings((prev) => ({ ...prev, active: false }));
     }
     setSelectedId("");
     setEditingTextId("");
@@ -3923,6 +3902,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   const visibleAnnotations = annotations.filter((item) => {
+    if (item?.source === "ai_clean_plan_trace") return false;
     if (visibleLayers[item.id] === false) return false;
     if (hideTextAndMeasurements && (item.type === "text" || item.type === "measure")) return false;
     return true;
@@ -4009,10 +3989,11 @@ export default function ProjectMarkupCanvas() {
       : selectedReferencePixelLength
     : 0;
   const measurementCalibrationInputValue = measurementCalibrationInputLength;
-  const calibrationReady = selectedReferencePixelLength > 0 && Number(measurementCalibrationInputValue) > 0;
+  const calibrationInputRealLength = parsePlanLengthInUnit(measurementCalibrationInputValue, measurementCalibration.unit);
+  const calibrationReady = selectedReferencePixelLength > 0 && calibrationInputRealLength > 0;
   const calibrationDisabledReason = selectedReferencePixelLength <= 0
     ? "Select one measure on the canvas first."
-    : Number(measurementCalibrationInputValue) > 0
+    : calibrationInputRealLength > 0
       ? ""
       : "Enter a known length greater than 0.";
   const fillMaterialLibrary = useMemo(
@@ -4022,7 +4003,7 @@ export default function ProjectMarkupCanvas() {
   const currentFillMaterialOption =
     fillMaterialLibrary.find((material) => material.key === currentFillMaterial) || FILL_MATERIALS[0];
   const selectedSupportsEndpoints =
-    !selectedForEditing || ["line", "arrow", "measure", "freehand", "pen"].includes(selectedForEditing.type);
+    !selectedForEditing || ["line", "arrow", "measure", "wall", "door", "window", "freehand", "pen"].includes(selectedForEditing.type);
 
   useEffect(() => {
     if (selectedReferencePixelLength <= 0) {
@@ -4032,8 +4013,10 @@ export default function ProjectMarkupCanvas() {
     const selectionKey = `${selectedReferenceLineId}:${Math.round(selectedReferencePixelLength * 100) / 100}`;
     if (lastCalibrationSelectionKeyRef.current === selectionKey) return;
     lastCalibrationSelectionKeyRef.current = selectionKey;
-    setMeasurementCalibrationInputLength(formatPlanNumber(selectedCalibrationDisplayLength));
-  }, [selectedReferenceLineId, selectedReferencePixelLength, selectedCalibrationDisplayLength]);
+    setMeasurementCalibrationInputLength(
+      calibratedMeasurementGeometry ? formatPlanNumber(selectedCalibrationDisplayLength) : "",
+    );
+  }, [calibratedMeasurementGeometry, selectedReferenceLineId, selectedReferencePixelLength, selectedCalibrationDisplayLength]);
 
   function changeStrokeWidth(nextWidth) {
     const maxWidth = selectedForEditing?.type === "background_eraser" ? 96 : 18;
@@ -4099,7 +4082,7 @@ export default function ProjectMarkupCanvas() {
     const length = overrides.length ?? prev.length;
     const unit = overrides.unit ?? prev.unit ?? "in";
     const referencePx = Number(overrides.referencePx ?? prev.referencePx ?? 0);
-    const realLength = Number(length);
+    const realLength = parsePlanLengthInUnit(length, unit);
     return {
       ...prev,
       referenceLineId: overrides.referenceLineId ?? prev.referenceLineId ?? "",
@@ -4112,24 +4095,28 @@ export default function ProjectMarkupCanvas() {
 
   function changeMeasurementCalibrationLength(nextLength) {
     setMeasurementCalibrationInputLength(nextLength);
-    setMeasurementCalibration((prev) =>
-      calibrationWithReference(prev, {
-        length: nextLength,
-        referenceLineId: selectedReferenceLineId || prev.referenceLineId || "",
-        referencePx: selectedReferencePixelLength || prev.referencePx || 0,
-      }),
-    );
+    setMeasurementCalibration((prev) => ({ ...prev, length: nextLength }));
   }
 
   function changeMeasurementCalibrationUnit(nextUnit) {
-    setMeasurementCalibration((prev) =>
-      calibrationWithReference(prev, {
-        length: measurementCalibrationInputValue,
-        unit: nextUnit,
-        referenceLineId: selectedReferenceLineId || prev.referenceLineId || "",
-        referencePx: selectedReferencePixelLength || prev.referencePx || 0,
-      }),
-    );
+    const currentInches = parsePlanLengthToInches(measurementCalibrationInputValue, measurementCalibration.unit);
+    const convertedLength = currentInches > 0
+      ? formatPlanNumber(currentInches / (PLAN_UNIT_INCHES[nextUnit] || 1))
+      : measurementCalibrationInputValue;
+    setMeasurementCalibrationInputLength(convertedLength);
+    setMeasurementCalibration((prev) => (
+      Number(prev.scale || 0) > 0
+        ? calibrationWithReference(prev, {
+            length: convertedLength,
+            unit: nextUnit,
+            referenceLineId: selectedReferenceLineId || prev.referenceLineId || "",
+            referencePx: selectedReferencePixelLength || prev.referencePx || 0,
+          })
+        : { ...prev, length: convertedLength, unit: nextUnit }
+    ));
+    if (isAssistedTrace) {
+      setTraceSettings((prev) => ({ ...prev, snapIncrement: defaultTraceSnapIncrement(nextUnit) }));
+    }
   }
 
   function setMeasurementScaleFromSelected() {
@@ -4137,7 +4124,7 @@ export default function ProjectMarkupCanvas() {
       setMessage("Select a measure that matches a known real-world length.");
       return false;
     }
-    const realLength = Number(measurementCalibrationInputValue);
+    const realLength = parsePlanLengthInUnit(measurementCalibrationInputValue, measurementCalibration.unit);
     if (!Number.isFinite(realLength) || realLength <= 0) {
       setMessage("Enter the real length for the selected calibration line.");
       return false;
@@ -4150,6 +4137,7 @@ export default function ProjectMarkupCanvas() {
     setMeasurementCalibration(nextCalibration);
     setMeasurementCalibrationInputLength(nextCalibration.length);
     setMessage(`Scale calibrated from selected ${selectedReferenceLabel}: ${Math.round(selectedReferencePixelLength)} px = ${formatPlanNumber(realLength)} ${nextCalibration.unit}.`);
+    if (isAssistedTrace) setTool("wall");
     return true;
   }
 
@@ -4174,8 +4162,8 @@ export default function ProjectMarkupCanvas() {
 
   function openMeasurementCalibrationSettings() {
     dismissMeasurementCalibrationPrompt();
-    setOpenSidebarSection("stroke");
-    if (compactViewport) setMobileSettingsPanel("style");
+    setOpenSidebarSection("annotations");
+    if (compactViewport) setMobileSettingsPanel("annotations");
   }
 
   function changeStrokeStyle(nextStyle) {
@@ -4196,7 +4184,12 @@ export default function ProjectMarkupCanvas() {
   }
 
   const mobileSettingsItems = [
-    { key: "canvas", label: "Canvas", icon: "dashboard", section: "mode" },
+    {
+      key: "canvas",
+      label: isAssistedTrace || sketchUploadRequested ? "Reference" : "Canvas",
+      icon: isAssistedTrace || sketchUploadRequested ? "image" : "dashboard",
+      section: isAssistedTrace || sketchUploadRequested ? "background" : "mode",
+    },
     { key: "layers", label: "Layers", icon: "layers", section: "layers", count: annotations.length },
     { key: "style", label: "Style", icon: "palette", section: "stroke" },
     { key: "annotations", label: "Details", icon: "edit_note", section: "annotations" },
@@ -4232,34 +4225,35 @@ export default function ProjectMarkupCanvas() {
       done: Boolean(sketchSource) && !["idle", "error"].includes(sketchPhase),
     },
     {
-      key: "upload",
-      label: "Send image to AI",
-      active: ["preparing", "uploading"].includes(sketchPhase),
-      done: sketchProgress >= 100 && ["analyzing", "drafting", "ready"].includes(sketchPhase),
+      key: "calibrate",
+      label: "Calibrate one known length",
+      active: isAssistedTrace && !calibratedMeasurementGeometry,
+      done: Boolean(calibratedMeasurementGeometry),
     },
     {
-      key: "create",
-      label: "Create floor-plan image",
-      active: ["analyzing", "drafting"].includes(sketchPhase),
-      done: sketchPhase === "ready",
-    },
-    {
-      key: "ready",
-      label: "Ready to review",
-      active: sketchPhase === "ready",
-      done: sketchPhase === "ready",
+      key: "trace",
+      label: "Trace walls, doors, and windows",
+      active: Boolean(calibratedMeasurementGeometry),
+      done: annotations.some((item) => ["wall", "door", "window"].includes(item.type)),
     },
   ];
-  const floorPlanWidthInches = parsePlanLengthToInches(floorPlanSetup.width, floorPlanSetup.unit);
-  const floorPlanLengthInches = parsePlanLengthToInches(floorPlanSetup.length, floorPlanSetup.unit);
-  const floorPlanWorkspaceWidth = floorPlanWidthInches ? floorPlanWidthInches + 48 : 0;
-  const floorPlanWorkspaceLength = floorPlanLengthInches ? floorPlanLengthInches + 48 : 0;
-  const unclearFloorPlanDimensions = Array.isArray(pendingFloorPlanSave?.planGeometry?.dimensions)
-    ? pendingFloorPlanSave.planGeometry.dimensions.filter((dimension) => dimension?.clarity === "unclear")
-    : [];
-  const hasEnteredFloorPlanDimension = Object.values(dimensionInputs).some(
-    (entry) => parsePlanLengthToInches(entry?.value, entry?.unit) > 0,
-  );
+  const traceGridBaseStep = Number(traceSnapGeometry?.scale || 0);
+  let traceGridDisplayStep = traceGridBaseStep;
+  while (traceGridDisplayStep > 0 && traceGridDisplayStep < 16) traceGridDisplayStep *= 2;
+  const traceGridOriginX = Number(traceSnapGeometry?.x || 0);
+  const traceGridOriginY = Number(traceSnapGeometry?.y || 0);
+  const traceGridStartX = traceGridDisplayStep
+    ? traceGridOriginX + Math.floor((traceReferenceFrame.x - traceGridOriginX) / traceGridDisplayStep) * traceGridDisplayStep
+    : 0;
+  const traceGridStartY = traceGridDisplayStep
+    ? traceGridOriginY + Math.floor((traceReferenceFrame.y - traceGridOriginY) / traceGridDisplayStep) * traceGridDisplayStep
+    : 0;
+  const traceGridColumns = traceGridDisplayStep
+    ? Math.min(240, Math.ceil((traceReferenceFrame.x + traceReferenceFrame.width - traceGridStartX) / traceGridDisplayStep) + 1)
+    : 0;
+  const traceGridRows = traceGridDisplayStep
+    ? Math.min(240, Math.ceil((traceReferenceFrame.y + traceReferenceFrame.height - traceGridStartY) / traceGridDisplayStep) + 1)
+    : 0;
 
   return (
     <div data-markup-editor className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-64px)] w-screen bg-slate-50 max-lg:fixed max-lg:inset-0 max-lg:left-0 max-lg:right-0 max-lg:z-[100] max-lg:m-0 max-lg:flex max-lg:h-[100dvh] max-lg:min-h-0 max-lg:w-full max-lg:flex-col max-lg:overflow-hidden">
@@ -4276,7 +4270,11 @@ export default function ProjectMarkupCanvas() {
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">Markup canvas</h1>
               <p className="text-xs text-slate-500 max-lg:hidden">
-                {isProjectImageMode ? "Markup will stay on this project image" : `${modeLabel}: mark the area that needs work`}
+                {isAssistedTrace
+                  ? "Calibrate one known length, then trace the plan over the reference sketch"
+                  : isProjectImageMode
+                    ? "Markup will stay on this project image"
+                    : `${modeLabel}: mark the area that needs work`}
               </p>
             </div>
           </div>
@@ -4302,14 +4300,16 @@ export default function ProjectMarkupCanvas() {
                 <SymbolIcon name="redo" className="text-[18px]" />
               </button>
             </div>
-            <button
-              type="button"
-              onClick={downloadSvg}
-              className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex"
-            >
-              <SymbolIcon name="download" className="text-[18px]" />
-              SVG
-            </button>
+            {!isAssistedTrace ? (
+              <button
+                type="button"
+                onClick={downloadSvg}
+                className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex"
+              >
+                <SymbolIcon name="download" className="text-[18px]" />
+                SVG
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={downloadPng}
@@ -4357,282 +4357,6 @@ export default function ProjectMarkupCanvas() {
           </div>
         ) : null}
 
-        {showFloorPlanSetup ? (
-          <div
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 px-4 py-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="floor-plan-setup-title"
-          >
-            <form
-              className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl"
-              onSubmit={(event) => {
-                event.preventDefault();
-                createCleanFloorPlanFromSketchSource(floorPlanSetup);
-              }}
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div>
-                  <h2 id="floor-plan-setup-title" className="text-base font-semibold text-slate-950">
-                    Set full plan size
-                  </h2>
-                  <p className="mt-1 text-sm leading-5 text-slate-600">
-                    Enter the gross width and length. The canvas will include 2 ft of open space on every side.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowFloorPlanSetup(false)}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200"
-                  aria-label="Close plan size"
-                >
-                  <SymbolIcon name="close" className="text-[20px]" />
-                </button>
-              </div>
-              <div className="p-4">
-                <div className="grid grid-cols-[1fr_1fr_82px] gap-2">
-                  <label className="block min-w-0">
-                    <span className="mb-1 block text-xs font-medium text-slate-600">Full width</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={floorPlanSetup.width}
-                      onChange={(event) => {
-                        setFloorPlanSetup((prev) => ({ ...prev, width: event.target.value }));
-                        setFloorPlanSetupError("");
-                      }}
-                      placeholder={floorPlanSetup.unit === "ft" ? "24'3\"" : "24.25"}
-                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-                      autoFocus
-                    />
-                  </label>
-                  <label className="block min-w-0">
-                    <span className="mb-1 block text-xs font-medium text-slate-600">Full length</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={floorPlanSetup.length}
-                      onChange={(event) => {
-                        setFloorPlanSetup((prev) => ({ ...prev, length: event.target.value }));
-                        setFloorPlanSetupError("");
-                      }}
-                      placeholder="30"
-                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-                    />
-                  </label>
-                  <label className="block min-w-0">
-                    <span className="mb-1 block text-xs font-medium text-slate-600">Unit</span>
-                    <select
-                      value={floorPlanSetup.unit}
-                      onChange={(event) => {
-                        const nextUnit = event.target.value;
-                        const widthInches = parsePlanLengthToInches(floorPlanSetup.width, floorPlanSetup.unit);
-                        const lengthInches = parsePlanLengthToInches(floorPlanSetup.length, floorPlanSetup.unit);
-                        setFloorPlanSetup({
-                          width: widthInches ? formatPlanNumber(widthInches / PLAN_UNIT_INCHES[nextUnit]) : "",
-                          length: lengthInches ? formatPlanNumber(lengthInches / PLAN_UNIT_INCHES[nextUnit]) : "",
-                          unit: nextUnit,
-                        });
-                        setFloorPlanSetupError("");
-                      }}
-                      className="h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-                    >
-                      <option value="ft">ft</option>
-                      <option value="in">in</option>
-                      <option value="m">m</option>
-                      <option value="cm">cm</option>
-                      <option value="mm">mm</option>
-                    </select>
-                  </label>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Feet and inches can be entered together, for example 24'3&quot;.
-                </p>
-                {floorPlanWorkspaceWidth && floorPlanWorkspaceLength ? (
-                  <div className="mt-3 border-y border-slate-200 py-3 text-sm text-slate-700">
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Plan</span>
-                      <span className="font-semibold text-slate-950">
-                        {formatPlanLengthFromInches(floorPlanWidthInches, floorPlanSetup.unit)} x{" "}
-                        {formatPlanLengthFromInches(floorPlanLengthInches, floorPlanSetup.unit)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-3">
-                      <span>Canvas with margins</span>
-                      <span className="font-semibold text-slate-950">
-                        {formatPlanLengthFromInches(floorPlanWorkspaceWidth, floorPlanSetup.unit)} x{" "}
-                        {formatPlanLengthFromInches(floorPlanWorkspaceLength, floorPlanSetup.unit)}
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-                {floorPlanSetupError ? (
-                  <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                    {floorPlanSetupError}
-                  </p>
-                ) : null}
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowFloorPlanSetup(false)}
-                    className="inline-flex h-11 items-center justify-center rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!floorPlanWidthInches || !floorPlanLengthInches || sketchBusy}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <SymbolIcon name="architecture" className="text-[19px]" />
-                    Convert
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        ) : null}
-
-        {pendingFloorPlanSave ? (
-          <div
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 px-4 py-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="floor-plan-save-title"
-            aria-describedby="floor-plan-save-description"
-          >
-            <div className="flex max-h-[calc(100dvh-3rem)] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
-              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <h2 id="floor-plan-save-title" className="text-base font-semibold text-slate-950">
-                  Save floor plan before markup
-                </h2>
-                <p id="floor-plan-save-description" className="mt-1 text-sm leading-5 text-slate-600">
-                  Save this clean image as the base floor plan. Markup added afterward will remain on separate editable layers.
-                </p>
-              </div>
-              <div className="overflow-y-auto bg-white p-4">
-                <div className="flex max-h-64 min-h-40 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                  <img
-                    src={pendingFloorPlanSave.url}
-                    alt="Generated floor plan ready to save"
-                    className="max-h-64 w-full object-contain"
-                  />
-                </div>
-                {pendingFloorPlanSave.planGeometry?.semantic_summary ? (
-                  <div className="mt-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-600">
-                    <div className="font-semibold text-slate-900">Detected plan elements</div>
-                    <div>
-                      {pendingFloorPlanSave.planGeometry.semantic_summary.wall_count || 0} walls ·{" "}
-                      {pendingFloorPlanSave.planGeometry.semantic_summary.door_count || 0} doors ·{" "}
-                      {pendingFloorPlanSave.planGeometry.semantic_summary.window_count || 0} windows ·{" "}
-                      {pendingFloorPlanSave.planGeometry.semantic_summary.stair_count || 0} stairs
-                    </div>
-                    <div className="text-slate-700">
-                      Plan:{" "}
-                      <span className="font-semibold text-slate-900">
-                        {formatPlanLengthFromInches(
-                          pendingFloorPlanSave.planGeometry.plan_bounds?.width_inches,
-                          pendingFloorPlanSave.planGeometry.plan_bounds?.unit,
-                        )} x{" "}
-                        {formatPlanLengthFromInches(
-                          pendingFloorPlanSave.planGeometry.plan_bounds?.length_inches,
-                          pendingFloorPlanSave.planGeometry.plan_bounds?.unit,
-                        )}
-                      </span>
-                      {" "}with 2 ft on every side
-                    </div>
-                  </div>
-                ) : null}
-                {unclearFloorPlanDimensions.length ? (
-                  <div className="mt-3 border-t border-slate-200 pt-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Enter unclear measurements</div>
-                        <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                          Clear sketch dimensions are already printed. Add only the values the sketch could not confirm.
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs font-semibold text-amber-700">
-                        {unclearFloorPlanDimensions.length} unclear
-                      </span>
-                    </div>
-                    <div className="mt-3 max-h-52 divide-y divide-slate-200 overflow-y-auto border-y border-slate-200">
-                      {unclearFloorPlanDimensions.map((dimension) => (
-                        <div key={dimension.id} className="grid grid-cols-[minmax(0,1fr)_112px_72px] items-center gap-2 py-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-semibold capitalize text-slate-800">
-                              {String(dimension.kind || "other").replaceAll("_", " ")}
-                            </div>
-                            <div className="truncate text-xs text-slate-500">
-                              {dimension.source_text ? `Sketch text: ${dimension.source_text}` : "Value could not be read"}
-                            </div>
-                          </div>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={dimensionInputs[dimension.id]?.value || ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setDimensionInputs((prev) => ({
-                                ...prev,
-                                [dimension.id]: { value, unit: prev[dimension.id]?.unit || dimension.unit || "ft" },
-                              }));
-                              setFloorPlanSaveError("");
-                            }}
-                            placeholder="Length"
-                            aria-label={`Measurement for ${String(dimension.kind || "dimension").replaceAll("_", " ")}`}
-                            className="h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
-                          />
-                          <select
-                            value={dimensionInputs[dimension.id]?.unit || dimension.unit || "ft"}
-                            onChange={(event) =>
-                              setDimensionInputs((prev) => ({
-                                ...prev,
-                                [dimension.id]: { value: prev[dimension.id]?.value || "", unit: event.target.value },
-                              }))
-                            }
-                            aria-label="Measurement unit"
-                            className="h-9 rounded-md border border-slate-300 px-1 text-sm text-slate-900 outline-none focus:border-blue-500"
-                          >
-                            <option value="ft">ft</option>
-                            <option value="in">in</option>
-                            <option value="m">m</option>
-                            <option value="cm">cm</option>
-                            <option value="mm">mm</option>
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={applyUnclearFloorPlanDimensions}
-                      disabled={updatingFloorPlanDimensions || !hasEnteredFloorPlanDimension}
-                      className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <SymbolIcon name="straighten" className="text-[18px]" />
-                      {updatingFloorPlanDimensions ? "Applying measurements..." : "Apply entered measurements"}
-                    </button>
-                  </div>
-                ) : null}
-                {floorPlanSaveError ? (
-                  <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                    {floorPlanSaveError}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={saveGeneratedFloorPlanBase}
-                  disabled={savingFloorPlanBase}
-                  className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
-                >
-                  <SymbolIcon name="save" className="text-[19px]" />
-                  {savingFloorPlanBase ? "Saving floor plan..." : "Save floor plan"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         {showMeasurementCalibrationPrompt ? (
           <div
             className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-6"
@@ -4668,9 +4392,8 @@ export default function ProjectMarkupCanvas() {
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-slate-500">Known length</span>
                   <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={measurementCalibrationInputValue}
                     onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
@@ -4757,6 +4480,11 @@ export default function ProjectMarkupCanvas() {
               onToggle={toggleSidebarSection}
               onPin={toggleSidebarPin}
             >
+              {isAssistedTrace || sketchUploadRequested ? (
+                <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-900">
+                  Assisted tracing
+                </div>
+              ) : (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -4777,6 +4505,7 @@ export default function ProjectMarkupCanvas() {
                   Create Plan
                 </button>
               </div>
+              )}
               {!isRoughPlan ? (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="flex items-center justify-between gap-2">
@@ -4794,9 +4523,8 @@ export default function ProjectMarkupCanvas() {
                     <label className="block">
                       <span className="mb-1 block text-[11px] text-slate-500">Known length</span>
                       <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={measurementCalibrationInputValue}
                         onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                         className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
@@ -4852,9 +4580,9 @@ export default function ProjectMarkupCanvas() {
               {isRoughPlan ? (
                 <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-sm font-semibold text-slate-900">Create from sketch</div>
+                    <div className="text-sm font-semibold text-slate-900">Assisted tracing</div>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Create one clean floor-plan image. Source measurements guide its proportions, with one reference retained for later calibration.
+                      Use the sketch as a reference, calibrate one known length, then trace walls, doors, and windows.
                     </p>
                     <input
                       ref={sketchFileRef}
@@ -4880,7 +4608,7 @@ export default function ProjectMarkupCanvas() {
                                 className={`overflow-hidden rounded-xl border bg-white text-left transition ${
                                   selectedImage ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300"
                                 } disabled:opacity-60`}
-                                aria-label={`Use ${image.caption || "project image"} for plan creation`}
+                                aria-label={`Use ${image.caption || "project image"} as the tracing reference`}
                               >
                                 <img src={image.image_url} alt="" className="h-16 w-full object-cover" />
                                 <span className="block truncate px-2 py-1 text-[10px] font-medium text-slate-600">
@@ -4956,11 +4684,11 @@ export default function ProjectMarkupCanvas() {
                     <button
                       type="button"
                       disabled={sketchBusy || !sketchSource}
-                      onClick={openFloorPlanSetupDialog}
+                      onClick={startAssistedTracing}
                       className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                     >
                       <SymbolIcon name="floor_plan" className="text-[18px]" />
-                      {sketchBusy ? "Creating floor-plan image..." : "Create floor-plan image"}
+                      {sketchBusy ? "Preparing reference..." : "Start assisted tracing"}
                     </button>
                     {sketchPhase !== "idle" ? (
                       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -4971,18 +4699,14 @@ export default function ProjectMarkupCanvas() {
                             </div>
                             <div className="mt-0.5 text-[11px] text-slate-500">
                               {sketchPhase === "selected"
-                                ? sketchStatus.detail || "Image selected. Create the floor-plan image when ready."
+                                ? sketchStatus.detail || "Image selected as the tracing reference."
                                 : sketchPhase === "preparing"
                                   ? "Preparing the selected project image."
                                   : sketchPhase === "uploading"
                                     ? `Uploading ${sketchProgress}%`
-                                : sketchPhase === "analyzing"
-                                  ? "AI is creating the floor-plan image."
-                                  : sketchPhase === "drafting"
-                                    ? "Finishing the floor-plan image."
-                                    : sketchPhase === "ready"
-                                      ? "Floor-plan image is saved to the image library."
-                                      : sketchStatus.detail || "Could not create the floor-plan image."}
+                                : sketchPhase === "ready"
+                                  ? sketchStatus.detail || "Reference ready. Calibrate one known length."
+                                  : sketchStatus.detail || "Could not prepare the tracing reference."}
                             </div>
                           </div>
                           {sketchBusy ? (
@@ -5093,13 +4817,35 @@ export default function ProjectMarkupCanvas() {
             {!isRoughPlan ? (
             <CollapsibleSection
               id="background"
-              title="Background"
+              title={isAssistedTrace || sketchUploadRequested ? "Sketch reference" : "Background"}
               open={isSidebarSectionOpen("background")}
               pinned={pinnedSidebarSections.has("background")}
               onToggle={toggleSidebarSection}
               onPin={toggleSidebarPin}
             >
-              <p className="mt-1 text-xs text-slate-500">Use a room photo, floor plan, or sketch.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {isAssistedTrace || sketchUploadRequested
+                  ? "Choose the sketch that will stay behind your traced floor plan as a reference."
+                  : "Use a room photo, floor plan, or sketch."}
+              </p>
+              {(isAssistedTrace || sketchUploadRequested) && sketchSourceImages.length ? (
+                <label className="mt-3 block">
+                  <span className="mb-1 block text-xs font-medium text-slate-500">Saved project image</span>
+                  <select
+                    value={sketchSource?.kind === "existing" ? String(sketchSource.imageId || "") : ""}
+                    onChange={(event) => {
+                      const image = sketchSourceImages.find((item) => String(item.id) === event.target.value);
+                      if (image) selectExistingSketchImage(image);
+                    }}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                  >
+                    <option value="">Choose an image</option>
+                    {sketchSourceImages.map((image) => (
+                      <option key={image.id} value={image.id}>{image.caption || `Project image ${image.id}`}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
               <button
                 type="button"
@@ -5107,9 +4853,89 @@ export default function ProjectMarkupCanvas() {
                 onClick={() => fileRef.current?.click()}
               >
                 <SymbolIcon name="upload" className="text-[18px]" />
-                Upload background
+                {isAssistedTrace || sketchUploadRequested ? "Choose new sketch" : "Upload background"}
               </button>
-              {backgroundUrl ? (
+              {!isAssistedTrace && sketchUploadRequested && sketchSource ? (
+                <button
+                  type="button"
+                  disabled={sketchBusy || !sketchSource}
+                  onClick={startAssistedTracing}
+                  className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-950 bg-white px-4 text-sm font-semibold text-slate-950 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <SymbolIcon name="architecture" className="text-[18px]" />
+                  {sketchBusy ? "Preparing reference..." : "Start assisted tracing"}
+                </button>
+              ) : null}
+              {isAssistedTrace ? (
+                <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                  <div className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                    <span>Reference visible</span>
+                    <input
+                      type="checkbox"
+                      checked={traceSettings.referenceVisible}
+                      onChange={(event) => setTraceSettings((prev) => ({ ...prev, referenceVisible: event.target.checked }))}
+                      className="h-4 w-4 accent-blue-600"
+                    />
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 flex items-center justify-between text-xs text-slate-500">
+                      <span>Reference opacity</span>
+                      <span>{Math.round(traceSettings.referenceOpacity * 100)}%</span>
+                    </span>
+                    <input
+                      type="range"
+                      min="0.15"
+                      max="0.8"
+                      step="0.05"
+                      value={traceSettings.referenceOpacity}
+                      onChange={(event) => setTraceSettings((prev) => ({ ...prev, referenceOpacity: Number(event.target.value) }))}
+                      className="w-full accent-blue-600"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-600">
+                      <span>Grid</span>
+                      <input
+                        type="checkbox"
+                        checked={traceSettings.gridVisible}
+                        onChange={(event) => setTraceSettings((prev) => ({ ...prev, gridVisible: event.target.checked }))}
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                    </label>
+                    <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-600">
+                      <span>Snap</span>
+                      <input
+                        type="checkbox"
+                        checked={traceSettings.snap}
+                        onChange={(event) => setTraceSettings((prev) => ({ ...prev, snap: event.target.checked }))}
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-slate-500">Snap increment ({measurementCalibration.unit})</span>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="0.01"
+                      value={traceSettings.snapIncrement}
+                      onChange={(event) => setTraceSettings((prev) => ({ ...prev, snapIncrement: Math.max(0.001, Number(event.target.value) || 0.001) }))}
+                      className="h-9 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={openMeasurementCalibrationPrompt}
+                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="straighten" className="text-[17px]" />
+                    {calibratedMeasurementGeometry ? "Change reference scale" : "Calibrate reference scale"}
+                  </button>
+                  <p className="text-[11px] leading-4 text-slate-500">
+                    The sketch and grid are reference-only and will not appear in the saved floor-plan image.
+                  </p>
+                </div>
+              ) : backgroundUrl ? (
                 <button
                   type="button"
                   className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50"
@@ -5375,7 +5201,7 @@ export default function ProjectMarkupCanvas() {
                   </div>
                 ) : null}
 
-                {(selectedForEditing && isLineLike(selectedForEditing)) || ["line", "measure"].includes(tool) ? (
+                {(selectedForEditing && isLineLike(selectedForEditing)) || ["line", "measure", "wall", "door", "window"].includes(tool) ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-slate-700">Measurement calibration</span>
@@ -5389,9 +5215,8 @@ export default function ProjectMarkupCanvas() {
                       <label className="block">
                         <span className="mb-1 block text-[11px] text-slate-500">Known length</span>
                         <input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={measurementCalibrationInputValue}
                           onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                           className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
@@ -5667,9 +5492,8 @@ export default function ProjectMarkupCanvas() {
                         <label className="block">
                           <span className="mb-1 block text-[11px] text-slate-500">Known length</span>
                           <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={measurementCalibrationInputValue}
                             onChange={(event) => changeMeasurementCalibrationLength(event.target.value)}
                             className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
@@ -5819,7 +5643,10 @@ export default function ProjectMarkupCanvas() {
                     <button
                       key={image.id}
                       type="button"
-                      onClick={() => setBackgroundUrl(image.image_url)}
+                      onClick={() => {
+                        if (isAssistedTrace || sketchUploadRequested) selectExistingSketchImage(image);
+                        else setBackgroundUrl(image.image_url);
+                      }}
                       className="flex w-full items-center gap-2 rounded-lg border border-slate-200 p-2 text-left text-xs text-slate-600 hover:bg-slate-50"
                     >
                       <img src={image.image_url} alt="" className="h-10 w-12 rounded object-cover" />
@@ -6157,7 +5984,7 @@ export default function ProjectMarkupCanvas() {
                   <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.13" />
                 </filter>
 	              </defs>
-	              <rect width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
+	              <rect width={CANVAS_W} height={CANVAS_H} fill={isAssistedTrace ? "#ffffff" : "#f8fafc"} />
 	              {isRoughPlan ? (
                   <g>
                     <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#ffffff" />
@@ -6221,7 +6048,16 @@ export default function ProjectMarkupCanvas() {
                     </text>
                   </g>
 	              ) : backgroundUrl ? (
-	                <image href={backgroundUrl} x="0" y="0" width={CANVAS_W} height={CANVAS_H} preserveAspectRatio="xMidYMid meet" />
+	                <image
+                    className={isAssistedTrace ? "reference-only" : undefined}
+                    href={backgroundUrl}
+                    x="0"
+                    y="0"
+                    width={CANVAS_W}
+                    height={CANVAS_H}
+                    preserveAspectRatio="xMidYMid meet"
+                    opacity={isAssistedTrace ? (traceSettings.referenceVisible ? traceSettings.referenceOpacity : 0) : 1}
+                  />
 		              ) : (
 		                <g>
 		                  <rect x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="#f8fafc" />
@@ -6233,6 +6069,41 @@ export default function ProjectMarkupCanvas() {
 	                  </text>
 		                </g>
 		              )}
+
+                {isAssistedTrace && traceSettings.gridVisible && traceGridDisplayStep > 0 ? (
+                  <g className="editing-only pointer-events-none">
+                    {Array.from({ length: traceGridColumns }).map((_, index) => {
+                      const x = traceGridStartX + index * traceGridDisplayStep;
+                      return (
+                        <line
+                          key={`trace-grid-x-${index}`}
+                          x1={x}
+                          y1={traceReferenceFrame.y}
+                          x2={x}
+                          y2={traceReferenceFrame.y + traceReferenceFrame.height}
+                          stroke="#2563eb"
+                          strokeOpacity="0.09"
+                          strokeWidth="0.75"
+                        />
+                      );
+                    })}
+                    {Array.from({ length: traceGridRows }).map((_, index) => {
+                      const y = traceGridStartY + index * traceGridDisplayStep;
+                      return (
+                        <line
+                          key={`trace-grid-y-${index}`}
+                          x1={traceReferenceFrame.x}
+                          y1={y}
+                          x2={traceReferenceFrame.x + traceReferenceFrame.width}
+                          y2={y}
+                          stroke="#2563eb"
+                          strokeOpacity="0.09"
+                          strokeWidth="0.75"
+                        />
+                      );
+                    })}
+                  </g>
+                ) : null}
 
 	              {backgroundEraserAnnotations.map((item) =>
                 renderAnnotation(item, {
@@ -6264,7 +6135,7 @@ export default function ProjectMarkupCanvas() {
                   liveLength:
                     item.id === draft ||
                     item.id === penDraftId ||
-                    (!hideTextAndMeasurements && ["line", "measure", "pen"].includes(item.type)),
+                    (!hideTextAndMeasurements && ["line", "measure", "wall", "door", "window", "pen"].includes(item.type)),
                   onPointerDown:
                     tool === "hand"
                       ? undefined

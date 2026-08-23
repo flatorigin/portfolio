@@ -346,7 +346,7 @@ export default function ProjectPlanDetail() {
   }
 
   function openSketchPlanBuilder() {
-    navigate(`/dashboard/planner/${planId}/markup?mode=rough_plan&sketch=1`);
+    navigate(`/dashboard/planner/${planId}/markup?trace=1`);
   }
 
   function downloadMarkupSvg(version) {
@@ -867,7 +867,7 @@ export default function ProjectPlanDetail() {
           <div className="flex flex-wrap gap-2">
             <GhostButton type="button" onClick={openSketchPlanBuilder} className="h-10 px-4">
               <SymbolIcon name="architecture" className="text-[18px]" />
-              Create Plan from Sketch
+              Trace Plan from Sketch
             </GhostButton>
             <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white">
               <input type="file" accept="image/*" multiple className="hidden" onChange={uploadImages} />
@@ -1052,9 +1052,11 @@ export default function ProjectPlanDetail() {
                           {version.created_at ? ` · ${new Date(version.created_at).toLocaleString()}` : ""}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <GhostButton type="button" onClick={() => downloadMarkupSvg(version)} className="h-9 px-3 text-xs">
-                            SVG
-                          </GhostButton>
+                          {version.version_type !== "assisted_trace" ? (
+                            <GhostButton type="button" onClick={() => downloadMarkupSvg(version)} className="h-9 px-3 text-xs">
+                              SVG
+                            </GhostButton>
+                          ) : null}
                           <GhostButton
                             type="button"
                             onClick={() => downloadMarkupPng(version)}
