@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
+import { MarkupCanvasPreview } from "../components/MarkupPresetOverlay";
 import { Badge, Button, Card, GhostButton, Input, SymbolIcon, Textarea } from "../ui";
 
 function emptyPlan(data = {}) {
@@ -952,7 +953,16 @@ export default function ProjectPlanDetail() {
               return (
                 <div key={image.id} className="rounded-2xl border border-slate-200 p-3">
                   <button type="button" onClick={() => openMarkupForImage(image)} className="block w-full overflow-hidden rounded-xl bg-slate-100 text-left">
-                    <img src={image.image_url} alt="" className="h-44 w-full object-cover" />
+                    {markedVersion?.annotations?.length ? (
+                      <MarkupCanvasPreview
+                        version={markedVersion}
+                        backgroundUrl={image.image_url}
+                        className="h-44 w-full"
+                        ariaLabel={`${image.caption || "Project image"} with saved markup`}
+                      />
+                    ) : (
+                      <img src={image.image_url} alt="" className="h-44 w-full object-cover" />
+                    )}
                   </button>
                   <div className="mt-3 flex items-start justify-between gap-2">
                     <div>
@@ -979,7 +989,7 @@ export default function ProjectPlanDetail() {
                     <Button type="button" onClick={() => openMarkupForImage(image)} className="h-9 px-3 text-xs">
                       {markedVersion ? "Edit markup" : "Add markup"}
                     </Button>
-                    {markedVersion?.snapshot_url ? (
+                    {markedVersion ? (
                       <GhostButton type="button" onClick={() => openMarkupForImage(image)} className="h-9 px-3 text-xs">
                         View
                       </GhostButton>
@@ -1000,14 +1010,18 @@ export default function ProjectPlanDetail() {
             <div className="text-sm font-semibold text-slate-900">Saved markup versions</div>
             <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
               {markupVersions.map((version) => {
-                const previewUrl = version.snapshot_url || version.background_url || "";
                 return (
                   <div key={version.id} className="min-w-[220px] rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                    {previewUrl ? (
-                      <img src={previewUrl} alt="" className="h-28 w-full rounded-xl object-cover" />
+                    {version.annotations?.length || version.background_url || version.snapshot_url ? (
+                      <MarkupCanvasPreview
+                        version={version}
+                        backgroundUrl={version.background_url || version.snapshot_url || ""}
+                        className="h-28 w-full rounded-xl"
+                        ariaLabel={`${version.name || "Saved markup"} preview`}
+                      />
                     ) : (
                       <div className="flex h-28 items-center justify-center rounded-xl bg-white text-xs text-slate-400">
-                        No snapshot preview
+                        No markup preview
                       </div>
                     )}
                     <div className="mt-3 font-semibold text-slate-900">{version.name || "Saved markup"}</div>

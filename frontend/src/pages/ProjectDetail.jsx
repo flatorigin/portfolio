@@ -10,7 +10,7 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api";
 import { Badge, Card, Button, Textarea, Input, SymbolIcon } from "../ui";
 import ProjectEditorCard from "../components/ProjectEditorCard";
-import MarkupPresetOverlay, { getMarkupAnnotations, getMarkupVersion } from "../components/MarkupPresetOverlay";
+import { MarkupCanvasPreview, getMarkupAnnotations, getMarkupVersion } from "../components/MarkupPresetOverlay";
 import MediaVideoPlayer from "../components/MediaVideoPlayer";
 import BidModule from "../components/bids/BidModule";
 import QuickMessageDrawer from "../components/QuickMessageDrawer";
@@ -2304,6 +2304,7 @@ export default function ProjectDetail() {
 	                  const mediaType = mediaTypeFor(img);
 	                  const thumbUrl = img.thumbnail || img.url;
 	                  const isProcessing = img.processing_status && img.processing_status !== "ready";
+	                  const markupVersion = getMarkupVersion(img);
 	                  const markupAnnotations = getMarkupAnnotations(img);
 	                  const imageBadge = mediaType === "image" ? mediaBadgeForImage(img) : null;
 
@@ -2338,6 +2339,13 @@ export default function ProjectDetail() {
                                 </span>
                               </div>
                             </>
+	                          ) : markupAnnotations.length > 0 ? (
+	                            <MarkupCanvasPreview
+	                              version={markupVersion}
+	                              backgroundUrl={img.url}
+	                              className="h-full w-full transition-transform group-hover:scale-[1.02]"
+	                              ariaLabel={`${img.caption || "Project image"} with saved markup`}
+	                            />
 	                          ) : (
 	                            <img
 	                              src={img.url}
@@ -2345,9 +2353,6 @@ export default function ProjectDetail() {
 	                              className="block h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
 	                            />
 	                          )}
-	                          {mediaType === "image" && markupAnnotations.length > 0 ? (
-	                            <MarkupPresetOverlay annotations={markupAnnotations} />
-	                          ) : null}
 	                          {imageBadge ? (
 	                            <div className={`absolute left-2 top-2 rounded-md px-2 py-1 text-[10px] font-semibold shadow-sm ${imageBadge.className}`}>
 	                              {imageBadge.label}
@@ -2606,6 +2611,13 @@ export default function ProjectDetail() {
                       poster={currentImage.thumbnail || undefined}
                       className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
                     />
+	                  ) : getMarkupAnnotations(currentImage).length > 0 ? (
+	                    <MarkupCanvasPreview
+	                      version={getMarkupVersion(currentImage)}
+	                      backgroundUrl={currentImage.url}
+	                      className="h-full w-full max-h-full max-w-full rounded-lg shadow-2xl"
+	                      ariaLabel={`${currentImage.caption || "Project image"} with saved markup`}
+	                    />
 	                  ) : (
 	                    <img
 	                      src={currentImage.url}
@@ -2613,9 +2625,6 @@ export default function ProjectDetail() {
 	                      className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
 	                    />
 	                  )}
-	                  {mediaTypeFor(currentImage) === "image" && getMarkupAnnotations(currentImage).length > 0 ? (
-	                    <MarkupPresetOverlay annotations={getMarkupAnnotations(currentImage)} />
-	                  ) : null}
 	                  
 	                  {/* Caption overlay on mobile */}
                   {currentImage?.caption && (

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../api";
+import { renderMarkupAnnotation } from "../components/MarkupPresetOverlay";
 import { SymbolIcon } from "../ui";
 
 const CANVAS_W = 1200;
@@ -5781,12 +5782,12 @@ export default function ProjectMarkupCanvas() {
 
 		              {backgroundEraserAnnotations.map((item) => {
                 const locked = !!lockedLayers[item.id];
-                return renderAnnotation(item, {
+	                return renderMarkupAnnotation(item, {
                   locked,
                   selected: !locked && item.id === selectedForEditing?.id,
                   editing: !locked && item.id === editingTextId,
                   calibratedReference: item.id === measurementCalibration.referenceLineId,
-                  roughGeometry: activeMeasurementGeometry,
+                  measurementGeometry: activeMeasurementGeometry,
                   showSegmentLengths: false,
                   onPointerDown:
                     locked || tool === "hand" || item.id === penDraftId
@@ -5801,12 +5802,12 @@ export default function ProjectMarkupCanvas() {
 
 		              {layeredAnnotations.map((item) => {
                 const locked = !!lockedLayers[item.id];
-                return renderAnnotation(item, {
+	                return renderMarkupAnnotation(item, {
                   locked,
                   selected: !locked && item.id === selectedForEditing?.id,
                   editing: !locked && item.id === editingTextId,
                   calibratedReference: item.id === measurementCalibration.referenceLineId,
-                  roughGeometry: activeMeasurementGeometry,
+                  measurementGeometry: activeMeasurementGeometry,
                   showSegmentLengths: showPlanSegmentLengths,
                   liveLength:
                     item.id === draft ||

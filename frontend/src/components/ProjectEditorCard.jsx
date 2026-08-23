@@ -5,7 +5,7 @@
 // ============================================================================
 import { useMemo, useState } from "react";
 import ImageUploader from "./ImageUploader";
-import MarkupPresetOverlay, { getMarkupAnnotations, getMarkupVersion } from "./MarkupPresetOverlay";
+import { MarkupCanvasPreview, getMarkupAnnotations, getMarkupVersion } from "./MarkupPresetOverlay";
 import { Card, Input, Textarea, Button, GhostButton, Badge, SymbolIcon } from "../ui";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|webm)(?:$|[?#])/i;
@@ -694,7 +694,6 @@ export default function ProjectEditorCard({
 	                  const mediaUrl = it.url || it.image || it.image_url || it.file || "/placeholder.png";
 	                  const thumbnailUrl = it.thumbnail || mediaUrl;
 	                  const markupVersion = getMarkupVersion(it);
-	                  const markupSnapshotUrl = markupVersion?.snapshot_url || "";
 	                  const markupAnnotations = getMarkupAnnotations(it);
 	                  const isProcessing = it.processing_status && it.processing_status !== "ready";
 	                  const isCover = String(currentCoverId ?? "") === String(it.id ?? "");
@@ -723,6 +722,13 @@ export default function ProjectEditorCard({
                               </span>
                             </div>
                           </>
+	                        ) : markupAnnotations.length > 0 ? (
+	                          <MarkupCanvasPreview
+	                            version={markupVersion}
+	                            backgroundUrl={mediaUrl}
+	                            className="h-full w-full"
+	                            ariaLabel="Project image with saved markup"
+	                          />
 	                        ) : (
 	                          <img
 	                            src={mediaUrl}
@@ -733,10 +739,6 @@ export default function ProjectEditorCard({
 	                            }}
 	                          />
 	                        )}
-	                        {mediaType === "image" && markupAnnotations.length > 0 ? (
-	                          <MarkupPresetOverlay annotations={markupAnnotations} />
-	                        ) : null}
-
                         {/* Cover badge */}
                         {isCover && mediaType === "image" && (
                           <div className="absolute left-2 top-2 rounded-md bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white">
