@@ -1169,7 +1169,7 @@ function applySelectedNodeDrag(drag, item, point) {
   return applyHandleDrag(drag, item, point);
 }
 
-function renderAnnotation(item, { selected = false, editing = false, calibratedReference = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false, liveLength = false } = {}) {
+function renderAnnotation(item, { selected = false, editing = false, locked = false, calibratedReference = false, onPointerDown, onPointerEnter, onPointerLeave, onDoubleClick, roughGeometry = null, showSegmentLengths = false, liveLength = false } = {}) {
   const style = styleFor(item);
   const stroke = style.strokeColor;
   const baseStrokeWidth = strokeWidthFor(item);
@@ -1177,11 +1177,13 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
   const strokeWidth = baseStrokeWidth;
   const common = {
     key: item.id,
-    onPointerDown,
-    onPointerEnter,
-    onPointerLeave,
-    onDoubleClick,
-    className: selected ? "cursor-move" : "cursor-pointer",
+    onPointerDown: locked ? undefined : onPointerDown,
+    onPointerEnter: locked ? undefined : onPointerEnter,
+    onPointerLeave: locked ? undefined : onPointerLeave,
+    onDoubleClick: locked ? undefined : onDoubleClick,
+    className: locked ? "pointer-events-none cursor-default" : selected ? "cursor-move" : "cursor-pointer",
+    opacity: locked ? 0.45 : undefined,
+    pointerEvents: locked ? "none" : undefined,
   };
 
   if (item.type === "rect") {
@@ -1512,9 +1514,11 @@ function renderAnnotation(item, { selected = false, editing = false, calibratedR
     return (
       <g
         key={item.id}
-        onPointerDown={onPointerDown}
-        onDoubleClick={onDoubleClick}
-        className={selected ? "cursor-move" : "cursor-pointer"}
+        onPointerDown={locked ? undefined : onPointerDown}
+        onDoubleClick={locked ? undefined : onDoubleClick}
+        className={locked ? "pointer-events-none cursor-default" : selected ? "cursor-move" : "cursor-pointer"}
+        opacity={locked ? 0.45 : undefined}
+        pointerEvents={locked ? "none" : undefined}
       />
     );
   }
@@ -2016,9 +2020,20 @@ export default function ProjectMarkupCanvas() {
   }, [loadingPlan, requestedCanvasMode, sketchUploadRequested]);
 
   const selected = useMemo(
-    () => annotations.find((item) => item.id === selectedId) || null,
-    [annotations, selectedId],
+    () => annotations.find((item) => item.id === selectedId && !lockedLayers[item.id]) || null,
+    [annotations, lockedLayers, selectedId],
   );
+
+  useEffect(() => {
+    if (!selectedId || !lockedLayers[selectedId]) return;
+    setSelectedId("");
+    setSelectedNodes({ annotationId: "", handleKeys: [] });
+    setHoveredAnnotationId("");
+    setEditingTextId("");
+    setFocusedSidebarInputId("");
+    setDrag((current) => (current?.id === selectedId ? null : current));
+    resetNodeMultiSelectSequence();
+  }, [lockedLayers, selectedId]);
 
   useEffect(() => {
     if (selectedNodes.annotationId && selectedNodes.annotationId !== selectedId) {
@@ -2237,7 +2252,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   function updateSelected(patch) {
-    if (!selectedId) return;
+    if (!selectedId || lockedLayers[selectedId]) return;
     resetNodeMultiSelectSequence();
     setAnnotations((prev) =>
       prev.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)),
@@ -2249,7 +2264,19 @@ export default function ProjectMarkupCanvas() {
   }
 
   function toggleAnnotationLayerLock(annotationId) {
+    const nextLocked = !lockedLayers[annotationId];
     setLockedLayers((prev) => ({ ...prev, [annotationId]: !prev[annotationId] }));
+    if (!nextLocked) return;
+    if (penDraftId === annotationId) finishPenPath();
+    if (selectedId === annotationId) setSelectedId("");
+    if (selectedNodes.annotationId === annotationId) {
+      setSelectedNodes({ annotationId: "", handleKeys: [] });
+      resetNodeMultiSelectSequence();
+    }
+    if (hoveredAnnotationId === annotationId) setHoveredAnnotationId("");
+    if (editingTextId === annotationId) setEditingTextId("");
+    if (focusedSidebarInputId === annotationId) setFocusedSidebarInputId("");
+    if (drag?.id === annotationId) setDrag(null);
   }
 
   function moveAnnotationLayer(annotationId, direction) {
@@ -2672,6 +2699,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   function continuePenFromExisting(event, item) {
+    if (lockedLayers[item.id]) return;
     event.stopPropagation();
     if (!svgRef.current || item.type !== "pen") return;
     const point = canvasPointFromEvent(event);
@@ -2762,6 +2790,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   function continuePenFromNode(event, item, nodeIndex) {
+    if (lockedLayers[item?.id]) return;
     event.stopPropagation();
     if (!item || item.type !== "pen" || !Array.isArray(item.points)) return;
     const clickedPoint = item.points[nodeIndex];
@@ -2802,6 +2831,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   function addPenNode(event, item) {
+    if (lockedLayers[item.id]) return;
     event.stopPropagation();
     if (!svgRef.current || item.type !== "pen" || !Array.isArray(item.points)) return;
     const point = canvasPointFromEvent(event);
@@ -2830,6 +2860,7 @@ export default function ProjectMarkupCanvas() {
   }
 
   function removePenNode(event, item, nodeIndex = null) {
+    if (lockedLayers[item?.id]) return;
     event.stopPropagation();
     if (!item || item.type !== "pen" || !Array.isArray(item.points)) return;
     const point = svgRef.current && nodeIndex == null ? canvasPointFromEvent(event) : null;
@@ -3246,17 +3277,12 @@ export default function ProjectMarkupCanvas() {
   }
 
   function startMove(event, item) {
+    if (lockedLayers[item.id]) return;
     event.stopPropagation();
     if (!svgRef.current) return;
     resetNodeMultiSelectSequence();
     if (selectedNodes.handleKeys.length) {
       setSelectedNodes({ annotationId: "", handleKeys: [] });
-    }
-    if (lockedLayers[item.id]) {
-      setSelectedId(item.id);
-      setEditingTextId("");
-      setMessage("Layer is locked. Unlock it from the layer list or canvas lock button before moving it.");
-      return;
     }
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
@@ -3269,15 +3295,10 @@ export default function ProjectMarkupCanvas() {
   }
 
   function startCurveEdit(event, item) {
+    if (lockedLayers[item.id]) return;
     event.stopPropagation();
     if (!svgRef.current) return;
     resetNodeMultiSelectSequence();
-    if (lockedLayers[item.id]) {
-      setSelectedId(item.id);
-      setEditingTextId("");
-      setMessage("Layer is locked. Unlock it before editing its shape.");
-      return;
-    }
     svgRef.current.setPointerCapture?.(event.pointerId);
     const point = canvasPointFromEvent(event);
     finishPenPath();
@@ -4707,9 +4728,9 @@ export default function ProjectMarkupCanvas() {
             >
               <div className="mt-3 space-y-2">
                 {annotationLayers.length ? annotationLayers.map(({ item, index, label }, stackIndex) => {
-                  const active = selectedId === item.id;
                   const visible = visibleLayers[item.id] !== false;
                   const locked = !!lockedLayers[item.id];
+                  const active = !locked && selectedId === item.id;
                   const topLayer = stackIndex === 0;
                   const bottomLayer = stackIndex === annotationLayers.length - 1;
                   return (
@@ -4754,11 +4775,12 @@ export default function ProjectMarkupCanvas() {
                       </button>
                       <button
                         type="button"
+                        disabled={locked}
                         onClick={() => setSelectedId(item.id)}
-                        className="min-w-0 flex-1 text-left"
+                        className="min-w-0 flex-1 text-left disabled:cursor-default"
                       >
-                        <span className="block truncate text-sm font-medium text-slate-700">{label}</span>
-                        <span className="block truncate text-[11px] text-slate-400">
+                        <span className={`block truncate text-sm font-medium ${locked ? "text-slate-400" : "text-slate-700"}`}>{label}</span>
+                        <span className={`block truncate text-[11px] ${locked ? "text-slate-300" : "text-slate-400"}`}>
                           {topLayer ? "Top" : bottomLayer ? "Bottom" : `Stack ${annotationLayers.length - stackIndex}`}
                         </span>
                       </button>
@@ -5810,30 +5832,32 @@ export default function ProjectMarkupCanvas() {
 		                </g>
 		              )}
 
-	              {backgroundEraserAnnotations.map((item) =>
-                renderAnnotation(item, {
-                  selected: item.id === selectedForEditing?.id,
-                  editing: item.id === editingTextId,
+		              {backgroundEraserAnnotations.map((item) => {
+                const locked = !!lockedLayers[item.id];
+                return renderAnnotation(item, {
+                  locked,
+                  selected: !locked && item.id === selectedForEditing?.id,
+                  editing: !locked && item.id === editingTextId,
                   calibratedReference: item.id === measurementCalibration.referenceLineId,
                   roughGeometry: activeMeasurementGeometry,
                   showSegmentLengths: false,
                   onPointerDown:
-                    tool === "hand"
+                    locked || tool === "hand" || item.id === penDraftId
                       ? undefined
-                      : item.id === penDraftId
-                        ? undefined
-                        : (event) => startMove(event, item),
-                  onPointerEnter: () => setHoveredAnnotationId(item.id),
-                  onPointerLeave: () => {
+                      : (event) => startMove(event, item),
+                  onPointerEnter: locked ? undefined : () => setHoveredAnnotationId(item.id),
+                  onPointerLeave: locked ? undefined : () => {
                     if (drag?.id !== item.id) setHoveredAnnotationId((current) => (current === item.id ? "" : current));
                   },
-                }),
-              )}
+                });
+              })}
 
-	              {layeredAnnotations.map((item) =>
-                renderAnnotation(item, {
-                  selected: item.id === selectedForEditing?.id,
-                  editing: item.id === editingTextId,
+		              {layeredAnnotations.map((item) => {
+                const locked = !!lockedLayers[item.id];
+                return renderAnnotation(item, {
+                  locked,
+                  selected: !locked && item.id === selectedForEditing?.id,
+                  editing: !locked && item.id === editingTextId,
                   calibratedReference: item.id === measurementCalibration.referenceLineId,
                   roughGeometry: activeMeasurementGeometry,
                   showSegmentLengths: showPlanSegmentLengths,
@@ -5842,7 +5866,7 @@ export default function ProjectMarkupCanvas() {
                     item.id === penDraftId ||
                     (!hideTextAndMeasurements && ["line", "measure", "pen"].includes(item.type)),
                   onPointerDown:
-                    tool === "hand"
+                    locked || tool === "hand"
                       ? undefined
                     : item.id === penDraftId
                       ? undefined
@@ -5855,19 +5879,19 @@ export default function ProjectMarkupCanvas() {
                       : tool === "pen" && item.type === "pen"
                         ? (event) => continuePenFromExisting(event, item)
                         : (event) => startMove(event, item),
-                  onPointerEnter: () => setHoveredAnnotationId(item.id),
-                  onPointerLeave: () => {
+                  onPointerEnter: locked ? undefined : () => setHoveredAnnotationId(item.id),
+                  onPointerLeave: locked ? undefined : () => {
                     if (drag?.id !== item.id) setHoveredAnnotationId((current) => (current === item.id ? "" : current));
                   },
-                  onDoubleClick: item.id === penDraftId ? undefined : (event) => {
+                  onDoubleClick: locked || item.id === penDraftId ? undefined : (event) => {
                     event.stopPropagation();
                     if (item.type === "text" || item.type === "measure") {
                       setSelectedId(item.id);
                       setEditingTextId(item.id);
                     }
                   },
-                }),
-              )}
+                });
+              })}
 
               {penDraft && Array.isArray(penDraft.points) ? (
                 <g className="editing-only pointer-events-none">
