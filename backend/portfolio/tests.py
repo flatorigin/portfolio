@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import AIConfiguration, AIUsageEvent, Profile
+from accounts.models import AIConfiguration, AIUsageEvent, Profile, StaffAccess
 from .models import (
     Project,
     ProjectImage,
@@ -1462,6 +1462,55 @@ class ProjectCoverAdminTests(APITestCase):
         self.assertContains(response, "First image (order 0)")
         self.assertContains(response, "Selected image (order 1)")
         self.assertContains(response, "Preview")
+
+    def test_moderator_can_select_and_delete_user_uploaded_images(self):
+        moderator = User.objects.create_user(
+            username="image-moderator",
+            email="image-moderator@example.com",
+            password="test-pass-123",
+            is_staff=True,
+        )
+        StaffAccess.objects.create(
+            user=moderator,
+            role=StaffAccess.Role.MODERATOR,
+            can_access_admin=True,
+            can_manage_moderation=True,
+        )
+        self.client.force_login(moderator)
+
+        project_response = self.client.get(
+            f"/admin/portfolio/project/{self.project.id}/change/"
+        )
+        image_list_response = self.client.get("/admin/portfolio/projectimage/")
+
+        self.assertEqual(project_response.status_code, status.HTTP_200_OK)
+        self.assertContains(project_response, "select Delete? and save")
+        self.assertContains(project_response, 'name="images-0-DELETE"')
+        self.assertEqual(image_list_response.status_code, status.HTTP_200_OK)
+        self.assertContains(image_list_response, 'class="action-select"')
+
+        confirmation = self.client.post(
+            "/admin/portfolio/projectimage/",
+            {
+                "action": "delete_selected",
+                "_selected_action": [self.selected_image.id],
+                "index": "0",
+            },
+        )
+        self.assertEqual(confirmation.status_code, status.HTTP_200_OK)
+        self.assertContains(confirmation, "Are you sure")
+
+        deleted = self.client.post(
+            "/admin/portfolio/projectimage/",
+            {
+                "action": "delete_selected",
+                "_selected_action": [self.selected_image.id],
+                "post": "yes",
+            },
+        )
+
+        self.assertEqual(deleted.status_code, status.HTTP_302_FOUND)
+        self.assertFalse(ProjectImage.objects.filter(pk=self.selected_image.id).exists())
 
     def test_api_rejects_cover_from_another_project(self):
         other_project = Project.objects.create(owner=self.owner, title="Other project")

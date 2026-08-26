@@ -5,6 +5,8 @@ from django.db.models import F
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
+from accounts.models import user_can_access_admin
+
 from .models import (
     Project,
     ProjectImage,
@@ -14,6 +16,29 @@ from .models import (
     HelperListing,
     HelperFeedback,
 )
+
+
+def user_can_moderate_project_images(user):
+    if not user_can_access_admin(user):
+        return False
+    if user.is_superuser:
+        return True
+    access = getattr(user, "staff_access", None)
+    return bool(access and access.can_manage_moderation)
+
+
+class ProjectModerationAdminMixin:
+    def has_module_permission(self, request):
+        return user_can_moderate_project_images(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return user_can_moderate_project_images(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return user_can_moderate_project_images(request.user)
+
+    def has_add_permission(self, request):
+        return bool(request.user.is_superuser)
 
 
 def project_image_preview(image, size=72):
@@ -62,23 +87,36 @@ class ProjectAdminForm(forms.ModelForm):
 class ProjectImageInline(admin.TabularInline):
     model = ProjectImage
     extra = 0
+    can_delete = True
+    show_change_link = True
+    verbose_name_plural = "User-uploaded images - select Delete? and save to remove images"
     fields = (
         "image_preview",
-        "image",
+        "caption",
+        "order",
         "media_type",
         "processing_status",
-        "order",
-        "caption",
-        "alt_text",
     )
-    readonly_fields = ("image_preview",)
+    readonly_fields = ("image_preview", "media_type", "processing_status")
+
+    def has_view_permission(self, request, obj=None):
+        return user_can_moderate_project_images(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return user_can_moderate_project_images(request.user)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return user_can_moderate_project_images(request.user)
 
     @admin.display(description="Preview")
     def image_preview(self, obj):
         return project_image_preview(obj)
 
 @admin.register(Project)
-class ProjectAdmin(admin.ModelAdmin):
+class ProjectAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
     form = ProjectAdminForm
     list_display = (
         "title",
@@ -98,7 +136,7 @@ class ProjectAdmin(admin.ModelAdmin):
         return project_image_preview(obj.get_cover_image(), size=56)
 
 @admin.register(ProjectImage)
-class ProjectImageAdmin(admin.ModelAdmin):
+class ProjectImageAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
     list_display = (
         "image_preview",
         "project",
@@ -112,6 +150,9 @@ class ProjectImageAdmin(admin.ModelAdmin):
     search_fields = ("project__title", "project__owner__username", "caption", "alt_text")
     list_select_related = ("project", "project__cover_image_ref")
     actions = ("set_as_project_cover",)
+
+    def has_delete_permission(self, request, obj=None):
+        return user_can_moderate_project_images(request.user)
 
     @admin.display(description="Preview")
     def image_preview(self, obj):
