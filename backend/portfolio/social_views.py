@@ -5,7 +5,7 @@ from django.conf import settings
 from django.http import HttpResponse
 from django.views import View
 
-from .models import Project, ProjectImage
+from .models import Project
 
 
 def _public_project(project):
@@ -16,14 +16,7 @@ def _public_project(project):
 
 
 def _cover_url(project, request):
-    cover = next(
-        (
-            image
-            for image in sorted(project.images.all(), key=lambda item: (item.order, item.id))
-            if image.media_type == ProjectImage.MEDIA_TYPE_IMAGE and image.image
-        ),
-        None,
-    )
+    cover = project.get_cover_image()
     if cover and hasattr(cover.image, "url"):
         return request.build_absolute_uri(cover.image.url)
     if project.cover_image_file and hasattr(project.cover_image_file, "url"):

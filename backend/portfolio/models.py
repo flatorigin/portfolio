@@ -175,6 +175,27 @@ class Project(models.Model):
             convert_field_file_to_webp(self.cover_image_file, quality=80)
         super().save(*args, **kwargs)
 
+    def get_cover_image(self):
+        """Return the selected project cover, falling back to the first image."""
+        if self.cover_image_ref_id:
+            cover = self.cover_image_ref
+            if (
+                cover.project_id == self.pk
+                and cover.media_type == ProjectImage.MEDIA_TYPE_IMAGE
+                and cover.image
+            ):
+                return cover
+
+        images = sorted(self.images.all(), key=lambda image: (image.order, image.id))
+        return next(
+            (
+                image
+                for image in images
+                if image.media_type == ProjectImage.MEDIA_TYPE_IMAGE and image.image
+            ),
+            None,
+        )
+
     @property
     def is_private_job(self):
         return bool(self.is_job_posting and (self.is_private or self.post_privacy == "private"))
@@ -490,6 +511,10 @@ class ProjectImage(models.Model):
     extra_data = models.JSONField(blank=True, null=True)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        label = self.caption.strip() or os.path.basename(self.image.name or "") or f"Image {self.pk}"
+        return f"{label} (order {self.order})"
 
     def _convert_image_to_webp(self):
         if not self.image:

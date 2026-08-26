@@ -1,4 +1,7 @@
-from django.contrib import admin
+from django import forms
+from django.contrib import admin, messages
+from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
@@ -12,18 +15,137 @@ from .models import (
     HelperFeedback,
 )
 
+
+def project_image_preview(image, size=72):
+    if not image:
+        return "-"
+    file_field = image.thumbnail if image.thumbnail else image.image
+    if not file_field or not hasattr(file_field, "url"):
+        return "-"
+    return format_html(
+        '<a href="{}" target="_blank" rel="noopener">'
+        '<img src="{}" alt="" style="width:{}px;height:{}px;object-fit:cover;border-radius:4px;" />'
+        "</a>",
+        file_field.url,
+        file_field.url,
+        size,
+        size,
+    )
+
+
+class ProjectAdminForm(forms.ModelForm):
+    class Meta:
+        model = Project
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cover_field = self.fields.get("cover_image_ref")
+        if not cover_field:
+            return
+        cover_field.label = "Cover image"
+        cover_field.help_text = "Choose one of this project's images for cards and shared-link previews."
+        if self.instance and self.instance.pk:
+            cover_field.queryset = self.instance.images.filter(
+                media_type=ProjectImage.MEDIA_TYPE_IMAGE
+            ).order_by("order", "id")
+        else:
+            cover_field.queryset = ProjectImage.objects.none()
+
+    def clean_cover_image_ref(self):
+        cover = self.cleaned_data.get("cover_image_ref")
+        if cover and self.instance.pk and cover.project_id != self.instance.pk:
+            raise forms.ValidationError("Choose an image that belongs to this project.")
+        return cover
+
+
 class ProjectImageInline(admin.TabularInline):
     model = ProjectImage
     extra = 0
+    fields = (
+        "image_preview",
+        "image",
+        "media_type",
+        "processing_status",
+        "order",
+        "caption",
+        "alt_text",
+    )
+    readonly_fields = ("image_preview",)
+
+    @admin.display(description="Preview")
+    def image_preview(self, obj):
+        return project_image_preview(obj)
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("title","owner","is_public","created_at")
+    form = ProjectAdminForm
+    list_display = (
+        "title",
+        "owner",
+        "cover_preview",
+        "is_job_posting",
+        "is_public",
+        "created_at",
+    )
+    list_filter = ("is_job_posting", "is_public", "is_private", "post_privacy")
+    search_fields = ("title", "owner__username", "owner__email")
+    list_select_related = ("owner", "cover_image_ref")
     inlines = [ProjectImageInline]
+
+    @admin.display(description="Cover")
+    def cover_preview(self, obj):
+        return project_image_preview(obj.get_cover_image(), size=56)
 
 @admin.register(ProjectImage)
 class ProjectImageAdmin(admin.ModelAdmin):
-    list_display = ("project", "media_type", "processing_status", "order", "created_at")
+    list_display = (
+        "image_preview",
+        "project",
+        "is_project_cover",
+        "media_type",
+        "processing_status",
+        "order",
+        "created_at",
+    )
+    list_filter = ("media_type", "processing_status")
+    search_fields = ("project__title", "project__owner__username", "caption", "alt_text")
+    list_select_related = ("project", "project__cover_image_ref")
+    actions = ("set_as_project_cover",)
+
+    @admin.display(description="Preview")
+    def image_preview(self, obj):
+        return project_image_preview(obj)
+
+    @admin.display(boolean=True, description="Cover")
+    def is_project_cover(self, obj):
+        return obj.project.get_cover_image() == obj
+
+    @admin.action(description="Set selected image as its project cover")
+    def set_as_project_cover(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(request, "Select exactly one image.", level=messages.ERROR)
+            return
+
+        cover = queryset.select_related("project").first()
+        if cover.media_type != ProjectImage.MEDIA_TYPE_IMAGE:
+            self.message_user(request, "Only an image can be used as a project cover.", level=messages.ERROR)
+            return
+
+        with transaction.atomic():
+            ProjectImage.objects.filter(project=cover.project).exclude(pk=cover.pk).update(
+                order=F("order") + 1
+            )
+            cover.order = 0
+            cover.save(update_fields=["order"])
+            cover.project.cover_image_ref = cover
+            cover.project.save(update_fields=["cover_image_ref"])
+
+        self.message_user(
+            request,
+            f'"{cover}" is now the cover for "{cover.project.title}".',
+            level=messages.SUCCESS,
+        )
 
 
 class HelperSkillListFilter(admin.SimpleListFilter):

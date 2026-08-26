@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 from accounts.models import AIConfiguration, AIUsageEvent, Profile
 from .models import (
     Project,
+    ProjectImage,
     ProjectInvite,
     MessageThread,
     PrivateMessage,
@@ -1386,3 +1387,95 @@ class PublicProjectSharePageTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn("Private project details", content)
         self.assertNotIn('property="og:title"', content)
+
+
+class ProjectCoverAdminTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="cover-owner",
+            email="cover-owner@example.com",
+            password="test-pass-123",
+        )
+        self.project = Project.objects.create(owner=self.owner, title="Cover test")
+        self.first_image = self.project.images.create(
+            image=SimpleUploadedFile("first.png", TINY_PNG_BYTES, content_type="image/png"),
+            caption="First image",
+            order=0,
+        )
+        self.selected_image = self.project.images.create(
+            image=SimpleUploadedFile("selected.png", TINY_PNG_BYTES, content_type="image/png"),
+            caption="Selected image",
+            order=1,
+        )
+
+    def test_selected_cover_is_used_by_api_and_social_preview(self):
+        self.project.cover_image_ref = self.selected_image
+        self.project.save(update_fields=["cover_image_ref"])
+
+        api_response = self.client.get(f"/api/projects/{self.project.id}/")
+        page_response = self.client.get(f"/projects/{self.project.id}")
+        expected_url = f"http://testserver{self.selected_image.image.url}"
+
+        self.assertEqual(api_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(api_response.data["cover_image_url"], expected_url)
+        self.assertIn(
+            f'property="og:image" content="{expected_url}"',
+            page_response.content.decode("utf-8"),
+        )
+
+    def test_deleting_selected_cover_falls_back_to_first_image(self):
+        self.project.cover_image_ref = self.selected_image
+        self.project.save(update_fields=["cover_image_ref"])
+
+        self.selected_image.delete()
+        self.project.refresh_from_db()
+
+        self.assertIsNone(self.project.cover_image_ref)
+        self.assertEqual(self.project.get_cover_image(), self.first_image)
+
+    def test_admin_cover_selector_only_lists_images_from_current_project(self):
+        other_project = Project.objects.create(owner=self.owner, title="Other project")
+        other_image = other_project.images.create(
+            image=SimpleUploadedFile("other.png", TINY_PNG_BYTES, content_type="image/png"),
+            caption="Other image",
+        )
+        from .admin import ProjectAdminForm
+
+        form = ProjectAdminForm(instance=self.project)
+        image_ids = set(form.fields["cover_image_ref"].queryset.values_list("id", flat=True))
+
+        self.assertEqual(image_ids, {self.first_image.id, self.selected_image.id})
+        self.assertNotIn(other_image.id, image_ids)
+
+    def test_admin_project_page_shows_cover_selector_and_image_thumbnails(self):
+        admin_user = User.objects.create_superuser(
+            username="cover-admin",
+            email="cover-admin@example.com",
+            password="test-pass-123",
+        )
+        self.client.force_login(admin_user)
+
+        response = self.client.get(f"/admin/portfolio/project/{self.project.id}/change/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertContains(response, "Cover image")
+        self.assertContains(response, "First image (order 0)")
+        self.assertContains(response, "Selected image (order 1)")
+        self.assertContains(response, "Preview")
+
+    def test_api_rejects_cover_from_another_project(self):
+        other_project = Project.objects.create(owner=self.owner, title="Other project")
+        other_image = other_project.images.create(
+            image=SimpleUploadedFile("other.png", TINY_PNG_BYTES, content_type="image/png"),
+            caption="Other image",
+        )
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.patch(
+            f"/api/projects/{self.project.id}/",
+            {"cover_image_ref": other_image.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cover_image_ref", response.data)

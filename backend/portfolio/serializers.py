@@ -1163,12 +1163,23 @@ class ProjectSerializer(serializers.ModelSerializer):
                     {"cover_image_id": "Only image media can be used as the project cover."}
                 )
 
+        cover_image_ref = attrs.get("cover_image_ref")
+        if cover_image_ref is not None and instance is not None:
+            if cover_image_ref.project_id != instance.id:
+                raise serializers.ValidationError(
+                    {"cover_image_ref": "Choose an image that belongs to this project."}
+                )
+            if cover_image_ref.media_type != ProjectImage.MEDIA_TYPE_IMAGE:
+                raise serializers.ValidationError(
+                    {"cover_image_ref": "Only image media can be used as the project cover."}
+                )
+
         return attrs
 
     def get_cover_image_url(self, obj):
         request = self.context.get("request")
 
-        cover = obj.images.filter(media_type=ProjectImage.MEDIA_TYPE_IMAGE).order_by("order", "id").first()
+        cover = obj.get_cover_image()
         if cover and cover.image and hasattr(cover.image, "url"):
             url = cover.image.url
             return request.build_absolute_uri(url) if request else url
@@ -1280,6 +1291,8 @@ class ProjectSerializer(serializers.ModelSerializer):
                 if row.order != idx:
                     row.order = idx
             ProjectImage.objects.bulk_update(ordered, ["order"])
+            project.cover_image_ref = cover
+            project.save(update_fields=["cover_image_ref"])
 
     def create(self, validated_data):
         invite_usernames = validated_data.pop("private_contractor_usernames", None)
