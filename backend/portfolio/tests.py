@@ -1325,3 +1325,64 @@ class ProjectPlannerTests(APITestCase):
 
         self.assertIn(planner_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})
         self.assertIn(project_response.status_code, {status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED})
+
+
+class PublicProjectSharePageTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="share-owner",
+            email="share-owner@example.com",
+            password="test-pass-123",
+        )
+        set_profile_type(self.owner, "homeowner")
+
+    def test_public_project_page_includes_social_preview_metadata(self):
+        project = Project.objects.create(
+            owner=self.owner,
+            title="Kitchen & Bath Refresh",
+            summary="Cabinets, flooring, and a more practical layout.",
+            category="Remodeling",
+            is_public=True,
+            is_private=False,
+            post_privacy="public",
+        )
+
+        response = self.client.get(f"/projects/{project.id}")
+        content = response.content.decode("utf-8")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Kitchen &amp; Bath Refresh | FlatOrigin", content)
+        self.assertIn('property="og:title" content="Kitchen &amp; Bath Refresh"', content)
+        self.assertIn(f'property="og:url" content="http://testserver/projects/{project.id}"', content)
+        self.assertIn('name="twitter:card" content="summary_large_image"', content)
+
+    def test_anonymous_recipient_can_load_public_project_api(self):
+        project = Project.objects.create(
+            owner=self.owner,
+            title="Public deck project",
+            is_public=True,
+            is_private=False,
+            post_privacy="public",
+        )
+
+        response = self.client.get(f"/api/projects/{project.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["title"], "Public deck project")
+
+    def test_private_project_page_does_not_leak_social_metadata(self):
+        project = Project.objects.create(
+            owner=self.owner,
+            title="Private project details",
+            summary="Do not expose this description.",
+            is_public=False,
+            is_private=True,
+            post_privacy="private",
+        )
+
+        response = self.client.get(f"/projects/{project.id}")
+        content = response.content.decode("utf-8")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("Private project details", content)
+        self.assertNotIn('property="og:title"', content)

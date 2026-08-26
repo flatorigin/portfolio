@@ -12,6 +12,8 @@ import {
   SymbolIcon,
 } from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
+import ProjectShareDialog from "../components/ProjectShareDialog";
+import { isShareablePublicProject } from "../utils/projectShare";
 import {
   getCachedLocationOrigin,
   formatDistanceMiles,
@@ -810,6 +812,7 @@ export default function Explore() {
   const [directoryLikeCounts, setDirectoryLikeCounts] = useState({});
   const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
   const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(DIRECTORY_BATCH_SIZE);
+  const [projectToShare, setProjectToShare] = useState(null);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -1749,6 +1752,7 @@ export default function Explore() {
           const liked = !!likeMap[p.id];
           const likeCount = Number(likeCounts[p.id] ?? p.like_count ?? 0);
           const viewCount = Number(p.view_count ?? 0);
+          const canShare = isShareablePublicProject(p);
 
           const card = (
             <div className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md">
@@ -1830,30 +1834,48 @@ export default function Explore() {
                     </span>
                   </div>
 
-                  {canSave ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-                      onClick={(e) => toggleFavorite(e, p)}
-                      disabled={favBusyId === p.id}
-                      aria-label={saved ? "Unsave project" : "Save project"}
-                    >
-                      <SymbolIcon name="bookmark" fill={saved ? 1 : 0} className="text-[18px]" />
-                    </button>
-                  ) : authed && isOwner(p) && !isReferenceGallery ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        navigate(`/dashboard?edit=${p.id}`);
-                      }}
-                      aria-label="Edit project"
-                    >
-                      <SymbolIcon name="edit" className="text-[18px]" />
-                    </button>
-                  ) : null}
+                  <div className="flex items-center gap-1">
+                    {canShare ? (
+                      <button
+                        type="button"
+                        className="inline-flex size-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setProjectToShare(p);
+                        }}
+                        aria-label={`Share ${p.title || "project"}`}
+                        title="Share project"
+                      >
+                        <SymbolIcon name="share" className="text-[18px]" />
+                      </button>
+                    ) : null}
+
+                    {canSave ? (
+                      <button
+                        type="button"
+                        className="inline-flex size-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                        onClick={(e) => toggleFavorite(e, p)}
+                        disabled={favBusyId === p.id}
+                        aria-label={saved ? "Unsave project" : "Save project"}
+                      >
+                        <SymbolIcon name="bookmark" fill={saved ? 1 : 0} className="text-[18px]" />
+                      </button>
+                    ) : authed && isOwner(p) && !isReferenceGallery ? (
+                      <button
+                        type="button"
+                        className="inline-flex size-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigate(`/dashboard?edit=${p.id}`);
+                        }}
+                        aria-label="Edit project"
+                      >
+                        <SymbolIcon name="edit" className="text-[18px]" />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2045,6 +2067,12 @@ export default function Explore() {
           </div>
         </div>
       ) : null}
+
+      <ProjectShareDialog
+        open={!!projectToShare}
+        project={projectToShare}
+        onClose={() => setProjectToShare(null)}
+      />
     </div>
   );
 }

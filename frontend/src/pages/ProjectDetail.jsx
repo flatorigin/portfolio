@@ -15,6 +15,8 @@ import MediaVideoPlayer from "../components/MediaVideoPlayer";
 import BidModule from "../components/bids/BidModule";
 import QuickMessageDrawer from "../components/QuickMessageDrawer";
 import ReportContentButton from "../components/ReportContentButton";
+import ProjectShareDialog from "../components/ProjectShareDialog";
+import { isShareablePublicProject } from "../utils/projectShare";
 
 const COMMENT_CHAR_LIMIT = 280;
 const COMMENT_LINK_PATTERN = /(https?:\/\/|www\.)/i;
@@ -221,7 +223,7 @@ export default function ProjectDetail() {
   const [isLiked, setIsLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [shareFeedback, setShareFeedback] = useState("");
+  const [shareOpen, setShareOpen] = useState(false);
   const [msgOpen, setMsgOpen] = useState(false);
 
   const [comments, setComments] = useState([]);
@@ -315,52 +317,13 @@ export default function ProjectDetail() {
     (project.owner_username || "").toLowerCase() ===
       (meUser.username || "").toLowerCase();
 
-  const canSharePublicJob = !!(
-    project?.is_job_posting &&
-    project?.is_public &&
-    !project?.is_private &&
-    project?.id
-  );
-  const publicProjectUrl =
-    typeof window !== "undefined" && project?.id
-      ? `${window.location.origin}/projects/${project.id}`
-      : "";
+  const canSharePublicProject = isShareablePublicProject(project);
   const jobSummaryText = (project?.job_summary || project?.summary || "").trim();
   const projectRequirementsText =
     project?.summary && project.summary.trim() !== jobSummaryText ? project.summary.trim() : "";
   const serviceCategoryList = Array.isArray(project?.service_categories)
     ? project.service_categories.filter((item) => String(item || "").trim())
     : [];
-
-  async function shareProject() {
-    if (!canSharePublicJob || !publicProjectUrl) return;
-    setShareFeedback("");
-
-    const payload = {
-      title: project?.title || "Job posting",
-      text: jobSummaryText || "Take a look at this job posting.",
-      url: publicProjectUrl,
-    };
-
-    try {
-      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-        await navigator.share(payload);
-        setShareFeedback("Shared.");
-        return;
-      }
-
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(publicProjectUrl);
-        setShareFeedback("Link copied.");
-        return;
-      }
-
-      setShareFeedback(publicProjectUrl);
-    } catch (err) {
-      if (err?.name === "AbortError") return;
-      setShareFeedback("Could not share right now.");
-    }
-  }
 
   function requestEditProject() {
     if (!project?.id) return;
@@ -1823,7 +1786,6 @@ export default function ProjectDetail() {
                   </div>
                 </div>
               </div>
-              {shareFeedback ? <div className="mt-3 text-xs text-slate-500">{shareFeedback}</div> : null}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-7">
@@ -1851,10 +1813,10 @@ export default function ProjectDetail() {
                   </>
                 ) : null}
 
-                {canSharePublicJob ? (
+                {canSharePublicProject ? (
                   <button
                     type="button"
-                    onClick={shareProject}
+                    onClick={() => setShareOpen(true)}
                     className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                   >
                     <SymbolIcon name="share" className="text-[16px]" />
@@ -1992,7 +1954,6 @@ export default function ProjectDetail() {
                   )}
                 </div>
               </div>
-              {shareFeedback ? <div className="mt-3 text-xs text-slate-500">{shareFeedback}</div> : null}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-7">
@@ -2018,6 +1979,17 @@ export default function ProjectDetail() {
                       Download PDF
                     </Link>
                   </>
+                ) : null}
+
+                {canSharePublicProject ? (
+                  <button
+                    type="button"
+                    onClick={() => setShareOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <SymbolIcon name="share" className="text-[16px]" />
+                    Share
+                  </button>
                 ) : null}
 
                 {project?.owner_username ? (
@@ -2981,6 +2953,12 @@ export default function ProjectDetail() {
           originProjectTitle={project?.title || `Project #${project?.id}`}
         />
       ) : null}
+
+      <ProjectShareDialog
+        open={shareOpen}
+        project={project}
+        onClose={() => setShareOpen(false)}
+      />
     </div>
   );
 }
