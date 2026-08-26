@@ -1462,6 +1462,12 @@ class ProjectCoverAdminTests(APITestCase):
         self.assertContains(response, "First image (order 0)")
         self.assertContains(response, "Selected image (order 1)")
         self.assertContains(response, "Preview")
+        self.assertNotContains(response, 'class="deletelink"')
+
+        delete_response = self.client.get(
+            f"/admin/portfolio/project/{self.project.id}/delete/"
+        )
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_moderator_can_select_and_delete_user_uploaded_images(self):
         moderator = User.objects.create_user(

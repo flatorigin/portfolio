@@ -131,6 +131,11 @@ class ProjectAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
     list_select_related = ("owner", "cover_image_ref")
     inlines = [ProjectImageInline]
 
+    def has_delete_permission(self, request, obj=None):
+        # Projects contain cascaded user content. Remove images through the inline
+        # moderation controls instead of exposing project-wide deletion in admin.
+        return False
+
     @admin.display(description="Cover")
     def cover_preview(self, obj):
         return project_image_preview(obj.get_cover_image(), size=56)
