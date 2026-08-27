@@ -755,6 +755,178 @@ a.button:focus {
   color: var(--fo-cyan);
 }
 
+.fo-manage-images,
+.fo-manage-images:link,
+.fo-manage-images:visited,
+#changelist table td a.fo-manage-images {
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
+  white-space: nowrap;
+}
+
+#changelist table td a.fo-manage-images:hover,
+#changelist table td a.fo-manage-images:focus {
+  color: #fff;
+}
+
+.fo-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 32px;
+  padding: 20px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+}
+
+.fo-danger-zone h2 {
+  margin: 0 0 6px;
+  color: #991b1b;
+  font-size: 17px;
+}
+
+.fo-danger-zone p {
+  margin: 0;
+  color: #7f1d1d;
+}
+
+.fo-danger-button,
+.fo-danger-button:link,
+.fo-danger-button:visited,
+.fo-danger-submit {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--fo-danger);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.fo-danger-button:hover,
+.fo-danger-button:focus,
+.fo-danger-submit:hover,
+.fo-danger-submit:focus {
+  background: var(--fo-danger-dark);
+  color: #fff;
+}
+
+.fo-image-manager-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin: 0 0 18px;
+}
+
+.fo-image-manager-heading h1,
+.fo-delete-confirmation-card h1 {
+  margin: 0;
+  color: var(--fo-text);
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.fo-section-kicker,
+.fo-delete-kicker {
+  margin: 0 0 5px;
+  color: var(--fo-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.model-projectimage.change-list #result_list tbody tr:has(.action-select:checked) {
+  background: var(--selected-row);
+}
+
+.model-projectimage.change-list .action-select {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--fo-cyan);
+  cursor: pointer;
+}
+
+.fo-delete-confirmation-card {
+  max-width: 760px;
+  padding: 24px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--fo-shadow);
+}
+
+.fo-delete-confirmation-card > p:not(.fo-delete-kicker) {
+  color: #7f1d1d;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.fo-title-confirmation-form {
+  margin-top: 24px;
+}
+
+.fo-title-confirmation-form label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--fo-text);
+  font-weight: 600;
+}
+
+.fo-title-confirmation-form input[type="text"] {
+  width: min(100%, 520px);
+}
+
+.fo-confirmation-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.fo-confirmation-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+
+.fo-confirmation-image {
+  overflow: hidden;
+  border: 1px solid var(--fo-border);
+  border-radius: 8px;
+  background: var(--fo-surface);
+}
+
+.fo-confirmation-image img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.fo-confirmation-image div {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+}
+
+.fo-confirmation-image span {
+  overflow: hidden;
+  color: var(--fo-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #changelist .actions,
 .paginator,
 .results,
@@ -951,5 +1123,16 @@ body.login {
 
   .login #content-main form {
     padding: 24px;
+  }
+
+  .fo-danger-zone,
+  .fo-confirmation-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fo-danger-button,
+  .fo-danger-submit {
+    width: 100%;
   }
 }

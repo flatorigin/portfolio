@@ -1,7 +1,7 @@
-from django import forms
 from django.contrib import admin, messages
 from django.db import transaction
-from django.db.models import F
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
@@ -58,70 +58,16 @@ def project_image_preview(image, size=72):
     )
 
 
-class ProjectAdminForm(forms.ModelForm):
-    class Meta:
-        model = Project
-        fields = "__all__"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        cover_field = self.fields.get("cover_image_ref")
-        if not cover_field:
-            return
-        cover_field.label = "Cover image"
-        cover_field.help_text = "Choose one of this project's images for cards and shared-link previews."
-        if self.instance and self.instance.pk:
-            cover_field.queryset = self.instance.images.filter(
-                media_type=ProjectImage.MEDIA_TYPE_IMAGE
-            ).order_by("order", "id")
-        else:
-            cover_field.queryset = ProjectImage.objects.none()
-
-    def clean_cover_image_ref(self):
-        cover = self.cleaned_data.get("cover_image_ref")
-        if cover and self.instance.pk and cover.project_id != self.instance.pk:
-            raise forms.ValidationError("Choose an image that belongs to this project.")
-        return cover
-
-
-class ProjectImageInline(admin.TabularInline):
-    model = ProjectImage
-    extra = 0
-    can_delete = True
-    show_change_link = True
-    verbose_name_plural = "User-uploaded images - select Delete? and save to remove images"
-    fields = (
-        "image_preview",
-        "caption",
-        "order",
-        "media_type",
-        "processing_status",
-    )
-    readonly_fields = ("image_preview", "media_type", "processing_status")
-
-    def has_view_permission(self, request, obj=None):
-        return user_can_moderate_project_images(request.user)
-
-    def has_change_permission(self, request, obj=None):
-        return user_can_moderate_project_images(request.user)
-
-    def has_add_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return user_can_moderate_project_images(request.user)
-
-    @admin.display(description="Preview")
-    def image_preview(self, obj):
-        return project_image_preview(obj)
-
 @admin.register(Project)
 class ProjectAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
-    form = ProjectAdminForm
+    change_form_template = "admin/portfolio/project/change_form.html"
+    delete_confirmation_template = "admin/portfolio/project/delete_confirmation.html"
+    exclude = ("cover_image_ref",)
     list_display = (
         "title",
         "owner",
         "cover_preview",
+        "manage_images",
         "is_job_posting",
         "is_public",
         "created_at",
@@ -129,29 +75,66 @@ class ProjectAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
     list_filter = ("is_job_posting", "is_public", "is_private", "post_privacy")
     search_fields = ("title", "owner__username", "owner__email")
     list_select_related = ("owner", "cover_image_ref")
-    inlines = [ProjectImageInline]
 
     def has_delete_permission(self, request, obj=None):
-        # Projects contain cascaded user content. Remove images through the inline
-        # moderation controls instead of exposing project-wide deletion in admin.
-        return False
+        # Full project deletion is intentionally unavailable as a bulk action.
+        return bool(obj and request.user.is_superuser)
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        obj = self.get_object(request, object_id) if object_id else None
+        extra_context = {
+            **(extra_context or {}),
+            "show_delete": False,
+            "can_delete_entire_project": self.has_delete_permission(request, obj),
+        }
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def delete_view(self, request, object_id, extra_context=None):
+        obj = self.get_object(request, object_id)
+        if request.method == "POST" and obj:
+            entered_title = request.POST.get("confirm_project_title", "").strip()
+            if entered_title != obj.title:
+                self.message_user(
+                    request,
+                    "Project title did not match. The project was not deleted.",
+                    level=messages.ERROR,
+                )
+                delete_url = reverse("admin:portfolio_project_delete", args=[obj.pk])
+                return HttpResponseRedirect(delete_url)
+
+        extra_context = {
+            **(extra_context or {}),
+            "confirmation_project_title": obj.title if obj else "",
+        }
+        return super().delete_view(request, object_id, extra_context)
 
     @admin.display(description="Cover")
     def cover_preview(self, obj):
         return project_image_preview(obj.get_cover_image(), size=56)
 
+    @admin.display(description="Images")
+    def manage_images(self, obj):
+        image_list_url = reverse("admin:portfolio_projectimage_changelist")
+        return format_html(
+            '<a class="button fo-manage-images" href="{}?project__id__exact={}">Manage images</a>',
+            image_list_url,
+            obj.pk,
+        )
+
 @admin.register(ProjectImage)
 class ProjectImageAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
+    change_list_template = "admin/portfolio/projectimage/change_list.html"
+    delete_selected_confirmation_template = (
+        "admin/portfolio/projectimage/delete_selected_confirmation.html"
+    )
     list_display = (
         "image_preview",
-        "project",
+        "project_title",
         "is_project_cover",
-        "media_type",
-        "processing_status",
         "order",
-        "created_at",
     )
-    list_filter = ("media_type", "processing_status")
+    list_display_links = ("project_title",)
+    list_filter = ("project", "media_type", "processing_status")
     search_fields = ("project__title", "project__owner__username", "caption", "alt_text")
     list_select_related = ("project", "project__cover_image_ref")
     actions = ("set_as_project_cover",)
@@ -161,13 +144,28 @@ class ProjectImageAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
 
     @admin.display(description="Preview")
     def image_preview(self, obj):
-        return project_image_preview(obj)
+        return project_image_preview(obj, size=96)
+
+    @admin.display(ordering="project__title", description="Project")
+    def project_title(self, obj):
+        return obj.project.title
 
     @admin.display(boolean=True, description="Cover")
     def is_project_cover(self, obj):
         return obj.project.get_cover_image() == obj
 
-    @admin.action(description="Set selected image as its project cover")
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if "delete_selected" in actions:
+            delete_action, action_name, _ = actions["delete_selected"]
+            actions["delete_selected"] = (
+                delete_action,
+                action_name,
+                "Delete selected images",
+            )
+        return actions
+
+    @admin.action(description="Make selected image the project cover")
     def set_as_project_cover(self, request, queryset):
         if queryset.count() != 1:
             self.message_user(request, "Select exactly one image.", level=messages.ERROR)
@@ -179,13 +177,19 @@ class ProjectImageAdmin(ProjectModerationAdminMixin, admin.ModelAdmin):
             return
 
         with transaction.atomic():
-            ProjectImage.objects.filter(project=cover.project).exclude(pk=cover.pk).update(
-                order=F("order") + 1
+            project = Project.objects.select_for_update().get(pk=cover.project_id)
+            images = list(
+                ProjectImage.objects.select_for_update()
+                .filter(project=project)
+                .order_by("order", "id")
             )
-            cover.order = 0
-            cover.save(update_fields=["order"])
-            cover.project.cover_image_ref = cover
-            cover.project.save(update_fields=["cover_image_ref"])
+            ordered_images = [cover] + [image for image in images if image.pk != cover.pk]
+            for index, image in enumerate(ordered_images):
+                image.order = index
+            ProjectImage.objects.bulk_update(ordered_images, ["order"])
+
+            project.cover_image_ref = cover
+            project.save(update_fields=["cover_image_ref"])
 
         self.message_user(
             request,

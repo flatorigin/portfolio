@@ -5,6 +5,7 @@ import json
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -1433,21 +1434,7 @@ class ProjectCoverAdminTests(APITestCase):
         self.assertIsNone(self.project.cover_image_ref)
         self.assertEqual(self.project.get_cover_image(), self.first_image)
 
-    def test_admin_cover_selector_only_lists_images_from_current_project(self):
-        other_project = Project.objects.create(owner=self.owner, title="Other project")
-        other_image = other_project.images.create(
-            image=SimpleUploadedFile("other.png", TINY_PNG_BYTES, content_type="image/png"),
-            caption="Other image",
-        )
-        from .admin import ProjectAdminForm
-
-        form = ProjectAdminForm(instance=self.project)
-        image_ids = set(form.fields["cover_image_ref"].queryset.values_list("id", flat=True))
-
-        self.assertEqual(image_ids, {self.first_image.id, self.selected_image.id})
-        self.assertNotIn(other_image.id, image_ids)
-
-    def test_admin_project_page_shows_cover_selector_and_image_thumbnails(self):
+    def test_admin_project_page_separates_image_management_and_project_deletion(self):
         admin_user = User.objects.create_superuser(
             username="cover-admin",
             email="cover-admin@example.com",
@@ -1458,18 +1445,65 @@ class ProjectCoverAdminTests(APITestCase):
         response = self.client.get(f"/admin/portfolio/project/{self.project.id}/change/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertContains(response, "Cover image")
-        self.assertContains(response, "First image (order 0)")
-        self.assertContains(response, "Selected image (order 1)")
-        self.assertContains(response, "Preview")
+        self.assertContains(response, "Manage project images")
+        self.assertContains(response, "Delete entire project")
+        self.assertNotContains(response, 'name="cover_image_ref"')
+        self.assertNotContains(response, 'name="images-0-DELETE"')
         self.assertNotContains(response, 'class="deletelink"')
 
         delete_response = self.client.get(
             f"/admin/portfolio/project/{self.project.id}/delete/"
         )
-        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(delete_response.status_code, status.HTTP_200_OK)
+        self.assertContains(delete_response, "Delete entire project?")
+        self.assertContains(delete_response, 'name="confirm_project_title"')
+        self.assertContains(delete_response, "This is not an image-only action")
 
-    def test_moderator_can_select_and_delete_user_uploaded_images(self):
+    def test_superuser_can_add_project_image_from_admin(self):
+        admin_user = User.objects.create_superuser(
+            username="image-upload-admin",
+            email="image-upload-admin@example.com",
+            password="test-pass-123",
+        )
+        self.client.force_login(admin_user)
+
+        image_list_response = self.client.get("/admin/portfolio/projectimage/")
+        self.assertEqual(image_list_response.status_code, status.HTTP_200_OK)
+        self.assertContains(image_list_response, "Add project image")
+
+        image_buffer = BytesIO()
+        Image.new("RGB", (16, 16), "white").save(image_buffer, format="PNG")
+        response = self.client.post(
+            "/admin/portfolio/projectimage/add/",
+            {
+                "project": self.project.id,
+                "image": SimpleUploadedFile(
+                    "admin-added.png",
+                    image_buffer.getvalue(),
+                    content_type="image/png",
+                ),
+                "media_type": ProjectImage.MEDIA_TYPE_IMAGE,
+                "processing_status": ProjectImage.STATUS_READY,
+                "caption": "Admin added image",
+                "alt_text": "",
+                "order": 2,
+                "_save": "Save",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_302_FOUND,
+            response.context["adminform"].form.errors if response.context else None,
+        )
+        self.assertTrue(
+            ProjectImage.objects.filter(
+                project=self.project,
+                caption="Admin added image",
+            ).exists()
+        )
+
+    def test_moderator_can_select_and_delete_images_but_cannot_delete_project(self):
         moderator = User.objects.create_user(
             username="image-moderator",
             email="image-moderator@example.com",
@@ -1487,13 +1521,27 @@ class ProjectCoverAdminTests(APITestCase):
         project_response = self.client.get(
             f"/admin/portfolio/project/{self.project.id}/change/"
         )
-        image_list_response = self.client.get("/admin/portfolio/projectimage/")
+        image_list_response = self.client.get(
+            f"/admin/portfolio/projectimage/?project__id__exact={self.project.id}"
+        )
 
         self.assertEqual(project_response.status_code, status.HTTP_200_OK)
-        self.assertContains(project_response, "select Delete? and save")
-        self.assertContains(project_response, 'name="images-0-DELETE"')
+        self.assertContains(project_response, "Manage project images")
+        self.assertNotContains(project_response, "Delete entire project")
+        self.assertNotContains(project_response, 'name="images-0-DELETE"')
         self.assertEqual(image_list_response.status_code, status.HTTP_200_OK)
         self.assertContains(image_list_response, 'class="action-select"')
+        self.assertContains(image_list_response, "Make selected image the project cover")
+        self.assertContains(image_list_response, "Delete selected images")
+        self.assertNotContains(image_list_response, "Add project image")
+
+        image_add_response = self.client.get("/admin/portfolio/projectimage/add/")
+        self.assertEqual(image_add_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        project_delete_response = self.client.get(
+            f"/admin/portfolio/project/{self.project.id}/delete/"
+        )
+        self.assertEqual(project_delete_response.status_code, status.HTTP_403_FORBIDDEN)
 
         confirmation = self.client.post(
             "/admin/portfolio/projectimage/",
@@ -1504,7 +1552,9 @@ class ProjectCoverAdminTests(APITestCase):
             },
         )
         self.assertEqual(confirmation.status_code, status.HTTP_200_OK)
-        self.assertContains(confirmation, "Are you sure")
+        self.assertContains(confirmation, "Delete selected project images?")
+        self.assertContains(confirmation, "The project itself will remain")
+        self.assertContains(confirmation, "Selected image")
 
         deleted = self.client.post(
             "/admin/portfolio/projectimage/",
@@ -1517,6 +1567,57 @@ class ProjectCoverAdminTests(APITestCase):
 
         self.assertEqual(deleted.status_code, status.HTTP_302_FOUND)
         self.assertFalse(ProjectImage.objects.filter(pk=self.selected_image.id).exists())
+        self.assertTrue(Project.objects.filter(pk=self.project.id).exists())
+
+    def test_cover_action_moves_selected_image_to_index_zero(self):
+        admin_user = User.objects.create_superuser(
+            username="cover-action-admin",
+            email="cover-action-admin@example.com",
+            password="test-pass-123",
+        )
+        self.client.force_login(admin_user)
+
+        response = self.client.post(
+            "/admin/portfolio/projectimage/",
+            {
+                "action": "set_as_project_cover",
+                "_selected_action": [self.selected_image.id],
+                "index": "0",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.project.refresh_from_db()
+        self.first_image.refresh_from_db()
+        self.selected_image.refresh_from_db()
+        self.assertEqual(self.project.cover_image_ref, self.selected_image)
+        self.assertEqual(self.selected_image.order, 0)
+        self.assertEqual(self.first_image.order, 1)
+
+    def test_project_delete_requires_exact_title_confirmation(self):
+        admin_user = User.objects.create_superuser(
+            username="project-delete-admin",
+            email="project-delete-admin@example.com",
+            password="test-pass-123",
+        )
+        self.client.force_login(admin_user)
+        delete_url = f"/admin/portfolio/project/{self.project.id}/delete/"
+
+        rejected = self.client.post(
+            delete_url,
+            {"post": "yes", "confirm_project_title": "Wrong title"},
+        )
+
+        self.assertEqual(rejected.status_code, status.HTTP_302_FOUND)
+        self.assertTrue(Project.objects.filter(pk=self.project.id).exists())
+
+        deleted = self.client.post(
+            delete_url,
+            {"post": "yes", "confirm_project_title": self.project.title},
+        )
+
+        self.assertEqual(deleted.status_code, status.HTTP_302_FOUND)
+        self.assertFalse(Project.objects.filter(pk=self.project.id).exists())
 
     def test_api_rejects_cover_from_another_project(self):
         other_project = Project.objects.create(owner=self.owner, title="Other project")

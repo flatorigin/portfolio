@@ -1,0 +1,66 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  {{ media }}
+  <script src="{% static 'admin/js/cancel.js' %}" async></script>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} delete-confirmation fo-project-delete-confirmation{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url opts|admin_urlname:'change' object.pk|admin_urlquote %}">{{ object|truncatewords:"18" }}</a>
+    &rsaquo; Delete entire project
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% if perms_lacking %}
+    <p>You do not have permission to delete all records related to this project.</p>
+    <ul id="deleted-objects">{{ perms_lacking|unordered_list }}</ul>
+  {% elif protected %}
+    <p>This project cannot be deleted because it has protected related records.</p>
+    <ul id="deleted-objects">{{ protected|unordered_list }}</ul>
+  {% else %}
+    <div class="fo-delete-confirmation-card">
+      <p class="fo-delete-kicker">Permanent action</p>
+      <h1>Delete entire project?</h1>
+      <p>
+        This deletes <strong>{{ object.title }}</strong> and all related project data. This is not an image-only action and cannot be undone.
+      </p>
+
+      {% include "admin/includes/object_delete_summary.html" %}
+
+      <form method="post" class="fo-title-confirmation-form">
+        {% csrf_token %}
+        <input type="hidden" name="post" value="yes">
+        {% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
+        {% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
+
+        <label for="confirm-project-title">
+          Type <strong>{{ confirmation_project_title }}</strong> to confirm
+        </label>
+        <input
+          id="confirm-project-title"
+          name="confirm_project_title"
+          type="text"
+          required
+          autocomplete="off"
+          spellcheck="false"
+        >
+
+        <div class="fo-confirmation-actions">
+          <input type="submit" value="Permanently delete entire project" class="fo-danger-submit">
+          <a href="#" class="button cancel-link">Cancel</a>
+        </div>
+      </form>
+    </div>
+  {% endif %}
+{% endblock %}
