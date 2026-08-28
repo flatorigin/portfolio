@@ -220,20 +220,58 @@ def infer_supported_image_content_type(file_name):
 
 
 def clean_floor_plan_prompt(*, title, category, location="", notes="", width="", length="", unit="ft"):
-    size_line = f"Known or requested full area size: {width or 'unknown'} x {length or 'unknown'} {unit or 'ft'}."
+    size_line = f"Confirmed full exterior size: {width or 'unknown'} x {length or 'unknown'} {unit or 'ft'}."
     return (
         "Create a clean, presentation-ready black-and-white top-down floor plan image from the supplied homeowner sketch. "
         "Keep the overall visual proportion and layout relationship of the original sketch. "
+        "Treat the confirmed exterior width and length as authoritative: the outer building footprint must use their exact "
+        "width-to-length ratio even when the source image or handwriting suggests a different canvas proportion. "
         "Use crisp thin black walls/lines on a white background, simple room/area labels only when they are legible or obvious, "
         "and avoid photorealistic rendering, furniture staging, textures, colors, shadows, decorative styling, or 3D perspective. "
         "This is a contractor communication preview, not a permit, CAD, design, engineering, or construction drawing. "
-        "If measurements are unclear, do not invent exact dimensions in the image. "
+        "Preserve clear source measurements, but do not invent dimensions or add measurement clutter. "
         f"Project title: {title or 'Untitled project'}. "
         f"Project category/type: {category or 'general project'}. "
         f"Project location/context: {location or 'not provided'}. "
         f"Project notes: {notes or 'not provided'}. "
         f"{size_line}"
     )
+
+
+def normalize_detected_plan_dimensions(payload, confidence_threshold=0.75):
+    source = payload if isinstance(payload, dict) else {}
+    unit = str(source.get("unit") or "ft").strip().lower()
+    if unit not in {"ft", "in", "m"}:
+        unit = "ft"
+
+    try:
+        width = float(source.get("width"))
+        length = float(source.get("length"))
+    except (TypeError, ValueError):
+        width = 0
+        length = 0
+    try:
+        confidence = max(0, min(1, float(source.get("confidence") or 0)))
+    except (TypeError, ValueError):
+        confidence = 0
+
+    clear_value = source.get("clear")
+    clear_requested = clear_value is True or str(clear_value).strip().lower() in {"1", "true", "yes"}
+    clear = clear_requested and width > 0 and length > 0 and confidence >= confidence_threshold
+    return {
+        "clear": clear,
+        "width": format(width, ".4f").rstrip("0").rstrip(".") if clear else "",
+        "length": format(length, ".4f").rstrip("0").rstrip(".") if clear else "",
+        "unit": unit,
+        "confidence": round(confidence, 2),
+        "width_label": str(source.get("width_label") or "").strip()[:80],
+        "length_label": str(source.get("length_label") or "").strip()[:80],
+        "detail": (
+            "Both exterior dimensions were read from the sketch. Confirm them before creating the floor plan."
+            if clear
+            else "Both exterior dimensions could not be read confidently. Enter the width and length manually."
+        ),
+    }
 
 
 class FeedbackTicketListCreateView(generics.ListCreateAPIView):
@@ -1128,6 +1166,39 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         plan = serializer.save(owner=self.request.user, visibility="private")
         self._sync_plan_derived_fields(plan)
 
+    def _read_sketch_source(self, plan, request):
+        sketch = request.FILES.get("sketch") or request.FILES.get("image")
+        source_image_id = str(request.data.get("source_image_id") or "").strip()
+
+        if sketch:
+            content_type = str(getattr(sketch, "content_type", "") or "").lower()
+            image_name = getattr(sketch, "name", "") or "uploaded-sketch.png"
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
+            if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
+            return sketch.read(), content_type, image_name
+
+        if source_image_id:
+            try:
+                source_plan_image = ProjectPlanImage.objects.get(id=source_image_id, project_plan=plan)
+            except ProjectPlanImage.DoesNotExist:
+                raise ValidationError({"source_image_id": "Could not find that planner image."})
+            image_name = source_plan_image.caption or getattr(source_plan_image.image, "name", "") or "planner-sketch.png"
+            content_type = infer_supported_image_content_type(getattr(source_plan_image.image, "name", ""))
+            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
+                raise ValidationError({"source_image_id": "Use a JPG, PNG, or WebP planner image for floor plan creation."})
+            try:
+                with source_plan_image.image.open("rb") as fh:
+                    image_bytes = fh.read(MAX_SKETCH_PLAN_IMAGE_SIZE + 1)
+            except Exception:
+                raise ValidationError({"source_image_id": "Could not read that planner image."})
+            if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
+                raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
+            return image_bytes, content_type, image_name
+
+        raise ValidationError({"sketch": "Choose an uploaded project image or upload a new sketch first."})
+
     @action(detail=False, methods=["get"], url_path="meta")
     def meta(self, request):
         profile = require_plan_workspace_profile(request.user)
@@ -1248,53 +1319,94 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         self._sync_plan_derived_fields(plan)
         return Response(ProjectPlanImageSerializer(image, context={"request": request}).data)
 
+    @action(detail=True, methods=["post"], url_path="analyze-sketch-dimensions")
+    def analyze_sketch_dimensions(self, request, pk=None):
+        plan = self.get_object()
+        feature = AIUsageEvent.Feature.PLANNER_ANALYZE
+        _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
+        image_bytes, content_type, _ = self._read_sketch_source(plan, request)
+        system_prompt = (
+            "Read only the full exterior dimensions printed on this floor-plan sketch. Return strict JSON with keys "
+            "width, length, unit, confidence, clear, width_label, length_label. width is the full left-to-right exterior "
+            "dimension and length is the full top-to-bottom exterior dimension. Values must be positive decimal numbers "
+            "in one unit: ft, in, or m. Convert mixed feet and inches to decimal feet. confidence must be from 0 to 1 "
+            "and should reflect the less certain of the two readings. Set clear to true only when both outermost dimensions "
+            "are legible and unambiguous. Do not use room dimensions, image proportions, common building sizes, or guesses. "
+            "When either exterior dimension is unclear, set clear to false and use null for the unclear numeric values."
+        )
+        user_prompt = (
+            "Inspect the sketch and identify the two complete outside dimensions. Preserve the source labels in width_label "
+            "and length_label so the user can verify the reading."
+        )
+        model_name = ""
+        response_text = ""
+        try:
+            result = generate_text_with_image(
+                feature=feature,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                image_bytes=image_bytes,
+                image_content_type=content_type,
+            )
+            model_name = result["model"]
+            response_text = result["text"]
+            dimensions = normalize_detected_plan_dimensions(parse_ai_json(response_text))
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=len(response_text),
+                status_value=AIUsageEvent.Status.SUCCESS,
+                usage=result.get("usage"),
+            )
+        except (AIServiceError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._record_ai_event(
+                user=request.user,
+                feature=feature,
+                model_name=model_name,
+                prompt_chars=len(system_prompt) + len(user_prompt),
+                response_chars=len(response_text),
+                status_value=AIUsageEvent.Status.ERROR,
+            )
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        remaining_after, _ = get_ai_remaining_today(request.user)
+        return Response(
+            {
+                "dimensions": dimensions,
+                "remaining_today": remaining_after,
+                "daily_limit": daily_limit,
+                "model": model_name,
+            }
+        )
+
     @action(detail=True, methods=["post"], url_path="sketch-to-clean-floor-plan")
     def sketch_to_clean_floor_plan(self, request, pk=None):
         plan = self.get_object()
         feature = AIUsageEvent.Feature.PLANNER_DRAFT
         _, _, daily_limit, _ = ensure_planner_ai_allowed(request.user, feature)
-        sketch = request.FILES.get("sketch") or request.FILES.get("image")
-        source_image_id = str(request.data.get("source_image_id") or "").strip()
-        image_bytes = None
-        content_type = ""
-        image_name = ""
-        source_plan_image = None
+        image_bytes, content_type, image_name = self._read_sketch_source(plan, request)
 
-        if sketch:
-            content_type = str(getattr(sketch, "content_type", "") or "").lower()
-            image_name = getattr(sketch, "name", "") or "uploaded-sketch.png"
-            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
-                raise ValidationError({"sketch": "Upload a JPG, PNG, or WebP sketch."})
-            if sketch.size and sketch.size > MAX_SKETCH_PLAN_IMAGE_SIZE:
-                raise ValidationError({"sketch": "Sketch images must be 15MB or smaller."})
-            image_bytes = sketch.read()
-        elif source_image_id:
-            try:
-                source_plan_image = ProjectPlanImage.objects.get(id=source_image_id, project_plan=plan)
-            except ProjectPlanImage.DoesNotExist:
-                raise ValidationError({"source_image_id": "Could not find that planner image."})
-            image_name = source_plan_image.caption or getattr(source_plan_image.image, "name", "") or "planner-sketch.png"
-            content_type = infer_supported_image_content_type(getattr(source_plan_image.image, "name", ""))
-            if content_type not in SUPPORTED_SKETCH_PLAN_CONTENT_TYPES:
-                raise ValidationError({"source_image_id": "Use a JPG, PNG, or WebP planner image for floor plan creation."})
-            try:
-                with source_plan_image.image.open("rb") as fh:
-                    image_bytes = fh.read(MAX_SKETCH_PLAN_IMAGE_SIZE + 1)
-            except Exception:
-                raise ValidationError({"source_image_id": "Could not read that planner image."})
-            if len(image_bytes) > MAX_SKETCH_PLAN_IMAGE_SIZE:
-                raise ValidationError({"source_image_id": "Sketch images must be 15MB or smaller."})
-        else:
-            raise ValidationError({"sketch": "Choose an uploaded project image or upload a new sketch first."})
+        width = str(request.data.get("width") or "").strip()
+        length = str(request.data.get("length") or "").strip()
+        unit = str(request.data.get("unit") or "ft").strip().lower()
+        if unit not in {"ft", "in", "m"}:
+            raise ValidationError({"unit": "Use ft, in, or m."})
+        try:
+            if float(width) <= 0 or float(length) <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValidationError({"detail": "Confirm a valid exterior width and length before creating the floor plan."})
 
         prompt = clean_floor_plan_prompt(
             title=plan.title,
             category=plan.project_type,
             location=plan.house_location,
             notes=plan.issue_summary or plan.notes or "",
-            width=request.data.get("width") or "",
-            length=request.data.get("length") or "",
-            unit=request.data.get("unit") or "ft",
+            width=width,
+            length=length,
+            unit=unit,
         )
         model_name = ""
         try:

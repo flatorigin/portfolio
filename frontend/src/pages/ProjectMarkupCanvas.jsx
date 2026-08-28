@@ -78,8 +78,18 @@ const MARKUP_SEGMENT_FONT_SIZE = 9;
 const CURVE_HANDLE_OFFSET = 34;
 const ROUGH_GRID_SIZE = 40;
 const ROUGH_SOFT_SNAP_DISTANCE = 9;
-const ROUGH_PLAN_GRID_MARGIN_UNITS = 4;
-const ROUGH_PLAN_DEFAULTS = { width: "20", length: "30", unit: "ft", snap: true, zoom: 100, showGrid: true, scaleSource: "manual" };
+const ROUGH_PLAN_MARGIN_FEET = 2;
+const ROUGH_PLAN_DEFAULTS = {
+  width: "",
+  length: "",
+  unit: "ft",
+  margin: "2",
+  dimensionsConfirmed: false,
+  snap: true,
+  zoom: 100,
+  showGrid: true,
+  scaleSource: "unset",
+};
 const ROUGH_PLAN_PADDING = 82;
 const DEFAULT_MEASUREMENT_CALIBRATION = { referenceLineId: "", length: "36", unit: "in", referencePx: 0, scale: 0 };
 const MARKUP_SELECTION_COLOR = "#2563eb";
@@ -111,6 +121,63 @@ function formatPlanNumber(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "";
   return String(Number.isInteger(number) ? number : Number(number.toFixed(2)));
+}
+
+function planUnitToFeet(value, unit) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return NaN;
+  if (unit === "in") return number / 12;
+  if (unit === "m") return number * 3.280839895;
+  return number;
+}
+
+function planFeetToUnit(value, unit) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return NaN;
+  if (unit === "in") return number * 12;
+  if (unit === "m") return number / 3.280839895;
+  return number;
+}
+
+function marginForPlanUnit(unit) {
+  return formatPlanNumber(planFeetToUnit(ROUGH_PLAN_MARGIN_FEET, unit));
+}
+
+function parsePlanDimension(value, unit = "ft") {
+  const raw = String(value ?? "").trim().toLowerCase().replace(/[’′]/g, "'").replace(/[”″]/g, '"');
+  if (!raw) return NaN;
+
+  if (unit === "ft") {
+    const feetAndInches = raw.match(/^(\d+(?:\.\d+)?)\s*(?:'|ft|feet|foot)(?:\s*(\d+(?:\.\d+)?)\s*(?:"|in|inch|inches))?$/i);
+    if (feetAndInches) {
+      const feet = Number(feetAndInches[1]);
+      const inches = Number(feetAndInches[2] || 0);
+      return inches < 12 ? feet + inches / 12 : NaN;
+    }
+  }
+
+  const numeric = raw.match(/^(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|in|inch|inches|m|meter|meters)?$/i);
+  return numeric ? Number(numeric[1]) : NaN;
+}
+
+function formatPlanDimension(value, unit = "ft") {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "Not set";
+  if (unit === "ft") {
+    let feet = Math.floor(number);
+    let inches = Math.round((number - feet) * 12);
+    if (inches === 12) {
+      feet += 1;
+      inches = 0;
+    }
+    return inches ? `${feet}' ${inches}"` : `${feet}'`;
+  }
+  return `${formatPlanNumber(number)} ${unit}`;
+}
+
+function normalizedPlanDimension(value, unit) {
+  const parsed = parsePlanDimension(value, unit);
+  return Number.isFinite(parsed) && parsed > 0 ? formatPlanNumber(parsed) : "";
 }
 
 function readImageDimensions(url) {
@@ -303,7 +370,7 @@ function pointFromEvent(event, svg, viewBox = { x: 0, y: 0, width: CANVAS_W, hei
 
 function softSnapPoint(point, enabled, geometry = null) {
   if (!enabled) return point;
-  const gridSize = geometry?.scale || ROUGH_GRID_SIZE;
+  const gridSize = geometry?.gridScale || geometry?.scale || ROUGH_GRID_SIZE;
   const snapDistance = Math.max(ROUGH_SOFT_SNAP_DISTANCE, Math.min(18, gridSize * 0.25));
   const originX = geometry?.x || 0;
   const originY = geometry?.y || 0;
@@ -366,9 +433,11 @@ function nearestPenHit(item, point, tolerance = 18) {
 }
 
 function roughPlanGeometry(roughPlan) {
-  const widthUnits = Math.max(1, Number(roughPlan?.width) || 1);
-  const lengthUnits = Math.max(1, Number(roughPlan?.length) || 1);
-  const marginUnits = Math.max(0, Number(roughPlan?.gridMarginUnits ?? ROUGH_PLAN_GRID_MARGIN_UNITS) || 0);
+  const unit = ["ft", "in", "m"].includes(roughPlan?.unit) ? roughPlan.unit : "ft";
+  const widthUnits = Math.max(1, parsePlanDimension(roughPlan?.width, unit) || 20);
+  const lengthUnits = Math.max(1, parsePlanDimension(roughPlan?.length, unit) || 30);
+  const marginUnits = Math.max(0, Number(roughPlan?.margin ?? marginForPlanUnit(unit)) || 0);
+  const gridIntervalUnits = unit === "in" ? 12 : 1;
   const gridWidthUnits = widthUnits + marginUnits * 2;
   const gridLengthUnits = lengthUnits + marginUnits * 2;
   const availableW = CANVAS_W - ROUGH_PLAN_PADDING * 2;
@@ -397,7 +466,11 @@ function roughPlanGeometry(roughPlan) {
     designWidthPx,
     designHeightPx,
     scale,
-    unit: roughPlan?.unit || "ft",
+    gridScale: scale * gridIntervalUnits,
+    gridIntervalUnits,
+    gridColumnCount: Math.floor(gridWidthUnits / gridIntervalUnits),
+    gridRowCount: Math.floor(gridLengthUnits / gridIntervalUnits),
+    unit,
   };
 }
 
@@ -553,8 +626,9 @@ function backgroundImageFrame(imageDimensions = null) {
 }
 
 function cleanPlanMeasurementGeometry(roughPlan, imageDimensions = null) {
-  const widthUnits = Math.max(1, Number(roughPlan?.width) || Number(ROUGH_PLAN_DEFAULTS.width) || 20);
-  const lengthUnits = Math.max(1, Number(roughPlan?.length) || Number(ROUGH_PLAN_DEFAULTS.length) || 30);
+  const unit = roughPlan?.unit || "ft";
+  const widthUnits = Math.max(1, parsePlanDimension(roughPlan?.width, unit) || 20);
+  const lengthUnits = Math.max(1, parsePlanDimension(roughPlan?.length, unit) || 30);
   const frame = backgroundImageFrame(imageDimensions);
   const inset = Math.min(34, Math.max(16, Math.min(frame.width, frame.height) * 0.035));
   const designWidthPx = Math.max(1, frame.width - inset * 2);
@@ -571,7 +645,7 @@ function cleanPlanMeasurementGeometry(roughPlan, imageDimensions = null) {
     widthUnits,
     lengthUnits,
     scale: Math.min(designWidthPx / widthUnits, designHeightPx / lengthUnits),
-    unit: roughPlan?.unit || "ft",
+    unit,
   };
 }
 
@@ -1719,6 +1793,7 @@ export default function ProjectMarkupCanvas() {
   const lastToolPointerTypeRef = useRef("");
   const modeRequestHandledRef = useRef(false);
   const backgroundRequestHandledRef = useRef(false);
+  const dimensionAnalysisRequestRef = useRef(0);
   const activeTouchPointersRef = useRef(new Map());
   const pinchGestureRef = useRef(null);
   const touchDrawingSnapshotRef = useRef(null);
@@ -1728,6 +1803,8 @@ export default function ProjectMarkupCanvas() {
   const measurementCalibrationPromptShownRef = useRef(false);
   const lastCalibrationSelectionKeyRef = useRef("");
   const [plan, setPlan] = useState(null);
+  const [planTitleDraft, setPlanTitleDraft] = useState("");
+  const [titleSaving, setTitleSaving] = useState(false);
   const [projectImage, setProjectImage] = useState(null);
   const [projectImages, setProjectImages] = useState([]);
   const [loadingPlan, setLoadingPlan] = useState(Boolean(planId || projectId));
@@ -1774,6 +1851,9 @@ export default function ProjectMarkupCanvas() {
   const [sketchBusy, setSketchBusy] = useState(false);
   const [sketchStatus, setSketchStatus] = useState({ phase: "idle", progress: 0, fileName: "", detail: "" });
   const [sketchSource, setSketchSource] = useState(null);
+  const [dimensionAnalysisBusy, setDimensionAnalysisBusy] = useState(false);
+  const [dimensionAnalysis, setDimensionAnalysis] = useState({ phase: "idle", confidence: 0, detail: "", widthLabel: "", lengthLabel: "" });
+  const [confirmingDimensions, setConfirmingDimensions] = useState(false);
   const [hideTextAndMeasurements, setHideTextAndMeasurements] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
@@ -1931,6 +2011,7 @@ export default function ProjectMarkupCanvas() {
       .then(({ data }) => {
         if (!alive) return;
         setPlan(data);
+        setPlanTitleDraft(data?.title || "Untitled issue");
         const markup = safeMarkupData(data?.markup_data);
         const selectedImage = selectedImageId
           ? (data?.images || []).find((image) => String(image.id) === String(selectedImageId))
@@ -2174,6 +2255,10 @@ export default function ProjectMarkupCanvas() {
 
   const isRoughPlan = canvasMode === "rough_plan";
   const roughGeometry = useMemo(() => roughPlanGeometry(roughPlan), [roughPlan]);
+  const planWidthUnits = parsePlanDimension(roughPlan.width, roughPlan.unit);
+  const planLengthUnits = parsePlanDimension(roughPlan.length, roughPlan.unit);
+  const planDimensionsValid = Number.isFinite(planWidthUnits) && planWidthUnits > 0 && Number.isFinite(planLengthUnits) && planLengthUnits > 0;
+  const planDimensionsConfirmed = planDimensionsValid && roughPlan.dimensionsConfirmed === true;
   const hasAiCleanPlanOverlay = !isRoughPlan && annotations.some((item) => item?.source === "ai_clean_plan_trace");
   const cleanPlanGeometry = useMemo(
     () => cleanPlanMeasurementGeometry(roughPlan, backgroundImageDimensions),
@@ -2194,8 +2279,8 @@ export default function ProjectMarkupCanvas() {
     ? roughGeometry
     : calibratedMeasurementGeometry || (hasAiCleanPlanOverlay ? cleanPlanGeometry : null);
   const modeLabel = isRoughPlan ? "Rough Plan" : hasAiCleanPlanOverlay ? "AI Plan Markup" : "Photo Markup";
-  const showRoughGrid = isRoughPlan && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
-  const canSnapRoughPlan = isRoughPlan && roughPlan.snap;
+  const showRoughGrid = isRoughPlan && planDimensionsValid && roughPlan.showGrid !== false && roughPlan.grid_visible !== false;
+  const canSnapRoughPlan = isRoughPlan && planDimensionsConfirmed && roughPlan.snap;
   const viewportBase = useMemo(() => {
     const aspect = clamp(canvasFrameAspect, 0.35, 3);
     const width = Math.min(CANVAS_W, CANVAS_H * aspect);
@@ -2290,7 +2375,7 @@ export default function ProjectMarkupCanvas() {
       snapshot_url: versionOverrides.snapshot_url || "",
       snapshot_image_id: versionOverrides.snapshot_image_id || null,
       annotations: normalizedAnnotations,
-      rough_plan: isRoughPlan ? roughPlan : undefined,
+      rough_plan: roughPlan,
       visible_layers: visibleLayers,
       locked_layers: lockedLayers,
       measurement_calibration: measurementCalibration,
@@ -2303,7 +2388,7 @@ export default function ProjectMarkupCanvas() {
       canvas: { width: CANVAS_W, height: CANVAS_H },
       canvas_mode: canvasMode,
       version_type: isRoughPlan ? "rough_plan" : "photo_markup",
-      rough_plan: isRoughPlan ? roughPlan : undefined,
+      rough_plan: roughPlan,
       background_url: isRoughPlan ? "" : background_url,
       annotations: normalizedAnnotations,
       visible_layers: visibleLayers,
@@ -2393,6 +2478,189 @@ export default function ProjectMarkupCanvas() {
     return data;
   }
 
+  async function savePlannerTitle() {
+    if (!planId || !plan || titleSaving) return;
+    const nextTitle = planTitleDraft.trim().slice(0, 200);
+    if (!nextTitle) {
+      setPlanTitleDraft(plan.title || "Untitled issue");
+      setMessage("Planner name cannot be empty.");
+      return;
+    }
+    if (nextTitle === plan.title) return;
+    setTitleSaving(true);
+    try {
+      const { data } = await api.patch(`/project-plans/${planId}/`, { title: nextTitle });
+      setPlan(data);
+      setPlanTitleDraft(data.title || nextTitle);
+      setMessage("Planner name saved.");
+    } catch (err) {
+      setPlanTitleDraft(plan.title || "Untitled issue");
+      setMessage(normalizeError(err, "Could not save the planner name."));
+    } finally {
+      setTitleSaving(false);
+    }
+  }
+
+  function handlePlannerTitleKeyDown(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.blur();
+    } else if (event.key === "Escape") {
+      setPlanTitleDraft(plan?.title || "Untitled issue");
+      event.currentTarget.blur();
+    }
+  }
+
+  function updatePlanDimension(field, value) {
+    setRoughPlan((prev) => ({
+      ...prev,
+      [field]: value,
+      dimensionsConfirmed: false,
+      scaleSource: "manual",
+    }));
+    setDimensionAnalysis((prev) => ({ ...prev, phase: "manual", detail: "Confirm the exterior dimensions before creating the floor plan." }));
+  }
+
+  function changePlanUnit(nextUnit) {
+    if (!["ft", "in", "m"].includes(nextUnit)) return;
+    setRoughPlan((prev) => {
+      const currentUnit = prev.unit || "ft";
+      const convert = (value) => {
+        const parsed = parsePlanDimension(value, currentUnit);
+        if (!Number.isFinite(parsed) || parsed <= 0) return value;
+        return formatPlanNumber(planFeetToUnit(planUnitToFeet(parsed, currentUnit), nextUnit));
+      };
+      return {
+        ...prev,
+        width: convert(prev.width),
+        length: convert(prev.length),
+        unit: nextUnit,
+        margin: marginForPlanUnit(nextUnit),
+        dimensionsConfirmed: false,
+        scaleSource: "manual",
+      };
+    });
+    setDimensionAnalysis((prev) => ({ ...prev, phase: "manual", detail: "Confirm the exterior dimensions before creating the floor plan." }));
+  }
+
+  async function confirmPlanDimensions() {
+    const width = normalizedPlanDimension(roughPlan.width, roughPlan.unit);
+    const length = normalizedPlanDimension(roughPlan.length, roughPlan.unit);
+    if (!width || !length) {
+      setMessage("Enter a valid exterior width and length. Feet can be entered as 24' 3\" or 24.25.");
+      return;
+    }
+    const nextRoughPlan = {
+      ...roughPlan,
+      width,
+      length,
+      margin: marginForPlanUnit(roughPlan.unit),
+      dimensionsConfirmed: true,
+      scaleSource: roughPlan.scaleSource === "detected" ? "confirmed_detected" : "confirmed_manual",
+      showGrid: true,
+      grid_visible: true,
+    };
+    setRoughPlan(nextRoughPlan);
+    setConfirmingDimensions(true);
+    try {
+      if (planId) {
+        const previousMarkup = safeMarkupData(plan?.markup_data);
+        await patchMarkupData(
+          {
+            ...previousMarkup,
+            rough_plan: nextRoughPlan,
+            updated_at: new Date().toISOString(),
+          },
+          "Exterior dimensions confirmed. The grid is ready.",
+        );
+      } else {
+        setMessage("Exterior dimensions confirmed. The grid is ready.");
+      }
+      setDimensionAnalysis((prev) => ({ ...prev, phase: "confirmed", detail: "Exterior dimensions confirmed." }));
+    } catch (err) {
+      setRoughPlan((prev) => ({ ...prev, dimensionsConfirmed: false }));
+      setMessage(normalizeError(err, "Could not save the plan dimensions."));
+    } finally {
+      setConfirmingDimensions(false);
+    }
+  }
+
+  async function analyzeSketchDimensions(source) {
+    const requestId = dimensionAnalysisRequestRef.current + 1;
+    dimensionAnalysisRequestRef.current = requestId;
+    setRoughPlan((prev) => ({
+      ...prev,
+      width: "",
+      length: "",
+      margin: marginForPlanUnit(prev.unit || "ft"),
+      dimensionsConfirmed: false,
+      scaleSource: "analyzing",
+    }));
+
+    if (!planId) {
+      setDimensionAnalysis({
+        phase: "manual",
+        confidence: 0,
+        detail: "Enter both exterior dimensions manually, then confirm them.",
+        widthLabel: "",
+        lengthLabel: "",
+      });
+      return;
+    }
+
+    setDimensionAnalysisBusy(true);
+    setDimensionAnalysis({ phase: "analyzing", confidence: 0, detail: "Reading exterior dimensions from the sketch...", widthLabel: "", lengthLabel: "" });
+    try {
+      const formData = new FormData();
+      if (source.kind === "upload" && source.file) formData.append("sketch", source.file);
+      else if (source.kind === "existing") formData.append("source_image_id", source.imageId);
+      else throw new Error("Choose a sketch before reading dimensions.");
+      const { data } = await api.post(`/project-plans/${planId}/analyze-sketch-dimensions/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (requestId !== dimensionAnalysisRequestRef.current) return;
+      const dimensions = data?.dimensions || {};
+      if (dimensions.clear && dimensions.width && dimensions.length) {
+        const unit = ["ft", "in", "m"].includes(dimensions.unit) ? dimensions.unit : "ft";
+        setRoughPlan((prev) => ({
+          ...prev,
+          width: String(dimensions.width),
+          length: String(dimensions.length),
+          unit,
+          margin: marginForPlanUnit(unit),
+          dimensionsConfirmed: false,
+          scaleSource: "detected",
+        }));
+        setDimensionAnalysis({
+          phase: "detected",
+          confidence: Number(dimensions.confidence || 0),
+          detail: dimensions.detail || "Review and confirm the exterior dimensions.",
+          widthLabel: dimensions.width_label || "",
+          lengthLabel: dimensions.length_label || "",
+        });
+      } else {
+        setDimensionAnalysis({
+          phase: "manual",
+          confidence: Number(dimensions.confidence || 0),
+          detail: dimensions.detail || "Both exterior dimensions could not be read confidently. Enter them manually.",
+          widthLabel: dimensions.width_label || "",
+          lengthLabel: dimensions.length_label || "",
+        });
+      }
+    } catch (err) {
+      if (requestId !== dimensionAnalysisRequestRef.current) return;
+      setDimensionAnalysis({
+        phase: "manual",
+        confidence: 0,
+        detail: `${normalizeError(err, "Could not read the sketch dimensions.")} Enter them manually to continue.`,
+        widthLabel: "",
+        lengthLabel: "",
+      });
+    } finally {
+      if (requestId === dimensionAnalysisRequestRef.current) setDimensionAnalysisBusy(false);
+    }
+  }
+
   function commitAnnotations(nextAnnotations) {
     setHistory((prev) => ({ past: [...prev.past, annotations].slice(-30), future: [] }));
     setAnnotations(nextAnnotations);
@@ -2476,14 +2744,15 @@ export default function ProjectMarkupCanvas() {
       return;
     }
     const previewUrl = URL.createObjectURL(file);
+    const nextSource = {
+      kind: "upload",
+      file,
+      previewUrl,
+      name: file.name || "Uploaded sketch",
+    };
     setSketchSource((prev) => {
       if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
-      return {
-        kind: "upload",
-        file,
-        previewUrl,
-        name: file.name || "Uploaded sketch",
-      };
+      return nextSource;
     });
     readImageDimensions(previewUrl).then((dimensions) => {
       if (!dimensions?.width || !dimensions?.height) return;
@@ -2493,24 +2762,26 @@ export default function ProjectMarkupCanvas() {
           : prev,
       );
     });
-    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected. Create the floor-plan PNG when ready." });
-    setMessage("New sketch selected for floor-plan image creation.");
+    setSketchStatus({ phase: "selected", progress: 0, fileName: file.name || "New sketch", detail: "New sketch selected. Confirm its exterior dimensions to continue." });
+    setMessage("New sketch selected. Reading its exterior dimensions now.");
+    void analyzeSketchDimensions(nextSource);
   }
 
   function selectExistingSketchImage(image) {
     const imageUrl = projectImageUrl(image);
     if (!imageUrl) return;
+    const nextSource = {
+      kind: "existing",
+      imageId: image.id,
+      imageUrl,
+      previewUrl: imageUrl,
+      name: image.caption || "Project image",
+      width: Number(image.width || image.image_width || image.natural_width || 0) || undefined,
+      height: Number(image.height || image.image_height || image.natural_height || 0) || undefined,
+    };
     setSketchSource((prev) => {
       if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
-      return {
-        kind: "existing",
-        imageId: image.id,
-        imageUrl,
-        previewUrl: imageUrl,
-        name: image.caption || "Project image",
-        width: Number(image.width || image.image_width || image.natural_width || 0) || undefined,
-        height: Number(image.height || image.image_height || image.natural_height || 0) || undefined,
-      };
+      return nextSource;
     });
     readImageDimensions(imageUrl).then((dimensions) => {
       if (!dimensions?.width || !dimensions?.height) return;
@@ -2520,8 +2791,9 @@ export default function ProjectMarkupCanvas() {
           : prev,
       );
     });
-    setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected. Create the floor-plan PNG when ready." });
-    setMessage("Project image selected for floor-plan image creation.");
+    setSketchStatus({ phase: "selected", progress: 0, fileName: image.caption || "Project image", detail: "Project image selected. Confirm its exterior dimensions to continue." });
+    setMessage("Project image selected. Reading its exterior dimensions now.");
+    void analyzeSketchDimensions(nextSource);
   }
 
   async function fileFromExistingSketchSource(source) {
@@ -2553,6 +2825,12 @@ export default function ProjectMarkupCanvas() {
       setMessage(detail);
       return;
     }
+    if (!planDimensionsConfirmed) {
+      const detail = "Confirm a valid exterior width and length before creating the floor-plan PNG.";
+      setSketchStatus((prev) => ({ ...prev, phase: "error", detail }));
+      setMessage(detail);
+      return;
+    }
 
     setSketchBusy(true);
     setSketchStatus({ phase: sketchSource.kind === "existing" ? "preparing" : "uploading", progress: 0, fileName: sketchSource.name || "Sketch image", detail: "" });
@@ -2581,6 +2859,10 @@ export default function ProjectMarkupCanvas() {
         formData.append("source_width", String(sketchSource.width));
         formData.append("source_height", String(sketchSource.height));
       }
+      formData.append("width", formatPlanNumber(planWidthUnits));
+      formData.append("length", formatPlanNumber(planLengthUnits));
+      formData.append("unit", roughPlan.unit || "ft");
+      formData.append("margin", marginForPlanUnit(roughPlan.unit || "ft"));
 
       const { data } = await api.post(endpoint, formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -4238,7 +4520,21 @@ export default function ProjectMarkupCanvas() {
               <SymbolIcon name="arrow_back" className="text-[22px]" />
             </Link>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">Markup canvas</h1>
+              <h1 className="truncate text-base font-semibold text-slate-950 max-lg:hidden">Markup canvas</h1>
+              {planId ? (
+                <input
+                  type="text"
+                  value={planTitleDraft}
+                  onChange={(event) => setPlanTitleDraft(event.target.value)}
+                  onBlur={savePlannerTitle}
+                  onKeyDown={handlePlannerTitleKeyDown}
+                  disabled={titleSaving}
+                  aria-label="Planner name"
+                  className="hidden h-9 min-w-0 max-w-[42vw] rounded-lg border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 disabled:opacity-60 max-lg:block"
+                />
+              ) : (
+                <h1 className="truncate text-sm font-semibold text-slate-950 lg:hidden">Markup canvas</h1>
+              )}
               <p className="text-xs text-slate-500 max-lg:hidden">
                 {isProjectImageMode
                   ? "Markup will stay on this project image"
@@ -4632,11 +4928,21 @@ export default function ProjectMarkupCanvas() {
                             type="button"
                             disabled={sketchBusy}
                             onClick={() => {
+                              dimensionAnalysisRequestRef.current += 1;
+                              setDimensionAnalysisBusy(false);
                               setSketchSource((prev) => {
                                 if (prev?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(prev.previewUrl);
                                 return null;
                               });
                               setSketchStatus({ phase: "idle", progress: 0, fileName: "", detail: "" });
+                              setDimensionAnalysis({ phase: "idle", confidence: 0, detail: "", widthLabel: "", lengthLabel: "" });
+                              setRoughPlan((prev) => ({
+                                ...prev,
+                                width: "",
+                                length: "",
+                                dimensionsConfirmed: false,
+                                scaleSource: "unset",
+                              }));
                             }}
                             className="shrink-0 text-[11px] font-medium text-slate-500 hover:text-slate-900 disabled:opacity-60"
                           >
@@ -4645,9 +4951,82 @@ export default function ProjectMarkupCanvas() {
                         </div>
                       </div>
                     ) : null}
+                    <div className="mt-3 border-t border-slate-200 pt-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-slate-800">Exterior plan size</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                            planDimensionsConfirmed
+                              ? "bg-emerald-100 text-emerald-700"
+                              : dimensionAnalysisBusy
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {planDimensionsConfirmed ? "Confirmed" : dimensionAnalysisBusy ? "Reading" : "Needs confirmation"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                          Use the full outside width and length. Unclear handwriting must be entered manually.
+                        </p>
+                        <div className="mt-3 grid grid-cols-[1fr_1fr_66px] gap-2">
+                          <label className="block">
+                            <span className="mb-1 block text-[11px] text-slate-500">Width</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={roughPlan.width}
+                              onChange={(event) => updatePlanDimension("width", event.target.value)}
+                              placeholder={roughPlan.unit === "ft" ? "24' 3\"" : "24.25"}
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-[11px] text-slate-500">Length</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={roughPlan.length}
+                              onChange={(event) => updatePlanDimension("length", event.target.value)}
+                              placeholder={roughPlan.unit === "ft" ? "30'" : "30"}
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
+                            <select
+                              value={roughPlan.unit}
+                              onChange={(event) => changePlanUnit(event.target.value)}
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+                            >
+                              <option value="ft">ft</option>
+                              <option value="in">in</option>
+                              <option value="m">m</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="mt-2 text-[11px] leading-4 text-slate-500">
+                          {dimensionAnalysisBusy
+                            ? "Reading the two outside measurements..."
+                            : dimensionAnalysis.detail || "Choose a sketch for automatic reading, or enter both dimensions manually."}
+                          {dimensionAnalysis.widthLabel || dimensionAnalysis.lengthLabel ? (
+                            <span className="mt-1 block text-slate-600">
+                              Read from sketch: {dimensionAnalysis.widthLabel || "width unclear"} x {dimensionAnalysis.lengthLabel || "length unclear"}
+                            </span>
+                          ) : null}
+                          <span className="mt-1 block">Canvas grid adds {formatPlanDimension(marginForPlanUnit(roughPlan.unit), roughPlan.unit)} on each side.</span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={dimensionAnalysisBusy || confirmingDimensions || !planDimensionsValid}
+                          onClick={confirmPlanDimensions}
+                          className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-45"
+                        >
+                          <SymbolIcon name={planDimensionsConfirmed ? "check_circle" : "check"} className="text-[17px]" />
+                          {confirmingDimensions ? "Saving..." : planDimensionsConfirmed ? "Dimensions confirmed" : "Confirm dimensions"}
+                        </button>
+                    </div>
                     <button
                       type="button"
-                      disabled={sketchBusy || !sketchSource}
+                      disabled={sketchBusy || dimensionAnalysisBusy || !sketchSource || !planDimensionsConfirmed}
                       onClick={createCleanFloorPlanFromSketchSource}
                       className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                     >
@@ -5568,7 +5947,25 @@ export default function ProjectMarkupCanvas() {
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm max-lg:flex max-lg:min-h-0 max-lg:w-full max-lg:flex-1 max-lg:flex-col max-lg:rounded-none max-lg:border-0 max-lg:p-0 max-lg:shadow-none">
             <div className="relative mb-3 flex min-h-10 items-center justify-between gap-3 text-sm text-slate-500 max-lg:hidden">
-              <span>Planner: <span className="text-slate-700">{plan?.title || "Untitled issue"}</span></span>
+              {planId ? (
+                <label className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="shrink-0">Planner:</span>
+                  <input
+                    type="text"
+                    value={planTitleDraft}
+                    onChange={(event) => setPlanTitleDraft(event.target.value)}
+                    onBlur={savePlannerTitle}
+                    onKeyDown={handlePlannerTitleKeyDown}
+                    disabled={titleSaving}
+                    aria-label="Planner name"
+                    className="h-9 min-w-0 max-w-md flex-1 rounded-lg border border-transparent bg-transparent px-2 font-medium text-slate-700 outline-none hover:border-slate-200 hover:bg-white focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/15 disabled:opacity-60"
+                  />
+                  <SymbolIcon name="edit" className="shrink-0 text-[17px] text-slate-400" />
+                  {titleSaving ? <span className="text-xs text-slate-400">Saving...</span> : null}
+                </label>
+              ) : (
+                <span>Planner: <span className="text-slate-700">{plan?.title || "Untitled issue"}</span></span>
+              )}
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{Math.round(viewport.zoom * 100)}%</span>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{modeLabel}</span>
@@ -5584,11 +5981,15 @@ export default function ProjectMarkupCanvas() {
             </div>
             {isRoughPlan ? (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 max-lg:hidden">
-                <span className="font-semibold text-slate-800">{roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}</span>
-                <span>Area: {(Number(roughPlan.width) || 0) * (Number(roughPlan.length) || 0)} sq {roughPlan.unit}</span>
-                <span>{showRoughGrid ? `Grid: ${roughGeometry.gridWidthUnits} x ${roughGeometry.gridLengthUnits} ${roughGeometry.unit}` : "Grid: hidden"}</span>
-                <span>{showRoughGrid ? `Interval: 1 ${roughGeometry.unit}` : ""}</span>
-                <span>{showRoughGrid ? `${roughGeometry.marginUnits} ${roughGeometry.unit} margin each side` : ""}</span>
+                <span className="font-semibold text-slate-800">
+                  {planDimensionsValid
+                    ? `${formatPlanDimension(planWidthUnits, roughPlan.unit)} x ${formatPlanDimension(planLengthUnits, roughPlan.unit)}`
+                    : "Exterior size not set"}
+                </span>
+                <span>{planDimensionsValid ? `Area: ${formatPlanNumber(planWidthUnits * planLengthUnits)} sq ${roughPlan.unit}` : "Confirm width and length to build the grid"}</span>
+                <span>{showRoughGrid ? `Grid: ${formatPlanNumber(roughGeometry.gridWidthUnits)} x ${formatPlanNumber(roughGeometry.gridLengthUnits)} ${roughGeometry.unit}` : "Grid: waiting for dimensions"}</span>
+                <span>{showRoughGrid ? `Interval: ${formatPlanNumber(roughGeometry.gridIntervalUnits)} ${roughGeometry.unit}` : ""}</span>
+                <span>{showRoughGrid ? `${formatPlanDimension(roughGeometry.marginUnits, roughGeometry.unit)} margin each side` : ""}</span>
                 <span>Soft snap: {canSnapRoughPlan ? "on" : "off"}</span>
                 <span>Zoom: {Math.round(viewport.zoom * 100)}%</span>
               </div>
@@ -5817,8 +6218,8 @@ export default function ProjectMarkupCanvas() {
                       strokeWidth="1.25"
                       strokeOpacity="0.28"
                     />
-                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.gridWidthUnits) + 1 }).map((_, index) => {
-                      const x = roughGeometry.x + index * roughGeometry.scale;
+                    {showRoughGrid ? Array.from({ length: roughGeometry.gridColumnCount + 1 }).map((_, index) => {
+                      const x = roughGeometry.x + index * roughGeometry.gridScale;
                       const isMajor = index % 5 === 0;
                       return (
                         <line
@@ -5833,8 +6234,8 @@ export default function ProjectMarkupCanvas() {
                         />
                       );
                     }) : null}
-                    {showRoughGrid ? Array.from({ length: Math.floor(roughGeometry.gridLengthUnits) + 1 }).map((_, index) => {
-                      const y = roughGeometry.y + index * roughGeometry.scale;
+                    {showRoughGrid ? Array.from({ length: roughGeometry.gridRowCount + 1 }).map((_, index) => {
+                      const y = roughGeometry.y + index * roughGeometry.gridScale;
                       const isMajor = index % 5 === 0;
                       return (
                         <line
@@ -5863,7 +6264,9 @@ export default function ProjectMarkupCanvas() {
                       />
                     ) : null}
                     <text x="36" y="54" fill="#64748b" fillOpacity="0.72" fontSize="20" fontWeight="700">
-                      Plan: {roughPlan.width || 0} x {roughPlan.length || 0} {roughPlan.unit}
+                      {planDimensionsValid
+                        ? `Plan: ${formatPlanDimension(planWidthUnits, roughPlan.unit)} x ${formatPlanDimension(planLengthUnits, roughPlan.unit)}`
+                        : "Choose a sketch and confirm its exterior dimensions"}
                     </text>
                   </g>
 	              ) : backgroundUrl ? (

@@ -1278,6 +1278,78 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("JPG, PNG, or WebP", str(response.data))
 
+    @patch("portfolio.views.generate_text_with_image")
+    def test_analyze_sketch_dimensions_returns_only_clear_exterior_measurements(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = {
+            "text": json.dumps(
+                {
+                    "width": 24.25,
+                    "length": 32.25,
+                    "unit": "ft",
+                    "confidence": 0.94,
+                    "clear": True,
+                    "width_label": "24'-3\"",
+                    "length_label": "32'-3\"",
+                }
+            ),
+            "model": "gpt-test",
+        }
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Measured sketch")
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/analyze-sketch-dimensions/",
+            {"sketch": sketch},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["dimensions"]["clear"])
+        self.assertEqual(response.data["dimensions"]["width"], "24.25")
+        self.assertEqual(response.data["dimensions"]["length"], "32.25")
+        self.assertEqual(response.data["dimensions"]["width_label"], "24'-3\"")
+        self.assertEqual(
+            AIUsageEvent.objects.filter(
+                user=self.homeowner,
+                feature=AIUsageEvent.Feature.PLANNER_ANALYZE,
+                status=AIUsageEvent.Status.SUCCESS,
+            ).count(),
+            1,
+        )
+
+    @patch("portfolio.views.generate_text_with_image")
+    def test_analyze_sketch_dimensions_requires_manual_entry_when_uncertain(self, mock_generate_text_with_image):
+        mock_generate_text_with_image.return_value = {
+            "text": json.dumps(
+                {
+                    "width": 24.25,
+                    "length": None,
+                    "unit": "ft",
+                    "confidence": 0.61,
+                    "clear": False,
+                    "width_label": "24'-3\"",
+                    "length_label": "unclear",
+                }
+            ),
+            "model": "gpt-test",
+        }
+        plan = ProjectPlan.objects.create(owner=self.contractor, title="Client sketch")
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.contractor)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/analyze-sketch-dimensions/",
+            {"sketch": sketch},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["dimensions"]["clear"])
+        self.assertEqual(response.data["dimensions"]["width"], "")
+        self.assertEqual(response.data["dimensions"]["length"], "")
+        self.assertIn("manually", response.data["dimensions"]["detail"].lower())
+
     @patch("portfolio.views.generate_image_from_image")
     def test_sketch_to_clean_floor_plan_saves_generated_planner_image(self, mock_generate_image_from_image):
         mock_generate_image_from_image.return_value = {
@@ -1298,10 +1370,27 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
         self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
+        self.assertIn("Confirmed full exterior size: 12 x 18 ft", mock_generate_image_from_image.call_args.kwargs["prompt"])
         self.assertEqual(
             AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-image-test", status=AIUsageEvent.Status.SUCCESS).count(),
             1,
         )
+
+    @patch("portfolio.views.generate_image_from_image")
+    def test_sketch_to_clean_floor_plan_requires_confirmed_dimensions(self, mock_generate_image_from_image):
+        plan = ProjectPlan.objects.create(owner=self.homeowner, title="Deck sketch")
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.homeowner)
+        response = self.client.post(
+            f"/api/project-plans/{plan.id}/sketch-to-clean-floor-plan/",
+            {"sketch": sketch},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("exterior width and length", str(response.data).lower())
+        mock_generate_image_from_image.assert_not_called()
 
     @patch("portfolio.views.generate_image_from_image")
     def test_contractor_workspace_can_generate_clean_floor_plan_image(self, mock_generate_image_from_image):
@@ -1323,7 +1412,7 @@ class ProjectPlannerTests(APITestCase):
         self.client.force_authenticate(user=self.contractor)
         response = self.client.post(
             f"/api/project-plans/{workspace.id}/sketch-to-clean-floor-plan/",
-            {"sketch": sketch},
+            {"sketch": sketch, "width": "16", "length": "24", "unit": "ft"},
             format="multipart",
         )
 
