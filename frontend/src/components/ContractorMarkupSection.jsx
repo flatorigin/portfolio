@@ -37,7 +37,6 @@ export default function ContractorMarkupSection({ isVisible = false }) {
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [creatingIntent, setCreatingIntent] = useState("");
-  const [showCreateOptions, setShowCreateOptions] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
 
@@ -75,7 +74,11 @@ export default function ContractorMarkupSection({ isVisible = false }) {
     setCreatingIntent(intent);
     try {
       const { data } = await api.post("/project-plans/", {
-        title: intent === "floor_plan" ? "Untitled floor plan" : "Untitled image markup",
+        title: intent === "floor_plan"
+          ? "Untitled floor plan"
+          : intent === "image_markup"
+            ? "Untitled image markup"
+            : "Untitled visual workspace",
         status: "planning",
         markup_data: {
           workspace_kind: CONTRACTOR_WORKSPACE_KIND,
@@ -216,79 +219,26 @@ export default function ContractorMarkupSection({ isVisible = false }) {
             );
           })}
 
-          {showCreateOptions && !atLimit ? (
-            <div className="relative flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-400 bg-slate-50 px-5 py-6 text-center">
-              <button
-                type="button"
-                onClick={() => setShowCreateOptions(false)}
-                disabled={Boolean(creatingIntent)}
-                className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-white hover:text-slate-900 disabled:opacity-50"
-                aria-label="Close workspace options"
-                title="Close"
-              >
-                <SymbolIcon name="close" className="text-[19px]" />
-              </button>
-              <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm ring-1 ring-slate-200">
-                <SymbolIcon name="add" className="text-[28px]" />
-              </span>
-              <div className="text-lg font-semibold text-slate-900">Choose a workspace</div>
-              <div className="mt-1 max-w-xs text-sm text-slate-500">Select what you want to create or mark up.</div>
-              <div className="mt-5 grid w-full gap-2">
-                <button
-                  type="button"
-                  disabled={Boolean(creatingIntent)}
-                  onClick={() => createWorkspace("floor_plan")}
-                  className="group flex min-h-20 w-full items-center gap-3 rounded-lg bg-slate-950 px-4 py-3 text-left text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:opacity-60"
-                >
-                  <SymbolIcon name="architecture" className="shrink-0 text-[22px]" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold">
-                      {creatingIntent === "floor_plan" ? "Opening..." : "Create floor plan"}
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-4 text-slate-300">
-                      Start from a sketch, then add measurements and visual markup.
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(creatingIntent)}
-                  onClick={() => createWorkspace("image_markup")}
-                  className="group flex min-h-20 w-full items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-left text-slate-700 transition hover:border-slate-900 hover:text-slate-950 focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:opacity-60"
-                >
-                  <SymbolIcon name="draw" className="shrink-0 text-[22px]" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold">
-                      {creatingIntent === "image_markup" ? "Opening..." : "Markup image"}
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-4 text-slate-500">
-                      Upload an image and overlay notes, shapes, walls, and measurements.
-                    </span>
-                  </span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowCreateOptions(true)}
-              disabled={atLimit}
-              aria-expanded={false}
-              className={`flex min-h-[320px] w-full flex-col items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center transition focus:outline-none focus:ring-4 focus:ring-slate-200 ${
-                atLimit
-                  ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
-                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-900 hover:bg-slate-50 hover:text-slate-950"
-              }`}
-            >
-              <span className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
-                <SymbolIcon name="add" className="text-[30px]" />
-              </span>
-              <span className="text-lg font-semibold">Add visual workspace</span>
-              <span className="mt-2 max-w-xs text-sm leading-5 text-slate-500">
-                Create a floor plan from a sketch or add editable markup over an image.
-              </span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => createWorkspace("visual_workspace")}
+            disabled={Boolean(creatingIntent) || atLimit}
+            className={`flex min-h-[320px] w-full flex-col items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center transition focus:outline-none focus:ring-4 focus:ring-slate-200 ${
+              atLimit
+                ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                : "border-slate-300 bg-white text-slate-700 hover:border-slate-900 hover:bg-slate-50 hover:text-slate-950"
+            }`}
+          >
+            <span className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+              <SymbolIcon name="add" className="text-[30px]" />
+            </span>
+            <span className="text-lg font-semibold">
+              {creatingIntent === "visual_workspace" ? "Opening workspace..." : "Add visual workspace"}
+            </span>
+            <span className="mt-2 max-w-xs text-sm leading-5 text-slate-500">
+              Create a floor plan from a sketch or add editable markup over an image.
+            </span>
+          </button>
         </div>
       )}
     </section>
