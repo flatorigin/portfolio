@@ -427,6 +427,16 @@ def require_homeowner_profile(user):
     return profile
 
 
+def require_plan_workspace_profile(user):
+    profile = getattr(user, "profile", None)
+    if getattr(profile, "profile_type", "") not in (
+        Profile.ProfileType.HOMEOWNER,
+        Profile.ProfileType.CONTRACTOR,
+    ):
+        raise PermissionDenied("Only homeowner or contractor accounts can use floor-plan workspaces.")
+    return profile
+
+
 def get_ai_config():
     config = AIConfiguration.get_solo()
     if not config.daily_limit_per_user:
@@ -1036,7 +1046,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        require_homeowner_profile(self.request.user)
+        require_plan_workspace_profile(self.request.user)
         qs = ProjectPlan.objects.filter(owner=self.request.user).prefetch_related("images")
         scope = (self.request.query_params.get("scope") or "").strip().lower()
         if scope == "active":
@@ -1105,7 +1115,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
         return plan
 
     def perform_create(self, serializer):
-        require_homeowner_profile(self.request.user)
+        require_plan_workspace_profile(self.request.user)
         plan = serializer.save(
             owner=self.request.user,
             title=(serializer.validated_data.get("title") or "Untitled issue").strip() or "Untitled issue",
@@ -1120,7 +1130,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="meta")
     def meta(self, request):
-        require_homeowner_profile(request.user)
+        profile = require_plan_workspace_profile(request.user)
         remaining, daily_limit = get_ai_remaining_today(request.user)
         active_count = ProjectPlan.objects.filter(
             owner=request.user,
@@ -1130,6 +1140,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 ProjectPlan.STATUS_ARCHIVED,
             ],
         ).count()
+        is_homeowner = profile.profile_type == Profile.ProfileType.HOMEOWNER
         return Response(
             {
                 "active_count": active_count,
@@ -1137,8 +1148,10 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
                 "ai_remaining_today": remaining,
                 "ai_daily_limit": daily_limit,
                 "can_create": active_count < 3,
-                "project_type_choices": get_project_type_choices(),
-                "project_intake_templates": load_project_intake_templates().get("project_types", []),
+                "project_type_choices": get_project_type_choices() if is_homeowner else [],
+                "project_intake_templates": (
+                    load_project_intake_templates().get("project_types", []) if is_homeowner else []
+                ),
             }
         )
 
@@ -1374,6 +1387,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="ai")
     def ai(self, request, pk=None):
+        require_homeowner_profile(request.user)
         plan = self.get_object()
         action_name = str(request.data.get("action") or "").strip()
         if action_name not in ("analyze_issue", "suggest_solution_paths", "generate_contractor_ready_project"):
@@ -1598,6 +1612,7 @@ class ProjectPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="convert-to-draft")
     def convert_to_draft(self, request, pk=None):
+        require_homeowner_profile(request.user)
         plan = self.get_object()
         title_or_summary = bool((plan.title or "").strip() or (plan.issue_summary or "").strip())
         note_or_image = bool((plan.notes or "").strip() or plan.images.exists())

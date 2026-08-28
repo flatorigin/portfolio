@@ -1718,6 +1718,7 @@ export default function ProjectMarkupCanvas() {
   const canvasFrameRef = useRef(null);
   const lastToolPointerTypeRef = useRef("");
   const modeRequestHandledRef = useRef(false);
+  const backgroundRequestHandledRef = useRef(false);
   const activeTouchPointersRef = useRef(new Map());
   const pinchGestureRef = useRef(null);
   const touchDrawingSnapshotRef = useRef(null);
@@ -1788,10 +1789,12 @@ export default function ProjectMarkupCanvas() {
   );
 
   const isProjectImageMode = Boolean(projectId && imageId);
+  const isContractorWorkspaceMode = location.pathname.includes("/dashboard/floor-plans/");
   const storageKey = `${STORAGE_PREFIX}:${planId ? `plan:${planId}` : isProjectImageMode ? `project:${projectId}:${imageId}` : "standalone"}`;
   const selectedImageId = useMemo(() => new URLSearchParams(location.search).get("image") || "", [location.search]);
   const requestedCanvasMode = useMemo(() => new URLSearchParams(location.search).get("mode") || "", [location.search]);
   const sketchUploadRequested = useMemo(() => new URLSearchParams(location.search).get("sketch") === "1", [location.search]);
+  const backgroundUploadRequested = useMemo(() => new URLSearchParams(location.search).get("background") === "1", [location.search]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1023px)");
@@ -2065,6 +2068,14 @@ export default function ProjectMarkupCanvas() {
     }
   }, [loadingPlan, requestedCanvasMode, sketchUploadRequested]);
 
+  useEffect(() => {
+    if (loadingPlan || requestedCanvasMode !== "photo" || !backgroundUploadRequested || backgroundRequestHandledRef.current) return;
+    backgroundRequestHandledRef.current = true;
+    setCanvasMode("photo");
+    setOpenSidebarSection("background");
+    setMessage("Upload an image to use as the editable markup background.");
+  }, [backgroundUploadRequested, loadingPlan, requestedCanvasMode]);
+
   const selected = useMemo(
     () => annotations.find((item) => item.id === selectedId && !lockedLayers[item.id]) || null,
     [annotations, lockedLayers, selectedId],
@@ -2287,6 +2298,7 @@ export default function ProjectMarkupCanvas() {
     };
 
     return {
+      ...previousMarkup,
       schema_version: 1,
       canvas: { width: CANVAS_W, height: CANVAS_H },
       canvas_mode: canvasMode,
@@ -2412,15 +2424,38 @@ export default function ProjectMarkupCanvas() {
     });
   }
 
-  function handleFile(event) {
+  async function handleFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
     const url = URL.createObjectURL(file);
     setBackgroundUrl((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
       return url;
     });
-    event.target.value = "";
+
+    if (!planId) return;
+
+    const formData = new FormData();
+    formData.append("images", file);
+    formData.append("captions", file.name || "Markup background");
+    setMessage("Uploading markup background...");
+    try {
+      const { data } = await api.post(`/project-plans/${planId}/images/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const uploaded = Array.isArray(data) ? data[0] : null;
+      if (!uploaded?.image_url) throw new Error("The uploaded image did not return a saved URL.");
+      setPlan((prev) => ({
+        ...(prev || {}),
+        images: [...(prev?.images || []).filter((image) => String(image.id) !== String(uploaded.id)), uploaded],
+      }));
+      setBackgroundUrl(uploaded.image_url);
+      URL.revokeObjectURL(url);
+      setMessage("Background uploaded and saved to this workspace.");
+    } catch (err) {
+      setMessage(normalizeError(err, "Could not save the background image. The local preview has not been saved."));
+    }
   }
 
   function validateSketchFile(file) {
@@ -3646,6 +3681,7 @@ export default function ProjectMarkupCanvas() {
     const saved = await saveEditableCanvas();
     if (!saved) return;
     if (isProjectImageMode && projectId) navigate(`/projects/${projectId}`);
+    else if (isContractorWorkspaceMode) navigate("/dashboard");
     else if (planId) navigate(`/dashboard/planner/${planId}`);
   }
 
@@ -3655,12 +3691,14 @@ export default function ProjectMarkupCanvas() {
 
   async function deletePlanner() {
     if (!planId) {
-      setMessage("Open this canvas from a saved project planner before deleting.");
+      setMessage("Open this canvas from a saved workspace before deleting.");
       return;
     }
     if (
       !window.confirm(
-        "Delete this project planner? This removes the planner, saved canvas versions, and planner images.",
+        isContractorWorkspaceMode
+          ? "Delete this workspace? This removes its saved images, markup layers, and versions."
+          : "Delete this project planner? This removes the planner, saved canvas versions, and planner images.",
       )
     ) {
       return;
@@ -4185,16 +4223,28 @@ export default function ProjectMarkupCanvas() {
         <div className="markup-editor-header mx-auto flex max-w-7xl items-center justify-between gap-2 px-6 py-3 max-lg:h-14 max-lg:px-2 max-lg:py-1.5">
           <div className="flex min-w-0 items-center gap-4 max-lg:gap-1">
             <Link
-              to={isProjectImageMode ? `/projects/${projectId}` : planId ? `/dashboard/planner/${planId}` : "/dashboard"}
+              to={
+                isProjectImageMode
+                  ? `/projects/${projectId}`
+                  : isContractorWorkspaceMode
+                    ? "/dashboard"
+                    : planId
+                      ? `/dashboard/planner/${planId}`
+                      : "/dashboard"
+              }
               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              aria-label={isProjectImageMode ? "Back to project" : "Back to planner"}
+              aria-label={isProjectImageMode ? "Back to project" : isContractorWorkspaceMode ? "Back to dashboard" : "Back to planner"}
             >
               <SymbolIcon name="arrow_back" className="text-[22px]" />
             </Link>
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-slate-950 max-lg:text-sm">Markup canvas</h1>
               <p className="text-xs text-slate-500 max-lg:hidden">
-                {isProjectImageMode ? "Markup will stay on this project image" : `${modeLabel}: mark the area that needs work`}
+                {isProjectImageMode
+                  ? "Markup will stay on this project image"
+                  : isContractorWorkspaceMode
+                    ? `${modeLabel}: create or alter the image with editable overlays`
+                    : `${modeLabel}: mark the area that needs work`}
               </p>
             </div>
           </div>
@@ -4536,7 +4586,7 @@ export default function ProjectMarkupCanvas() {
                     ) : (
                       !sketchSource ? (
                         <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
-                          No saved project images are attached to this planner yet. Choose a new sketch below.
+                          No saved images are attached to this workspace yet. Choose a new sketch below.
                         </div>
                       ) : null
                     )}
@@ -5411,7 +5461,7 @@ export default function ProjectMarkupCanvas() {
             {!isRoughPlan && plan?.images?.length ? (
               <CollapsibleSection
                 id="planner-images"
-                title="Planner images"
+                title={isContractorWorkspaceMode ? "Workspace images" : "Planner images"}
                 count={plan.images.length}
                 open={isSidebarSectionOpen("planner-images")}
                 pinned={pinnedSidebarSections.has("planner-images")}
@@ -5437,7 +5487,7 @@ export default function ProjectMarkupCanvas() {
             {planId ? (
               <CollapsibleSection
                 id="project-planner"
-                title="Project planner"
+                title={isContractorWorkspaceMode ? "Workspace" : "Project planner"}
                 open={isSidebarSectionOpen("project-planner")}
                 pinned={pinnedSidebarSections.has("project-planner")}
                 onToggle={toggleSidebarSection}
@@ -5445,7 +5495,9 @@ export default function ProjectMarkupCanvas() {
                 danger
               >
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Delete this planner and every image, canvas layer, and saved version attached to it.
+                  {isContractorWorkspaceMode
+                    ? "Delete this workspace and every image, canvas layer, and saved version attached to it."
+                    : "Delete this planner and every image, canvas layer, and saved version attached to it."}
                 </p>
                 <button
                   type="button"
@@ -5454,7 +5506,7 @@ export default function ProjectMarkupCanvas() {
                   className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-60"
                 >
                   <SymbolIcon name="delete" className="text-[18px]" />
-                  {deleting ? "Deleting..." : "Delete project planner"}
+                  {deleting ? "Deleting..." : isContractorWorkspaceMode ? "Delete workspace" : "Delete project planner"}
                 </button>
               </CollapsibleSection>
             ) : null}

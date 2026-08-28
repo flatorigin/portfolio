@@ -20,6 +20,7 @@ import PublicProfile from "./pages/PublicProfile";
 import MessagesThread from "./pages/MessagesThread";
 import FindLocalWork from "./pages/FindLocalWork";
 import ProjectPlanDetail from "./pages/ProjectPlanDetail";
+import ProjectMarkupCanvas from "./pages/ProjectMarkupCanvas";
 import HomeownerOnboarding from "./pages/HomeownerOnboarding";
 import ContractorOnboarding from "./pages/ContractorOnboarding";
 import ProjectCheckGateway from "./pages/ProjectCheckGateway";
@@ -51,6 +52,7 @@ export const router = createBrowserRouter([
       { path: "profile/saved-likes", element: <SavedLikesPage /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "dashboard/planner/:planId", element: <ProjectPlanDetail /> },
+      { path: "dashboard/floor-plans/:planId/markup", element: <ProjectMarkupCanvas /> },
       { path: "onboarding/homeowner", element: <HomeownerOnboarding /> },
       { path: "onboarding/contractor", element: <ContractorOnboarding /> },
       { path: "projects/:id", element: <ProjectDetail /> },

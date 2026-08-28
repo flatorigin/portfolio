@@ -8,6 +8,7 @@ import api from "../api";
 import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
+import ContractorMarkupSection from "../components/ContractorMarkupSection";
 import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
@@ -1252,6 +1253,7 @@ export default function Dashboard() {
   }
 
   const isHomeownerAccount = meUser?.profile_type === "homeowner";
+  const isContractorAccount = meUser?.profile_type === "contractor";
   const homeownerHasNoJobPosts = isHomeownerAccount && myJobPosts.length === 0;
   const primaryProjectTitle = isHomeownerAccount
     ? homeownerHasNoJobPosts
@@ -1350,6 +1352,7 @@ export default function Dashboard() {
       <AIUsagePanel usage={aiUsage} loading={aiUsageLoading} />
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
+      <ContractorMarkupSection isVisible={isContractorAccount} />
 
       {showJobPostsSection ? (
         showJobPostsLoading ? (

@@ -1027,10 +1027,74 @@ class ProjectPlannerTests(APITestCase):
         plan.refresh_from_db()
         self.assertEqual(plan.status, ProjectPlan.STATUS_PLANNING)
 
-    def test_contractor_cannot_access_project_planner(self):
+    def test_contractor_can_manage_private_floor_plan_workspace(self):
         self.client.force_authenticate(user=self.contractor)
-        response = self.client.get("/api/project-plans/")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        create_response = self.client.post(
+            "/api/project-plans/",
+            {
+                "title": "Kitchen layout markup",
+                "status": "planning",
+                "markup_data": {
+                    "workspace_kind": "contractor_floorplan_markup",
+                    "intent": "image_markup",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        workspace = ProjectPlan.objects.get(id=create_response.data["id"])
+        self.assertEqual(workspace.owner_id, self.contractor.id)
+        self.assertEqual(workspace.visibility, "private")
+
+        list_response = self.client.get("/api/project-plans/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([row["id"] for row in list_response.data], [workspace.id])
+
+        markup_data = {
+            **workspace.markup_data,
+            "background_url": "https://example.com/kitchen.png",
+            "annotations": [{"id": "wall-1", "type": "line", "x": 10, "y": 20, "x2": 90, "y2": 20}],
+            "locked_layers": {"wall-1": True},
+        }
+        update_response = self.client.patch(
+            f"/api/project-plans/{workspace.id}/",
+            {"markup_data": markup_data},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.data["markup_data"]["annotations"], markup_data["annotations"])
+
+    def test_contractor_cannot_access_another_users_workspace(self):
+        homeowner_plan = ProjectPlan.objects.create(owner=self.homeowner, title="Private homeowner plan")
+        self.client.force_authenticate(user=self.contractor)
+
+        response = self.client.get(f"/api/project-plans/{homeowner_plan.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_contractor_workspace_cannot_use_homeowner_planner_actions(self):
+        workspace = ProjectPlan.objects.create(
+            owner=self.contractor,
+            title="Kitchen layout markup",
+            notes="Show the proposed island location.",
+            markup_data={"workspace_kind": "contractor_floorplan_markup"},
+        )
+        self.client.force_authenticate(user=self.contractor)
+
+        ai_response = self.client.post(
+            f"/api/project-plans/{workspace.id}/ai/",
+            {"action": "analyze_issue"},
+            format="json",
+        )
+        convert_response = self.client.post(
+            f"/api/project-plans/{workspace.id}/convert-to-draft/",
+            {"use_ai": False},
+            format="json",
+        )
+
+        self.assertEqual(ai_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(convert_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_editable_markup_and_layer_locks_round_trip(self):
         self.client.force_authenticate(user=self.homeowner)
@@ -1236,6 +1300,42 @@ class ProjectPlannerTests(APITestCase):
         self.assertEqual(ProjectPlanImage.objects.filter(project_plan=plan).count(), 1)
         self.assertEqual(
             AIUsageEvent.objects.filter(user=self.homeowner, model_name="gpt-image-test", status=AIUsageEvent.Status.SUCCESS).count(),
+            1,
+        )
+
+    @patch("portfolio.views.generate_image_from_image")
+    def test_contractor_workspace_can_generate_clean_floor_plan_image(self, mock_generate_image_from_image):
+        mock_generate_image_from_image.return_value = {
+            "image_bytes": TINY_PNG_BYTES,
+            "content_type": "image/png",
+            "model": "gpt-image-test",
+        }
+        workspace = ProjectPlan.objects.create(
+            owner=self.contractor,
+            title="Client sketch",
+            markup_data={
+                "workspace_kind": "contractor_floorplan_markup",
+                "intent": "floor_plan",
+            },
+        )
+        sketch = SimpleUploadedFile("sketch.png", b"fake-png", content_type="image/png")
+
+        self.client.force_authenticate(user=self.contractor)
+        response = self.client.post(
+            f"/api/project-plans/{workspace.id}/sketch-to-clean-floor-plan/",
+            {"sketch": sketch},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["image"]["caption"], "clean-floor-plan")
+        self.assertEqual(workspace.images.count(), 1)
+        self.assertEqual(
+            AIUsageEvent.objects.filter(
+                user=self.contractor,
+                model_name="gpt-image-test",
+                status=AIUsageEvent.Status.SUCCESS,
+            ).count(),
             1,
         )
 

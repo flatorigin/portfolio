@@ -118,6 +118,14 @@ createRoot(document.getElementById("root")).render(
             }
           />
           <Route
+            path="dashboard/floor-plans/:planId/markup"
+            element={
+              <RequireAuth>
+                <ProjectMarkupCanvas />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="dashboard/projects/:projectId/images/:imageId/markup"
             element={
               <RequireAuth>

@@ -13,6 +13,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import F
 from accounts.serializers import ProfileSerializer
+from accounts.models import Profile
 
 from .models import (
     ProjectComment,
@@ -885,6 +886,10 @@ class ProjectPlanSerializer(serializers.ModelSerializer):
         return self.context.get("ai_daily_limit")
 
     def get_can_generate_draft(self, obj):
+        request = self.context.get("request")
+        profile = getattr(getattr(request, "user", None), "profile", None)
+        if getattr(profile, "profile_type", "") != Profile.ProfileType.HOMEOWNER:
+            return False
         title_or_summary = bool((obj.title or "").strip() or (obj.issue_summary or "").strip())
         note_or_image = bool((obj.notes or "").strip() or obj.images.exists())
         return title_or_summary and note_or_image

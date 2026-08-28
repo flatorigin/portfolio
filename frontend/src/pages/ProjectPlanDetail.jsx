@@ -182,6 +182,10 @@ export default function ProjectPlanDetail() {
         api.get("/project-plans/meta/"),
       ]);
       const loadedPlan = emptyPlan(planData);
+      if (loadedPlan.markup_data?.workspace_kind === "contractor_floorplan_markup") {
+        navigate(`/dashboard/floor-plans/${planId}/markup`, { replace: true });
+        return;
+      }
       setPlan(loadedPlan);
       setMeta(metaData || null);
       setFinalDetailsFinished(finalDetailsComplete(loadedPlan));
