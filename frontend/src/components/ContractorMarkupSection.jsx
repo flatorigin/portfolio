@@ -123,36 +123,17 @@ export default function ContractorMarkupSection({ isVisible = false }) {
   const atLimit = meta?.can_create === false;
 
   return (
-    <section className="border-y border-slate-200 bg-white px-5 py-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-950">Floor Plans &amp; Markup</h2>
-            <Badge>{meta?.active_count ?? workspaces.length}/{meta?.max_active_plans ?? 3} workspaces</Badge>
-            {meta ? <Badge>{meta.ai_remaining_today} AI assists left today</Badge> : null}
-          </div>
+          <h2 className="text-lg font-semibold text-slate-950">Floor Plans &amp; Visual Markups</h2>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
             Create a floor-plan image or overlay measurements, notes, walls, and visual changes on an existing image.
           </p>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          <GhostButton
-            type="button"
-            disabled={Boolean(creatingIntent) || atLimit}
-            onClick={() => createWorkspace("image_markup")}
-          >
-            <SymbolIcon name="draw" className="text-[18px]" />
-            {creatingIntent === "image_markup" ? "Opening..." : "Markup image"}
-          </GhostButton>
-          <Button
-            type="button"
-            disabled={Boolean(creatingIntent) || atLimit}
-            onClick={() => createWorkspace("floor_plan")}
-          >
-            <SymbolIcon name="architecture" className="text-[18px]" />
-            {creatingIntent === "floor_plan" ? "Opening..." : "Create floor plan"}
-          </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-slate-500">
+          <Badge>{meta?.active_count ?? workspaces.length}/{meta?.max_active_plans ?? 3} workspaces</Badge>
+          {meta ? <Badge>{meta.ai_remaining_today} AI assists left today</Badge> : null}
         </div>
       </div>
 
@@ -163,13 +144,13 @@ export default function ContractorMarkupSection({ isVisible = false }) {
       ) : null}
 
       {loading ? (
-        <div className="mt-5 border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+        <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
           Loading saved workspaces...
         </div>
       ) : error ? (
-        <div className="mt-5 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
-      ) : sortedWorkspaces.length ? (
-        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+      ) : (
+        <div className="mt-5 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,260px))]">
           {sortedWorkspaces.map((workspace) => {
             const intent = workspace?.markup_data?.intent || "";
             const openRoute = workspaceRoute(
@@ -180,20 +161,20 @@ export default function ContractorMarkupSection({ isVisible = false }) {
               ? workspace.markup_data.annotations.length
               : 0;
             return (
-              <Card key={workspace.id} className="overflow-hidden border border-slate-200 p-0 shadow-none">
+              <Card key={workspace.id} className="flex min-h-[320px] flex-col overflow-hidden border border-slate-200 p-0 shadow-sm">
                 <button
                   type="button"
                   onClick={() => navigate(openRoute)}
-                  className="block w-full text-left"
+                  className="block w-full flex-1 text-left"
                 >
                   {workspace.cover_image_url ? (
                     <img
                       src={workspace.cover_image_url}
                       alt=""
-                      className="h-36 w-full bg-slate-100 object-cover"
+                      className="h-44 w-full bg-slate-100 object-cover"
                     />
                   ) : (
-                    <div className="flex h-36 w-full items-center justify-center bg-slate-100 text-slate-400">
+                    <div className="flex h-44 w-full items-center justify-center bg-slate-100 text-slate-400">
                       <SymbolIcon name={intent === "image_markup" ? "draw" : "architecture"} className="text-[36px]" />
                     </div>
                   )}
@@ -206,7 +187,7 @@ export default function ContractorMarkupSection({ isVisible = false }) {
                   </div>
                 </button>
                 <div className="flex items-center gap-2 border-t border-slate-100 px-4 py-3">
-                  <Button type="button" className="flex-1" onClick={() => navigate(openRoute)}>
+                  <Button type="button" className="flex-1 whitespace-nowrap px-2 text-xs" onClick={() => navigate(openRoute)}>
                     Open markup
                   </Button>
                   <button
@@ -233,10 +214,33 @@ export default function ContractorMarkupSection({ isVisible = false }) {
               </Card>
             );
           })}
-        </div>
-      ) : (
-        <div className="mt-5 flex min-h-36 items-center justify-center border border-dashed border-slate-300 bg-slate-50 px-5 text-center text-sm text-slate-500">
-          No saved floor plans or image markups yet.
+
+          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
+            <span className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+              <SymbolIcon name="add" className="text-[28px]" />
+            </span>
+            {!sortedWorkspaces.length ? (
+              <div className="mb-5 text-sm text-slate-500">No saved floor plans or image markups yet.</div>
+            ) : null}
+            <div className="grid w-full max-w-[210px] gap-2">
+              <Button
+                type="button"
+                disabled={Boolean(creatingIntent) || atLimit}
+                onClick={() => createWorkspace("floor_plan")}
+              >
+                <SymbolIcon name="architecture" className="text-[18px]" />
+                {creatingIntent === "floor_plan" ? "Opening..." : "Create floor plan"}
+              </Button>
+              <GhostButton
+                type="button"
+                disabled={Boolean(creatingIntent) || atLimit}
+                onClick={() => createWorkspace("image_markup")}
+              >
+                <SymbolIcon name="draw" className="text-[18px]" />
+                {creatingIntent === "image_markup" ? "Opening..." : "Markup image"}
+              </GhostButton>
+            </div>
+          </div>
         </div>
       )}
     </section>
