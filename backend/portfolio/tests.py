@@ -1579,6 +1579,50 @@ class PublicProjectSharePageTests(APITestCase):
         self.assertNotIn('property="og:title"', content)
 
 
+class PublicHelperSharePageTests(APITestCase):
+    def test_public_helper_page_includes_social_preview_metadata(self):
+        helper = HelperListing.objects.create(
+            full_name="Alex & Taylor",
+            city="Media",
+            state="PA",
+            skills=[HelperListing.SKILL_CLEANUP, HelperListing.SKILL_PAINTING],
+            availability=[HelperListing.AVAILABILITY_WEEKENDS],
+            experience_level=HelperListing.EXPERIENCE_1_3,
+            is_active=True,
+            admin_approved=True,
+            contact_verified=True,
+        )
+
+        response = self.client.get(f"/project-helpers/{helper.id}")
+        content = response.content.decode("utf-8")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Alex &amp; Taylor — Project Helper | FlatOrigin", content)
+        self.assertIn('property="og:title" content="Alex &amp; Taylor — Project Helper"', content)
+        self.assertIn(f'property="og:url" content="http://testserver/project-helpers/{helper.id}"', content)
+        self.assertIn("Cleanup, Painting", content)
+
+    def test_unpublished_helper_page_does_not_leak_social_metadata(self):
+        helper = HelperListing.objects.create(
+            full_name="Hidden Helper",
+            city="Media",
+            state="PA",
+            skills=[HelperListing.SKILL_CLEANUP],
+            availability=[HelperListing.AVAILABILITY_WEEKENDS],
+            experience_level=HelperListing.EXPERIENCE_1_3,
+            is_active=True,
+            admin_approved=False,
+            contact_verified=True,
+        )
+
+        response = self.client.get(f"/project-helpers/{helper.id}")
+        content = response.content.decode("utf-8")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("Hidden Helper", content)
+        self.assertNotIn('property="og:title"', content)
+
+
 class ProjectCoverAdminTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(

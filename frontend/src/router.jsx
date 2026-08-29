@@ -47,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "contractor-check", element: <ContractorLeadCheck /> },
       { path: "work", element: <FindLocalWork /> },
       { path: "project-helpers", element: <ProjectHelpers /> },
+      { path: "project-helpers/:helperId", element: <ProjectHelpers /> },
       { path: "project-helpers/verify/:token", element: <ProjectHelpers /> },
       { path: "profile/edit", element: <ProfileEdit /> },
       { path: "profile/saved-likes", element: <SavedLikesPage /> },

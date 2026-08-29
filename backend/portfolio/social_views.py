@@ -5,7 +5,7 @@ from django.conf import settings
 from django.http import HttpResponse
 from django.views import View
 
-from .models import Project
+from .models import HelperListing, Project
 
 
 def _public_project(project):
@@ -66,6 +66,48 @@ class PublicProjectPageView(View):
             )
 
         meta_tags = "\n    ".join(tags)
+        html = html.replace("<title>FlatOrigin</title>", f"<title>{escape(page_title)}</title>", 1)
+        html = html.replace("</title>", f"</title>\n    {meta_tags}", 1)
+        return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+
+class PublicHelperPageView(View):
+    def get(self, request, pk):
+        index_path = Path(settings.FRONTEND_DIR) / "index.html"
+        html = index_path.read_text(encoding="utf-8")
+        helper = HelperListing.objects.filter(
+            pk=pk,
+            is_active=True,
+            admin_approved=True,
+            contact_verified=True,
+        ).first()
+
+        if not helper:
+            return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+        name = str(helper.full_name or "Project helper").strip()
+        location = ", ".join(item for item in (helper.city, helper.state) if item)
+        skills = ", ".join(helper.skill_labels()[:5])
+        details = [f"Skills: {skills}" if skills else "", f"Serving {location}" if location else "", helper.bio]
+        description = " ".join(" ".join(str(item).split()) for item in details if item)[:240]
+        description = description or f"View {name}'s project helper card on FlatOrigin."
+        helper_url = request.build_absolute_uri(f"/project-helpers/{helper.id}")
+        title = f"{name} — Project Helper"
+
+        tags = [
+            f'<meta name="description" content="{escape(description, quote=True)}" />',
+            f'<link rel="canonical" href="{escape(helper_url, quote=True)}" />',
+            '<meta property="og:type" content="profile" />',
+            '<meta property="og:site_name" content="FlatOrigin" />',
+            f'<meta property="og:title" content="{escape(title, quote=True)}" />',
+            f'<meta property="og:description" content="{escape(description, quote=True)}" />',
+            f'<meta property="og:url" content="{escape(helper_url, quote=True)}" />',
+            '<meta name="twitter:card" content="summary" />',
+            f'<meta name="twitter:title" content="{escape(title, quote=True)}" />',
+            f'<meta name="twitter:description" content="{escape(description, quote=True)}" />',
+        ]
+        meta_tags = "\n    ".join(tags)
+        page_title = f"{title} | FlatOrigin"
         html = html.replace("<title>FlatOrigin</title>", f"<title>{escape(page_title)}</title>", 1)
         html = html.replace("</title>", f"</title>\n    {meta_tags}", 1)
         return HttpResponse(html, content_type="text/html; charset=utf-8")

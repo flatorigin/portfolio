@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api";
 import { SectionTitle, SymbolIcon } from "../ui";
+import HelperShareDialog from "../components/HelperShareDialog";
 
 const DEFAULT_OPTIONS = {
   skills: [
@@ -348,9 +349,10 @@ function RatingSummary({ averageRating, feedbackCount, compact = false }) {
   );
 }
 
-function HelperCard({ helper, authed, onFeedback }) {
-  const [expanded, setExpanded] = useState(false);
+function HelperCard({ helper, authed, onFeedback, initiallyExpanded = false }) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const availabilityText = (helper.availability_labels || []).join(", ") || "Availability not listed";
   const feedbackCount = Number(helper.feedback_count || 0);
   const averageRating = Number(helper.average_rating || 0);
@@ -361,7 +363,7 @@ function HelperCard({ helper, authed, onFeedback }) {
 
   return (
     <>
-      <article
+      <article id={`helper-${helper.id}`}
         className={
           "rounded-xl border border-slate-200 bg-white shadow-sm transition " +
           (expanded ? "ring-1 ring-slate-200" : "hover:border-slate-300 hover:shadow-md")
@@ -507,6 +509,15 @@ function HelperCard({ helper, authed, onFeedback }) {
               <p className="text-xs text-slate-500">
                 Verify helper availability, qualifications, and payment terms directly.
               </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShareOpen(true)}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <SymbolIcon name="ios_share" className="text-[17px]" />
+                  Share
+                </button>
               {authed ? (
                 <button
                   type="button"
@@ -524,6 +535,7 @@ function HelperCard({ helper, authed, onFeedback }) {
                   Log in to leave feedback
                 </Link>
               )}
+              </div>
             </div>
           </div>
         </div>
@@ -540,6 +552,7 @@ function HelperCard({ helper, authed, onFeedback }) {
           }}
         />
       ) : null}
+      {shareOpen ? <HelperShareDialog helper={helper} onClose={() => setShareOpen(false)} /> : null}
     </>
   );
 }
@@ -899,7 +912,7 @@ function HelperListingWizard({ open, options, onClose, onSubmitted }) {
 }
 
 export default function ProjectHelpers() {
-  const { token } = useParams();
+  const { token, helperId } = useParams();
   const authed = !!localStorage.getItem("access");
   const [options, setOptions] = useState(DEFAULT_OPTIONS);
   const [helpers, setHelpers] = useState([]);
@@ -976,9 +989,9 @@ export default function ProjectHelpers() {
     let cancelled = false;
     setLoading(true);
     api
-      .get(`/project-helpers/${queryParams ? `?${queryParams}` : ""}`)
+      .get(helperId ? `/project-helpers/${helperId}/` : `/project-helpers/${queryParams ? `?${queryParams}` : ""}`)
       .then(({ data }) => {
-        if (!cancelled) setHelpers(Array.isArray(data) ? data : data?.results || []);
+        if (!cancelled) setHelpers(helperId ? [data] : (Array.isArray(data) ? data : data?.results || []));
       })
       .catch(() => {
         if (!cancelled) setHelpers([]);
@@ -989,7 +1002,7 @@ export default function ProjectHelpers() {
     return () => {
       cancelled = true;
     };
-  }, [queryParams, refreshKey]);
+  }, [helperId, queryParams, refreshKey]);
 
   const submitFeedback = async (e) => {
     e.preventDefault();
@@ -1125,6 +1138,7 @@ export default function ProjectHelpers() {
                 key={helper.id}
                 helper={helper}
                 authed={authed}
+                initiallyExpanded={String(helper.id) === String(helperId || "")}
                 onFeedback={(item) => {
                   setFeedbackHelper(item);
                   setFeedbackError("");

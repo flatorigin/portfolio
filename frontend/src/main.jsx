@@ -76,6 +76,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="project-check/contractor" element={<ContractorLeadCheck />} />
           <Route path="contractor-check" element={<ContractorLeadCheck />} />
           <Route path="project-helpers" element={<ProjectHelpers />} />
+          <Route path="project-helpers/:helperId" element={<ProjectHelpers />} />
           <Route path="project-helpers/verify/:token" element={<ProjectHelpers />} />
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />

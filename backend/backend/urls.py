@@ -10,7 +10,7 @@ from django.views.static import serve
 import os
 
 from accounts.views import ActivationRedirectView, SafeUserCreateViewSet
-from portfolio.social_views import PublicProjectPageView
+from portfolio.social_views import PublicHelperPageView, PublicProjectPageView
 
 admin.site.site_header = "FlatOrigin Admin"
 admin.site.site_title = "FlatOrigin Admin"
@@ -31,6 +31,7 @@ class ReactAppView(View):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("projects/<int:pk>", PublicProjectPageView.as_view(), name="public-project-page"),
+    path("project-helpers/<int:pk>", PublicHelperPageView.as_view(), name="public-helper-page"),
     path(
         "activate/<str:uid>/<str:token>",
         ActivationRedirectView.as_view(),
