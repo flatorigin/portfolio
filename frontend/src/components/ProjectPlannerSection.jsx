@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
-import { Badge, Button, Card, GhostButton, SymbolIcon } from "../ui";
+import { Badge, Button, Card, GhostButton, Input, SymbolIcon, Textarea } from "../ui";
+
+const EMPTY_FLOOR_PLAN_PROJECT = {
+  title: "",
+  house_location: "",
+  issue_summary: "",
+};
 
 function normalizeError(err, fallback) {
   const data = err?.response?.data;
@@ -47,7 +53,9 @@ function getPlanProgress(plan, templates) {
   const intakeComplete = questions.length > 0 && guidedIndex >= questions.length;
   const missingFinal = REQUIRED_FINAL_DETAIL_FIELDS.filter((question) => {
     const value = String(plan?.[question.field] ?? "").trim();
-    if (question.field === "title") return !value || value === "Untitled issue";
+    if (question.field === "title") {
+      return !value || value === "Untitled issue" || value === "Untitled project plan";
+    }
     return !value;
   });
 
@@ -131,6 +139,9 @@ export default function ProjectPlannerSection({ isVisible = false }) {
   const [busyId, setBusyId] = useState(null);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [error, setError] = useState("");
+  const [floorPlanDialogOpen, setFloorPlanDialogOpen] = useState(false);
+  const [floorPlanDialogView, setFloorPlanDialogView] = useState("choose");
+  const [floorPlanProject, setFloorPlanProject] = useState(EMPTY_FLOOR_PLAN_PROJECT);
 
   const refresh = useCallback(async () => {
     if (!isVisible) return;
@@ -162,6 +173,42 @@ export default function ProjectPlannerSection({ isVisible = false }) {
     );
   }, [plans]);
   const templates = useMemo(() => meta?.project_intake_templates || [], [meta]);
+  const availableFloorPlanProjects = useMemo(
+    () => sortedPlans.filter((plan) => plan.status !== "archived"),
+    [sortedPlans],
+  );
+
+  function closeFloorPlanDialog() {
+    if (creating) return;
+    setFloorPlanDialogOpen(false);
+    setFloorPlanDialogView("choose");
+    setFloorPlanProject(EMPTY_FLOOR_PLAN_PROJECT);
+  }
+
+  function openFloorPlanEditor(planId) {
+    if (!planId) return;
+    setFloorPlanDialogOpen(false);
+    navigate(`/dashboard/planner/${planId}/markup?mode=rough_plan&sketch=1`);
+  }
+
+  async function createFloorPlanProject({ skipDetails = false } = {}) {
+    if (creating || meta?.can_create === false) return;
+    setCreating(true);
+    try {
+      const details = skipDetails ? EMPTY_FLOOR_PLAN_PROJECT : floorPlanProject;
+      const { data } = await api.post("/project-plans/", {
+        title: details.title.trim() || "Untitled project plan",
+        house_location: details.house_location.trim(),
+        issue_summary: details.issue_summary.trim(),
+        status: "planning",
+      });
+      openFloorPlanEditor(data.id);
+    } catch (err) {
+      window.alert(normalizeError(err, "Could not create a new project plan."));
+    } finally {
+      setCreating(false);
+    }
+  }
 
   async function createPlan() {
     if (creating || meta?.can_create === false) return;
@@ -241,9 +288,22 @@ export default function ProjectPlannerSection({ isVisible = false }) {
             Keep up to 3 private project plans. Contractors cannot see these until you turn one into a draft.
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <Badge>{meta?.active_count ?? plans.length}/3 plans</Badge>
-          {meta ? <Badge>{meta.ai_remaining_today} AI assists left today</Badge> : null}
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <Button
+            type="button"
+            className="h-10 gap-2 rounded-lg px-4"
+            onClick={() => {
+              setFloorPlanDialogView("choose");
+              setFloorPlanDialogOpen(true);
+            }}
+          >
+            <SymbolIcon name="architecture" className="text-[19px]" />
+            Create Floor Plan from Sketch
+          </Button>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <Badge>{meta?.active_count ?? plans.length}/3 plans</Badge>
+            {meta ? <Badge>{meta.ai_remaining_today} AI assists left today</Badge> : null}
+          </div>
         </div>
       </div>
 
@@ -407,6 +467,153 @@ export default function ProjectPlannerSection({ isVisible = false }) {
             <SymbolIcon name="delete" className="text-[18px]" />
             {busyId === selectedPlanId ? "Deleting..." : "Delete Project Plan"}
           </button>
+        </div>
+      ) : null}
+
+      {floorPlanDialogOpen ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeFloorPlanDialog();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="floor-plan-launcher-title"
+            className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 id="floor-plan-launcher-title" className="text-lg font-semibold text-slate-950">
+                  {floorPlanDialogView === "new" ? "Start a new project plan" : "Create a floor plan"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {floorPlanDialogView === "new"
+                    ? "Add what you know now, or continue with an untitled plan."
+                    : "Choose where the sketch and generated floor plan should be saved."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeFloorPlanDialog}
+                disabled={creating}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                aria-label="Close"
+              >
+                <SymbolIcon name="close" className="text-[21px]" />
+              </button>
+            </div>
+
+            {floorPlanDialogView === "choose" ? (
+              <div className="space-y-5 p-5">
+                <section>
+                  <div className="text-sm font-semibold text-slate-900">Add to an existing plan</div>
+                  <div className="mt-3 space-y-2">
+                    {availableFloorPlanProjects.length ? (
+                      availableFloorPlanProjects.map((plan) => (
+                        <button
+                          key={plan.id}
+                          type="button"
+                          onClick={() => openFloorPlanEditor(plan.id)}
+                          className="flex w-full items-center justify-between gap-4 rounded-lg border border-slate-200 px-4 py-3 text-left transition hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-slate-900">
+                              {plan.title || "Untitled project plan"}
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-slate-500">
+                              {plan.house_location || plan.issue_summary || "Project details can be added later"}
+                            </span>
+                          </span>
+                          <SymbolIcon name="arrow_forward" className="shrink-0 text-[19px] text-slate-400" />
+                        </button>
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        You do not have an active project plan yet.
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="border-t border-slate-200 pt-5">
+                  <button
+                    type="button"
+                    disabled={meta?.can_create === false}
+                    onClick={() => setFloorPlanDialogView("new")}
+                    className="flex w-full items-center gap-3 rounded-lg border border-dashed border-slate-300 px-4 py-4 text-left transition hover:border-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                      <SymbolIcon name="add" className="text-[23px]" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-900">Start a new project plan</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        Create a private plan for this sketch and floor plan.
+                      </span>
+                    </span>
+                  </button>
+                  {meta?.can_create === false ? (
+                    <p className="mt-2 text-xs text-amber-700">
+                      You already have 3 project plans. Choose an existing plan or delete one first.
+                    </p>
+                  ) : null}
+                </section>
+              </div>
+            ) : (
+              <form
+                className="space-y-4 p-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  createFloorPlanProject();
+                }}
+              >
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">Project name</span>
+                  <Input
+                    value={floorPlanProject.title}
+                    onChange={(event) => setFloorPlanProject((current) => ({ ...current, title: event.target.value }))}
+                    placeholder="For example, First-floor renovation"
+                    autoFocus
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">Work area</span>
+                  <Input
+                    value={floorPlanProject.house_location}
+                    onChange={(event) => setFloorPlanProject((current) => ({ ...current, house_location: event.target.value }))}
+                    placeholder="For example, Kitchen and dining room"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-slate-700">Project summary</span>
+                  <Textarea
+                    className="min-h-24"
+                    value={floorPlanProject.issue_summary}
+                    onChange={(event) => setFloorPlanProject((current) => ({ ...current, issue_summary: event.target.value }))}
+                    placeholder="Briefly describe what you are planning"
+                  />
+                </label>
+
+                <p className="text-xs text-slate-500">All fields are optional and can be edited later.</p>
+
+                <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <GhostButton type="button" onClick={() => setFloorPlanDialogView("choose")} disabled={creating}>
+                    Back
+                  </GhostButton>
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                    <GhostButton type="button" onClick={() => createFloorPlanProject({ skipDetails: true })} disabled={creating}>
+                      Skip for now
+                    </GhostButton>
+                    <Button type="submit" disabled={creating}>
+                      {creating ? "Creating..." : "Create and continue"}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       ) : null}
     </Card>
