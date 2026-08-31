@@ -211,6 +211,11 @@ export default function LandingPage() {
             ))}
           </div>
 
+          <p className="mx-auto mt-6 max-w-3xl text-center text-sm leading-relaxed text-slate-600">
+            <span className="font-semibold text-slate-900">Create floor plans from sketches.</span>{" "}
+            Upload a hand-drawn sketch, generate a clean floor-plan image, and add visual markups inside your project plan.
+          </p>
+
           <div className="mt-7 flex justify-center">
             <Link
               to="/project-helpers"
