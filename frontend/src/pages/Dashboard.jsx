@@ -43,45 +43,6 @@ function mediaTypeFor(item) {
   return "image";
 }
 
-function getProjectCoverImage(project) {
-  const images = Array.isArray(project?.images) ? project.images.filter(Boolean) : [];
-  if (!images.length) return null;
-
-  const coverRefId = project?.cover_image_ref?.id ?? project?.cover_image_ref ?? null;
-  if (coverRefId != null) {
-    const selectedCover = images.find((image) => String(image.id) === String(coverRefId));
-    if (selectedCover) return selectedCover;
-  }
-
-  return [...images]
-    .filter((image) => mediaTypeFor(image) === "image")
-    .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))[0] || null;
-}
-
-function ProjectCardMarkupAction({ project, onOpen }) {
-  const coverImage = getProjectCoverImage(project);
-  const isPublished = !!project?.is_public;
-
-  if (isPublished || !coverImage?.id || mediaTypeFor(coverImage) !== "image") return null;
-
-  return (
-    <div className="touch-action-overlay absolute inset-0 z-[1] flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpen(coverImage.id);
-        }}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 sm:h-9 sm:w-9"
-        title="Markup image"
-        aria-label={`Markup ${project?.title || "project"} cover image`}
-      >
-        <SymbolIcon name="draw" className="text-[18px]" />
-      </button>
-    </div>
-  );
-}
-
 // robust extraction of project id from favorite payload
 function extractProjectId(fav) {
   return (
@@ -1468,12 +1429,7 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      <ProjectCardMarkupAction
-                        project={p}
-                        onOpen={(coverImageId) => navigate(`/dashboard/projects/${p.id}/images/${coverImageId}/markup`)}
-                      />
-
-                      <div className="absolute left-3 top-3 z-[2] flex flex-wrap gap-1.5">
+                      <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
                         <Badge className="bg-slate-800 text-[10px] font-semibold text-white">Job post</Badge>
                         {isPrivateJob ? (
                           <Badge className="inline-flex items-center gap-1 bg-slate-700 text-[10px] text-white">
@@ -1928,7 +1884,7 @@ export default function Dashboard() {
               return (
                 <div
                   key={p.id}
-                  className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md"
+                  className="cursor-pointer overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md"
                   onClick={() => window.open(`/projects/${p.id}`, "_self")}
                   role="button"
                   tabIndex={0}
@@ -1939,27 +1895,20 @@ export default function Dashboard() {
                     }
                   }}
                 >
-                  <div className="relative">
-                    {coverSrc ? (
-                      <img
-                        src={coverSrc}
-                        alt=""
-                        className="block h-36 w-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-400">
-                        No cover
-                      </div>
-                    )}
-
-                    <ProjectCardMarkupAction
-                      project={p}
-                      onOpen={(coverImageId) => navigate(`/dashboard/projects/${p.id}/images/${coverImageId}/markup`)}
+                  {coverSrc ? (
+                    <img
+                      src={coverSrc}
+                      alt=""
+                      className="block h-36 w-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
                     />
-                  </div>
+                  ) : (
+                    <div className="flex h-36 items-center justify-center bg-slate-100 text-sm text-slate-400">
+                      No cover
+                    </div>
+                  )}
 
                   <div className="p-4">
                     <div className="mb-1 flex items-start justify-between gap-2">

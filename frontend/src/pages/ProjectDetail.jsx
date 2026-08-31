@@ -394,7 +394,7 @@ export default function ProjectDetail() {
 
   async function handleMakeCoverImage(imgId) {
     const normalized = imgId == null ? null : Number(imgId);
-    if (!project?.id || normalized == null || Number.isNaN(normalized)) return;
+    if (!isOwnerUser || !project?.id || normalized == null || Number.isNaN(normalized)) return;
 
     const target = editImages.find((img) => Number(img.id) === normalized);
     if (target && mediaTypeFor(target) !== "image") {
@@ -553,7 +553,13 @@ export default function ProjectDetail() {
 
       if (meta) {
         const coverFromMetaRaw =
-          meta.cover_image_id ?? (meta.cover_image && meta.cover_image.id) ?? meta.cover_image_pk ?? null;
+          meta.cover_image_id ??
+          (meta.cover_image && meta.cover_image.id) ??
+          (meta.cover_image_ref && typeof meta.cover_image_ref === "object"
+            ? meta.cover_image_ref.id
+            : meta.cover_image_ref) ??
+          meta.cover_image_pk ??
+          null;
 
         const coverFromMeta = coverFromMetaRaw == null ? null : Number(coverFromMetaRaw);
 
@@ -1098,10 +1104,14 @@ export default function ProjectDetail() {
   }
 
   async function handleDeleteImage(img) {
-    if (!project || !img?.id) return;
+    if (!isOwnerUser || !project || !img?.id) return;
     if (!window.confirm("Delete this image? This cannot be undone.")) return;
     try {
       await api.delete(`/projects/${project.id}/images/${img.id}/`);
+      if (Number(editCoverImageId ?? editForm.cover_image_id) === Number(img.id)) {
+        setEditCoverImageId(null);
+        setEditForm((prev) => ({ ...prev, cover_image_id: null }));
+      }
       await refreshImages();
     } catch (e) {
       console.error("delete image error:", e?.response || e);
@@ -1272,15 +1282,24 @@ export default function ProjectDetail() {
   const currentImage =
     images.length && activeImageIdx >= 0 ? images[Math.min(activeImageIdx, images.length - 1)] : null;
 
-  const coverUrl = useMemo(() => {
+  const currentCoverImageId = useMemo(() => {
     const selectedId = editCoverImageId ?? editForm.cover_image_id ?? null;
+    const selectedImage = selectedId == null
+      ? null
+      : images.find((item) => Number(item.id) === Number(selectedId) && mediaTypeFor(item) === "image");
+    if (selectedImage?.id != null) return Number(selectedImage.id);
 
-    if (selectedId != null) {
-      const match = editImages.find((im) => Number(im.id) === Number(selectedId));
+    const firstImage = images.find((item) => mediaTypeFor(item) === "image");
+    return firstImage?.id == null ? null : Number(firstImage.id);
+  }, [editCoverImageId, editForm.cover_image_id, images]);
+
+  const coverUrl = useMemo(() => {
+    if (currentCoverImageId != null) {
+      const match = editImages.find((im) => Number(im.id) === Number(currentCoverImageId));
       if (mediaTypeFor(match) === "image" && match?.url) return match.url;
     }
     return images?.find((item) => mediaTypeFor(item) === "image")?.url || null;
-  }, [editCoverImageId, editForm.cover_image_id, editImages, images]);
+  }, [currentCoverImageId, editImages, images]);
 
   function getBidContractorMeta(bid) {
     const displayName =
@@ -2279,6 +2298,12 @@ export default function ProjectDetail() {
 	                  const markupVersion = getMarkupVersion(img);
 	                  const markupAnnotations = getMarkupAnnotations(img);
 	                  const imageBadge = mediaType === "image" ? mediaBadgeForImage(img) : null;
+	                  const isCover =
+	                    mediaType === "image" &&
+	                    img.id != null &&
+	                    currentCoverImageId != null &&
+	                    Number(img.id) === Number(currentCoverImageId);
+	                  const canManageMedia = !!(isOwnerUser && !project?.is_public && img.id);
 
 	                  return (
                     <div
@@ -2338,6 +2363,47 @@ export default function ProjectDetail() {
                         </div>
                         {img.caption && <div className="px-3 py-2 text-xs text-slate-700">{img.caption}</div>}
                       </button>
+                      {canManageMedia ? (
+                        <div className="touch-action-overlay pointer-events-none absolute inset-x-0 top-0 z-10 flex h-40 items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                          {mediaType === "image" ? (
+                            <Link
+                              to={`/dashboard/projects/${project.id}/images/${img.id}/markup`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 sm:h-9 sm:w-9"
+                              title="Markup image"
+                              aria-label={`Markup ${img.caption || "project image"}`}
+                            >
+                              <SymbolIcon name="draw" className="text-[18px]" />
+                            </Link>
+                          ) : null}
+                          {mediaType === "image" && !isCover ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleMakeCoverImage(img.id);
+                              }}
+                              className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 sm:h-9 sm:w-9"
+                              title="Set as cover"
+                              aria-label={`Set ${img.caption || "project image"} as cover`}
+                            >
+                              <SymbolIcon name="photo_camera" className="text-[18px]" />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteImage(img);
+                            }}
+                            className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-red-600 shadow-sm transition hover:bg-red-50 sm:h-9 sm:w-9"
+                            title="Delete"
+                            aria-label={`Delete ${img.caption || "project media"}`}
+                          >
+                            <SymbolIcon name="delete" className="text-[18px]" />
+                          </button>
+                        </div>
+                      ) : null}
                       {!isOwnerUser && img.id ? (
                         <div className="absolute right-2 top-2">
                           <ReportContentButton
