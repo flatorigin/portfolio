@@ -662,6 +662,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save(owner=self.request.user)
 
+    def retrieve(self, request, *args, **kwargs):
+        project = self.get_object()
+        is_owner = request.user.is_authenticated and project.owner_id == request.user.id
+
+        if project.is_public and not is_owner:
+            Project.objects.filter(pk=project.pk).update(view_count=models.F("view_count") + 1)
+            project.view_count = Project.objects.values_list("view_count", flat=True).get(pk=project.pk)
+
+        serializer = self.get_serializer(project)
+        return Response(serializer.data)
+
     def destroy(self, request, *args, **kwargs):
         project = self.get_object()
         if project.owner != request.user:
