@@ -358,6 +358,60 @@ class ProjectHelperApiTests(APITestCase):
         self.assertFalse(feedback.is_approved)
 
 
+class ProjectViewCountTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="view-owner", password="pw123456")
+        self.public_project = Project.objects.create(
+            owner=self.owner,
+            title="Public kitchen renovation",
+            is_public=True,
+        )
+        self.private_project = Project.objects.create(
+            owner=self.owner,
+            title="Private kitchen renovation",
+            is_public=False,
+        )
+
+    def test_project_list_returns_view_count_without_incrementing_it(self):
+        response = self.client.get("/api/projects/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        project_data = next(item for item in response.data if item["id"] == self.public_project.id)
+        self.assertEqual(project_data["view_count"], 0)
+        self.public_project.refresh_from_db()
+        self.assertEqual(self.public_project.view_count, 0)
+
+    def test_public_project_detail_increments_view_count(self):
+        first_response = self.client.get(f"/api/projects/{self.public_project.id}/")
+        second_response = self.client.get(f"/api/projects/{self.public_project.id}/")
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_response.data["view_count"], 1)
+        self.assertEqual(second_response.data["view_count"], 2)
+        self.public_project.refresh_from_db()
+        self.assertEqual(self.public_project.view_count, 2)
+
+    def test_owner_project_detail_does_not_increment_view_count(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(f"/api/projects/{self.public_project.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 0)
+        self.public_project.refresh_from_db()
+        self.assertEqual(self.public_project.view_count, 0)
+
+    def test_private_project_detail_does_not_increment_view_count(self):
+        self.client.force_authenticate(user=self.owner)
+
+        response = self.client.get(f"/api/projects/{self.private_project.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 0)
+        self.private_project.refresh_from_db()
+        self.assertEqual(self.private_project.view_count, 0)
+
+
 class PrivateProjectAccessTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw123456")

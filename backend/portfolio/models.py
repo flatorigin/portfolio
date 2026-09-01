@@ -147,6 +147,7 @@ class Project(models.Model):
     )
 
     is_public = models.BooleanField(default=True)
+    view_count = models.PositiveBigIntegerField(default=0)
     tech_stack = models.JSONField(blank=True, null=True)
 
     location = models.CharField(max_length=140, blank=True, default="")
