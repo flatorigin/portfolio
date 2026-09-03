@@ -2020,7 +2020,7 @@ export default function Explore() {
                     ) : null}
 
                     {/* Divider */}
-                    <div className="my-4 border-t border-slate-100" />
+                    <div className="mb-4 mt-auto pt-4 border-b border-slate-100" />
 
                     {/* Footer: phone + website */}
                     <div className="flex items-center justify-between gap-3">
