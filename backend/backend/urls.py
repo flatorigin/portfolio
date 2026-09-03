@@ -10,7 +10,11 @@ from django.views.static import serve
 import os
 
 from accounts.views import ActivationRedirectView, SafeUserCreateViewSet
-from portfolio.social_views import PublicHelperPageView, PublicProjectPageView
+from portfolio.social_views import (
+    PublicBusinessDirectoryPageView,
+    PublicHelperPageView,
+    PublicProjectPageView,
+)
 
 admin.site.site_header = "FlatOrigin Admin"
 admin.site.site_title = "FlatOrigin Admin"
@@ -32,6 +36,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("projects/<int:pk>", PublicProjectPageView.as_view(), name="public-project-page"),
     path("project-helpers/<int:pk>", PublicHelperPageView.as_view(), name="public-helper-page"),
+    path(
+        "business-directory/<int:pk>",
+        PublicBusinessDirectoryPageView.as_view(),
+        name="public-business-directory-page",
+    ),
     path(
         "activate/<str:uid>/<str:token>",
         ActivationRedirectView.as_view(),

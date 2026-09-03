@@ -12,6 +12,7 @@ from .views import (
     SecurityDeleteAccountView,
     SecuritySendVerificationEmailView,
     PublicProfileView,
+    BusinessDirectoryListingDetailView,
     BusinessDirectoryListingLikeView,
     ProfileLikeView,
     LikedProfilesView,
@@ -49,6 +50,7 @@ urlpatterns = [
     path("profiles/contractors/search/", ContractorSearchView.as_view(), name="contractor-search"),
     path("profiles/homeowner-references/", PublicHomeownerReferenceGalleryListView.as_view(), name="homeowner-reference-gallery-list"),
     path("business-directory/", BusinessDirectoryListingView.as_view(), name="business-directory"),
+    path("business-directory/<int:pk>/", BusinessDirectoryListingDetailView.as_view(), name="business-directory-detail"),
     path("business-directory/<int:pk>/like/", BusinessDirectoryListingLikeView.as_view(), name="business-directory-like"),
 
     # ✅ keep like route before/after public profile (either is fine)

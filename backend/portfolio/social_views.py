@@ -5,6 +5,8 @@ from django.conf import settings
 from django.http import HttpResponse
 from django.views import View
 
+from accounts.models import BusinessDirectoryListing
+
 from .models import HelperListing, Project
 
 
@@ -108,6 +110,46 @@ class PublicHelperPageView(View):
         ]
         meta_tags = "\n    ".join(tags)
         page_title = f"{title} | FlatOrigin"
+        html = html.replace("<title>FlatOrigin</title>", f"<title>{escape(page_title)}</title>", 1)
+        html = html.replace("</title>", f"</title>\n    {meta_tags}", 1)
+        return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+
+class PublicBusinessDirectoryPageView(View):
+    def get(self, request, pk):
+        index_path = Path(settings.FRONTEND_DIR) / "index.html"
+        html = index_path.read_text(encoding="utf-8")
+        listing = BusinessDirectoryListing.objects.filter(
+            pk=pk,
+            is_published=True,
+            is_removed=False,
+        ).first()
+
+        if not listing:
+            return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+        name = str(listing.business_name or "Local business").strip()
+        location = str(listing.location or "").strip()
+        specialties = ", ".join(str(item).strip() for item in listing.specialties[:5] if str(item).strip())
+        details = [specialties and f"Services: {specialties}", location and f"Serving {location}"]
+        description = ". ".join(item for item in details if item)[:240]
+        description = description or f"View {name} in the FlatOrigin contractor directory."
+        listing_url = request.build_absolute_uri(f"/business-directory/{listing.id}")
+
+        tags = [
+            f'<meta name="description" content="{escape(description, quote=True)}" />',
+            f'<link rel="canonical" href="{escape(listing_url, quote=True)}" />',
+            '<meta property="og:type" content="profile" />',
+            '<meta property="og:site_name" content="FlatOrigin" />',
+            f'<meta property="og:title" content="{escape(name, quote=True)}" />',
+            f'<meta property="og:description" content="{escape(description, quote=True)}" />',
+            f'<meta property="og:url" content="{escape(listing_url, quote=True)}" />',
+            '<meta name="twitter:card" content="summary" />',
+            f'<meta name="twitter:title" content="{escape(name, quote=True)}" />',
+            f'<meta name="twitter:description" content="{escape(description, quote=True)}" />',
+        ]
+        meta_tags = "\n    ".join(tags)
+        page_title = f"{name} | FlatOrigin"
         html = html.replace("<title>FlatOrigin</title>", f"<title>{escape(page_title)}</title>", 1)
         html = html.replace("</title>", f"</title>\n    {meta_tags}", 1)
         return HttpResponse(html, content_type="text/html; charset=utf-8")

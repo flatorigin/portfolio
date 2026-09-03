@@ -13,7 +13,9 @@ import {
 } from "../ui";
 import ReportContentButton from "../components/ReportContentButton";
 import ProjectShareDialog from "../components/ProjectShareDialog";
+import BusinessShareDialog from "../components/BusinessShareDialog";
 import { isShareablePublicProject } from "../utils/projectShare";
+import { isShareableBusinessListing } from "../utils/businessShare";
 import {
   getCachedLocationOrigin,
   formatDistanceMiles,
@@ -813,6 +815,7 @@ export default function Explore() {
   const [directoryLikeBusyId, setDirectoryLikeBusyId] = useState(null);
   const [visibleDirectoryCount, setVisibleDirectoryCount] = useState(DIRECTORY_BATCH_SIZE);
   const [projectToShare, setProjectToShare] = useState(null);
+  const [directoryToShare, setDirectoryToShare] = useState(null);
 
   // 🔍 filter state
   const [filters, setFilters] = useState({
@@ -1934,29 +1937,46 @@ export default function Explore() {
                 const liked = !!directoryLikeMap[listing.id];
                 const rating = listing.rating ?? 0;
                 const reviewCount = listing.review_count ?? 0;
+                const canShareListing = isShareableBusinessListing(listing);
 
                 return (
                   <div
                     key={`directory-${listing.id}`}
                     className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                   >
-                    {/* Save/Like button - top right */}
-                    <button
-                      type="button"
-                      className="absolute right-4 top-4 text-slate-300 transition hover:text-slate-600 disabled:opacity-50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleDirectoryLike(e, listing);
-                      }}
-                      disabled={directoryLikeBusyId === listing.id}
-                      aria-label={liked ? "Unlike" : "Like"}
-                    >
-                      <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[22px]" />
-                    </button>
+                    <div className="absolute right-3 top-3 flex items-center gap-1">
+                      {canShareListing ? (
+                        <button
+                          type="button"
+                          className="inline-flex size-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setDirectoryToShare(listing);
+                          }}
+                          aria-label={`Share ${listing.business_name || "business"}`}
+                          title="Share business"
+                        >
+                          <SymbolIcon name="share" className="text-[19px]" />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="inline-flex size-9 items-center justify-center rounded-full text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleDirectoryLike(e, listing);
+                        }}
+                        disabled={directoryLikeBusyId === listing.id}
+                        aria-label={liked ? "Unlike" : "Like"}
+                      >
+                        <SymbolIcon name="favorite" fill={liked ? 1 : 0} className="text-[22px]" />
+                      </button>
+                    </div>
 
                     {/* Business name */}
-                    <h3 className="pr-8 text-lg font-semibold text-slate-900">
+                    <h3 className="pr-20 text-lg font-semibold text-slate-900">
                       {listing.business_name}
                     </h3>
 
@@ -2073,6 +2093,12 @@ export default function Explore() {
         project={projectToShare}
         onClose={() => setProjectToShare(null)}
       />
+      {directoryToShare ? (
+        <BusinessShareDialog
+          listing={directoryToShare}
+          onClose={() => setDirectoryToShare(null)}
+        />
+      ) : null}
     </div>
   );
 }

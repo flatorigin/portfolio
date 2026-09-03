@@ -399,19 +399,30 @@ function HelperCard({ helper, authed, onFeedback, initiallyExpanded = false }) {
               compact
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setExpanded((value) => !value)}
-            onFocus={() => setExpanded(true)}
-            className="flex items-center justify-end gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-300"
-            aria-expanded={expanded ? "true" : "false"}
-          >
-            <span>{expanded ? "Show less" : "Show more"}</span>
-            <SymbolIcon
-              name={expanded ? "expand_less" : "expand_more"}
-              className="text-[18px]"
-            />
-          </button>
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              className="inline-flex size-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              aria-label={`Share ${helper.full_name}`}
+              title="Share helper"
+            >
+              <SymbolIcon name="share" className="text-[18px]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              onFocus={() => setExpanded(true)}
+              className="flex items-center justify-end gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              aria-expanded={expanded ? "true" : "false"}
+            >
+              <span>{expanded ? "Show less" : "Show more"}</span>
+              <SymbolIcon
+                name={expanded ? "expand_less" : "expand_more"}
+                className="text-[18px]"
+              />
+            </button>
+          </div>
         </div>
 
       <div

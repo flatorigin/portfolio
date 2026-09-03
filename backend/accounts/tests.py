@@ -1088,6 +1088,37 @@ class BusinessDirectoryListingTests(APITestCase):
         self.assertIn("Hidden specialty", response.data[0]["specialties"])
         self.assertIsNone(response.data[0]["distance_miles"])
 
+    def test_public_listing_detail_returns_only_published_not_removed(self):
+        published = BusinessDirectoryListing.objects.create(
+            business_name="Shareable Contractor",
+            location="Media, PA",
+            specialties=["Decks", "Railings"],
+            phone_number="555-333-4444",
+            is_published=True,
+        )
+        pending = BusinessDirectoryListing.objects.create(
+            business_name="Pending Contractor",
+            location="Media, PA",
+            phone_number="555-333-5555",
+            is_published=False,
+        )
+        removed = BusinessDirectoryListing.objects.create(
+            business_name="Removed Contractor",
+            location="Media, PA",
+            phone_number="555-333-6666",
+            is_published=True,
+            is_removed=True,
+        )
+
+        published_response = self.client.get(f"/api/business-directory/{published.id}/")
+        pending_response = self.client.get(f"/api/business-directory/{pending.id}/")
+        removed_response = self.client.get(f"/api/business-directory/{removed.id}/")
+
+        self.assertEqual(published_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(published_response.data["business_name"], "Shareable Contractor")
+        self.assertEqual(pending_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(removed_response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_public_listing_endpoint_sorts_by_query_coordinates(self):
         regional = BusinessDirectoryListing.objects.create(
             business_name="Baltimore Contractor",

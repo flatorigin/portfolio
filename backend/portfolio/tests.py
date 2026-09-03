@@ -9,7 +9,13 @@ from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import AIConfiguration, AIUsageEvent, Profile, StaffAccess
+from accounts.models import (
+    AIConfiguration,
+    AIUsageEvent,
+    BusinessDirectoryListing,
+    Profile,
+    StaffAccess,
+)
 from .models import (
     Project,
     ProjectImage,
@@ -1674,6 +1680,44 @@ class PublicHelperSharePageTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn("Hidden Helper", content)
+        self.assertNotIn('property="og:title"', content)
+
+
+class PublicBusinessDirectorySharePageTests(APITestCase):
+    def test_public_business_page_includes_social_preview_metadata(self):
+        listing = BusinessDirectoryListing.objects.create(
+            business_name="Decks & More",
+            location="Media, PA",
+            specialties=["Decks", "Railings"],
+            phone_number="555-333-4444",
+            is_published=True,
+        )
+
+        response = self.client.get(f"/business-directory/{listing.id}")
+        content = response.content.decode("utf-8")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Decks &amp; More | FlatOrigin", content)
+        self.assertIn('property="og:title" content="Decks &amp; More"', content)
+        self.assertIn(
+            f'property="og:url" content="http://testserver/business-directory/{listing.id}"',
+            content,
+        )
+        self.assertIn("Services: Decks, Railings", content)
+
+    def test_unpublished_business_page_does_not_leak_social_metadata(self):
+        listing = BusinessDirectoryListing.objects.create(
+            business_name="Hidden Contractor",
+            location="Media, PA",
+            phone_number="555-333-5555",
+            is_published=False,
+        )
+
+        response = self.client.get(f"/business-directory/{listing.id}")
+        content = response.content.decode("utf-8")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("Hidden Contractor", content)
         self.assertNotIn('property="og:title"', content)
 
 

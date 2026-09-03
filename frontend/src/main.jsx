@@ -38,6 +38,7 @@ const ProjectCheckGateway = lazy(() => import("./pages/ProjectCheckGateway.jsx")
 const HomeownerProjectCheck = lazy(() => import("./pages/HomeownerProjectCheck.jsx"));
 const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx"));
 const ProjectHelpers = lazy(() => import("./pages/ProjectHelpers.jsx"));
+const BusinessDirectoryDetail = lazy(() => import("./pages/BusinessDirectoryDetail.jsx"));
 
 function RouteFallback() {
   return (
@@ -78,6 +79,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="project-helpers" element={<ProjectHelpers />} />
           <Route path="project-helpers/:helperId" element={<ProjectHelpers />} />
           <Route path="project-helpers/verify/:token" element={<ProjectHelpers />} />
+          <Route path="business-directory/:listingId" element={<BusinessDirectoryDetail />} />
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />
