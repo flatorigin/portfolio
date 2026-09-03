@@ -27,6 +27,7 @@ import ProjectCheckGateway from "./pages/ProjectCheckGateway";
 import HomeownerProjectCheck from "./pages/HomeownerProjectCheck";
 import ContractorLeadCheck from "./pages/ContractorLeadCheck";
 import ProjectHelpers from "./pages/ProjectHelpers";
+import BusinessDirectoryDetail from "./pages/BusinessDirectoryDetail";
 
 export const router = createBrowserRouter([
   {
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
       { path: "project-helpers", element: <ProjectHelpers /> },
       { path: "project-helpers/:helperId", element: <ProjectHelpers /> },
       { path: "project-helpers/verify/:token", element: <ProjectHelpers /> },
+      { path: "business-directory/:listingId", element: <BusinessDirectoryDetail /> },
       { path: "profile/edit", element: <ProfileEdit /> },
       { path: "profile/saved-likes", element: <SavedLikesPage /> },
       { path: "dashboard", element: <Dashboard /> },

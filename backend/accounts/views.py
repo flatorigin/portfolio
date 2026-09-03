@@ -1030,6 +1030,23 @@ class BusinessDirectoryListingView(APIView):
         )
 
 
+class BusinessDirectoryListingDetailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        listing = get_object_or_404(
+            BusinessDirectoryListing,
+            pk=pk,
+            is_published=True,
+            is_removed=False,
+        )
+        serializer = BusinessDirectoryListingSerializer(
+            listing,
+            context={"request": request},
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class BusinessDirectoryListingLikeView(APIView):
     permission_classes = [IsAuthenticated]
 
