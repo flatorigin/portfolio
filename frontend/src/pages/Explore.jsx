@@ -1758,7 +1758,7 @@ export default function Explore() {
           const canShare = isShareablePublicProject(p);
 
           const card = (
-            <div className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md">
+            <div className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md">
               {/* Cover image with category badge */}
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
                 {coverUrl ? (
@@ -1786,7 +1786,7 @@ export default function Explore() {
                 ) : null}
               </div>
 
-              <div className="p-4">
+              <div className="flex flex-1 flex-col p-4">
                 {/* Title */}
                 <h3 className="font-semibold text-slate-900">{p.title}</h3>
 
@@ -1796,7 +1796,7 @@ export default function Explore() {
                 </p>
 
                 {/* Divider */}
-                <div className="my-3 border-t border-slate-100" />
+                <div className="mb-3 mt-auto border-b border-slate-100 pt-3" />
 
                 {/* Footer: author, location, likes, views */}
                 <div className="flex items-center justify-between text-xs text-slate-500">
@@ -1888,7 +1888,7 @@ export default function Explore() {
             <Link
               key={p.id}
               to={isReferenceGallery ? p.profile_url : `/projects/${p.id}`}
-              className="block text-inherit no-underline"
+              className="block h-full text-inherit no-underline"
             >
               {card}
             </Link>
