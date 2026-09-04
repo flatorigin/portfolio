@@ -17,6 +17,8 @@ const SAMPLE_PROJECTS = [
     budget: "$42,000",
     sqf: "310 sq ft",
     completed: "Completed May 2026",
+    posted: "May 28, 2026",
+    likes: 18,
     summary:
       "Opened the kitchen to the dining room and installed new cabinetry, counters, lighting, and finish details.",
     description:
@@ -29,6 +31,12 @@ const SAMPLE_PROJECTS = [
     ],
     materials: "White shaker cabinetry, oak island, quartz countertops, black hardware",
     highlights: "Structural opening, custom island, quartz counters",
+    review: {
+      author: "Morgan L.",
+      date: "Jun 2, 2026",
+      text: "The new opening completely changed how the first floor feels. The schedule and daily updates were clear from start to finish.",
+      reply: "Thank you, Morgan. We enjoyed helping your family make the kitchen work better for everyday gatherings.",
+    },
     gallery: kitchenGallery,
     galleryLabels: [
       "Completed kitchen and island",
@@ -45,6 +53,8 @@ const SAMPLE_PROJECTS = [
     budget: "$28,500",
     sqf: "420 sq ft",
     completed: "Completed April 2026",
+    posted: "Apr 19, 2026",
+    likes: 12,
     summary:
       "Replaced an aging wood deck with composite boards, picture-frame edges, black railing, and new stairs.",
     description:
@@ -57,6 +67,12 @@ const SAMPLE_PROJECTS = [
     ],
     materials: "Medium-brown composite decking, pressure-treated framing, aluminum railing",
     highlights: "Composite decking, picture-frame border, aluminum railing",
+    review: {
+      author: "Chris D.",
+      date: "Apr 25, 2026",
+      text: "The deck feels solid and the stair layout is much safer. The finish details look especially clean around the border and railing.",
+      reply: "Thank you, Chris. The improved access and low-maintenance finish were the priorities for this rebuild.",
+    },
     gallery: deckGallery,
     galleryLabels: [
       "Completed deck from the yard",
@@ -73,6 +89,8 @@ const SAMPLE_PROJECTS = [
     budget: "$31,800",
     sqf: "145 sq ft",
     completed: "Completed March 2026",
+    posted: "Mar 21, 2026",
+    likes: 15,
     summary:
       "Built a walk-in shower and double vanity with new waterproofing, tile, lighting, plumbing, and glass.",
     description:
@@ -85,6 +103,12 @@ const SAMPLE_PROJECTS = [
     ],
     materials: "Oak double vanity, white tile, light stone flooring, matte black fixtures",
     highlights: "Walk-in shower, double vanity, full waterproofing",
+    review: {
+      author: "Taylor S.",
+      date: "Mar 27, 2026",
+      text: "The shower and vanity storage made the room much more practical. Every transition and tile line looks carefully finished.",
+      reply: "Thank you, Taylor. We are glad the new layout and storage are working well for you.",
+    },
     gallery: bathroomGallery,
     galleryLabels: [
       "Completed vanity and walk-in shower",
@@ -171,7 +195,7 @@ function Gallery({ item, activeIndex, onSelect }) {
   );
 }
 
-function DemoModal({ title, eyebrow, onClose, children }) {
+function useModalLifecycle(onClose) {
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -186,6 +210,10 @@ function DemoModal({ title, eyebrow, onClose, children }) {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose]);
+}
+
+function DemoModal({ title, eyebrow, onClose, children }) {
+  useModalLifecycle(onClose);
 
   return (
     <div
@@ -226,99 +254,259 @@ function DemoModal({ title, eyebrow, onClose, children }) {
   );
 }
 
-function SampleProjectPreview({ project, onClose, onCreateProject }) {
-  const [activeImage, setActiveImage] = useState(0);
+function StaticProjectAction({ icon, children, primary = false }) {
+  return (
+    <span
+      className={`inline-flex h-9 cursor-default items-center gap-1.5 rounded-lg px-3 text-sm font-medium ${
+        primary
+          ? "bg-slate-900 text-white"
+          : "border border-slate-200 bg-white text-slate-700"
+      }`}
+    >
+      <SymbolIcon name={icon} className="text-[16px]" />
+      {children}
+    </span>
+  );
+}
+
+function StaticStars({ rating = 5 }) {
+  return (
+    <div className="inline-flex items-center gap-0" aria-label={`${rating} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        <SymbolIcon
+          key={value}
+          name="star"
+          fill={value <= rating ? 1 : 0}
+          className={value <= rating ? "text-[13px] text-amber-500" : "text-[13px] text-slate-300"}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SampleProjectPreview({ project, onClose }) {
+  useModalLifecycle(onClose);
 
   return (
-    <DemoModal title={project.title} eyebrow="Portfolio project preview" onClose={onClose}>
-      <div className="grid gap-6 p-5 lg:grid-cols-[1.15fr_0.85fr]">
-        <Gallery item={project} activeIndex={activeImage} onSelect={setActiveImage} />
-
-        <div className="space-y-5">
-          <div className="flex flex-wrap gap-2">
-            <Badge className="bg-emerald-50 text-emerald-700">Completed</Badge>
-            <Badge className="bg-slate-100 text-slate-600">{project.category}</Badge>
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/65 px-3 py-4 backdrop-blur-sm sm:px-6 sm:py-8"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="mx-auto max-w-6xl"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sample-project-detail-title"
+      >
+        <div className="mb-0 flex min-h-14 items-center justify-between rounded-t-2xl bg-slate-50 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <Badge className="bg-sky-100 text-[10px] font-semibold text-sky-800">Sample</Badge>
+            <span>/</span>
+            <span className="text-slate-700">Project</span>
           </div>
+          <button type="button" onClick={onClose} className="text-sm text-slate-600 hover:text-slate-900">
+            &larr; Back
+          </button>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-3">
-              <SymbolIcon name="location_on" className="text-[18px] text-slate-500" />
-              <div>
-                <div className="text-xs text-slate-400">Location</div>
-                <div className="font-medium text-slate-800">{project.location}</div>
+        <div className="mb-4 overflow-hidden rounded-b-2xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-white">
+            <div className="px-5 py-5 sm:px-7 sm:py-6">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Project document
+                  </div>
+                  <h1
+                    id="sample-project-detail-title"
+                    className="mt-2 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl"
+                  >
+                    {project.title}
+                  </h1>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">
+                      {project.category}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                      Prepared by Demo Contractor
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                      {project.posted}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 text-slate-700">
+                  <div className="flex items-center gap-1.5">
+                    <span className="min-w-[1ch] text-[18px] font-medium text-slate-900">{project.likes}</span>
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
+                      <SymbolIcon name="favorite" className="text-[18px]" />
+                    </span>
+                  </div>
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
+                    <SymbolIcon name="bookmark" className="text-[18px]" />
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-3">
-              <SymbolIcon name="payments" className="text-[18px] text-slate-500" />
-              <div>
-                <div className="text-xs text-slate-400">Project value</div>
-                <div className="font-medium text-slate-800">{project.budget}</div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-7">
+              <div className="flex flex-wrap items-center gap-2">
+                <StaticProjectAction icon="print">Print</StaticProjectAction>
+                <StaticProjectAction icon="download">Download PDF</StaticProjectAction>
+                <StaticProjectAction icon="share">Share</StaticProjectAction>
+                <StaticProjectAction icon="person">Profile</StaticProjectAction>
               </div>
-            </div>
-            <div className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-3">
-              <SymbolIcon name="square_foot" className="text-[18px] text-slate-500" />
-              <div>
-                <div className="text-xs text-slate-400">Project size</div>
-                <div className="font-medium text-slate-800">{project.sqf}</div>
-              </div>
-            </div>
-            <div className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-3">
-              <SymbolIcon name="event_available" className="text-[18px] text-slate-500" />
-              <div>
-                <div className="text-xs text-slate-400">Status</div>
-                <div className="font-medium text-slate-800">{project.completed}</div>
-              </div>
+              <StaticProjectAction icon="edit" primary>Edit</StaticProjectAction>
             </div>
           </div>
 
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Project description</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{project.description}</p>
-          </div>
+          <div className="space-y-6 p-4 sm:p-7">
+            <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Project overview
+              </div>
+              <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-[15px]">{project.description}</p>
 
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Scope completed</h3>
-            <ul className="mt-2 space-y-2">
-              {project.scope.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm leading-5 text-slate-600">
-                  <SymbolIcon name="check_circle" className="mt-0.5 text-[17px] text-emerald-600" fill={1} />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+              <div className="mt-6 grid gap-y-5 border-t border-slate-200 pt-5 sm:grid-cols-2 lg:grid-cols-4 lg:gap-x-0">
+                {[
+                  ["Location", project.location],
+                  ["Budget", project.budget],
+                  ["Sq Ft", project.sqf],
+                  ["Status", project.completed],
+                ].map(([label, value], index) => (
+                  <div
+                    key={label}
+                    className={`min-w-0 lg:px-5 ${index > 0 ? "lg:border-l lg:border-slate-200" : ""}`}
+                  >
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+                  </div>
+                ))}
+              </div>
 
-          <div className="rounded-xl border border-slate-200 px-4 py-3">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
-              <SymbolIcon name="handyman" className="text-[17px]" />
-              Materials and finishes
-            </div>
-            <p className="mt-2 text-sm text-slate-700">{project.materials}</p>
+              <div className="mt-6 grid gap-5 border-t border-slate-200 pt-5 lg:grid-cols-[0.8fr_1.2fr]">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Highlights</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{project.highlights}</p>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Work completed</div>
+                  <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {project.scope.map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-sm leading-5 text-slate-700">
+                        <SymbolIcon name="check_circle" fill={1} className="mt-0.5 text-[16px] text-emerald-600" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-5">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Materials &amp; tools used
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                  <SymbolIcon name="handyman" className="text-[18px]" />
+                </span>
+                <div className="text-sm font-semibold text-slate-800">{project.materials}</div>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project media</div>
+                <div className="text-[11px] text-slate-500">{project.galleryLabels.length} media items</div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {project.galleryLabels.map((label, index) => (
+                  <div
+                    key={label}
+                    className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm"
+                  >
+                    <div className="relative h-40 w-full overflow-hidden bg-slate-100">
+                      <GalleryImage
+                        sheet={project.gallery}
+                        index={index}
+                        label={label}
+                        className="block h-full w-full bg-cover"
+                      />
+                      <div className="absolute left-2 top-2 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                        Image only
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 text-xs text-slate-700">{label}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Comments</div>
+                <div className="text-[11px] text-slate-500">2 comments</div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
+                  <div className="mb-0.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <span className="font-medium text-slate-700">{project.review.author}</span>
+                    <span>{project.review.date}</span>
+                  </div>
+                  <StaticStars />
+                  <p className="mt-0.5 whitespace-pre-line leading-5 text-slate-800">{project.review.text}</p>
+                </div>
+
+                <div className="ml-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
+                  <div className="mb-0.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-700">Demo Contractor</span>
+                      <span className="rounded-full bg-slate-900 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-white">
+                        Owner
+                      </span>
+                    </div>
+                    <span>{project.review.date}</span>
+                  </div>
+                  <p className="whitespace-pre-line leading-5 text-slate-800">{project.review.reply}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-3">
+                <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-1.5 text-[11px] text-slate-600">
+                  Public comments are text-only. No links or media. Emoji is okay.
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <div className="text-[11px] font-medium text-slate-600">Rating (optional)</div>
+                  <StaticStars rating={0} />
+                </div>
+                <textarea
+                  rows={3}
+                  readOnly
+                  tabIndex={-1}
+                  placeholder="Add a public comment..."
+                  className="mt-2 min-h-[76px] w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
+                />
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-[11px] text-slate-500">0/280</div>
+                  <button
+                    type="button"
+                    aria-disabled="true"
+                    className="h-10 cursor-default rounded-xl bg-slate-900 px-5 text-sm font-medium text-white"
+                  >
+                    Post
+                  </button>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>
-
-      <div className="flex flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end">
-        <button
-          type="button"
-          onClick={onClose}
-          className="h-11 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-        >
-          Close
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            onClose();
-            onCreateProject();
-          }}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          <SymbolIcon name="add" className="text-[19px]" />
-          Create your project
-        </button>
-      </div>
-    </DemoModal>
+    </div>
   );
 }
 
@@ -669,7 +857,6 @@ export default function ContractorDashboardDemo({ isVisible, onCreateProject }) 
         <SampleProjectPreview
           project={activeProject}
           onClose={() => setActiveProject(null)}
-          onCreateProject={onCreateProject}
         />
       ) : null}
       {showBidPreview ? <SampleBidPreview onClose={() => setShowBidPreview(false)} /> : null}
