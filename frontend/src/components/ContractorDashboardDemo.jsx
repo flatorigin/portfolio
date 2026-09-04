@@ -28,6 +28,7 @@ const SAMPLE_PROJECTS = [
       "Completed final paint, hardware adjustments, and cleanup",
     ],
     materials: "White shaker cabinetry, oak island, quartz countertops, black hardware",
+    highlights: "Structural opening, custom island, quartz counters",
     gallery: kitchenGallery,
     galleryLabels: [
       "Completed kitchen and island",
@@ -55,6 +56,7 @@ const SAMPLE_PROJECTS = [
       "Installed black aluminum guards, handrails, and final trim",
     ],
     materials: "Medium-brown composite decking, pressure-treated framing, aluminum railing",
+    highlights: "Composite decking, picture-frame border, aluminum railing",
     gallery: deckGallery,
     galleryLabels: [
       "Completed deck from the yard",
@@ -82,6 +84,7 @@ const SAMPLE_PROJECTS = [
       "Completed glass installation, fixture trim, paint, and punch list",
     ],
     materials: "Oak double vanity, white tile, light stone flooring, matte black fixtures",
+    highlights: "Walk-in shower, double vanity, full waterproofing",
     gallery: bathroomGallery,
     galleryLabels: [
       "Completed vanity and walk-in shower",
@@ -465,64 +468,73 @@ function SampleBidPreview({ onClose }) {
 
 function ProjectCard({ project, onOpen }) {
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md">
-      <button type="button" onClick={onOpen} className="block w-full text-left" aria-label={`Open ${project.title}`}>
-        <GalleryImage
-          sheet={project.gallery}
-          index={0}
-          label={project.galleryLabels[0]}
-          className="h-36 w-full bg-cover"
-        />
-        <div className="grid h-12 grid-cols-3 gap-px bg-white">
-          {[1, 2, 3].map((index) => (
-            <GalleryImage
-              key={project.galleryLabels[index]}
-              sheet={project.gallery}
-              index={index}
-              label={project.galleryLabels[index]}
-              className="h-full w-full bg-cover"
-            />
-          ))}
-        </div>
-      </button>
+    <article
+      className="cursor-pointer overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200 hover:shadow-md"
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${project.title}`}
+    >
+      <GalleryImage
+        sheet={project.gallery}
+        index={0}
+        label={project.galleryLabels[0]}
+        className="block h-36 w-full bg-cover"
+      />
 
-      <div className="flex flex-1 flex-col p-4">
+      <div className="p-4">
         <div className="mb-1 flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-slate-900">{project.title}</h3>
-            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
-              <SymbolIcon name="location_on" className="text-[14px]" />
-              {project.location}
-            </div>
           </div>
-          <Badge className="shrink-0 bg-emerald-50 text-[10px] font-medium text-emerald-700">Completed</Badge>
+          <Badge className="shrink-0 bg-slate-100 text-[10px] text-slate-600">{project.category}</Badge>
         </div>
 
-        <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-600">{project.summary}</p>
+        <p className="line-clamp-2 text-xs text-slate-600">{project.summary}</p>
 
-        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-          <div className="inline-flex items-center gap-1">
-            <SymbolIcon name="payments" className="text-[14px]" />
-            {project.budget}
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          <div>
+            <span className="text-slate-400">Location:</span> {project.location}
           </div>
-          <div className="inline-flex items-center gap-1">
-            <SymbolIcon name="square_foot" className="text-[14px]" />
-            {project.sqf}
+          <div>
+            <span className="text-slate-400">Budget:</span> {project.budget}
           </div>
-          <div className="col-span-2 inline-flex items-center gap-1 truncate">
-            <SymbolIcon name="category" className="text-[14px]" />
-            {project.category}
+          <div>
+            <span className="text-slate-400">Sq Ft:</span> {project.sqf}
+          </div>
+          <div className="col-span-2 truncate">
+            <span className="text-slate-400">Highlights:</span> {project.highlights}
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onOpen}
-          className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          <SymbolIcon name="folder_open" className="text-[18px]" />
-          Open project
-        </button>
+        <div className="mt-3 flex w-full flex-nowrap gap-2">
+          <button
+            type="button"
+            className="flex h-9 w-1/2 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen();
+            }}
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            className="flex h-9 w-1/2 items-center justify-center rounded-xl bg-slate-900 text-sm font-medium text-white transition hover:bg-slate-800"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen();
+            }}
+          >
+            Edit
+          </button>
+        </div>
       </div>
     </article>
   );
@@ -566,12 +578,11 @@ export default function ContractorDashboardDemo({ isVisible, onCreateProject }) 
         </div>
 
         <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Your Projects</div>
-              <div className="text-xs text-slate-500">Open any sample to review its photos, scope, materials, and project details.</div>
-            </div>
-            <span className="shrink-0 text-xs font-medium text-slate-500">3 samples</span>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-900">Your Projects</div>
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+              {SAMPLE_PROJECTS.length} shown
+            </span>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
