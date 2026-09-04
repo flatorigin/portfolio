@@ -418,6 +418,58 @@ class ProjectViewCountTests(APITestCase):
         self.assertEqual(self.private_project.view_count, 0)
 
 
+class ContractorDashboardDemoTests(APITestCase):
+    def setUp(self):
+        self.contractor = User.objects.create_user(
+            username="newcontractor",
+            email="newcontractor@example.com",
+            password="pw123456",
+        )
+        self.profile = set_profile_type(
+            self.contractor,
+            Profile.ProfileType.CONTRACTOR,
+        )
+        self.client.force_authenticate(user=self.contractor)
+
+    def test_first_real_project_permanently_completes_dashboard_demo(self):
+        response = self.client.post(
+            "/api/projects/",
+            {
+                "title": "First portfolio project",
+                "summary": "A completed renovation.",
+                "is_job_posting": False,
+                "is_public": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.profile.refresh_from_db()
+        self.assertIsNotNone(self.profile.contractor_dashboard_demo_completed_at)
+
+        Project.objects.filter(pk=response.data["id"]).delete()
+        me_response = self.client.get("/api/users/me/")
+        self.assertEqual(me_response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(
+            me_response.data["contractor_dashboard_demo_completed_at"]
+        )
+
+    def test_contractor_job_post_does_not_complete_portfolio_demo(self):
+        response = self.client.post(
+            "/api/projects/",
+            {
+                "title": "Contractor job post",
+                "is_job_posting": True,
+                "is_public": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.profile.refresh_from_db()
+        self.assertIsNone(self.profile.contractor_dashboard_demo_completed_at)
+
+
 class PrivateProjectAccessTests(APITestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="owner", password="pw123456")

@@ -9,6 +9,7 @@ import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
 import ContractorMarkupSection from "../components/ContractorMarkupSection";
+import ContractorDashboardDemo from "../components/ContractorDashboardDemo";
 import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
@@ -1073,6 +1074,16 @@ export default function Dashboard() {
 
       if (!isMountedRef.current) return;
 
+      if (
+        meUser?.profile_type === "contractor" &&
+        !isJobPostingFlag(data?.is_job_posting)
+      ) {
+        setMeUser((current) => ({
+          ...current,
+          contractor_dashboard_demo_completed_at: new Date().toISOString(),
+        }));
+      }
+
       setForm({
         title: "",
         summary: "",
@@ -1254,6 +1265,11 @@ export default function Dashboard() {
 
   const isHomeownerAccount = meUser?.profile_type === "homeowner";
   const isContractorAccount = meUser?.profile_type === "contractor";
+  const showContractorDemo =
+    isContractorAccount &&
+    !projectsLoading &&
+    projects.length === 0 &&
+    !meUser?.contractor_dashboard_demo_completed_at;
   const homeownerHasNoJobPosts = isHomeownerAccount && myJobPosts.length === 0;
   const primaryProjectTitle = isHomeownerAccount
     ? homeownerHasNoJobPosts
@@ -1353,6 +1369,10 @@ export default function Dashboard() {
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
       <ContractorMarkupSection isVisible={isContractorAccount} />
+      <ContractorDashboardDemo
+        isVisible={showContractorDemo}
+        onCreateProject={() => setCreateOpen(true)}
+      />
 
       {showJobPostsSection ? (
         showJobPostsLoading ? (

@@ -453,6 +453,15 @@ class MeProfilePersistenceTests(APITestCase):
         self.assertIn("homeowner_onboarding_completed_at", response.data)
         self.assertIn("homeowner_onboarding_dismissed_at", response.data)
 
+    def test_me_response_includes_contractor_dashboard_demo_status(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get("/api/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("contractor_dashboard_demo_completed_at", response.data)
+        self.assertIsNone(response.data["contractor_dashboard_demo_completed_at"])
+
     def test_contractor_categories_round_trip_on_profile_patch(self):
         self.client.force_authenticate(self.user)
 

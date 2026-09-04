@@ -657,7 +657,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return qs.filter(visible_projects_q_for_user(request.user)).distinct()
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        with transaction.atomic():
+            project = serializer.save(owner=self.request.user)
+            if not project.is_job_posting:
+                Profile.objects.filter(
+                    user=self.request.user,
+                    profile_type=Profile.ProfileType.CONTRACTOR,
+                    contractor_dashboard_demo_completed_at__isnull=True,
+                ).update(contractor_dashboard_demo_completed_at=timezone.now())
 
     def perform_update(self, serializer):
         serializer.save(owner=self.request.user)
