@@ -124,9 +124,17 @@ const SAMPLE_JOB = {
   homeowner: "Jamie R.",
   location: "Springfield, PA",
   budget: "$12,000-$18,000",
+  sqf: "240 sq ft",
   timeline: "Flexible start; complete within 3-4 weeks",
   category: "General Contractor",
-  posted: "Posted 2 days ago",
+  postedDate: "Sep 2, 2026",
+  distance: "4.8 mi",
+  likes: 4,
+  postingType: "Public job posting",
+  permits: "Required · Homeowner",
+  expertise: "Structural framing, electrical coordination, drywall, trim, and painting",
+  highlights: "Wider opening, matching existing finishes, occupied home",
+  serviceCategories: ["General Contractor", "Structural Framing", "Drywall & Paint"],
   summary:
     "We want to widen or remove the wall between our kitchen and dining room so the first floor feels more open. We need help confirming whether the wall is load-bearing and completing all framing, electrical, drywall, trim, and paint work.",
   details: [
@@ -135,6 +143,12 @@ const SAMPLE_JOB = {
     "Install the required header and complete framing",
     "Repair flooring, drywall, ceiling, trim, and paint at the opening",
   ],
+  review: {
+    author: "Riverside Build Co.",
+    date: "Sep 3, 2026",
+    text: "Is the wall directly below a second-floor wall, and do you have any original framing plans available?",
+    reply: "It is below the upstairs hallway wall. We do not have framing plans, so we expect the contractor to help coordinate the structural review.",
+  },
   gallery: homeownerJobGallery,
   galleryLabels: [
     "Kitchen facing the dining-room opening",
@@ -159,42 +173,6 @@ function GalleryImage({ sheet, index, label, className = "" }) {
   );
 }
 
-function Gallery({ item, activeIndex, onSelect }) {
-  return (
-    <div>
-      <GalleryImage
-        sheet={item.gallery}
-        index={activeIndex}
-        label={item.galleryLabels[activeIndex]}
-        className="aspect-[3/2] w-full rounded-xl border border-slate-100 bg-cover"
-      />
-      <div className="mt-2 grid grid-cols-4 gap-2">
-        {item.galleryLabels.map((label, index) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => onSelect(index)}
-            className={`overflow-hidden rounded-lg border-2 transition ${
-              activeIndex === index
-                ? "border-slate-900"
-                : "border-transparent hover:border-slate-300"
-            }`}
-            aria-label={`View ${label.toLowerCase()}`}
-            aria-pressed={activeIndex === index}
-          >
-            <GalleryImage
-              sheet={item.gallery}
-              index={index}
-              label=""
-              className="aspect-[3/2] w-full bg-cover"
-            />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function useModalLifecycle(onClose) {
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -210,48 +188,6 @@ function useModalLifecycle(onClose) {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose]);
-}
-
-function DemoModal({ title, eyebrow, onClose, children }) {
-  useModalLifecycle(onClose);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="contractor-demo-modal-title"
-      >
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4">
-          <div className="min-w-0">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <Badge className="bg-sky-100 text-[10px] font-semibold text-sky-800">Sample</Badge>
-              <span className="text-xs text-slate-500">{eyebrow}</span>
-            </div>
-            <h2 id="contractor-demo-modal-title" className="text-lg font-semibold text-slate-900 sm:text-xl">
-              {title}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
-            aria-label="Close preview"
-            title="Close"
-          >
-            <SymbolIcon name="close" className="text-[20px]" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 function StaticProjectAction({ icon, children, primary = false }) {
@@ -511,146 +447,306 @@ function SampleProjectPreview({ project, onClose }) {
 }
 
 function SampleBidPreview({ onClose }) {
-  const [activeImage, setActiveImage] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
-  const [form, setForm] = useState({
-    amount: "14,500",
-    timeline: "2-3 weeks after permit approval",
-    proposal:
-      "I would begin with a site visit to verify the wall conditions, utilities, and structural requirements. After engineering confirmation, our crew can complete the opening, rough work, and finish repairs as one coordinated scope.",
-  });
-
-  function updateField(field) {
-    return (event) => {
-      setSubmitted(false);
-      setForm((current) => ({ ...current, [field]: event.target.value }));
-    };
-  }
-
-  function handleSubmit(event) {
-    event.preventDefault();
-    setSubmitted(true);
-  }
+  useModalLifecycle(onClose);
 
   return (
-    <DemoModal title={SAMPLE_JOB.title} eyebrow="Sample homeowner job - nothing will be submitted" onClose={onClose}>
-      <div className="grid gap-6 p-5 lg:grid-cols-[1fr_1fr]">
-        <div className="space-y-5">
-          <Gallery item={SAMPLE_JOB} activeIndex={activeImage} onSelect={setActiveImage} />
-
-          <div>
-            <div className="flex flex-wrap gap-2">
-              <Badge className="bg-amber-100 text-amber-800">Accepting bids</Badge>
-              <Badge className="bg-slate-100 text-slate-600">{SAMPLE_JOB.category}</Badge>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-slate-700">{SAMPLE_JOB.summary}</p>
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/65 px-3 py-4 backdrop-blur-sm sm:px-6 sm:py-8"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="mx-auto max-w-6xl"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sample-job-detail-title"
+      >
+        <div className="mb-0 flex min-h-14 items-center justify-between rounded-t-2xl bg-slate-50 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <Badge className="bg-sky-100 text-[10px] font-semibold text-sky-800">Sample</Badge>
+            <span>/</span>
+            <span className="text-slate-700">Project</span>
           </div>
-
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Requested scope</h3>
-            <ul className="mt-2 space-y-2">
-              {SAMPLE_JOB.details.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm leading-5 text-slate-600">
-                  <SymbolIcon name="check" className="mt-0.5 text-[17px] text-slate-500" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <button type="button" onClick={onClose} className="text-sm text-slate-600 hover:text-slate-900">
+            &larr; Back
+          </button>
         </div>
 
-        <div>
-          <div className="grid grid-cols-2 gap-3 border-b border-slate-100 pb-5 text-sm">
-            <div>
-              <div className="text-xs text-slate-400">Homeowner</div>
-              <div className="mt-1 font-medium text-slate-800">{SAMPLE_JOB.homeowner}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-400">Location</div>
-              <div className="mt-1 font-medium text-slate-800">{SAMPLE_JOB.location}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-400">Expected budget</div>
-              <div className="mt-1 font-medium text-slate-800">{SAMPLE_JOB.budget}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-400">Timing</div>
-              <div className="mt-1 font-medium text-slate-800">{SAMPLE_JOB.timeline}</div>
-            </div>
-          </div>
+        <div className="mb-4 overflow-hidden rounded-b-2xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-white">
+            <div className="px-5 py-5 sm:px-7 sm:py-6">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Project brief
+                  </div>
+                  <h1
+                    id="sample-job-detail-title"
+                    className="mt-2 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl"
+                  >
+                    {SAMPLE_JOB.title}
+                  </h1>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">
+                      {SAMPLE_JOB.category}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                      Prepared by {SAMPLE_JOB.homeowner}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600">
+                      {SAMPLE_JOB.postedDate}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold tracking-wide text-emerald-800">
+                      JOB POSTING
+                    </span>
+                  </div>
+                </div>
 
-          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <SymbolIcon name="request_quote" className="text-[21px] text-slate-600" />
-              <h3 className="text-base font-semibold text-slate-900">Your bid</h3>
-            </div>
-
-            <div>
-              <label htmlFor="sample-bid-amount" className="mb-1.5 block text-sm font-medium text-slate-800">
-                Bid amount
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
-                <input
-                  id="sample-bid-amount"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.amount}
-                  onChange={updateField("amount")}
-                  className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-7 pr-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-                />
+                <div className="flex items-center justify-end gap-3 text-slate-700">
+                  <div className="flex items-center gap-1.5">
+                    <span className="min-w-[1ch] text-[18px] font-medium text-slate-900">{SAMPLE_JOB.likes}</span>
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
+                      <SymbolIcon name="favorite" className="text-[18px]" />
+                    </span>
+                  </div>
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
+                    <SymbolIcon name="bookmark" className="text-[18px]" />
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div>
-              <label htmlFor="sample-bid-timeline" className="mb-1.5 block text-sm font-medium text-slate-800">
-                Estimated timeline
-              </label>
-              <input
-                id="sample-bid-timeline"
-                type="text"
-                value={form.timeline}
-                onChange={updateField("timeline")}
-                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-              />
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-7">
+              <div className="flex flex-wrap items-center gap-2">
+                <StaticProjectAction icon="print">Print</StaticProjectAction>
+                <StaticProjectAction icon="download">Download PDF</StaticProjectAction>
+                <StaticProjectAction icon="share">Share</StaticProjectAction>
+                <StaticProjectAction icon="person">Profile</StaticProjectAction>
+                <StaticProjectAction icon="chat_bubble">Message</StaticProjectAction>
+                <StaticProjectAction icon="flag">Report</StaticProjectAction>
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label htmlFor="sample-bid-proposal" className="mb-1.5 block text-sm font-medium text-slate-800">
-                Proposal
-              </label>
-              <textarea
-                id="sample-bid-proposal"
-                rows={6}
-                value={form.proposal}
-                onChange={updateField("proposal")}
-                className="w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-              />
-            </div>
+          <div className="space-y-6 p-4 sm:p-7">
+            <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Job overview</div>
+              <p className="mt-3 text-sm leading-7 text-slate-700 sm:text-[15px]">{SAMPLE_JOB.summary}</p>
 
-            {submitted ? (
-              <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">
-                <SymbolIcon name="check_circle" className="mt-0.5 text-[19px] text-emerald-700" fill={1} />
-                <div>
-                  <div className="font-semibold">Sample bid prepared</div>
-                  <div className="mt-0.5 text-xs text-emerald-800">
-                    This preview was not saved or sent to a homeowner.
+              <div className="mt-6 grid gap-y-5 border-t border-slate-200 pt-5 sm:grid-cols-2 xl:grid-cols-6 xl:gap-x-0">
+                {[
+                  ["Location", SAMPLE_JOB.location],
+                  ["Budget", SAMPLE_JOB.budget],
+                  ["Sq Ft", SAMPLE_JOB.sqf],
+                  ["Posting type", SAMPLE_JOB.postingType],
+                  ["Permits", SAMPLE_JOB.permits],
+                  ["Posted", SAMPLE_JOB.postedDate],
+                ].map(([label, value], index) => (
+                  <div
+                    key={label}
+                    className={`min-w-0 xl:px-5 ${index > 0 ? "xl:border-l xl:border-slate-200" : ""}`}
+                  >
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+                    {label === "Location" ? (
+                      <span className="mt-1 inline-flex text-xs font-medium text-sky-700">Show map</span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 border-t border-slate-200 pt-5">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Requirements</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {SAMPLE_JOB.serviceCategories.map((category) => (
+                    <span
+                      key={category}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                    >
+                      {category}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-3 text-sm text-slate-700 lg:grid-cols-2">
+                  <div>
+                    <span className="font-semibold text-slate-900">Required expertise:</span>{" "}
+                    {SAMPLE_JOB.expertise}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Highlights:</span>{" "}
+                    {SAMPLE_JOB.highlights}
+                  </div>
+                  <div className="lg:col-span-2">
+                    <div className="font-semibold text-slate-900">Project requirements:</div>
+                    <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {SAMPLE_JOB.details.map((item) => (
+                        <li key={item} className="flex items-start gap-2 leading-6">
+                          <SymbolIcon name="check_circle" fill={1} className="mt-1 text-[16px] text-emerald-600" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </div>
-            ) : null}
+            </section>
 
-            <button
-              type="submit"
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              <SymbolIcon name="send" className="text-[18px]" />
-              Preview bid submission
-            </button>
-          </form>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Your Bid</h2>
+                  <p className="text-sm text-slate-500">Submit one bid for this project.</p>
+                </div>
+                <span className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700">Refresh</span>
+              </div>
+              <div className="flex justify-end">
+                <span className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white">Send Bid</span>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project media</div>
+                <div className="text-[11px] text-slate-500">{SAMPLE_JOB.galleryLabels.length} media items</div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {SAMPLE_JOB.galleryLabels.map((label, index) => (
+                  <div
+                    key={label}
+                    className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm"
+                  >
+                    <div className="relative h-40 w-full overflow-hidden bg-slate-100">
+                      <GalleryImage
+                        sheet={SAMPLE_JOB.gallery}
+                        index={index}
+                        label={label}
+                        className="block h-full w-full bg-cover"
+                      />
+                      <div className="absolute left-2 top-2 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                        Image only
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 text-xs text-slate-700">{label}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Comments</div>
+                <div className="text-[11px] text-slate-500">2 comments</div>
+              </div>
+              <div className="space-y-2">
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
+                  <div className="mb-0.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <span className="font-medium text-slate-700">{SAMPLE_JOB.review.author}</span>
+                    <span>{SAMPLE_JOB.review.date}</span>
+                  </div>
+                  <StaticStars rating={0} />
+                  <p className="mt-0.5 whitespace-pre-line leading-5 text-slate-800">{SAMPLE_JOB.review.text}</p>
+                </div>
+                <div className="ml-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
+                  <div className="mb-0.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-700">{SAMPLE_JOB.homeowner}</span>
+                      <span className="rounded-full bg-slate-900 px-2 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-white">
+                        Owner
+                      </span>
+                    </div>
+                    <span>{SAMPLE_JOB.review.date}</span>
+                  </div>
+                  <p className="whitespace-pre-line leading-5 text-slate-800">{SAMPLE_JOB.review.reply}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-3">
+                <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-1.5 text-[11px] text-slate-600">
+                  Public comments are text-only. No links or media. Emoji is okay.
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <div className="text-[11px] font-medium text-slate-600">Rating (optional)</div>
+                  <StaticStars rating={0} />
+                </div>
+                <textarea
+                  rows={3}
+                  readOnly
+                  tabIndex={-1}
+                  placeholder="Add a public comment..."
+                  className="mt-2 min-h-[76px] w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
+                />
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-[11px] text-slate-500">0/280</div>
+                  <button
+                    type="button"
+                    aria-disabled="true"
+                    className="h-10 cursor-default rounded-xl bg-slate-900 px-5 text-sm font-medium text-white"
+                  >
+                    Post
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
-    </DemoModal>
+    </div>
+  );
+}
+
+function SampleJobCard({ onOpen }) {
+  return (
+    <article
+      className="group cursor-pointer overflow-hidden rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur-md transition hover:shadow-md"
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${SAMPLE_JOB.title}`}
+    >
+      <div className="relative h-44 bg-slate-100">
+        <GalleryImage
+          sheet={SAMPLE_JOB.gallery}
+          index={0}
+          label={SAMPLE_JOB.galleryLabels[0]}
+          className="h-full w-full bg-cover transition-transform group-hover:scale-[1.02]"
+        />
+        <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+          <Badge className="bg-slate-800 text-[11px] font-semibold text-white">Job posting</Badge>
+        </div>
+      </div>
+
+      <div className="p-4">
+        <h3 className="truncate text-sm font-semibold text-slate-900">{SAMPLE_JOB.title}</h3>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+          <span>by {SAMPLE_JOB.homeowner}</span>
+          <span className="mx-1 text-slate-300" aria-hidden="true">•</span>
+          <span>{SAMPLE_JOB.location}</span>
+          <span className="mx-1 text-slate-300" aria-hidden="true">•</span>
+          <span className="font-semibold text-slate-600">{SAMPLE_JOB.distance}</span>
+        </div>
+
+        <p className="mt-2 line-clamp-2 text-xs text-slate-600">{SAMPLE_JOB.summary}</p>
+
+        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <div className="text-slate-600">
+              <span className="font-medium text-slate-800">0</span> total bids
+            </div>
+            <div className="font-medium text-slate-500">No open bids</div>
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -789,67 +885,9 @@ export default function ContractorDashboardDemo({ isVisible, onCreateProject }) 
             <Badge className="shrink-0 bg-amber-100 text-[10px] font-semibold text-amber-800">New opportunity</Badge>
           </div>
 
-          <article className="grid overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm md:grid-cols-[260px_1fr]">
-            <button
-              type="button"
-              onClick={() => setShowBidPreview(true)}
-              className="block w-full text-left"
-              aria-label={`Open ${SAMPLE_JOB.title}`}
-            >
-              <GalleryImage
-                sheet={SAMPLE_JOB.gallery}
-                index={0}
-                label={SAMPLE_JOB.galleryLabels[0]}
-                className="h-44 w-full bg-cover md:h-full"
-              />
-            </button>
-
-            <div className="flex flex-col p-4 sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                    <span>{SAMPLE_JOB.posted}</span>
-                    <span aria-hidden="true">|</span>
-                    <span>Posted by {SAMPLE_JOB.homeowner}</span>
-                  </div>
-                  <h3 className="text-base font-semibold text-slate-900">{SAMPLE_JOB.title}</h3>
-                </div>
-                <Badge className="bg-slate-100 text-[10px] text-slate-600">{SAMPLE_JOB.category}</Badge>
-              </div>
-
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                <span className="inline-flex items-center gap-1">
-                  <SymbolIcon name="location_on" className="text-[15px]" />
-                  {SAMPLE_JOB.location}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <SymbolIcon name="payments" className="text-[15px]" />
-                  {SAMPLE_JOB.budget}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <SymbolIcon name="schedule" className="text-[15px]" />
-                  Flexible start
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <SymbolIcon name="photo_library" className="text-[15px]" />
-                  4 photos
-                </span>
-              </div>
-
-              <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{SAMPLE_JOB.summary}</p>
-
-              <div className="mt-auto flex justify-end pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowBidPreview(true)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
-                >
-                  <SymbolIcon name="request_quote" className="text-[19px]" />
-                  Open job &amp; practice bidding
-                </button>
-              </div>
-            </div>
-          </article>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SampleJobCard onOpen={() => setShowBidPreview(true)} />
+          </div>
         </div>
       </section>
 
