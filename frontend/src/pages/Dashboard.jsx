@@ -9,7 +9,9 @@ import CreateProjectCard from "../components/CreateProjectCard";
 import ProjectEditorCard from "../components/ProjectEditorCard";
 import ProjectPlannerSection from "../components/ProjectPlannerSection";
 import ContractorMarkupSection from "../components/ContractorMarkupSection";
-import ContractorDashboardDemo from "../components/ContractorDashboardDemo";
+import ContractorDashboardDemo, {
+  ContractorDashboardDemoNotice,
+} from "../components/ContractorDashboardDemo";
 import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
@@ -1336,6 +1338,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
+      {showContractorDemo ? (
+        <ContractorDashboardDemoNotice onCreateProject={() => setCreateOpen(true)} />
+      ) : null}
+
       <header className="flex min-h-14 items-center mb-1">
         <SectionTitle className="!mb-0">Dashboard</SectionTitle>
       </header>
@@ -1369,10 +1375,7 @@ export default function Dashboard() {
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
       <ContractorMarkupSection isVisible={isContractorAccount} />
-      <ContractorDashboardDemo
-        isVisible={showContractorDemo}
-        onCreateProject={() => setCreateOpen(true)}
-      />
+      <ContractorDashboardDemo isVisible={showContractorDemo} />
 
       {showJobPostsSection ? (
         showJobPostsLoading ? (

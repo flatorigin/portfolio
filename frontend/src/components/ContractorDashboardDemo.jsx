@@ -220,6 +220,42 @@ function StaticStars({ rating = 5 }) {
   );
 }
 
+export function ContractorDashboardDemoNotice({ onCreateProject }) {
+  return (
+    <section
+      className="flex flex-col gap-5 rounded-2xl border border-teal-500 bg-teal-600 px-5 py-5 text-white shadow-md sm:flex-row sm:items-center sm:justify-between sm:px-6"
+      aria-labelledby="sample-dashboard-title"
+    >
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-300 text-slate-950 shadow-sm">
+          <SymbolIcon name="preview" className="text-[24px]" />
+        </span>
+        <div>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h2 id="sample-dashboard-title" className="text-xl font-bold text-white sm:text-2xl">
+              Your sample contractor dashboard
+            </h2>
+            <Badge className="bg-white text-[10px] font-semibold text-teal-800">Sample data</Badge>
+          </div>
+          <p className="max-w-3xl text-sm leading-6 text-teal-50">
+            Explore how your projects can be presented, how your work can be featured, and how homeowner
+            opportunities appear. As soon as you create your first project, this sample content is permanently
+            replaced by your own and will not appear again.
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onCreateProject}
+        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-teal-800 shadow-sm transition hover:bg-teal-50"
+      >
+        <SymbolIcon name="add" className="text-[20px]" />
+        Create real project
+      </button>
+    </section>
+  );
+}
+
 function SampleProjectPreview({ project, onClose }) {
   useModalLifecycle(onClose);
 
@@ -230,7 +266,7 @@ function SampleProjectPreview({ project, onClose }) {
       role="presentation"
     >
       <div
-        className="mx-auto max-w-6xl"
+        className="mx-auto max-w-5xl"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -824,7 +860,7 @@ function ProjectCard({ project, onOpen }) {
   );
 }
 
-export default function ContractorDashboardDemo({ isVisible, onCreateProject }) {
+export default function ContractorDashboardDemo({ isVisible }) {
   const [activeProject, setActiveProject] = useState(null);
   const [showBidPreview, setShowBidPreview] = useState(false);
 
@@ -832,35 +868,7 @@ export default function ContractorDashboardDemo({ isVisible, onCreateProject }) 
 
   return (
     <>
-      <section className="space-y-5" aria-labelledby="sample-dashboard-title">
-        <div className="flex flex-col gap-4 rounded-2xl border border-sky-200 bg-sky-50 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm">
-              <SymbolIcon name="preview" className="text-[24px]" />
-            </span>
-            <div>
-              <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                <h2 id="sample-dashboard-title" className="text-xl font-bold text-slate-950 sm:text-2xl">
-                  Your sample contractor dashboard
-                </h2>
-                <Badge className="bg-sky-700 text-[10px] font-semibold text-white">Sample data</Badge>
-              </div>
-              <p className="max-w-2xl text-sm leading-6 text-slate-600">
-                Explore a portfolio and practice responding to a homeowner job. These examples
-                disappear permanently after you create your first project.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onCreateProject}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            <SymbolIcon name="add" className="text-[20px]" />
-            Create real project
-          </button>
-        </div>
-
+      <section className="space-y-5" aria-label="Sample contractor dashboard content">
         <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
           <div className="mb-4 flex items-center justify-between">
             <div className="text-sm font-semibold text-slate-900">Your Projects</div>
