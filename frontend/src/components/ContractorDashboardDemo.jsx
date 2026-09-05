@@ -167,7 +167,7 @@ function GalleryImage({ sheet, index, label, className = "" }) {
       style={{
         backgroundImage: `url(${sheet})`,
         backgroundPosition: GALLERY_POSITIONS[index],
-        backgroundSize: "200% 200%",
+        backgroundSize: "200% auto",
       }}
     />
   );
@@ -456,7 +456,7 @@ function SampleBidPreview({ onClose }) {
       role="presentation"
     >
       <div
-        className="mx-auto max-w-6xl"
+        className="mx-auto max-w-5xl"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
