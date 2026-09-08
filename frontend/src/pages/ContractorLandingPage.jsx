@@ -610,16 +610,16 @@ export default function ContractorLandingPage() {
                 <p className="mt-6 text-pretty text-lg leading-relaxed text-slate-600">
                   Build a focused public profile, showcase completed projects, and bid on homeowner projects directly.
                 </p>
-                <div className="mt-8 flex flex-wrap items-center gap-4">
+                <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                   <Link
                     to={primaryCtaPath}
-                    className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                    className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md sm:w-auto"
                   >
                     {primaryCtaLabel}
                   </Link>
                   <Link
                     to="/work"
-                    className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                   >
                     Explore Projects
                   </Link>

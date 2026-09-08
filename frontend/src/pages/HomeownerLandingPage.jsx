@@ -336,9 +336,9 @@ export default function HomeownerLandingPage() {
           <div className="absolute -bottom-20 -left-20 h-[400px] w-[400px] rounded-full bg-gradient-to-tr from-slate-100/60 to-amber-50/40 blur-3xl" />
 
           <Container className="relative py-16 sm:py-20 lg:py-24">
-            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <div className="grid min-w-0 grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
               {/* Left: Content */}
-              <div className="max-w-xl">
+              <div className="w-full min-w-0 max-w-xl">
                 <Badge className="border-amber-200/60 bg-amber-50 font-semibold uppercase tracking-[0.12em] text-amber-700">
                   Highlighted homeowner feature
                 </Badge>
@@ -349,16 +349,16 @@ export default function HomeownerLandingPage() {
                   Easily turn photos, notes, measurements, and markups into a
                   clear, contractor-ready plan before you reach out for pricing.
                 </p>
-                <div className="mt-8 flex flex-wrap items-center gap-4">
+                <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                   <Link
                     to={primaryCtaPath}
-                    className="inline-flex h-12 items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                    className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-slate-900 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md sm:w-auto"
                   >
                     {primaryCtaLabel}
                   </Link>
                   <Link
                     to="/explore"
-                    className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                    className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
                   >
                     Browse Real Projects
                   </Link>
@@ -395,7 +395,7 @@ export default function HomeownerLandingPage() {
               </div>
 
               {/* Right: Visual - Project Preview Stack */}
-              <div className="relative">
+              <div className="relative min-w-0">
                 {/* Mobile/Tablet: Horizontal scroll preview */}
                 <div className="lg:hidden">
                   <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
