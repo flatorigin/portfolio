@@ -418,6 +418,54 @@ class ProjectViewCountTests(APITestCase):
         self.assertEqual(self.private_project.view_count, 0)
 
 
+class ContractorJobReviewMilestoneTests(APITestCase):
+    def setUp(self):
+        self.homeowner = User.objects.create_user(
+            username="job-owner",
+            password="pw123456",
+        )
+        set_profile_type(self.homeowner, Profile.ProfileType.HOMEOWNER)
+        self.contractor = User.objects.create_user(
+            username="job-reviewer",
+            password="pw123456",
+        )
+        self.profile = set_profile_type(
+            self.contractor,
+            Profile.ProfileType.CONTRACTOR,
+        )
+        self.job_post = Project.objects.create(
+            owner=self.homeowner,
+            title="Kitchen cabinet replacement",
+            is_job_posting=True,
+            is_public=True,
+        )
+        self.portfolio_project = Project.objects.create(
+            owner=self.homeowner,
+            title="Completed kitchen",
+            is_job_posting=False,
+            is_public=True,
+        )
+        self.client.force_authenticate(user=self.contractor)
+
+    def test_opening_job_post_completes_review_milestone(self):
+        response = self.client.get(f"/api/projects/{self.job_post.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertIsNotNone(self.profile.contractor_job_reviewed_at)
+
+        me_response = self.client.get("/api/users/me/")
+        self.assertEqual(me_response.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(me_response.data["contractor_job_reviewed_at"])
+
+    def test_opening_portfolio_project_does_not_complete_review_milestone(self):
+        response = self.client.get(f"/api/projects/{self.portfolio_project.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertIsNone(self.profile.contractor_job_reviewed_at)
+
+
 class ContractorDashboardDemoTests(APITestCase):
     def setUp(self):
         self.contractor = User.objects.create_user(

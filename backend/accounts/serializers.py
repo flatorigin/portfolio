@@ -536,6 +536,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "contractor_onboarding_completed_at",
             "contractor_onboarding_dismissed_at",
             "contractor_dashboard_demo_completed_at",
+            "contractor_job_reviewed_at",
             "homeowner_onboarding_completed_at",
             "homeowner_onboarding_dismissed_at",
             "languages",
@@ -567,6 +568,7 @@ class MeSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "contractor_onboarding_completed_at",
             "contractor_onboarding_dismissed_at",
             "contractor_dashboard_demo_completed_at",
+            "contractor_job_reviewed_at",
         ]
 
     def validate_languages(self, value):
@@ -701,6 +703,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "contractor_onboarding_completed_at",
             "contractor_onboarding_dismissed_at",
             "contractor_dashboard_demo_completed_at",
+            "contractor_job_reviewed_at",
             "homeowner_onboarding_completed_at",
             "homeowner_onboarding_dismissed_at",
             "languages",
@@ -733,6 +736,7 @@ class ProfileSerializer(ProfileBaseMixin, serializers.ModelSerializer):
             "contractor_onboarding_completed_at",
             "contractor_onboarding_dismissed_at",
             "contractor_dashboard_demo_completed_at",
+            "contractor_job_reviewed_at",
             "homeowner_onboarding_completed_at",
             "homeowner_onboarding_dismissed_at",
             "is_frozen",

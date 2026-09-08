@@ -12,6 +12,7 @@ import ContractorMarkupSection from "../components/ContractorMarkupSection";
 import ContractorDashboardDemo, {
   ContractorDashboardDemoNotice,
 } from "../components/ContractorDashboardDemo";
+import ContractorDashboardGuide from "../components/ContractorDashboardGuide";
 import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
@@ -639,6 +640,8 @@ export default function Dashboard() {
   const [myThumbs, setMyThumbs] = useState({});
   const [myBids, setMyBids] = useState([]);
   const [invitedJobPosts, setInvitedJobPosts] = useState([]);
+  const [contractorInboxThreads, setContractorInboxThreads] = useState([]);
+  const [contractorInboxLoading, setContractorInboxLoading] = useState(true);
   const [activeBidCard, setActiveBidCard] = useState(null);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [bidsLoading, setBidsLoading] = useState(true);
@@ -895,6 +898,38 @@ export default function Dashboard() {
     if (!meUser.username) return;
     refreshMyBids();
   }, [meUser.username, refreshMyBids]);
+
+  useEffect(() => {
+    if (meLoading) return;
+    if (meUser.profile_type !== "contractor") {
+      setContractorInboxThreads([]);
+      setContractorInboxLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    const refreshContractorInbox = async () => {
+      try {
+        const { data } = await api.get("/inbox/threads/");
+        if (active && isMountedRef.current) {
+          setContractorInboxThreads(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        if (active && isMountedRef.current) setContractorInboxThreads([]);
+      } finally {
+        if (active && isMountedRef.current) setContractorInboxLoading(false);
+      }
+    };
+
+    refreshContractorInbox();
+    window.addEventListener("inbox:changed", refreshContractorInbox);
+
+    return () => {
+      active = false;
+      window.removeEventListener("inbox:changed", refreshContractorInbox);
+    };
+  }, [meLoading, meUser.profile_type]);
 
   useEffect(() => {
     if (meLoading || meUser.username) return;
@@ -1376,6 +1411,19 @@ export default function Dashboard() {
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
       <ContractorMarkupSection isVisible={isContractorAccount} />
       <ContractorDashboardDemo isVisible={showContractorDemo} />
+
+      {isContractorAccount &&
+      !projectsLoading &&
+      !bidsLoading &&
+      !contractorInboxLoading ? (
+        <ContractorDashboardGuide
+          profile={meUser}
+          projects={projects}
+          bids={myBids}
+          inboxThreads={contractorInboxThreads}
+          onCreateProject={() => setCreateOpen(true)}
+        />
+      ) : null}
 
       {showJobPostsSection ? (
         showJobPostsLoading ? (

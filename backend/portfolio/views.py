@@ -673,6 +673,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         is_owner = request.user.is_authenticated and project.owner_id == request.user.id
 
+        if request.user.is_authenticated and project.is_job_posting and not is_owner:
+            Profile.objects.filter(
+                user=request.user,
+                profile_type=Profile.ProfileType.CONTRACTOR,
+                contractor_job_reviewed_at__isnull=True,
+            ).update(contractor_job_reviewed_at=timezone.now())
+
         if project.is_public and not is_owner:
             Project.objects.filter(pk=project.pk).update(view_count=models.F("view_count") + 1)
             project.view_count = Project.objects.values_list("view_count", flat=True).get(pk=project.pk)

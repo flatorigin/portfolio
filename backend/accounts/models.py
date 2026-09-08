@@ -127,6 +127,7 @@ class Profile(models.Model):
     contractor_onboarding_completed_at = models.DateTimeField(null=True, blank=True)
     contractor_onboarding_dismissed_at = models.DateTimeField(null=True, blank=True)
     contractor_dashboard_demo_completed_at = models.DateTimeField(null=True, blank=True)
+    contractor_job_reviewed_at = models.DateTimeField(null=True, blank=True)
     homeowner_onboarding_completed_at = models.DateTimeField(null=True, blank=True)
     homeowner_onboarding_dismissed_at = models.DateTimeField(null=True, blank=True)
 
