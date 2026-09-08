@@ -598,9 +598,9 @@ export default function ContractorLandingPage() {
           <div className="absolute -bottom-20 -right-20 h-[400px] w-[400px] rounded-full bg-gradient-to-tr from-slate-100/60 to-blue-50/40 blur-3xl" />
           
           <Container className="relative py-16 sm:py-20 lg:py-24">
-            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <div className="grid min-w-0 grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
               {/* Left: Content */}
-              <div className="max-w-xl">
+              <div className="w-full min-w-0 max-w-xl">
                 <Badge className="border-blue-200/60 bg-blue-50 font-semibold uppercase tracking-[0.12em] text-blue-700">
                   For contractors
                 </Badge>
@@ -647,7 +647,7 @@ export default function ContractorLandingPage() {
               </div>
 
               {/* Right: Visual - Profile Preview */}
-              <div className="relative">
+              <div className="relative min-w-0">
                 {/* Mobile/Tablet: Job cards preview */}
                 <div className="lg:hidden">
                   <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
