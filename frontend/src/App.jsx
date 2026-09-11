@@ -316,6 +316,11 @@ export default function App() {
     navigate("/profile/saved-likes");
   };
 
+  const goAiUsage = () => {
+    setMenuOpen(false);
+    navigate("/profile/ai-usage");
+  };
+
   const goSetupGuide = () => {
     setMenuOpen(false);
     sessionStorage.setItem("dashboard-setup-guide-request-open", "1");
@@ -501,6 +506,17 @@ export default function App() {
                           <SymbolIcon name="favorite" className="text-[18px]" />
                         </span>
                         <span>Saved &amp; Likes</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={goAiUsage}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
+                          <SymbolIcon name="smart_toy" className="text-[18px]" />
+                        </span>
+                        <span>AI Usage</span>
                       </button>
 
                       <button
