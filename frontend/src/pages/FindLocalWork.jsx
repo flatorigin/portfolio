@@ -327,7 +327,10 @@ export default function FindLocalWork() {
           </header>
 
           {/* Search bar - translucent */}
-          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md sm:flex-row sm:items-center">
+          <div
+            className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-md sm:flex-row sm:items-center"
+            data-onboarding-target="find-work"
+          >
             <div className="relative flex-1">
               <SymbolIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-slate-400" />
               <input

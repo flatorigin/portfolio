@@ -574,7 +574,10 @@ export default function ProjectPlanDetail() {
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
-        <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <Card
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          data-onboarding-target="project-details"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-lg font-semibold text-slate-950">Project Packet Builder</div>
@@ -925,7 +928,10 @@ export default function ProjectPlanDetail() {
         </Card>
       ) : null}
 
-      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <Card
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        data-onboarding-target="project-visuals"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-lg font-semibold text-slate-950">Project Photos & Markup</div>
@@ -1249,7 +1255,10 @@ export default function ProjectPlanDetail() {
       ) : null}
 
       {finalReady ? (
-      <Card className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <Card
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        data-onboarding-target="share-project"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-lg font-semibold text-slate-950">Generate Contractor-Ready Project</div>

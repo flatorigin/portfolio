@@ -12,7 +12,7 @@ import ContractorMarkupSection from "../components/ContractorMarkupSection";
 import ContractorDashboardDemo, {
   ContractorDashboardDemoNotice,
 } from "../components/ContractorDashboardDemo";
-import ContractorDashboardGuide from "../components/ContractorDashboardGuide";
+import DashboardSetupGuide from "../components/DashboardSetupGuide";
 import { SectionTitle, Badge, SymbolIcon } from "../ui";
 import { PROJECT_CHECK_TRANSFER_KEY } from "../data/projectChecklists";
 
@@ -1412,11 +1412,10 @@ export default function Dashboard() {
       <ContractorMarkupSection isVisible={isContractorAccount} />
       <ContractorDashboardDemo isVisible={showContractorDemo} />
 
-      {isContractorAccount &&
+      {(isContractorAccount || isHomeownerAccount) &&
       !projectsLoading &&
-      !bidsLoading &&
-      !contractorInboxLoading ? (
-        <ContractorDashboardGuide
+      (isHomeownerAccount || (!bidsLoading && !contractorInboxLoading)) ? (
+        <DashboardSetupGuide
           profile={meUser}
           projects={projects}
           bids={myBids}

@@ -280,7 +280,10 @@ export default function ProjectPlannerSection({ isVisible = false }) {
   if (!isVisible) return null;
 
   return (
-    <Card className="border border-slate-200 p-5 shadow-none">
+    <Card
+      className="border border-slate-200 p-5 shadow-none"
+      data-onboarding-target="project-planner"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-lg font-semibold text-slate-900">Plan a Project</div>

@@ -198,68 +198,6 @@ function LandingNav() {
   );
 }
 
-function ContractorSetupBanner() {
-  const authed = !!localStorage.getItem("access");
-  const [showBanner, setShowBanner] = useState(false);
-
-  useEffect(() => {
-    if (!authed) {
-      setShowBanner(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadProfile() {
-      try {
-        const { data } = await api.get("/users/me/");
-        if (cancelled) return;
-        setShowBanner(
-          data?.profile_type === "contractor" &&
-            !data?.contractor_onboarding_completed_at
-        );
-      } catch {
-        if (!cancelled) setShowBanner(false);
-      }
-    }
-
-    loadProfile();
-
-    const handleProfileChanged = () => loadProfile();
-    window.addEventListener("profile:changed", handleProfileChanged);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("profile:changed", handleProfileChanged);
-    };
-  }, [authed]);
-
-  if (!showBanner) return null;
-
-  return (
-    <div className="border-b border-slate-200 bg-white">
-      <Container>
-        <div className="flex min-h-20 flex-col justify-center gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-950">
-              Continue your free contractor setup
-            </p>
-            <p className="mt-1 text-sm text-slate-600">
-              Finish your profile so homeowners can browse your work. No credit card required.
-            </p>
-          </div>
-          <Link
-            to="/onboarding/contractor"
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            Continue contractor setup
-          </Link>
-        </div>
-      </Container>
-    </div>
-  );
-}
-
 function ProjectFeedPreview() {
   const [locationOrigin, setLocationOrigin] = useState(getCachedLocationOrigin);
   const [jobs, setJobs] = useState([]);
@@ -543,52 +481,16 @@ function LocalMapPreview() {
 
 export default function ContractorLandingPage() {
   const authed = !!localStorage.getItem("access");
-  const [me, setMe] = useState(null);
-
-  useEffect(() => {
-    if (!authed) {
-      setMe(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadProfile() {
-      try {
-        const { data } = await api.get("/users/me/");
-        if (!cancelled) setMe(data);
-      } catch {
-        if (!cancelled) setMe(null);
-      }
-    }
-
-    loadProfile();
-
-    const handleProfileChanged = () => loadProfile();
-    window.addEventListener("profile:changed", handleProfileChanged);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("profile:changed", handleProfileChanged);
-    };
-  }, [authed]);
-
-  const onboardingComplete = !!me?.contractor_onboarding_completed_at;
   const primaryCtaPath = authed
-    ? onboardingComplete
-      ? "/profile/edit"
-      : "/onboarding/contractor"
+    ? "/dashboard"
     : "/register?role=contractor";
   const primaryCtaLabel = authed
-    ? onboardingComplete
-      ? "Complete your profile"
-      : "Continue Contractor Setup"
+    ? "Open Dashboard"
     : "Create Contractor Profile";
 
   return (
     <div className="bg-[#FBF9F7] text-slate-900">
       <LandingNav />
-      <ContractorSetupBanner />
       <main>
         {/* Hero Section */}
         <section className="relative overflow-hidden">

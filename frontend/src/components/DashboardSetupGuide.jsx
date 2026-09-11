@@ -1,9 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import api from "../api";
 import { SymbolIcon } from "../ui";
 
 function hasText(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasPlanDetails(plan) {
+  const title = String(plan?.title || "").trim();
+  return (
+    title.length > 0 &&
+    !["Untitled issue", "Untitled project plan"].includes(title) &&
+    hasText(plan?.house_location) &&
+    hasText(plan?.issue_summary)
+  );
+}
+
+function hasPlanVisuals(plan) {
+  const versions = Array.isArray(plan?.markup_data?.versions)
+    ? plan.markup_data.versions
+    : [];
+  return (Array.isArray(plan?.images) && plan.images.length > 0) || versions.length > 0;
 }
 
 function isHomeownerConnection(thread, username) {
@@ -27,39 +45,138 @@ function isHomeownerConnection(thread, username) {
   );
 }
 
-export default function ContractorDashboardGuide({
+function projectIsJobPost(project) {
+  const value = project?.is_job_posting;
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
+export default function DashboardSetupGuide({
   profile,
   projects = [],
   bids = [],
   inboxThreads = [],
   onCreateProject,
 }) {
-  const storageKey = profile?.username
-    ? `contractor-dashboard-guide-seen:${profile.username}`
-    : "";
+  const location = useLocation();
+  const role = profile?.profile_type;
+  const username = profile?.username || "";
+  const storageKey = username ? `dashboard-setup-guide-seen:${username}` : "";
   const [open, setOpen] = useState(() => {
-    if (!profile?.username) return false;
-    return localStorage.getItem(
-      `contractor-dashboard-guide-seen:${profile.username}`
-    ) !== "1";
+    if (!username) return false;
+    const newGuideSeen =
+      localStorage.getItem(`dashboard-setup-guide-seen:${username}`) === "1";
+    const previousContractorGuideSeen =
+      role === "contractor" &&
+      localStorage.getItem(`contractor-dashboard-guide-seen:${username}`) === "1";
+    return !newGuideSeen && !previousContractorGuideSeen;
   });
   const [activeStep, setActiveStep] = useState(0);
+  const [plans, setPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(role === "homeowner");
+
+  useEffect(() => {
+    if (role !== "homeowner") {
+      setPlans([]);
+      setPlansLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setPlansLoading(true);
+    api
+      .get("/project-plans/", { params: { scope: "active" } })
+      .then(({ data }) => {
+        if (active) setPlans(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (active) setPlans([]);
+      })
+      .finally(() => {
+        if (active) setPlansLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [role, username]);
 
   const steps = useMemo(() => {
+    if (role === "homeowner") {
+      const firstPlan = plans.find((plan) => plan?.status !== "archived") || plans[0];
+      const planPath = firstPlan?.id
+        ? `/dashboard/planner/${firstPlan.id}`
+        : "/dashboard";
+      const hasContactDetails = Boolean(
+        (hasText(profile?.contact_email) || hasText(profile?.email)) &&
+          hasText(profile?.contact_phone),
+      );
+
+      return [
+        {
+          title: "Start a private project plan",
+          description:
+            "Create a private workspace before sharing anything with contractors.",
+          complete: plans.length > 0,
+          actionLabel: "Open planner",
+          to: "/dashboard?onboarding=start-plan",
+          icon: "add_home_work",
+        },
+        {
+          title: "Describe the project",
+          description:
+            "Add the project name, work area, type, and a short summary of what needs to happen.",
+          complete: plans.some(hasPlanDetails),
+          actionLabel: firstPlan ? "Add details" : "Start a plan",
+          to: `${planPath}?onboarding=${firstPlan ? "project-details" : "start-plan"}`,
+          icon: "description",
+        },
+        {
+          title: "Add visual information",
+          description:
+            "Upload photos, create a floor plan, or add markup when it helps explain the work.",
+          complete: plans.some(hasPlanVisuals),
+          actionLabel: firstPlan ? "Add visuals" : "Start a plan",
+          to: `${planPath}?onboarding=${firstPlan ? "project-visuals" : "start-plan"}`,
+          icon: "photo_library",
+        },
+        {
+          title: "Complete your contact details",
+          description:
+            "Add your name, project area, and contact information for contractor conversations.",
+          complete:
+            hasText(profile?.display_name) &&
+            hasText(profile?.service_location) &&
+            hasContactDetails,
+          actionLabel: "Complete profile",
+          to: "/onboarding/homeowner",
+          icon: "person",
+        },
+        {
+          title: "Share the project",
+          description:
+            "Review the project packet, then publish it or invite a contractor.",
+          complete: projects.some(projectIsJobPost),
+          actionLabel: firstPlan ? "Review project" : "Start a plan",
+          to: `${planPath}?onboarding=${firstPlan ? "share-project" : "start-plan"}`,
+          icon: "send",
+        },
+      ];
+    }
+
     const categories = Array.isArray(profile?.contractor_categories)
       ? profile.contractor_categories
       : [];
     const hasProfileImage = Boolean(
-      profile?.avatar_url || profile?.avatar || profile?.logo
+      profile?.avatar_url || profile?.avatar || profile?.logo,
     );
     const hasContactDetails = Boolean(
       (hasText(profile?.contact_email) || hasText(profile?.email)) &&
-        hasText(profile?.contact_phone)
+        hasText(profile?.contact_phone),
     );
     const hasConnection =
       bids.length > 0 ||
       inboxThreads.some((thread) =>
-        isHomeownerConnection(thread, profile?.username)
+        isHomeownerConnection(thread, profile?.username),
       );
 
     return [
@@ -72,8 +189,8 @@ export default function ContractorDashboardGuide({
           hasProfileImage &&
           hasContactDetails &&
           hasText(profile?.bio),
-        actionLabel: "Open profile",
-        to: "/profile/edit",
+        actionLabel: "Open setup",
+        to: "/onboarding/contractor",
         icon: "business_center",
       },
       {
@@ -85,7 +202,7 @@ export default function ContractorDashboardGuide({
           hasText(profile?.contractor_primary_category) &&
           categories.length > 0,
         actionLabel: "Set services",
-        to: "/profile/edit",
+        to: "/profile/edit?onboarding=services",
         icon: "distance",
       },
       {
@@ -103,23 +220,26 @@ export default function ContractorDashboardGuide({
           "Open a relevant job posting and review its scope, location, and requirements.",
         complete: Boolean(profile?.contractor_job_reviewed_at),
         actionLabel: "Find work",
-        to: "/work",
+        to: "/work?onboarding=review-work",
         icon: "assignment",
       },
       {
         title: "Make your first connection",
-        description:
-          "Submit a bid or message a homeowner about a project.",
+        description: "Submit a bid or message a homeowner about a project.",
         complete: hasConnection,
         actionLabel: "View opportunities",
-        to: "/work",
+        to: "/work?onboarding=make-connection",
         icon: "handshake",
       },
     ];
-  }, [profile, projects.length, bids.length, inboxThreads, onCreateProject]);
+  }, [role, plans, profile, projects, bids, inboxThreads, onCreateProject]);
 
   const completedCount = steps.filter((step) => step.complete).length;
-  const allComplete = completedCount === steps.length;
+  const allComplete = steps.length > 0 && completedCount === steps.length;
+  const guideTitle =
+    role === "homeowner"
+      ? "Get your first project ready"
+      : "Build your contractor presence";
 
   useEffect(() => {
     if (!storageKey || !allComplete) return;
@@ -128,14 +248,38 @@ export default function ContractorDashboardGuide({
   }, [allComplete, storageKey]);
 
   useEffect(() => {
-    if (!profile?.username || allComplete) return;
+    if (!username || allComplete) return;
     const nextIncomplete = steps.findIndex((step) => !step.complete);
     setActiveStep(nextIncomplete >= 0 ? nextIncomplete : 0);
-  }, [profile?.username, allComplete]);
+  }, [username, allComplete, steps]);
 
-  if (profile?.profile_type !== "contractor" || allComplete) return null;
+  useEffect(() => {
+    const reopen = () => {
+      const nextIncomplete = steps.findIndex((step) => !step.complete);
+      setActiveStep(nextIncomplete >= 0 ? nextIncomplete : 0);
+      setOpen(true);
+    };
+    window.addEventListener("onboarding:open", reopen);
+    return () => window.removeEventListener("onboarding:open", reopen);
+  }, [steps]);
 
-  const step = steps[activeStep];
+  useEffect(() => {
+    if (sessionStorage.getItem("dashboard-setup-guide-request-open") !== "1") {
+      return;
+    }
+    sessionStorage.removeItem("dashboard-setup-guide-request-open");
+    const nextIncomplete = steps.findIndex((step) => !step.complete);
+    setActiveStep(nextIncomplete >= 0 ? nextIncomplete : 0);
+    setOpen(true);
+  }, [steps]);
+
+  if (!username || !["homeowner", "contractor"].includes(role) || plansLoading) {
+    return null;
+  }
+  if (new URLSearchParams(location.search).has("onboarding")) return null;
+  if (allComplete && !open) return null;
+
+  const step = steps[activeStep] || steps[0];
 
   const minimize = () => {
     if (storageKey) localStorage.setItem(storageKey, "1");
@@ -159,8 +303,8 @@ export default function ContractorDashboardGuide({
         type="button"
         onClick={reopen}
         className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-14 items-center gap-2 rounded-full bg-slate-950 px-4 text-white shadow-xl transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:bottom-5 sm:right-5"
-        aria-label="Open contractor setup guide"
-        title="Open contractor setup guide"
+        aria-label={`Open ${guideTitle.toLowerCase()}`}
+        title="Open setup guide"
       >
         <SymbolIcon name="checklist" className="text-[24px]" weight={500} />
         <span className="text-sm font-semibold">{completedCount}/5</span>
@@ -170,14 +314,14 @@ export default function ContractorDashboardGuide({
 
   return (
     <aside
-      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:w-[360px]"
-      aria-label="Build your contractor presence"
+      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:w-[360px]"
+      aria-label={guideTitle}
       aria-live="polite"
     >
       <div className="border-b border-slate-100 bg-slate-950 px-4 py-4 text-white">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-base font-semibold">Build your contractor presence</div>
+            <div className="text-base font-semibold">{guideTitle}</div>
             <div className="mt-1 text-xs text-slate-300">
               {completedCount} of 5 completed
             </div>
@@ -186,7 +330,7 @@ export default function ContractorDashboardGuide({
             type="button"
             onClick={minimize}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-300 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/70"
-            aria-label="Minimize contractor setup guide"
+            aria-label="Minimize setup guide"
             title="Minimize"
           >
             <SymbolIcon name="remove" className="text-[22px]" weight={500} />
@@ -203,8 +347,8 @@ export default function ContractorDashboardGuide({
                 index === activeStep
                   ? "border-white bg-white text-slate-950"
                   : item.complete
-                  ? "border-emerald-400/60 bg-emerald-400/15 text-emerald-200"
-                  : "border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-400"
+                    ? "border-emerald-400/60 bg-emerald-400/15 text-emerald-200"
+                    : "border-slate-600 bg-slate-900 text-slate-300 hover:border-slate-400"
               }`}
               aria-label={`${item.title}${item.complete ? ", complete" : ""}`}
             >

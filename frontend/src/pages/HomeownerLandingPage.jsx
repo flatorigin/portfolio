@@ -282,47 +282,10 @@ function HomeownerUpdates({ primaryCtaPath }) {
 
 export default function HomeownerLandingPage() {
   const authed = !!localStorage.getItem("access");
-  const [me, setMe] = useState(null);
-
-  useEffect(() => {
-    if (!authed) {
-      setMe(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadProfile() {
-      try {
-        const { data } = await api.get("/users/me/");
-        if (!cancelled) setMe(data);
-      } catch {
-        if (!cancelled) setMe(null);
-      }
-    }
-
-    loadProfile();
-
-    const handleProfileChanged = () => loadProfile();
-    window.addEventListener("profile:changed", handleProfileChanged);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("profile:changed", handleProfileChanged);
-    };
-  }, [authed]);
-
-  const onboardingComplete = !!me?.homeowner_onboarding_completed_at;
   const primaryCtaPath = authed
-    ? onboardingComplete
-      ? "/dashboard"
-      : "/onboarding/homeowner"
+    ? "/dashboard"
     : "/register?role=homeowner";
-  const primaryCtaLabel = authed
-    ? onboardingComplete
-      ? "Start a Project"
-      : "Continue Homeowner Setup"
-    : "Start a Project";
+  const primaryCtaLabel = "Start a Project";
 
   return (
     <div className="bg-[#FBF9F7] text-slate-900">

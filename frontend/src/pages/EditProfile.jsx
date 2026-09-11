@@ -934,7 +934,10 @@ export default function EditProfile() {
   ]);
 
   const renderContractorCategoriesSection = () => (
-    <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+    <div
+      className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md"
+      data-onboarding-target="services"
+    >
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-base font-semibold text-slate-900">

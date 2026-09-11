@@ -10,6 +10,7 @@ import { Container, SymbolIcon } from "./ui";
 import { logout } from "./auth";
 import { roleLandingPath } from "./landingRole";
 import FeedbackSupportModal from "./components/FeedbackSupportModal";
+import ContextualOnboardingPrompt from "./components/ContextualOnboardingPrompt";
 
 function normalizeUsername(value) {
   return String(value || "").trim().toLowerCase();
@@ -25,10 +26,6 @@ function safeJsonParse(raw, fallback) {
 
 function getInboxReadMap() {
   return safeJsonParse(localStorage.getItem("inbox_read_map") || "{}", {});
-}
-
-function getOnboardingPromptKey(me, role) {
-  return `${role}_onboarding_prompt_seen:${me?.id || me?.username || "unknown"}`;
 }
 
 export default function App() {
@@ -60,7 +57,6 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-  const [showContractorSetupPrompt, setShowContractorSetupPrompt] = useState(false);
   const [inboxThreads, setInboxThreads] = useState([]);
   const [inboxReadMap, setInboxReadMap] = useState(() => getInboxReadMap());
   const menuRef = useRef(null);
@@ -134,30 +130,6 @@ export default function App() {
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
-
-  const needsContractorSetup =
-    authed &&
-    me?.profile_type === "contractor" &&
-    !me?.contractor_onboarding_completed_at;
-  const needsHomeownerSetup =
-    authed &&
-    me?.profile_type === "homeowner" &&
-    !me?.homeowner_onboarding_completed_at;
-  const needsRoleSetup = needsContractorSetup || needsHomeownerSetup;
-  const setupRole = needsContractorSetup ? "contractor" : needsHomeownerSetup ? "homeowner" : "";
-  const isContractorOnboardingPath = pathname.startsWith("/onboarding/contractor");
-  const isHomeownerOnboardingPath = pathname.startsWith("/onboarding/homeowner");
-  const isRoleOnboardingPath = isContractorOnboardingPath || isHomeownerOnboardingPath;
-
-  useEffect(() => {
-    if (!needsRoleSetup || isRoleOnboardingPath) {
-      setShowContractorSetupPrompt(false);
-      return;
-    }
-
-    const promptKey = getOnboardingPromptKey(me, setupRole);
-    setShowContractorSetupPrompt(localStorage.getItem(promptKey) !== "1");
-  }, [needsRoleSetup, isRoleOnboardingPath, setupRole, me?.id, me?.username]);
 
   useEffect(() => {
     const syncReadMap = () => {
@@ -344,14 +316,13 @@ export default function App() {
     navigate("/profile/saved-likes");
   };
 
-  const goRoleSetup = () => {
-    setShowContractorSetupPrompt(false);
-    navigate(`/onboarding/${setupRole || "contractor"}`);
-  };
-
-  const skipRoleSetupPrompt = () => {
-    localStorage.setItem(getOnboardingPromptKey(me, setupRole || "contractor"), "1");
-    setShowContractorSetupPrompt(false);
+  const goSetupGuide = () => {
+    setMenuOpen(false);
+    sessionStorage.setItem("dashboard-setup-guide-request-open", "1");
+    navigate("/dashboard");
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("onboarding:open"));
+    }, 0);
   };
 
   return (
@@ -466,6 +437,17 @@ export default function App() {
                           <SymbolIcon name="dashboard" className="text-[18px]" />
                         </span>
                         <span>Dashboard</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={goSetupGuide}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
+                          <SymbolIcon name="checklist" className="text-[18px]" />
+                        </span>
+                        <span>Setup Guide</span>
                       </button>
 
                       {/* Inbox (route-based) */}
@@ -629,78 +611,6 @@ export default function App() {
       </header>
       ) : null}
 
-      {showContractorSetupPrompt ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-900">
-              <SymbolIcon
-                name={setupRole === "homeowner" ? "home" : "construction"}
-                className="text-[24px]"
-              />
-            </div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
-              {setupRole === "homeowner" ? "Homeowner setup" : "Contractor setup"}
-            </p>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-950">
-              {setupRole === "homeowner"
-                ? "Set up your free homeowner profile."
-                : "Set up your free contractor profile."}
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {setupRole === "homeowner"
-                ? "Add your project area and contact preferences so your project planning starts cleanly. No credit card required."
-                : "Add your service area, trade categories, and business details so homeowners can browse your work and understand what you do. No credit card required."}
-            </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={goRoleSetup}
-                className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Get started
-              </button>
-              <button
-                type="button"
-                onClick={skipRoleSetupPrompt}
-                className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Skip for now
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {needsRoleSetup && !isRoleOnboardingPath && !hideShellNav ? (
-        <div className="border-b border-slate-200 bg-white">
-          <Container>
-            <div className="flex min-h-20 flex-col justify-center gap-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-950">
-                  {setupRole === "homeowner"
-                    ? "Continue your free homeowner setup"
-                    : "Continue your free contractor setup"}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {setupRole === "homeowner"
-                    ? "Finish your setup so project planning and contractor conversations start cleanly. No credit card required."
-                    : "Finish your profile so homeowners can browse your work. No credit card required."}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={goRoleSetup}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                {setupRole === "homeowner"
-                  ? "Continue homeowner setup"
-                  : "Continue contractor setup"}
-              </button>
-            </div>
-          </Container>
-        </div>
-      ) : null}
-
       <main className="w-full overflow-x-clip">
         {isFullBleed ? (
           <Outlet />
@@ -710,6 +620,8 @@ export default function App() {
           </Container>
         )}
       </main>
+
+      {authed ? <ContextualOnboardingPrompt /> : null}
 
       <FeedbackSupportModal
         open={feedbackModalOpen}
