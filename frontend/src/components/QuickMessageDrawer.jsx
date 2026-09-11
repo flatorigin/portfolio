@@ -25,28 +25,14 @@ function toInitial(nameOrUsername) {
   return s ? s[0].toUpperCase() : "U";
 }
 
-function safeJsonParse(raw, fallback) {
+async function markInboxThreadRead(threadId) {
+  if (!threadId) return;
   try {
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
+    await api.post(`/inbox/threads/${threadId}/read/`);
+    window.dispatchEvent(new CustomEvent("inbox:changed"));
+  } catch (err) {
+    console.warn("[QuickMessageDrawer] failed to mark thread read", err?.response || err);
   }
-}
-
-function getInboxReadMap() {
-  return safeJsonParse(localStorage.getItem("inbox_read_map") || "{}", {});
-}
-
-function markInboxThreadLatestRead(threadId, latestMessageId) {
-  if (!threadId || !latestMessageId) return false;
-  const map = getInboxReadMap();
-  const key = String(threadId);
-  const value = String(latestMessageId);
-  if (String(map[key] || "") === value) return false;
-  map[key] = value;
-  localStorage.setItem("inbox_read_map", JSON.stringify(map));
-  window.dispatchEvent(new CustomEvent("inbox:read-map-changed"));
-  return true;
 }
 
 function MessageAttachments({
@@ -269,8 +255,7 @@ export default function QuickMessageDrawer({
 
   useEffect(() => {
     if (!open || !threadId || messages.length === 0) return;
-    const latest = messages[messages.length - 1];
-    markInboxThreadLatestRead(threadId, latest?.id || null);
+    markInboxThreadRead(threadId);
   }, [open, threadId, messages]);
 
   async function reloadMessages() {

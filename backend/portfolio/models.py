@@ -869,6 +869,9 @@ class MessageThread(models.Model):
     owner_ignored_until = models.DateTimeField(null=True, blank=True)
     client_ignored_until = models.DateTimeField(null=True, blank=True)
 
+    owner_last_read_at = models.DateTimeField(null=True, blank=True)
+    client_last_read_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -998,8 +1001,40 @@ class MessageThread(models.Model):
     def latest_message(self):
         return self.messages.order_by("-created_at").first()
 
+    def read_at_for(self, user):
+        uid = getattr(user, "id", None)
+        if uid == self.owner_id:
+            return self.owner_last_read_at
+        if uid == self.client_id:
+            return self.client_last_read_at
+        return None
+
+    def mark_read(self, user, *, at=None):
+        uid = getattr(user, "id", None)
+        field_name = None
+        if uid == self.owner_id:
+            field_name = "owner_last_read_at"
+        elif uid == self.client_id:
+            field_name = "client_last_read_at"
+
+        if not field_name:
+            return False
+
+        setattr(self, field_name, at or timezone.now())
+        self.save(update_fields=[field_name])
+        return True
+
     def unread_count_for(self, user):
-        return 0
+        if not self.user_is_participant(user):
+            return 0
+
+        messages = self.messages.filter(
+            sender_id__in=(self.owner_id, self.client_id),
+        ).exclude(sender_id=user.id)
+        read_at = self.read_at_for(user)
+        if read_at:
+            messages = messages.filter(created_at__gt=read_at)
+        return messages.count()
 
 
 class PrivateMessage(models.Model):

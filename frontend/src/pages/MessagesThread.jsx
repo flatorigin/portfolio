@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api";
-import { Card, Button, Badge } from "../ui";
+import { Card, Button, Badge, SymbolIcon } from "../ui";
 import MessageComposer from "../components/MessageComposer";
 import ReportContentButton from "../components/ReportContentButton";
 import { canDeletePersistedMessage } from "../lib/messages";
@@ -40,6 +40,7 @@ function toSafeUrl(raw) {
 }
 
 function getThreadBidMeta(thread) {
+  const bid = thread?.bid || null;
   const unreadCount =
     Number(
       thread?.bid_unread_count ??
@@ -54,38 +55,48 @@ function getThreadBidMeta(thread) {
     unreadCount > 0;
 
   return {
+    bid,
     hasNewBid,
     unreadCount,
     projectTitle: thread?.project_title || "",
+    statusLabel: bid?.status_label || "",
   };
 }
 
-function safeJsonParse(raw, fallback) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
+function roleLabel(profileType) {
+  if (profileType === "contractor") return "Contractor";
+  if (profileType === "homeowner") return "Homeowner";
+  return "Member";
+}
+
+function formatConversationTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   }
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function getInboxReadMap() {
-  return safeJsonParse(localStorage.getItem("inbox_read_map") || "{}", {});
-}
+function ConversationAvatar({ person, className = "h-10 w-10", textClassName = "text-sm" }) {
+  const name = person?.display_name || person?.username || "User";
+  const avatarUrl = toSafeUrl(person?.avatar_url || "");
 
-function setInboxReadMap(next) {
-  localStorage.setItem("inbox_read_map", JSON.stringify(next || {}));
-  window.dispatchEvent(new CustomEvent("inbox:read-map-changed"));
-}
-
-function markInboxThreadLatestRead(threadId, latestMessageId) {
-  if (!threadId || !latestMessageId) return false;
-  const map = getInboxReadMap();
-  const key = String(threadId);
-  const value = String(latestMessageId);
-  if (String(map[key] || "") === value) return false;
-  map[key] = value;
-  setInboxReadMap(map);
-  return true;
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 font-semibold text-slate-700 ${className}`}
+      aria-hidden="true"
+    >
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className={textClassName}>{name.trim().charAt(0).toUpperCase() || "U"}</span>
+      )}
+    </span>
+  );
 }
 
 function MessageAttachments({
@@ -305,6 +316,9 @@ export default function MessagesThread() {
 
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
+  const [threadSearch, setThreadSearch] = useState("");
+  const [threadFilter, setThreadFilter] = useState("all");
+  const [threadError, setThreadError] = useState("");
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -329,9 +343,8 @@ export default function MessagesThread() {
 
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageError, setMessageError] = useState("");
 
-  const [readThreadIds, setReadThreadIds] = useState(new Set());
-  const [inboxReadMap, setInboxReadMapState] = useState(() => getInboxReadMap());
   const [meUsername, setMeUsername] = useState(() => localStorage.getItem("username") || "");
   const [meProfileType, setMeProfileType] = useState("");
   const [draftError, setDraftError] = useState("");
@@ -357,22 +370,6 @@ export default function MessagesThread() {
     return () => {
       window.removeEventListener("storage", syncUsername);
       window.removeEventListener("auth:changed", syncUsername);
-    };
-  }, []);
-
-  useEffect(() => {
-    const syncReadMap = () => {
-      if (isMountedRef.current) {
-        setInboxReadMapState(getInboxReadMap());
-      }
-    };
-
-    window.addEventListener("storage", syncReadMap);
-    window.addEventListener("inbox:read-map-changed", syncReadMap);
-
-    return () => {
-      window.removeEventListener("storage", syncReadMap);
-      window.removeEventListener("inbox:read-map-changed", syncReadMap);
     };
   }, []);
 
@@ -412,20 +409,9 @@ export default function MessagesThread() {
   const canReply =
     activeThread?.can_reply !== undefined ? !!activeThread.can_reply : true;
 
-  const markThreadRead = (id, latestMessageId = null) => {
-    setReadThreadIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-
-    if (latestMessageId && markInboxThreadLatestRead(id, latestMessageId)) {
-      setInboxReadMapState(getInboxReadMap());
-    }
-  };
-
   const counterpartFor = (thread) => {
     if (!thread) return null;
+    if (thread.counterpart) return thread.counterpart;
 
     const ownerProfile = thread.owner_profile || {};
     const clientProfile = thread.client_profile || {};
@@ -438,14 +424,33 @@ export default function MessagesThread() {
 
     const ownerDisplay = ownerProfile.display_name || ownerUsernameRaw || "User";
     const clientDisplay = clientProfile.display_name || clientUsernameRaw || "User";
+    const ownerAvatar = ownerProfile.avatar_url || "";
+    const clientAvatar = clientProfile.avatar_url || "";
+    const ownerType = ownerProfile.profile_type || "";
+    const clientType = clientProfile.profile_type || "";
 
     if (meLower && ownerLower === meLower) {
-      return { username: clientUsernameRaw, display_name: clientDisplay };
+      return {
+        username: clientUsernameRaw,
+        display_name: clientDisplay,
+        avatar_url: clientAvatar,
+        profile_type: clientType,
+      };
     }
     if (meLower && clientLower === meLower) {
-      return { username: ownerUsernameRaw, display_name: ownerDisplay };
+      return {
+        username: ownerUsernameRaw,
+        display_name: ownerDisplay,
+        avatar_url: ownerAvatar,
+        profile_type: ownerType,
+      };
     }
-    return { username: clientUsernameRaw, display_name: clientDisplay };
+    return {
+      username: clientUsernameRaw,
+      display_name: clientDisplay,
+      avatar_url: clientAvatar,
+      profile_type: clientType,
+    };
   };
 
   const counterpart = useMemo(
@@ -459,9 +464,54 @@ export default function MessagesThread() {
   );
   const canUseBidConversion = meProfileType === "contractor" && !!activeThread?.project;
   const canUseProjectConversion = meProfileType === "homeowner" && !activeThread?.project;
+  const latestConvertibleMessage = useMemo(
+    () =>
+      [...messages]
+        .reverse()
+        .find(
+          (message) =>
+            (message?.text || "").trim() &&
+            (message?.sender_username || "").toLowerCase() !== meLower
+        ) || null,
+    [messages, meLower]
+  );
+
+  const unreadActivityCount = useMemo(
+    () =>
+      threads.reduce(
+        (total, thread) =>
+          total + Number(thread?.unread_count || 0) + Number(thread?.bid_unread_count || 0),
+        0
+      ),
+    [threads]
+  );
+
+  const filteredThreads = useMemo(() => {
+    const query = threadSearch.trim().toLowerCase();
+    return threads.filter((thread) => {
+      if (threadFilter === "unread" && !thread.is_unread && !thread.has_new_bid) return false;
+      if (threadFilter === "requests" && !thread.is_request) return false;
+
+      if (!query) return true;
+      const person = counterpartFor(thread);
+      const searchable = [
+        person?.display_name,
+        person?.username,
+        person?.profile_type,
+        thread.project_title,
+        thread.latest_message?.text,
+        thread.latest_message?.attachment_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(query);
+    });
+  }, [threads, threadFilter, threadSearch, meLower]);
 
   const fetchThreads = useCallback(async () => {
     setLoadingThreads(true);
+    setThreadError("");
     try {
       const { data } = await api.get("/inbox/threads/");
       const arr = Array.isArray(data) ? data : [];
@@ -475,11 +525,38 @@ export default function MessagesThread() {
       });
     } catch (err) {
       console.error("[MessagesThread] failed to load threads", err?.response || err);
-      if (isMountedRef.current) setThreads([]);
+      if (isMountedRef.current) {
+        setThreadError("Unable to load your conversations. Please try again.");
+      }
     } finally {
       if (isMountedRef.current) setLoadingThreads(false);
     }
   }, [threadIdParam]);
+
+  const markThreadRead = useCallback(async (id) => {
+    const thread = threads.find((item) => String(item.id) === String(id));
+    if (!thread || (!thread.is_unread && !thread.has_new_bid)) return;
+
+    setThreads((current) =>
+      current.map((item) =>
+        String(item.id) === String(id)
+          ? { ...item, unread_count: 0, is_unread: false, has_new_bid: false, bid_unread_count: 0 }
+          : item
+      )
+    );
+
+    try {
+      const { data } = await api.post(`/inbox/threads/${id}/read/`);
+      if (!isMountedRef.current) return;
+      setThreads((current) =>
+        current.map((item) => (String(item.id) === String(id) ? data : item))
+      );
+      window.dispatchEvent(new CustomEvent("inbox:changed"));
+    } catch (err) {
+      console.error("[MessagesThread] failed to mark thread read", err?.response || err);
+      fetchThreads();
+    }
+  }, [threads, fetchThreads]);
 
   useEffect(() => {
     fetchThreads();
@@ -514,6 +591,7 @@ export default function MessagesThread() {
     messageFetchSequenceRef.current += 1;
     setMessages([]);
     setReplyTo(null);
+    setMessageError("");
     setLoadingMessages(false);
   }, [activeThread?.id]);
 
@@ -526,7 +604,10 @@ export default function MessagesThread() {
       }
 
       const requestSequence = ++messageFetchSequenceRef.current;
-      if (!silent) setLoadingMessages(true);
+      if (!silent) {
+        setLoadingMessages(true);
+        setMessageError("");
+      }
 
       try {
         const { data } = await api.get(
@@ -551,7 +632,9 @@ export default function MessagesThread() {
           && isMountedRef.current
           && requestSequence === messageFetchSequenceRef.current
           && String(activeThreadIdRef.current) === String(requestedThreadId)
-        ) setMessages([]);
+        ) {
+          setMessageError("Unable to load this conversation. Please try again.");
+        }
       } finally {
         if (
           !silent
@@ -578,8 +661,7 @@ export default function MessagesThread() {
 
   useEffect(() => {
     if (!activeThread?.id || messages.length === 0) return;
-    const latest = messages[messages.length - 1];
-    markThreadRead(activeThread.id, latest?.id || null);
+    markThreadRead(activeThread.id);
   }, [activeThread?.id, messages]);
 
   async function threadAction(action) {
@@ -831,9 +913,8 @@ export default function MessagesThread() {
   };
 
   const openThread = (id) => {
-    const thread = threads.find((item) => String(item.id) === String(id));
     setActiveThreadId(id);
-    markThreadRead(id, thread?.latest_message?.id || null);
+    markThreadRead(id);
     navigate(`/messages/${id}`);
   };
 
@@ -845,45 +926,132 @@ export default function MessagesThread() {
 
   return (
     <>
-    <div className="flex items-start gap-4">
+    <div className="space-y-4 py-6">
+      <header
+        className={[
+          "items-end justify-between gap-4",
+          activeThreadId ? "hidden md:flex" : "flex",
+        ].join(" ")}
+      >
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-slate-950">Inbox</h1>
+            {unreadActivityCount > 0 ? (
+              <Badge className="border-sky-200 bg-sky-50 font-semibold text-sky-800">
+                {unreadActivityCount} unread
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Keep project questions, bids, and updates together.
+          </p>
+        </div>
+      </header>
+
+      <div className="flex items-start gap-4">
       <div
         className={[
-          "w-full md:w-64 md:shrink-0",
+          "w-full md:w-80 md:shrink-0",
           activeThreadId ? "hidden md:block" : "block",
         ].join(" ")}
       >
-        <Card className="h-[calc(100vh-140px)] min-h-[320px] overflow-hidden p-0">
-          <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Conversations
+        <Card className="flex h-[calc(100vh-210px)] min-h-[420px] flex-col overflow-hidden p-0">
+          <div className="space-y-3 border-b border-slate-200 p-3">
+            <label className="relative block">
+              <span className="sr-only">Search conversations</span>
+              <SymbolIcon
+                name="search"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[19px] text-slate-400"
+              />
+              <input
+                type="search"
+                value={threadSearch}
+                onChange={(event) => setThreadSearch(event.target.value)}
+                placeholder="Search conversations"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-900 outline-none focus:border-slate-400 focus:bg-white"
+              />
+            </label>
+
+            <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1" aria-label="Conversation filters">
+              {[
+                { value: "all", label: "All" },
+                { value: "unread", label: "Unread" },
+                { value: "requests", label: "Requests" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setThreadFilter(option.value)}
+                  className={[
+                    "h-8 rounded-md px-2 text-xs font-medium",
+                    threadFilter === option.value
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900",
+                  ].join(" ")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="h-full overflow-y-auto">
-            {loadingThreads ? (
-              <div className="p-3 text-xs text-slate-500">Loading…</div>
+          {threadError ? (
+            <div className="border-b border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <div>{threadError}</div>
+              <button type="button" onClick={fetchThreads} className="mt-1 font-semibold underline">
+                Try again
+              </button>
+            </div>
+          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {loadingThreads && threads.length === 0 ? (
+              <div className="space-y-3 p-3" aria-label="Loading conversations">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="h-20 animate-pulse rounded-lg bg-slate-100" />
+                ))}
+              </div>
             ) : threads.length === 0 ? (
-              <div className="p-3 text-xs text-slate-500">
-                No conversations yet.
+              <div className="flex h-full flex-col items-center justify-center px-5 py-8 text-center">
+                <SymbolIcon name="forum" className="text-[32px] text-slate-300" />
+                <div className="mt-3 text-sm font-semibold text-slate-800">No conversations yet</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Explore projects and profiles to start a relevant conversation.
+                </p>
+                <Link
+                  to={meProfileType === "contractor" ? "/work" : "/explore"}
+                  className="mt-4 text-xs font-semibold text-sky-700 hover:text-sky-900"
+                >
+                  {meProfileType === "contractor" ? "Find local work" : "Explore projects"}
+                </Link>
+              </div>
+            ) : filteredThreads.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center px-5 py-8 text-center">
+                <SymbolIcon name="search_off" className="text-[30px] text-slate-300" />
+                <div className="mt-2 text-sm font-semibold text-slate-800">No matching conversations</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThreadSearch("");
+                    setThreadFilter("all");
+                  }}
+                  className="mt-3 text-xs font-semibold text-sky-700 hover:text-sky-900"
+                >
+                  Clear search and filters
+                </button>
               </div>
             ) : (
-              threads.map((t) => {
+              filteredThreads.map((t) => {
                 const cp = counterpartFor(t);
                 const name = cp?.display_name || cp?.username || "User";
                 const bidMeta = getThreadBidMeta(t);
 
                 const latest = t.latest_message || null;
-                const dateLabel = latest?.created_at
-                  ? new Date(latest.created_at).toLocaleDateString()
-                  : "";
-
-                const latestFromMe =
-                  latest?.sender_username &&
-                  latest.sender_username.toLowerCase() === meLower;
-
-                const lastReadId = inboxReadMap[String(t.id)];
-                const hasBeenRead =
-                  readThreadIds.has(t.id) ||
-                  (!!latest?.id && String(lastReadId || "") === String(latest.id));
-                const isUnread = !hasBeenRead && !latestFromMe && !!latest;
+                const latestFromMe = (latest?.sender_username || "").toLowerCase() === meLower;
+                const latestPreview =
+                  latest?.text || latest?.attachment_name || "No messages yet";
+                const unreadCount = Number(t.unread_count || 0);
+                const isUnread = !!t.is_unread;
 
                 const isActive = String(t.id) === String(activeThreadId);
 
@@ -893,35 +1061,62 @@ export default function MessagesThread() {
                     type="button"
                     onClick={() => openThread(t.id)}
                     className={[
-                      "block w-full border-b border-slate-100 px-3 py-3 text-left text-sm",
-                      isActive ? "bg-slate-100" : "hover:bg-slate-50",
+                      "block w-full border-b border-slate-100 px-3 py-3 text-left",
+                      isActive ? "bg-slate-100" : "bg-white hover:bg-slate-50",
                     ].join(" ")}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div
-                          className={
-                            "truncate text-sm " +
-                            (isUnread
-                              ? "font-semibold text-slate-900"
-                              : "font-normal text-slate-800")
-                          }
-                        >
-                          {name}
+                    <div className="flex items-start gap-3">
+                      <ConversationAvatar person={cp} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className={`truncate text-sm ${isUnread ? "font-semibold text-slate-950" : "font-medium text-slate-800"}`}>
+                              {name}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                              {roleLabel(cp?.profile_type)}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <span className="text-[10px] text-slate-400">
+                              {formatConversationTime(latest?.created_at || t.updated_at)}
+                            </span>
+                            {isUnread ? (
+                              <span className="flex min-w-[18px] items-center justify-center rounded-full bg-sky-600 px-1 text-[10px] font-semibold leading-[18px] text-white">
+                                {unreadCount > 9 ? "9+" : unreadCount}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
 
-                        <div className="mt-0.5 text-[11px] text-slate-500">
-                          {dateLabel || "—"}
+                        {t.project_title ? (
+                          <div className="mt-2 flex items-center gap-1 truncate text-[11px] font-medium text-slate-600">
+                            <SymbolIcon name="home_repair_service" className="text-[14px] text-slate-400" />
+                            <span className="truncate">{t.project_title}</span>
+                          </div>
+                        ) : null}
+
+                        <div className={`mt-1 truncate text-xs ${isUnread ? "font-medium text-slate-800" : "text-slate-500"}`}>
+                          {latestFromMe ? "You: " : ""}{latestPreview}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {t.is_request ? (
+                            <Badge className="border-amber-200 bg-amber-50 text-[10px] font-semibold text-amber-800">
+                              Request
+                            </Badge>
+                          ) : null}
+                          {bidMeta.hasNewBid ? (
+                            <Badge className="border-emerald-200 bg-emerald-50 text-[10px] font-semibold text-emerald-800">
+                              New bid
+                            </Badge>
+                          ) : bidMeta.statusLabel ? (
+                            <Badge className="text-[10px] text-slate-600">
+                              Bid: {bidMeta.statusLabel}
+                            </Badge>
+                          ) : null}
                         </div>
                       </div>
-
-                      {bidMeta.hasNewBid ? (
-                        <Badge className="shrink-0 bg-emerald-600 text-white">
-                          {bidMeta.unreadCount > 1
-                            ? `${bidMeta.unreadCount} bids`
-                            : "New Bid"}
-                        </Badge>
-                      ) : null}
                     </div>
                   </button>
                 );
@@ -937,24 +1132,26 @@ export default function MessagesThread() {
           activeThreadId ? "block" : "hidden md:block",
         ].join(" ")}
       >
-        <Card className="flex h-[calc(100vh-140px)] min-h-[320px] flex-col p-4">
+        <Card className="flex h-[calc(100dvh-100px)] min-h-[420px] flex-col p-4 md:h-[calc(100vh-210px)]">
           {!activeThread ? (
             <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
               Select a conversation from the left.
             </div>
           ) : (
             <>
-              <div className="mb-3 border-b border-slate-200 pb-2">
+              <div className="mb-3 space-y-3 border-b border-slate-200 pb-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center">
+                  <div className="flex min-w-0 items-center gap-3">
                     <button
                       type="button"
                       onClick={closeMobileThread}
-                      className="mr-2 rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 md:hidden"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 md:hidden"
+                      aria-label="Back to conversations"
                     >
-                      Back
+                      <SymbolIcon name="arrow_back" className="text-[21px]" />
                     </button>
 
+                    <ConversationAvatar person={counterpart} />
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-slate-900">
                         {counterpart?.username ? (
@@ -968,16 +1165,9 @@ export default function MessagesThread() {
                           "Conversation"
                         )}
                       </div>
-
-                      {activeThreadBidMeta.hasNewBid ? (
-                        <div className="mt-0.5 flex items-center gap-2">
-                          <Badge className="bg-emerald-600 text-white">
-                            {activeThreadBidMeta.unreadCount > 1
-                              ? `${activeThreadBidMeta.unreadCount} bids`
-                              : "New Bid"}
-                          </Badge>
-                        </div>
-                      ) : null}
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {roleLabel(counterpart?.profile_type)}
+                      </div>
                     </div>
                   </div>
 
@@ -988,8 +1178,64 @@ export default function MessagesThread() {
                       subject={counterpart?.username ? `Conversation with ${counterpart.username}` : "Conversation"}
                       label="Report conversation"
                       defaultReportType="harassment"
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     />
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeThread?.project ? (
+                    <Link
+                      to={`/projects/${activeThread.project}`}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <SymbolIcon name="home_repair_service" className="text-[17px]" />
+                      <span className="max-w-[220px] truncate">
+                        {activeThreadBidMeta.bid
+                          ? meProfileType === "homeowner"
+                            ? "Review bid"
+                            : "View bid"
+                          : "View project"}
+                      </span>
+                    </Link>
+                  ) : null}
+
+                  {activeThread?.project_title ? (
+                    <span className="max-w-full truncate text-xs text-slate-500">
+                      {activeThread.project_title}
+                    </span>
+                  ) : null}
+
+                  {activeThreadBidMeta.hasNewBid ? (
+                    <Badge className="border-emerald-200 bg-emerald-50 font-semibold text-emerald-800">
+                      New bid
+                    </Badge>
+                  ) : activeThreadBidMeta.statusLabel ? (
+                    <Badge>Bid: {activeThreadBidMeta.statusLabel}</Badge>
+                  ) : null}
+
+                  {canUseBidConversion && !activeThreadBidMeta.bid && latestConvertibleMessage ? (
+                    <button
+                      type="button"
+                      onClick={() => handlePrefillBid(latestConvertibleMessage)}
+                      disabled={convertingMessageId === latestConvertibleMessage.id}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      <SymbolIcon name="request_quote" className="text-[17px]" />
+                      {convertingMessageId === latestConvertibleMessage.id ? "Preparing..." : "Prepare bid"}
+                    </button>
+                  ) : null}
+
+                  {canUseProjectConversion && latestConvertibleMessage ? (
+                    <button
+                      type="button"
+                      onClick={() => handlePrefillProject(latestConvertibleMessage)}
+                      disabled={convertingMessageId === latestConvertibleMessage.id}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      <SymbolIcon name="add_home_work" className="text-[17px]" />
+                      {convertingMessageId === latestConvertibleMessage.id ? "Preparing..." : "Create project"}
+                    </button>
                   ) : null}
                 </div>
 
@@ -1036,11 +1282,23 @@ export default function MessagesThread() {
               </div>
 
               <div className="mb-3 flex-1 overflow-y-auto rounded-xl bg-slate-50 p-3">
+                {messageError ? (
+                  <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <div>{messageError}</div>
+                    <button
+                      type="button"
+                      onClick={() => fetchMessages({ silent: false })}
+                      className="mt-1 font-semibold underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : null}
                 {loadingMessages ? (
                   <p className="text-xs text-slate-500">Loading messages…</p>
-                ) : messages.length === 0 ? (
+                ) : messages.length === 0 && !messageError ? (
                   <p className="text-xs text-slate-500">No messages yet.</p>
-                ) : (
+                ) : messages.length > 0 ? (
                   <>
                     {messages.map((m) => {
                     const fromMe =
@@ -1169,7 +1427,7 @@ export default function MessagesThread() {
                     );
                   })}
                   </>
-                )}
+                ) : null}
               </div>
 
               <MessageComposer
@@ -1192,6 +1450,7 @@ export default function MessagesThread() {
           )}
         </Card>
       </div>
+    </div>
     </div>
 
     <Modal

@@ -1507,6 +1507,13 @@ class MessageThreadSerializer(serializers.ModelSerializer):
     latest_message = serializers.SerializerMethodField()
     owner_profile = ProfileSerializer(source="owner.profile", read_only=True)
     client_profile = ProfileSerializer(source="client.profile", read_only=True)
+    counterpart = serializers.SerializerMethodField()
+    project_is_job_posting = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    is_unread = serializers.SerializerMethodField()
+    bid = serializers.SerializerMethodField()
+    has_new_bid = serializers.SerializerMethodField()
+    bid_unread_count = serializers.SerializerMethodField()
 
     is_request = serializers.SerializerMethodField()
     can_reply = serializers.SerializerMethodField()
@@ -1525,6 +1532,7 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "client",
             "client_username",
             "client_profile",
+            "counterpart",
             "owner_has_accepted",
             "client_has_accepted",
             "owner_archived",
@@ -1537,6 +1545,12 @@ class MessageThreadSerializer(serializers.ModelSerializer):
             "blocked",
             "created_at",
             "updated_at",
+            "project_is_job_posting",
+            "unread_count",
+            "is_unread",
+            "bid",
+            "has_new_bid",
+            "bid_unread_count",
             "latest_message",
         ]
         read_only_fields = fields
@@ -1544,7 +1558,12 @@ class MessageThreadSerializer(serializers.ModelSerializer):
     def get_latest_message(self, obj):
         latest_id = getattr(obj, "latest_message_id", None)
         if latest_id is None:
-            msg = obj.messages.order_by("-created_at").first()
+            msg = (
+                obj.messages
+                .filter(sender_id__in=(obj.owner_id, obj.client_id))
+                .order_by("-created_at")
+                .first()
+            )
             if not msg:
                 return None
             attachment_name = msg.attachment_name or (
@@ -1580,6 +1599,93 @@ class MessageThreadSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         u = getattr(request, "user", None)
         return u if u and u.is_authenticated else None
+
+    def get_counterpart(self, obj):
+        user = self._current_user()
+        if not user or not obj.user_is_participant(user):
+            return None
+
+        other = obj.client if user.id == obj.owner_id else obj.owner
+        profile = getattr(other, "profile", None)
+        if not profile:
+            return {
+                "username": other.username,
+                "display_name": other.username,
+                "profile_type": "",
+                "avatar_url": "",
+            }
+
+        profile_data = ProfileSerializer(profile, context=self.context).data
+        return {
+            "username": other.username,
+            "display_name": profile_data.get("display_name") or other.username,
+            "profile_type": profile_data.get("profile_type") or "",
+            "avatar_url": profile_data.get("avatar_url") or "",
+        }
+
+    def get_project_is_job_posting(self, obj):
+        return bool(obj.project and obj.project.is_job_posting)
+
+    def _get_unread_count(self, obj):
+        user = self._current_user()
+        if not user:
+            return 0
+        cache_key = f"_inbox_unread_count_{user.id}"
+        if not hasattr(obj, cache_key):
+            setattr(obj, cache_key, obj.unread_count_for(user))
+        return getattr(obj, cache_key)
+
+    def get_unread_count(self, obj):
+        return self._get_unread_count(obj)
+
+    def get_is_unread(self, obj):
+        return self._get_unread_count(obj) > 0
+
+    def _get_bid_meta(self, obj):
+        user = self._current_user()
+        if not user or not obj.project_id:
+            return None
+
+        cache_key = f"_inbox_bid_meta_{user.id}"
+        if hasattr(obj, cache_key):
+            return getattr(obj, cache_key)
+
+        project = obj.project
+        other_id = obj.client_id if user.id == obj.owner_id else obj.owner_id
+        bids = list(project.bids.all())
+        if project.owner_id == user.id:
+            relevant = next((item for item in bids if item.contractor_id == other_id), None)
+        else:
+            relevant = next((item for item in bids if item.contractor_id == user.id), None)
+
+        if not relevant:
+            setattr(obj, cache_key, None)
+            return None
+
+        read_at = obj.read_at_for(user)
+        is_new = bool(
+            project.owner_id == user.id
+            and relevant.status in ("pending", "revision_requested")
+            and (read_at is None or relevant.updated_at > read_at)
+        )
+        meta = {
+            "id": relevant.id,
+            "status": relevant.status,
+            "status_label": relevant.get_status_display(),
+            "updated_at": relevant.updated_at,
+            "is_new": is_new,
+        }
+        setattr(obj, cache_key, meta)
+        return meta
+
+    def get_bid(self, obj):
+        return self._get_bid_meta(obj)
+
+    def get_has_new_bid(self, obj):
+        return bool((self._get_bid_meta(obj) or {}).get("is_new"))
+
+    def get_bid_unread_count(self, obj):
+        return 1 if self.get_has_new_bid(obj) else 0
 
     def get_is_request(self, obj):
         user = self._current_user()

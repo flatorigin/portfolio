@@ -890,6 +890,72 @@ class MessagingPrivacyTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([row["id"] for row in response.data], [self.alice_bob_thread.id])
         self.assertEqual(response.data[0]["latest_message"]["id"], self.valid_message.id)
+        self.assertEqual(response.data[0]["unread_count"], 1)
+        self.assertTrue(response.data[0]["is_unread"])
+        self.assertEqual(response.data[0]["counterpart"]["username"], self.bob.username)
+        self.assertEqual(
+            response.data[0]["counterpart"]["profile_type"],
+            Profile.ProfileType.CONTRACTOR,
+        )
+
+    def test_participant_can_mark_thread_read(self):
+        self.client.force_authenticate(user=self.alice)
+
+        response = self.client.post(
+            f"/api/inbox/threads/{self.alice_bob_thread.id}/read/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["unread_count"], 0)
+        self.assertFalse(response.data["is_unread"])
+        self.assertEqual(response.data["latest_message"]["id"], self.valid_message.id)
+        self.alice_bob_thread.refresh_from_db()
+        self.assertIsNotNone(self.alice_bob_thread.owner_last_read_at)
+
+    def test_non_participant_cannot_mark_thread_read(self):
+        self.client.force_authenticate(user=self.carol)
+
+        response = self.client.post(
+            f"/api/inbox/threads/{self.alice_bob_thread.id}/read/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_inbox_exposes_new_bid_for_project_owner(self):
+        project = Project.objects.create(
+            owner=self.alice,
+            title="Bathroom renovation",
+            summary="Replace the shower and tile.",
+            is_job_posting=True,
+            is_public=True,
+        )
+        self.alice_bob_thread.project = project
+        self.alice_bob_thread.save(update_fields=["project", "updated_at"])
+        bid = Bid.objects.create(
+            project=project,
+            contractor=self.bob,
+            amount="12000.00",
+            proposal_text="Complete bathroom renovation.",
+            message="Complete bathroom renovation.",
+        )
+        self.client.force_authenticate(user=self.alice)
+
+        response = self.client.get("/api/inbox/threads/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = response.data[0]
+        self.assertEqual(row["project_title"], project.title)
+        self.assertTrue(row["project_is_job_posting"])
+        self.assertEqual(row["bid"]["id"], bid.id)
+        self.assertEqual(row["bid"]["status"], Bid.STATUS_PENDING)
+        self.assertTrue(row["has_new_bid"])
+        self.assertEqual(row["bid_unread_count"], 1)
+
+        read_response = self.client.post(
+            f"/api/inbox/threads/{self.alice_bob_thread.id}/read/"
+        )
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(read_response.data["has_new_bid"])
 
     def test_thread_messages_only_include_the_two_participants(self):
         self.client.force_authenticate(user=self.alice)

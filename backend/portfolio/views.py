@@ -2281,7 +2281,15 @@ class InboxThreadListView(generics.ListAPIView):
         return (
             MessageThread.objects
             .filter(Q(owner=user) | Q(client=user))
-            .select_related("owner", "client", "owner__profile", "client__profile")
+            .select_related(
+                "owner",
+                "client",
+                "owner__profile",
+                "client__profile",
+                "project",
+                "project__owner",
+            )
+            .prefetch_related("project__bids")
             .annotate(
                 latest_message_id=Subquery(latest_messages.values("id")[:1]),
                 latest_message_text=Subquery(latest_messages.values("text")[:1]),
@@ -2297,6 +2305,29 @@ class InboxThreadListView(generics.ListAPIView):
             )
             .order_by("-updated_at")
         )
+
+
+class InboxThreadReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, *args, **kwargs):
+        thread = get_object_or_404(
+            MessageThread.objects.select_related(
+                "owner",
+                "client",
+                "owner__profile",
+                "client__profile",
+                "project",
+                "project__owner",
+            ).prefetch_related("project__bids"),
+            pk=pk,
+        )
+        if not thread.user_is_participant(request.user):
+            raise PermissionDenied("You do not have access to this conversation.")
+
+        thread.mark_read(request.user)
+        serializer = MessageThreadSerializer(thread, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class MessageStartView(APIView):

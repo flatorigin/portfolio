@@ -12,22 +12,6 @@ import { roleLandingPath } from "./landingRole";
 import FeedbackSupportModal from "./components/FeedbackSupportModal";
 import ContextualOnboardingPrompt from "./components/ContextualOnboardingPrompt";
 
-function normalizeUsername(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function safeJsonParse(raw, fallback) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-function getInboxReadMap() {
-  return safeJsonParse(localStorage.getItem("inbox_read_map") || "{}", {});
-}
-
 export default function App() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -58,7 +42,6 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [inboxThreads, setInboxThreads] = useState([]);
-  const [inboxReadMap, setInboxReadMap] = useState(() => getInboxReadMap());
   const menuRef = useRef(null);
   const inboxFetchInFlightRef = useRef(false);
   const lastInboxFetchAtRef = useRef(0);
@@ -132,20 +115,6 @@ export default function App() {
   }, [pathname]);
 
   useEffect(() => {
-    const syncReadMap = () => {
-      setInboxReadMap(getInboxReadMap());
-    };
-
-    window.addEventListener("storage", syncReadMap);
-    window.addEventListener("inbox:read-map-changed", syncReadMap);
-
-    return () => {
-      window.removeEventListener("storage", syncReadMap);
-      window.removeEventListener("inbox:read-map-changed", syncReadMap);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!authed || !me?.id) {
       setInboxThreads([]);
       return;
@@ -181,7 +150,6 @@ export default function App() {
       }
     };
     const handleInboxChanged = () => {
-      setInboxReadMap(getInboxReadMap());
       fetchInboxThreads({ force: true });
     };
 
@@ -277,14 +245,10 @@ export default function App() {
       ? username.trim().charAt(0).toUpperCase()
       : "";
 
-  const meLower = normalizeUsername(username);
   const unreadInboxCount = (inboxThreads || []).reduce((sum, thread) => {
-    const latest = thread?.latest_message || null;
-    if (!latest?.id) return sum;
-    if (normalizeUsername(latest.sender_username) === meLower) return sum;
-
-    const lastReadId = inboxReadMap[String(thread.id)];
-    return String(lastReadId || "") !== String(latest.id) ? sum + 1 : sum;
+    const messageCount = Number(thread?.unread_count || 0);
+    const bidCount = Number(thread?.bid_unread_count || 0);
+    return sum + messageCount + bidCount;
   }, 0);
   const unreadBadgeLabel = unreadInboxCount > 9 ? "9+" : String(unreadInboxCount);
 

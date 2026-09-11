@@ -10,6 +10,7 @@ from .views import (
     ProjectThreadCreateView,
     ThreadMessagesView,
     InboxThreadListView,
+    InboxThreadReadView,
     ThreadActionView,
     BlockListView,
     FavoriteProjectListView,
@@ -75,6 +76,11 @@ urlpatterns = [
 
     # Global inbox (threads)
     path("inbox/threads/", InboxThreadListView.as_view(), name="inbox-threads"),
+    path(
+        "inbox/threads/<int:pk>/read/",
+        InboxThreadReadView.as_view(),
+        name="inbox-thread-read",
+    ),
     path("inbox/threads/<int:pk>/actions/", ThreadActionView.as_view(), name="inbox-thread-actions"),
     path("inbox/blocked/", BlockListView.as_view(), name="inbox-blocked"),
 
