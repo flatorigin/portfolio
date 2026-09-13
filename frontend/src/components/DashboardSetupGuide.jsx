@@ -50,6 +50,17 @@ function projectIsJobPost(project) {
   return value === true || value === 1 || value === "1" || value === "true";
 }
 
+function mobileViewportMatches() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 639px)").matches
+  );
+}
+
+function announceGuideOpened() {
+  window.dispatchEvent(new CustomEvent("dashboard-setup-guide:opened"));
+}
+
 export default function DashboardSetupGuide({
   profile,
   projects = [],
@@ -62,6 +73,7 @@ export default function DashboardSetupGuide({
   const username = profile?.username || "";
   const storageKey = username ? `dashboard-setup-guide-seen:${username}` : "";
   const [open, setOpen] = useState(() => {
+    if (mobileViewportMatches()) return false;
     if (!username) return false;
     const newGuideSeen =
       localStorage.getItem(`dashboard-setup-guide-seen:${username}`) === "1";
@@ -73,6 +85,20 @@ export default function DashboardSetupGuide({
   const [activeStep, setActiveStep] = useState(0);
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(role === "homeowner");
+  const [isMobile, setIsMobile] = useState(mobileViewportMatches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 639px)");
+    const syncViewport = (event) => {
+      const matches = event?.matches ?? mediaQuery.matches;
+      setIsMobile(matches);
+      if (matches) setOpen(false);
+    };
+
+    syncViewport(mediaQuery);
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
 
   useEffect(() => {
     if (role !== "homeowner") {
@@ -258,6 +284,7 @@ export default function DashboardSetupGuide({
       const nextIncomplete = steps.findIndex((step) => !step.complete);
       setActiveStep(nextIncomplete >= 0 ? nextIncomplete : 0);
       setOpen(true);
+      announceGuideOpened();
     };
     window.addEventListener("onboarding:open", reopen);
     return () => window.removeEventListener("onboarding:open", reopen);
@@ -271,7 +298,17 @@ export default function DashboardSetupGuide({
     const nextIncomplete = steps.findIndex((step) => !step.complete);
     setActiveStep(nextIncomplete >= 0 ? nextIncomplete : 0);
     setOpen(true);
+    announceGuideOpened();
   }, [steps]);
+
+  useEffect(() => {
+    if (!open || !isMobile) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, isMobile]);
 
   if (!username || !["homeowner", "contractor"].includes(role) || plansLoading) {
     return null;
@@ -290,6 +327,7 @@ export default function DashboardSetupGuide({
     const nextIncomplete = steps.findIndex((item) => !item.complete);
     setActiveStep(nextIncomplete >= 0 ? nextIncomplete : 0);
     setOpen(true);
+    announceGuideOpened();
   };
 
   const handleAction = () => {
@@ -302,22 +340,32 @@ export default function DashboardSetupGuide({
       <button
         type="button"
         onClick={reopen}
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-14 items-center gap-2 rounded-full bg-slate-950 px-4 text-white shadow-xl transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:bottom-5 sm:right-5"
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-slate-950 px-4 text-white shadow-xl transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:bottom-5 sm:right-5 sm:h-14"
         aria-label={`Open ${guideTitle.toLowerCase()}`}
         title="Open setup guide"
       >
-        <SymbolIcon name="checklist" className="text-[24px]" weight={500} />
-        <span className="text-sm font-semibold">{completedCount}/5</span>
+        <SymbolIcon name="checklist" className="text-[21px] sm:text-[24px]" weight={500} />
+        <span className="text-sm font-semibold sm:hidden">Setup {completedCount}/5</span>
+        <span className="hidden text-sm font-semibold sm:inline">{completedCount}/5</span>
       </button>
     );
   }
 
   return (
-    <aside
-      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:w-[360px]"
-      aria-label={guideTitle}
-      aria-live="polite"
-    >
+    <>
+      <button
+        type="button"
+        onClick={minimize}
+        className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[1px] sm:hidden"
+        aria-label="Close setup guide"
+      />
+      <aside
+        className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[70dvh] flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:max-h-none sm:w-[360px] sm:rounded-xl"
+        aria-label={guideTitle}
+        aria-live="polite"
+        role={isMobile ? "dialog" : "complementary"}
+        aria-modal={isMobile ? "true" : undefined}
+      >
       <div className="border-b border-slate-100 bg-slate-950 px-4 py-4 text-white">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -362,7 +410,7 @@ export default function DashboardSetupGuide({
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="min-h-0 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
         <div className="flex gap-3">
           <div
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
@@ -440,6 +488,7 @@ export default function DashboardSetupGuide({
           </div>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

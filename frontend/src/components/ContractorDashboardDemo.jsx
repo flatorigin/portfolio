@@ -221,33 +221,73 @@ function StaticStars({ rating = 5 }) {
 }
 
 export function ContractorDashboardDemoNotice({ onCreateProject }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  useEffect(() => {
+    const collapseDetails = () => setDetailsOpen(false);
+    window.addEventListener("dashboard-setup-guide:opened", collapseDetails);
+    return () =>
+      window.removeEventListener("dashboard-setup-guide:opened", collapseDetails);
+  }, []);
+
   return (
     <section
-      className="flex flex-col gap-5 rounded-2xl border border-teal-500 bg-teal-600 px-5 py-5 text-white shadow-md sm:flex-row sm:items-center sm:justify-between sm:px-6"
+      className="flex flex-col gap-3 rounded-xl border border-teal-500 bg-teal-600 px-4 py-3 text-white shadow-md sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:rounded-2xl sm:px-6 sm:py-5"
       aria-labelledby="sample-dashboard-title"
     >
-      <div className="flex items-start gap-3">
-        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-300 text-slate-950 shadow-sm">
-          <SymbolIcon name="preview" className="text-[24px]" />
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-300 text-slate-950 shadow-sm sm:h-11 sm:w-11 sm:rounded-xl">
+          <SymbolIcon name="preview" className="text-[20px] sm:text-[24px]" />
         </span>
-        <div>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 id="sample-dashboard-title" className="text-xl font-bold text-white sm:text-2xl">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2 sm:mb-2">
+            <h2 id="sample-dashboard-title" className="text-base font-bold leading-5 text-white sm:text-2xl">
               Your sample contractor dashboard
             </h2>
             <Badge className="bg-white text-[10px] font-semibold text-teal-800">Sample data</Badge>
           </div>
-          <p className="max-w-3xl text-sm leading-6 text-teal-50">
+          <p className="text-xs leading-5 text-teal-50 sm:hidden">
+            Explore the examples below. They disappear after your first project.
+          </p>
+          <p className="hidden max-w-3xl text-sm leading-6 text-teal-50 sm:block">
             Explore how your projects can be presented, how your work can be featured, and how homeowner
             opportunities appear. As soon as you create your first project, this sample content is permanently
             replaced by your own and will not appear again.
           </p>
         </div>
       </div>
+
+      {detailsOpen ? (
+        <p className="rounded-lg bg-teal-700/45 px-3 py-2 text-xs leading-5 text-teal-50 sm:hidden">
+          These examples show how projects, featured work, and homeowner opportunities appear. Your own
+          content permanently replaces them when you create your first project.
+        </p>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((current) => !current)}
+          className="inline-flex h-9 items-center gap-1 px-1 text-xs font-semibold text-white"
+          aria-expanded={detailsOpen}
+        >
+          <SymbolIcon name={detailsOpen ? "expand_less" : "info"} className="text-[18px]" />
+          {detailsOpen ? "Show less" : "Learn more"}
+        </button>
+        <button
+          type="button"
+          onClick={onCreateProject}
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-semibold text-teal-800 shadow-sm transition hover:bg-teal-50"
+        >
+          <SymbolIcon name="add" className="text-[18px]" />
+          Create project
+        </button>
+      </div>
+
       <button
         type="button"
         onClick={onCreateProject}
-        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-teal-800 shadow-sm transition hover:bg-teal-50"
+        className="hidden h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-teal-800 shadow-sm transition hover:bg-teal-50 sm:inline-flex"
       >
         <SymbolIcon name="add" className="text-[20px]" />
         Create real project
