@@ -1246,7 +1246,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       {showContractorDemo ? (
-        <ContractorDashboardDemoNotice onCreateProject={() => setCreateOpen(true)} />
+        <ContractorDashboardDemoNotice />
       ) : null}
 
       <header className="flex min-h-14 items-center mb-1">

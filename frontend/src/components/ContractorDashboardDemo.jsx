@@ -220,7 +220,7 @@ function StaticStars({ rating = 5 }) {
   );
 }
 
-export function ContractorDashboardDemoNotice({ onCreateProject }) {
+export function ContractorDashboardDemoNotice() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
@@ -244,7 +244,6 @@ export function ContractorDashboardDemoNotice({ onCreateProject }) {
             <h2 id="sample-dashboard-title" className="text-base font-bold leading-5 text-white sm:text-2xl">
               Your sample contractor dashboard
             </h2>
-            <Badge className="bg-white text-[10px] font-semibold text-teal-800">Sample data</Badge>
           </div>
           <p className="text-xs leading-5 text-teal-50 sm:hidden">
             Explore the examples below. They disappear after your first project.
@@ -274,24 +273,14 @@ export function ContractorDashboardDemoNotice({ onCreateProject }) {
           <SymbolIcon name={detailsOpen ? "expand_less" : "info"} className="text-[18px]" />
           {detailsOpen ? "Show less" : "Learn more"}
         </button>
-        <button
-          type="button"
-          onClick={onCreateProject}
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-semibold text-teal-800 shadow-sm transition hover:bg-teal-50"
-        >
-          <SymbolIcon name="add" className="text-[18px]" />
-          Create project
-        </button>
+        <span className="inline-flex h-8 items-center rounded-full border border-white bg-transparent px-3 text-xs font-semibold text-white">
+          Sample data
+        </span>
       </div>
 
-      <button
-        type="button"
-        onClick={onCreateProject}
-        className="hidden h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-teal-800 shadow-sm transition hover:bg-teal-50 sm:inline-flex"
-      >
-        <SymbolIcon name="add" className="text-[20px]" />
-        Create real project
-      </button>
+      <span className="hidden h-9 shrink-0 items-center rounded-full border border-white bg-transparent px-4 text-xs font-semibold text-white sm:inline-flex">
+        Sample data
+      </span>
     </section>
   );
 }
