@@ -692,13 +692,13 @@ export default function CreateProjectCard({
 
       {showForm && (
         <>
-          {/* Job Posting header (blue) + Public toggle on right */}
-          <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
+          {/* Job Posting header + Public visibility */}
+          <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-4 sm:py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               {/* LEFT: Job Posting toggle + title */}
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-start gap-3 sm:items-center">
                 {forceJobPosting ? (
-                  <span className="inline-flex items-center rounded-full bg-sky-500 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                  <span className="mt-0.5 inline-flex shrink-0 items-center rounded-full bg-sky-500 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white sm:mt-0">
                     Active
                   </span>
                 ) : (
@@ -706,25 +706,26 @@ export default function CreateProjectCard({
                     type="button"
                     onClick={toggleJobPosting}
                     aria-pressed={jobOn}
+                    aria-label="Toggle job posting"
                     className={
-                      "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+                      "relative mt-0.5 inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition sm:mt-0 sm:h-6 sm:w-11 " +
                       (jobOn ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
                     }
                   >
                     <span
                       className={
-                        "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
-                        (jobOn ? "translate-x-5" : "translate-x-1")
+                        "inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition sm:h-5 sm:w-5 " +
+                        (jobOn ? "translate-x-5" : "translate-x-0.5 sm:translate-x-1")
                       }
                     />
                   </button>
                 )}
 
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-sky-900/80 sm:text-[11px]">
                     Job Posting
                   </div>
-                  <div className="mt-0.5 text-[11px] text-sky-800">
+                  <div className="mt-1 text-xs leading-5 text-sky-800 sm:mt-0.5 sm:text-[11px] sm:leading-normal">
                     {jobOn
                       ? forceJobPosting
                         ? "Homeowner projects are posted as job posts for contractors to review."
@@ -735,21 +736,29 @@ export default function CreateProjectCard({
               </div>
 
               {/* RIGHT: Public toggle */}
-              <div className="flex items-center gap-2">
-                <div className="text-[11px] font-semibold text-sky-900/80">Public</div>
+              <div className="flex items-center justify-between gap-3 border-t border-sky-200 pt-3 sm:shrink-0 sm:justify-start sm:border-t-0 sm:pt-0">
+                <div>
+                  <div className="text-xs font-semibold text-sky-900/80 sm:text-[11px]">Public</div>
+                  <div className="mt-0.5 text-xs leading-5 text-sky-800 sm:hidden">
+                    {form.is_public
+                      ? "Visible to contractors and other members."
+                      : "Visible only to invited contractors."}
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => setPublicPosting(!form.is_public)}
                   aria-pressed={!!form.is_public}
+                  aria-label="Toggle public visibility"
                   className={
-                    "relative inline-flex h-6 w-11 items-center rounded-full border transition " +
+                    "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition sm:h-6 sm:w-11 " +
                     (form.is_public ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
                   }
                 >
                   <span
                     className={
-                      "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition " +
-                      (form.is_public ? "translate-x-5" : "translate-x-1")
+                      "inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition sm:h-5 sm:w-5 " +
+                      (form.is_public ? "translate-x-5" : "translate-x-0.5 sm:translate-x-1")
                     }
                   />
                 </button>
