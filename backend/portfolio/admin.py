@@ -15,6 +15,7 @@ from .models import (
     FeedbackReply,
     HelperListing,
     HelperFeedback,
+    ProjectEstimate,
 )
 
 
@@ -25,6 +26,33 @@ def user_can_moderate_project_images(user):
         return True
     access = getattr(user, "staff_access", None)
     return bool(access and access.can_manage_moderation)
+
+
+@admin.register(ProjectEstimate)
+class ProjectEstimateAdmin(admin.ModelAdmin):
+    list_display = (
+        "estimate_number",
+        "project_name",
+        "user",
+        "estimate_type",
+        "final_price",
+        "updated_at",
+    )
+    list_filter = ("estimate_type", "issue_date", "updated_at")
+    search_fields = ("project_name", "user__username", "user__email")
+    readonly_fields = (
+        "calculation",
+        "calculation_version",
+        "subtotal",
+        "discount_amount",
+        "final_price",
+        "created_at",
+        "updated_at",
+    )
+
+    @admin.display(description="Estimate")
+    def estimate_number(self, obj):
+        return obj.estimate_number
 
 
 class ProjectModerationAdminMixin:

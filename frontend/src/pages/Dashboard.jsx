@@ -1275,6 +1275,14 @@ export default function Dashboard() {
             <SymbolIcon name={primaryProjectButtonIcon} className="text-[20px]" weight={400} />
             {primaryProjectButtonLabel}
           </button>
+
+          <Link
+            to="/project-estimator"
+            className="mt-3 inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+          >
+            <SymbolIcon name="calculate" className="text-[19px]" />
+            Estimate a painting project
+          </Link>
         </div>
       </div>
 

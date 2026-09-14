@@ -34,7 +34,9 @@ from .models import (
     FeedbackReply,
     HelperListing,
     HelperFeedback,
+    ProjectEstimate,
 )
+from .estimators import calculate_painting_estimate
 from .project_intake import get_project_intake_template, get_project_type_choices
 
 User = get_user_model()
@@ -354,6 +356,80 @@ class FeedbackLinksField(serializers.Field):
 
     def to_representation(self, value):
         return value if isinstance(value, list) else []
+
+
+class ProjectEstimateSerializer(serializers.ModelSerializer):
+    estimate_number = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = ProjectEstimate
+        fields = (
+            "id",
+            "estimate_number",
+            "project",
+            "estimate_type",
+            "project_name",
+            "issue_date",
+            "valid_until",
+            "inputs",
+            "calculation",
+            "calculation_version",
+            "subtotal",
+            "discount_amount",
+            "final_price",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "estimate_number",
+            "calculation",
+            "calculation_version",
+            "subtotal",
+            "discount_amount",
+            "final_price",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate_project_name(self, value):
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Project name is required.")
+        return cleaned
+
+    def validate_project(self, project):
+        request = self.context.get("request")
+        if project and (not request or project.owner_id != request.user.id):
+            raise serializers.ValidationError("Choose one of your own projects.")
+        return project
+
+    def validate(self, attrs):
+        estimate_type = attrs.get(
+            "estimate_type",
+            getattr(self.instance, "estimate_type", ProjectEstimate.TYPE_PAINTING),
+        )
+        if estimate_type != ProjectEstimate.TYPE_PAINTING:
+            raise serializers.ValidationError(
+                {"estimate_type": "Painting is the only available estimator type."}
+            )
+
+        issue_date = attrs.get("issue_date", getattr(self.instance, "issue_date", None))
+        valid_until = attrs.get("valid_until", getattr(self.instance, "valid_until", None))
+        if issue_date and valid_until and valid_until < issue_date:
+            raise serializers.ValidationError(
+                {"valid_until": "Valid-until date cannot be before the issue date."}
+            )
+
+        raw_inputs = attrs.get("inputs", getattr(self.instance, "inputs", {}))
+        normalized_inputs, calculation = calculate_painting_estimate(raw_inputs)
+        attrs["inputs"] = normalized_inputs
+        attrs["calculation"] = calculation
+        attrs["calculation_version"] = calculation["version"]
+        attrs["subtotal"] = calculation["subtotal"]
+        attrs["discount_amount"] = calculation["discount_amount"]
+        attrs["final_price"] = calculation["final_price"]
+        return attrs
 
 
 class FeedbackTicketSerializer(serializers.ModelSerializer):

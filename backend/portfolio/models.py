@@ -1307,6 +1307,55 @@ class HelperFeedback(models.Model):
         return f"Feedback<{self.id}> helper={self.helper_id} reviewer={self.reviewer_id}"
 
 
+class ProjectEstimate(models.Model):
+    TYPE_PAINTING = "painting"
+    TYPE_CHOICES = [
+        (TYPE_PAINTING, "Painting"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="project_estimates",
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.SET_NULL,
+        related_name="estimates",
+        null=True,
+        blank=True,
+    )
+    estimate_type = models.CharField(
+        max_length=40,
+        choices=TYPE_CHOICES,
+        default=TYPE_PAINTING,
+    )
+    project_name = models.CharField(max_length=200)
+    issue_date = models.DateField(default=timezone.localdate)
+    valid_until = models.DateField(null=True, blank=True)
+    inputs = models.JSONField(default=dict)
+    calculation = models.JSONField(default=dict)
+    calculation_version = models.CharField(max_length=40, default="painting-v1")
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    final_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        indexes = [
+            models.Index(fields=["user", "estimate_type", "updated_at"]),
+        ]
+
+    @property
+    def estimate_number(self):
+        return f"FO-{self.pk:06d}" if self.pk else "FO-DRAFT"
+
+    def __str__(self):
+        return f"{self.estimate_number} {self.project_name}"
+
+
 class FeedbackTicket(models.Model):
     CATEGORY_GENERAL_FEEDBACK = "general_feedback"
     CATEGORY_TECHNICAL_SUPPORT = "technical_support"

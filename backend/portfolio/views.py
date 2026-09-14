@@ -46,6 +46,7 @@ from .models import (
     ProjectBidVersion,
     FeedbackTicket,
     HelperListing,
+    ProjectEstimate,
 )
 from apps.bids.models import Bid
 from .access import can_access_job_interactions, can_view_project, visible_projects_q_for_user
@@ -65,6 +66,7 @@ from .serializers import (
     FeedbackReplySerializer,
     HelperListingSerializer,
     HelperFeedbackSerializer,
+    ProjectEstimateSerializer,
 )
 from .permissions import IsOwnerOrReadOnly, IsCommentAuthorOrReadOnly
 from .project_intake import (
@@ -599,6 +601,21 @@ class UnpublishTestimonialView(APIView):
 
         ser = ProjectCommentSerializer(comment, context={"request": request})
         return Response(ser.data, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------
+# Saved project estimates
+# ---------------------------------------------------
+class ProjectEstimateViewSet(viewsets.ModelViewSet):
+    serializer_class = ProjectEstimateSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return ProjectEstimate.objects.filter(user=self.request.user).select_related("project")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 # ---------------------------------------------------

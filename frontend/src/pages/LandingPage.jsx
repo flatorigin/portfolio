@@ -237,6 +237,65 @@ export default function LandingPage() {
         </Container>
       </main>
 
+      <section className="border-y border-slate-200 bg-white py-14 sm:py-16">
+        <Container>
+          <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-red-500">
+                Free planning tool
+              </div>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                Estimate a painting project
+              </h2>
+              <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
+                Choose the surfaces, condition, materials, and additional work. FlatOrigin organizes the details into a complete on-screen project estimate.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  to="/project-estimator"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  <SymbolIcon name="calculate" className="text-[19px]" />
+                  Open the estimator
+                </Link>
+                <span className="inline-flex h-11 items-center text-sm text-slate-500">
+                  No account required
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">FlatOrigin Estimate</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-950">Interior painting</div>
+                </div>
+                <div className="text-right text-xs leading-5 text-slate-500">500 sq ft<br />Standard repaint</div>
+              </div>
+              <div className="divide-y divide-slate-100 px-5">
+                {[
+                  ["Walls", "1,750 sq ft", "$5,250.00"],
+                  ["Ceilings", "500 sq ft", "$1,000.00"],
+                  ["Baseboards & trim", "Allowance", "$750.00"],
+                ].map(([name, quantity, amount]) => (
+                  <div key={name} className="grid grid-cols-[1fr_auto] gap-4 py-3 text-sm">
+                    <div>
+                      <div className="font-medium text-slate-900">{name}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">{quantity}</div>
+                    </div>
+                    <div className="font-medium text-slate-900">{amount}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-4">
+                <span className="text-sm font-semibold text-slate-900">Estimated total</span>
+                <span className="text-xl font-bold text-slate-950">$7,000.00</span>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
       <section className="border-y border-slate-200 bg-[#F6F5F1] py-16">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">

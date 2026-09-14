@@ -28,12 +28,14 @@ from .views import (
     HelperListingViewSet,
     HelperListingVerifyView,
     HelperFeedbackCreateView,
+    ProjectEstimateViewSet,
 )
 
 router = DefaultRouter()
 router.register("projects", ProjectViewSet, basename="project")
 router.register("project-plans", ProjectPlanViewSet, basename="project-plan")
 router.register("project-helpers", HelperListingViewSet, basename="project-helper")
+router.register("estimates", ProjectEstimateViewSet, basename="project-estimate")
 
 urlpatterns = [
     # DRF router (projects CRUD)

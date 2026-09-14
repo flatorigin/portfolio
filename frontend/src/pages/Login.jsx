@@ -1,6 +1,6 @@
 // frontend/src/pages/Login.jsx
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { login } from "../auth";
 import { Card, Input, PasswordInput, Button } from "../ui";
 
@@ -9,6 +9,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedNext = searchParams.get("next") || "";
+  const safeNext = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+    ? requestedNext
+    : "/dashboard";
+  const registerPath = safeNext !== "/dashboard"
+    ? `/register?next=${encodeURIComponent(safeNext)}`
+    : "/register";
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -18,7 +26,7 @@ export default function Login() {
         username,
         password,
       });
-      navigate("/dashboard");
+      navigate(safeNext);
     } catch (err) {
       const detail = String(err?.response?.data?.detail || "").toLowerCase();
       setError(
@@ -75,7 +83,7 @@ export default function Login() {
         <div className="mt-3 text-center text-xs text-slate-500">
           Don't have an account?{" "}
           <Link
-            to="/register"
+            to={registerPath}
             className="text-xs font-medium text-slate-600 hover:text-slate-900"
           >
             Sign up

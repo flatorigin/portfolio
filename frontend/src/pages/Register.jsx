@@ -7,6 +7,11 @@ import { Input, PasswordInput, Button, SymbolIcon } from "../ui";
 export default function Register() {
   const [searchParams] = useSearchParams();
   const requestedRole = searchParams.get("role");
+  const requestedNext = searchParams.get("next") || "";
+  const safeNext = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+    ? requestedNext
+    : "";
+  const loginPath = safeNext ? `/login?next=${encodeURIComponent(safeNext)}` : "/login";
   const initialProfileType =
     requestedRole === "homeowner" || requestedRole === "contractor" ? requestedRole : "";
   const [form, setForm] = useState({
@@ -234,7 +239,7 @@ export default function Register() {
                 </p>
 
                 <Link
-                  to="/login"
+                  to={loginPath}
                   className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
                 >
                   I confirmed my email - sign in
@@ -364,7 +369,7 @@ export default function Register() {
 
                 <div className="mt-5 text-center text-sm text-slate-500">
                   Already have an account?{" "}
-                  <Link to="/login" className="font-medium text-slate-700 hover:text-slate-900">
+                  <Link to={loginPath} className="font-medium text-slate-700 hover:text-slate-900">
                     Log in
                   </Link>
                 </div>

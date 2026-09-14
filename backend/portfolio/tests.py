@@ -29,6 +29,7 @@ from .models import (
     FeedbackReply,
     HelperListing,
     HelperFeedback,
+    ProjectEstimate,
 )
 from apps.bids.models import Bid
 
@@ -50,6 +51,121 @@ def set_profile_type(user, profile_type, **defaults):
     )
     user._state.fields_cache["profile"] = profile
     return profile
+
+
+class ProjectEstimateApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="estimateuser",
+            email="estimate@example.com",
+            password="pw123456",
+        )
+        self.other_user = User.objects.create_user(
+            username="otherestimateuser",
+            password="pw123456",
+        )
+        self.payload = {
+            "estimate_type": "painting",
+            "project_name": "Main floor repaint",
+            "issue_date": "2026-09-14",
+            "valid_until": "2026-10-14",
+            "inputs": {
+                "prepared_by": "Example Painting LLC",
+                "client_name": "Taylor Homeowner",
+                "project_location": "Media, PA",
+                "space_size": 100,
+                "surfaces": {"walls": True, "ceilings": True, "trim": True},
+                "wall_condition": "new_drywall",
+                "trim_needs_prep": True,
+                "paint_tier": "premium",
+                "paint_material": "Premium washable eggshell",
+                "material_supplier": "contractor",
+                "discount_type": "percent",
+                "discount_value": 10,
+                "custom_items": [
+                    {
+                        "name": "Door painting",
+                        "description": "Prepare and paint two doors",
+                        "quantity": 2,
+                        "unit": "door",
+                        "material": "Interior enamel",
+                        "unit_price": 50,
+                    }
+                ],
+                "notes": "Final pricing depends on site conditions.",
+            },
+        }
+
+    def test_requires_authentication(self):
+        response = self.client.get("/api/estimates/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_creates_estimate_with_server_calculated_totals(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post("/api/estimates/", self.payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["estimate_number"], "FO-000001")
+        self.assertEqual(response.data["subtotal"], "2218.88")
+        self.assertEqual(response.data["discount_amount"], "221.89")
+        self.assertEqual(response.data["final_price"], "1996.99")
+        self.assertEqual(response.data["calculation_version"], "painting-v1")
+        self.assertEqual(len(response.data["calculation"]["line_items"]), 5)
+
+    def test_lists_and_updates_only_current_users_estimates(self):
+        own = ProjectEstimate.objects.create(
+            user=self.user,
+            project_name="Mine",
+            inputs=self.payload["inputs"],
+        )
+        ProjectEstimate.objects.create(
+            user=self.other_user,
+            project_name="Not mine",
+            inputs=self.payload["inputs"],
+        )
+        self.client.force_authenticate(user=self.user)
+
+        list_response = self.client.get("/api/estimates/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in list_response.data], [own.id])
+
+        update_response = self.client.patch(
+            f"/api/estimates/{own.id}/",
+            {"inputs": {**self.payload["inputs"], "space_size": 200}},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(update_response.data["final_price"], "0.00")
+
+        other_response = self.client.get(
+            f"/api/estimates/{ProjectEstimate.objects.get(user=self.other_user).id}/"
+        )
+        self.assertEqual(other_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_rejects_invalid_discount_and_date(self):
+        self.client.force_authenticate(user=self.user)
+        invalid = {
+            **self.payload,
+            "valid_until": "2026-09-01",
+            "inputs": {**self.payload["inputs"], "discount_value": 101},
+        }
+        response = self.client.post("/api/estimates/", invalid, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ProjectEstimate.objects.count(), 0)
+
+    def test_requires_a_surface_or_custom_item(self):
+        self.client.force_authenticate(user=self.user)
+        invalid = {
+            **self.payload,
+            "inputs": {
+                **self.payload["inputs"],
+                "surfaces": {"walls": False, "ceilings": False, "trim": False},
+                "custom_items": [],
+            },
+        }
+        response = self.client.post("/api/estimates/", invalid, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ProjectEstimate.objects.count(), 0)
 
 
 class FeedbackTicketApiTests(APITestCase):
