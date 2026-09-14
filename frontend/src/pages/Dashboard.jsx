@@ -2084,9 +2084,9 @@ export default function Dashboard() {
       ) : null}
 
       {createOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3">
+        <div className="fixed inset-0 z-50 bg-white sm:flex sm:items-center sm:justify-center sm:bg-black/40 sm:p-4 sm:backdrop-blur-sm">
+          <div className="flex h-[100dvh] w-full flex-col bg-white sm:relative sm:h-auto sm:max-h-[90vh] sm:max-w-5xl sm:overflow-y-auto sm:rounded-2xl sm:border sm:border-white/60 sm:shadow-2xl">
+            <div className="z-10 flex shrink-0 items-center justify-between border-b border-slate-100 bg-white px-4 py-3 sm:sticky sm:top-0">
               <div className="text-sm font-semibold text-slate-900">Create Project</div>
               <button
                 type="button"
@@ -2097,7 +2097,7 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <div className="p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain sm:overflow-visible sm:p-4">
               <CreateProjectCard
                 ownedCount={projects.length}
                 form={form}

@@ -8,7 +8,7 @@ import { useMemo, useState, useEffect } from "react";
 import { flushSync } from "react-dom";
 import api from "../api";
 import AiWriteButton from "./AiWriteButton";
-import { Card, Input, Textarea, Button, Badge, SymbolIcon } from "../ui";
+import { Input, Textarea, Button, Badge, SymbolIcon } from "../ui";
 import {
   getCachedLocationOrigin,
   formatDistanceMiles,
@@ -678,7 +678,7 @@ export default function CreateProjectCard({
   const showForm = hideLauncher || isOpen;
 
   return (
-    <Card className="p-5">
+    <div className="p-4 sm:rounded-2xl sm:border sm:border-slate-200 sm:bg-white sm:p-5 sm:shadow-sm">
       {/*<div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-semibold text-slate-800">Create Project</div>
         <Badge>{ownedCount} owned</Badge>
@@ -736,8 +736,8 @@ export default function CreateProjectCard({
               </div>
 
               {/* RIGHT: Public toggle */}
-              <div className="flex items-center justify-between gap-3 border-t border-sky-200 pt-3 sm:shrink-0 sm:justify-start sm:border-t-0 sm:pt-0">
-                <div>
+              <div className="flex items-start gap-3 border-t border-sky-200 pt-3 sm:shrink-0 sm:items-center sm:border-t-0 sm:pt-0">
+                <div className="order-2 min-w-0 flex-1 sm:order-1 sm:flex-none">
                   <div className="text-xs font-semibold text-sky-900/80 sm:text-[11px]">Public</div>
                   <div className="mt-0.5 text-xs leading-5 text-sky-800 sm:hidden">
                     {form.is_public
@@ -751,7 +751,7 @@ export default function CreateProjectCard({
                   aria-pressed={!!form.is_public}
                   aria-label="Toggle public visibility"
                   className={
-                    "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition sm:h-6 sm:w-11 " +
+                    "relative order-1 mt-0.5 inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition sm:order-2 sm:mt-0 sm:h-6 sm:w-11 " +
                     (form.is_public ? "bg-sky-500 border-sky-500" : "bg-slate-200 border-slate-300")
                   }
                 >
@@ -1201,6 +1201,6 @@ export default function CreateProjectCard({
           </form>
         </>
       )}
-    </Card>
+    </div>
   );
 }
