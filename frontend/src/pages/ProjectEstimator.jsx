@@ -270,6 +270,8 @@ function EstimatePreview({ draft, calculation, estimateNumber }) {
           <div className="mt-1">{supplierLabels[inputs.material_supplier]}</div>
           <div>{inputs.paint_tier === "premium" ? "Premium" : "Standard"} paint allowance</div>
           <div>{inputs.wall_height || 8} ft wall and ceiling height</div>
+          {inputs.surfaces.walls ? <div>{money(inputs.wall_unit_price || 3)} wall base rate per sq ft</div> : null}
+          {inputs.surfaces.ceilings ? <div>{money(inputs.ceiling_unit_price || 2)} ceiling base rate per sq ft</div> : null}
           {Number(calculation.assumptions?.ceiling_access_surcharge_percent) > 0 ? (
             <div>{calculation.assumptions.ceiling_access_surcharge_percent}% high-ceiling access and protection allowance</div>
           ) : null}
@@ -420,6 +422,12 @@ export default function ProjectEstimator() {
     if (Number(draft.inputs.space_size) <= 0) return "Enter a floor area greater than zero.";
     if (Number(draft.inputs.wall_height ?? 8) < 6 || Number(draft.inputs.wall_height ?? 8) > 40) {
       return "Enter a wall and ceiling height from 6 to 40 feet.";
+    }
+    if (draft.inputs.surfaces.walls && (Number(draft.inputs.wall_unit_price ?? 3) < 2 || Number(draft.inputs.wall_unit_price ?? 3) > 6)) {
+      return "Enter a wall unit price from $2.00 to $6.00 per square foot.";
+    }
+    if (draft.inputs.surfaces.ceilings && (Number(draft.inputs.ceiling_unit_price ?? 2) < 2 || Number(draft.inputs.ceiling_unit_price ?? 2) > 6)) {
+      return "Enter a ceiling unit price from $2.00 to $6.00 per square foot.";
     }
     if (
       !Object.values(draft.inputs.surfaces).some(Boolean) &&
@@ -686,7 +694,39 @@ export default function ProjectEstimator() {
                     <option value="contractor">Issuer / contractor</option>
                     <option value="client">Client / homeowner</option>
                   </select>
+                  <div className="mt-1.5 text-xs leading-5 text-slate-500">
+                    {draft.inputs.material_supplier === "contractor"
+                      ? "Use rates that include contractor-supplied paint and materials."
+                      : draft.inputs.material_supplier === "client"
+                      ? "Materials are not priced separately. Lower the rates as needed for owner-supplied paint and materials."
+                      : "Confirm the supplier, then set rates that reflect whether paint and materials are included."}
+                  </div>
                 </label>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  {draft.inputs.surfaces.walls ? (
+                    <label className="block">
+                      <FieldLabel>Wall base unit price</FieldLabel>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
+                        <Input type="number" min="2" max="6" step="0.25" value={draft.inputs.wall_unit_price ?? "3.00"} onChange={(event) => updateInputs("wall_unit_price", event.target.value)} className="pl-7 pr-16" />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">/ sq ft</span>
+                      </div>
+                    </label>
+                  ) : null}
+                  {draft.inputs.surfaces.ceilings ? (
+                    <label className="block">
+                      <FieldLabel>Ceiling base unit price</FieldLabel>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
+                        <Input type="number" min="2" max="6" step="0.25" value={draft.inputs.ceiling_unit_price ?? "2.00"} onChange={(event) => updateInputs("ceiling_unit_price", event.target.value)} className="pl-7 pr-16" />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">/ sq ft</span>
+                      </div>
+                    </label>
+                  ) : null}
+                </div>
+                <p className="text-xs leading-5 text-slate-500">
+                  Set the base labor-and-material rate for this estimate. Height, condition, and paint-quality adjustments are applied afterward.
+                </p>
               </div>
             </section>
 

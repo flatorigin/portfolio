@@ -1,4 +1,4 @@
-export const PAINTING_CALCULATION_VERSION = "painting-v2";
+export const PAINTING_CALCULATION_VERSION = "painting-v3";
 
 export function createDefaultPaintingInputs() {
   return {
@@ -7,6 +7,8 @@ export function createDefaultPaintingInputs() {
     project_location: "",
     space_size: "500",
     wall_height: "8",
+    wall_unit_price: "3.00",
+    ceiling_unit_price: "2.00",
     surfaces: {
       walls: true,
       ceilings: false,
@@ -44,6 +46,8 @@ function formatMoneyValue(value) {
 export function calculatePaintingEstimate(inputs) {
   const floorArea = Math.max(0, numberValue(inputs?.space_size));
   const wallHeight = Math.min(40, Math.max(6, numberValue(inputs?.wall_height, 8)));
+  const wallUnitPrice = Math.min(6, Math.max(2, numberValue(inputs?.wall_unit_price || 3, 3)));
+  const ceilingUnitPrice = Math.min(6, Math.max(2, numberValue(inputs?.ceiling_unit_price || 2, 2)));
   const wallHeightMultiplier = wallHeight / 8;
   const ceilingAccessSurchargePercent = Math.min(50, Math.max(0, (wallHeight - 9) * 5));
   const ceilingAccessMultiplier = 1 + ceilingAccessSurchargePercent / 100;
@@ -73,7 +77,7 @@ export function calculatePaintingEstimate(inputs) {
   if (surfaces.walls) {
     const wallArea = floorArea * 3.5 * wallHeightMultiplier;
     const isNewDrywall = inputs?.wall_condition === "new_drywall";
-    const wallRate = 3 * (isNewDrywall ? 1.35 : 1);
+    const wallRate = wallUnitPrice * (isNewDrywall ? 1.35 : 1);
     addLine({
       code: "walls",
       name: "Walls",
@@ -88,7 +92,7 @@ export function calculatePaintingEstimate(inputs) {
   }
 
   if (surfaces.ceilings) {
-    const ceilingRate = 2 * ceilingAccessMultiplier;
+    const ceilingRate = ceilingUnitPrice * ceilingAccessMultiplier;
     addLine({
       code: "ceilings",
       name: "Ceilings",
@@ -166,6 +170,8 @@ export function calculatePaintingEstimate(inputs) {
     assumptions: {
       wall_height: formatNumber(wallHeight),
       wall_height_multiplier: formatNumber(wallHeightMultiplier),
+      wall_unit_price: formatMoneyValue(wallUnitPrice),
+      ceiling_unit_price: formatMoneyValue(ceilingUnitPrice),
       ceiling_access_surcharge_percent: formatNumber(ceilingAccessSurchargePercent),
     },
     line_items: lineItems,

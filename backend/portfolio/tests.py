@@ -109,7 +109,7 @@ class ProjectEstimateApiTests(APITestCase):
         self.assertEqual(response.data["subtotal"], "2218.88")
         self.assertEqual(response.data["discount_amount"], "221.89")
         self.assertEqual(response.data["final_price"], "1996.99")
-        self.assertEqual(response.data["calculation_version"], "painting-v2")
+        self.assertEqual(response.data["calculation_version"], "painting-v3")
         self.assertEqual(len(response.data["calculation"]["line_items"]), 5)
 
     def test_scales_walls_and_ceiling_access_for_tall_rooms(self):
@@ -148,6 +148,43 @@ class ProjectEstimateApiTests(APITestCase):
         invalid = {
             **self.payload,
             "inputs": {**self.payload["inputs"], "wall_height": 41},
+        }
+
+        response = self.client.post("/api/estimates/", invalid, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ProjectEstimate.objects.count(), 0)
+
+    def test_uses_custom_wall_and_ceiling_unit_prices(self):
+        self.client.force_authenticate(user=self.user)
+        payload = {
+            **self.payload,
+            "inputs": {
+                **self.payload["inputs"],
+                "space_size": 100,
+                "wall_height": 8,
+                "wall_unit_price": 2.5,
+                "ceiling_unit_price": 4,
+                "surfaces": {"walls": True, "ceilings": True, "trim": False},
+                "wall_condition": "standard_repaint",
+                "paint_tier": "standard",
+                "discount_value": 0,
+                "custom_items": [],
+            },
+        }
+
+        response = self.client.post("/api/estimates/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["subtotal"], "1275.00")
+        self.assertEqual(response.data["calculation"]["line_items"][0]["rate"], "2.50")
+        self.assertEqual(response.data["calculation"]["line_items"][1]["rate"], "4.00")
+
+    def test_rejects_unit_price_outside_supported_range(self):
+        self.client.force_authenticate(user=self.user)
+        invalid = {
+            **self.payload,
+            "inputs": {**self.payload["inputs"], "wall_unit_price": 6.01},
         }
 
         response = self.client.post("/api/estimates/", invalid, format="json")
