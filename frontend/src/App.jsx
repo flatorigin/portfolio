@@ -305,17 +305,17 @@ export default function App() {
       {!hideShellNav ? (
       <header className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur-md">
         <Container className="py-3">
-          <nav className="flex items-center gap-2">
+          <nav className="flex flex-wrap items-center gap-2 md:flex-nowrap">
             {/* Left: Logo */}
             <Link
               to={logoPath}
-              className="mr-1 text-base font-bold tracking-tight text-slate-900"
+              className="mr-1 shrink-0 text-base font-bold tracking-tight text-slate-900"
             >
               FlatOrigin
             </Link>
 
             {/* Mobile center: role-aware nav */}
-            <div className="flex items-center gap-1 md:hidden">
+            <div className="order-3 flex w-full items-center justify-between gap-1 border-t border-slate-200/70 pt-2 md:hidden">
               <NavLink to="/explore" compact>
                 Explore
               </NavLink>
@@ -342,7 +342,7 @@ export default function App() {
 
             {/* Right side */}
             <div
-              className="relative ml-auto flex items-center gap-3"
+              className="relative ml-auto flex shrink-0 items-center gap-3"
               ref={menuRef}
             >
               {authed && previewLabel && isGuidesPath ? (

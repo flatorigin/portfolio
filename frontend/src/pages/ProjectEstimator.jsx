@@ -213,9 +213,9 @@ function EstimatePreview({ draft, calculation, estimateNumber }) {
     <section aria-label="Estimate preview" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 px-5 py-5 sm:px-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">FlatOrigin Estimate</div>
-            <h2 className="mt-2 text-2xl font-bold text-slate-950">{draft.project_name || "Untitled estimate"}</h2>
+            <h2 className="mt-2 break-words text-2xl font-bold text-slate-950">{draft.project_name || "Untitled estimate"}</h2>
             <div className="mt-2 text-sm text-slate-500">Estimate #{estimateNumber || "FO-DRAFT"}</div>
           </div>
           <div className="text-sm leading-6 text-slate-600 sm:text-right">
@@ -237,7 +237,33 @@ function EstimatePreview({ draft, calculation, estimateNumber }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="divide-y divide-slate-100 sm:hidden">
+        {calculation.line_items.map((item) => (
+          <article key={item.code} className="px-4 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 font-semibold text-slate-950">{item.name}</div>
+              <div className="shrink-0 font-semibold text-slate-950">{money(item.amount)}</div>
+            </div>
+            <p className="mt-1 break-words text-sm leading-5 text-slate-600">{item.description || "-"}</p>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+              <div className="min-w-0">
+                <dt className="font-semibold uppercase text-slate-400">Quantity</dt>
+                <dd className="mt-1 break-words text-slate-700">{item.quantity} {item.unit}</dd>
+              </div>
+              <div className="min-w-0 text-right">
+                <dt className="font-semibold uppercase text-slate-400">Rate</dt>
+                <dd className="mt-1 text-slate-700">{money(item.rate)}</dd>
+              </div>
+              <div className="col-span-2 min-w-0">
+                <dt className="font-semibold uppercase text-slate-400">Material</dt>
+                <dd className="mt-1 break-words text-slate-700">{item.material || "-"}</dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-[640px] border-collapse text-left">
           <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
@@ -594,8 +620,8 @@ export default function ProjectEstimator() {
       ) : null}
 
       <Container className="py-7 sm:py-10">
-        <div className="grid items-start gap-7 lg:grid-cols-[minmax(340px,0.72fr)_minmax(0,1.28fr)]">
-          <div className="space-y-6">
+        <div className="grid min-w-0 items-start gap-7 lg:grid-cols-[minmax(340px,0.72fr)_minmax(0,1.28fr)]">
+          <div className="min-w-0 space-y-6">
             <section className="border-b border-slate-200 pb-6">
               <h2 className="text-lg font-semibold text-slate-950">Estimate details</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -799,7 +825,7 @@ export default function ProjectEstimator() {
             ) : null}
           </div>
 
-          <div className="lg:sticky lg:top-24">
+          <div className="min-w-0 lg:sticky lg:top-24">
             <EstimatePreview draft={draft} calculation={calculation} estimateNumber={activeEstimate?.estimate_number} />
           </div>
         </div>
