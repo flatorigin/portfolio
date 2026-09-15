@@ -245,20 +245,20 @@ export default function LandingPage() {
                 Free planning tool
               </div>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-                Estimate a painting project
+                Painting Project Estimator
               </h2>
               <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
-                Choose the surfaces, condition, materials, and additional work. FlatOrigin organizes the details into a complete on-screen project estimate.
+                Choose the project size, wall height, surfaces, condition, materials, and additional work. FlatOrigin organizes the details into a complete on-screen estimate.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   to="/project-estimator"
-                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  className="inline-flex h-12 items-center gap-2.5 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
                 >
-                  <SymbolIcon name="calculate" className="text-[19px]" />
-                  Open the estimator
+                  <SymbolIcon name="calculate" className="text-[20px]" />
+                  Estimate a painting project
                 </Link>
-                <span className="inline-flex h-11 items-center text-sm text-slate-500">
+                <span className="inline-flex h-12 items-center text-sm font-medium text-slate-500">
                   No account required
                 </span>
               </div>

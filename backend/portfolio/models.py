@@ -1335,7 +1335,7 @@ class ProjectEstimate(models.Model):
     valid_until = models.DateField(null=True, blank=True)
     inputs = models.JSONField(default=dict)
     calculation = models.JSONField(default=dict)
-    calculation_version = models.CharField(max_length=40, default="painting-v1")
+    calculation_version = models.CharField(max_length=40, default="painting-v2")
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     final_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)

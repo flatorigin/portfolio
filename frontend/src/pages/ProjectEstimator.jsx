@@ -269,6 +269,10 @@ function EstimatePreview({ draft, calculation, estimateNumber }) {
           <div className="font-medium text-slate-900">Estimate assumptions</div>
           <div className="mt-1">{supplierLabels[inputs.material_supplier]}</div>
           <div>{inputs.paint_tier === "premium" ? "Premium" : "Standard"} paint allowance</div>
+          <div>{inputs.wall_height || 8} ft wall and ceiling height</div>
+          {Number(calculation.assumptions?.ceiling_access_surcharge_percent) > 0 ? (
+            <div>{calculation.assumptions.ceiling_access_surcharge_percent}% high-ceiling access and protection allowance</div>
+          ) : null}
           {inputs.notes ? <p className="mt-3 whitespace-pre-wrap">{inputs.notes}</p> : null}
         </div>
         <dl className="space-y-2 text-sm">
@@ -414,6 +418,9 @@ export default function ProjectEstimator() {
   const validateDraft = () => {
     if (!draft.project_name.trim()) return "Enter a project or estimate name.";
     if (Number(draft.inputs.space_size) <= 0) return "Enter a floor area greater than zero.";
+    if (Number(draft.inputs.wall_height ?? 8) < 6 || Number(draft.inputs.wall_height ?? 8) > 40) {
+      return "Enter a wall and ceiling height from 6 to 40 feet.";
+    }
     if (
       !Object.values(draft.inputs.surfaces).some(Boolean) &&
       draft.inputs.custom_items.length === 0
@@ -613,14 +620,25 @@ export default function ProjectEstimator() {
 
             <section className="border-b border-slate-200 pb-6">
               <h2 className="text-lg font-semibold text-slate-950">Painting scope</h2>
-              <label className="mt-4 block">
-                <FieldLabel>Floor area</FieldLabel>
-                <div className="relative">
-                  <Input type="number" min="1" max="100000" step="1" value={draft.inputs.space_size} onChange={(event) => updateInputs("space_size", event.target.value)} className="pr-16" />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">sq ft</span>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                <label className="block">
+                  <FieldLabel>Floor area</FieldLabel>
+                  <div className="relative">
+                    <Input type="number" min="1" max="100000" step="1" value={draft.inputs.space_size} onChange={(event) => updateInputs("space_size", event.target.value)} className="pr-16" />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">sq ft</span>
+                  </div>
+                </label>
+                <label className="block">
+                  <FieldLabel>Wall / ceiling height</FieldLabel>
+                  <div className="relative">
+                    <Input type="number" min="6" max="40" step="0.5" value={draft.inputs.wall_height ?? "8"} onChange={(event) => updateInputs("wall_height", event.target.value)} className="pr-10" />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">ft</span>
+                  </div>
+                </label>
+                <div className="text-xs leading-5 text-slate-500 sm:col-span-2 lg:col-span-1 xl:col-span-2">
+                  Walls scale from the 8 ft baseline. Ceilings above 9 ft add 5% per additional foot for access and protection, capped at 50%.
                 </div>
-                <div className="mt-1.5 text-xs leading-5 text-slate-500">Wall area uses a 3.5x floor-area planning factor.</div>
-              </label>
+              </div>
 
               <div className="mt-4">
                 <FieldLabel>Surfaces to paint</FieldLabel>

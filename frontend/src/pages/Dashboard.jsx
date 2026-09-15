@@ -1275,16 +1275,31 @@ export default function Dashboard() {
             <SymbolIcon name={primaryProjectButtonIcon} className="text-[20px]" weight={400} />
             {primaryProjectButtonLabel}
           </button>
-
-          <Link
-            to="/project-estimator"
-            className="mt-3 inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-          >
-            <SymbolIcon name="calculate" className="text-[19px]" />
-            Estimate a painting project
-          </Link>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+              <SymbolIcon name="calculate" className="text-[22px]" weight={500} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-slate-950">Painting Project Estimator</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                Build a detailed planning estimate using the project size, surfaces, height, condition, materials, and additional work.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/project-estimator"
+            className="inline-flex h-12 shrink-0 items-center justify-center gap-2.5 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+          >
+            <SymbolIcon name="calculate" className="text-[20px]" weight={400} />
+            Start estimate
+          </Link>
+        </div>
+      </section>
 
       <ProjectPlannerSection isVisible={isHomeownerAccount} />
       <ContractorMarkupSection isVisible={isContractorAccount} />

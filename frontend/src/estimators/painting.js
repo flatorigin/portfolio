@@ -1,4 +1,4 @@
-export const PAINTING_CALCULATION_VERSION = "painting-v1";
+export const PAINTING_CALCULATION_VERSION = "painting-v2";
 
 export function createDefaultPaintingInputs() {
   return {
@@ -6,6 +6,7 @@ export function createDefaultPaintingInputs() {
     client_name: "",
     project_location: "",
     space_size: "500",
+    wall_height: "8",
     surfaces: {
       walls: true,
       ceilings: false,
@@ -42,6 +43,10 @@ function formatMoneyValue(value) {
 
 export function calculatePaintingEstimate(inputs) {
   const floorArea = Math.max(0, numberValue(inputs?.space_size));
+  const wallHeight = Math.min(40, Math.max(6, numberValue(inputs?.wall_height, 8)));
+  const wallHeightMultiplier = wallHeight / 8;
+  const ceilingAccessSurchargePercent = Math.min(50, Math.max(0, (wallHeight - 9) * 5));
+  const ceilingAccessMultiplier = 1 + ceilingAccessSurchargePercent / 100;
   const surfaces = inputs?.surfaces || {};
   const material =
     String(inputs?.paint_material || "").trim() ||
@@ -66,7 +71,7 @@ export function calculatePaintingEstimate(inputs) {
   }
 
   if (surfaces.walls) {
-    const wallArea = floorArea * 3.5;
+    const wallArea = floorArea * 3.5 * wallHeightMultiplier;
     const isNewDrywall = inputs?.wall_condition === "new_drywall";
     const wallRate = 3 * (isNewDrywall ? 1.35 : 1);
     addLine({
@@ -83,14 +88,17 @@ export function calculatePaintingEstimate(inputs) {
   }
 
   if (surfaces.ceilings) {
+    const ceilingRate = 2 * ceilingAccessMultiplier;
     addLine({
       code: "ceilings",
       name: "Ceilings",
-      description: "Prepare and paint ceiling surfaces",
+      description: ceilingAccessSurchargePercent > 0
+        ? `Prepare and paint ceiling surfaces with ${formatNumber(ceilingAccessSurchargePercent)}% high-ceiling access and protection allowance`
+        : "Prepare and paint ceiling surfaces",
       quantity: floorArea,
       unit: "sq ft",
-      rate: 2,
-      amount: floorArea * 2,
+      rate: ceilingRate,
+      amount: floorArea * ceilingRate,
     });
   }
 
@@ -155,6 +163,11 @@ export function calculatePaintingEstimate(inputs) {
 
   return {
     version: PAINTING_CALCULATION_VERSION,
+    assumptions: {
+      wall_height: formatNumber(wallHeight),
+      wall_height_multiplier: formatNumber(wallHeightMultiplier),
+      ceiling_access_surcharge_percent: formatNumber(ceilingAccessSurchargePercent),
+    },
     line_items: lineItems,
     subtotal: formatMoneyValue(subtotal),
     discount_amount: formatMoneyValue(discountAmount),

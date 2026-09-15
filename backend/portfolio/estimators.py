@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 MONEY_PLACES = Decimal("0.01")
 QUANTITY_PLACES = Decimal("0.01")
-PAINTING_CALCULATION_VERSION = "painting-v1"
+PAINTING_CALCULATION_VERSION = "painting-v2"
 
 
 def _decimal(value, field_name, *, minimum=Decimal("0"), maximum=None):
@@ -47,6 +47,12 @@ def normalize_painting_inputs(raw_inputs):
         "space_size",
         minimum=Decimal("1"),
         maximum=Decimal("100000"),
+    )
+    wall_height = _decimal(
+        raw_inputs.get("wall_height", 8),
+        "wall_height",
+        minimum=Decimal("6"),
+        maximum=Decimal("40"),
     )
 
     raw_surfaces = raw_inputs.get("surfaces") or {}
@@ -140,6 +146,7 @@ def normalize_painting_inputs(raw_inputs):
         "client_name": str(raw_inputs.get("client_name") or "").strip()[:160],
         "project_location": str(raw_inputs.get("project_location") or "").strip()[:200],
         "space_size": _number_string(space_size),
+        "wall_height": _number_string(wall_height),
         "surfaces": surfaces,
         "wall_condition": wall_condition,
         "trim_needs_prep": bool(raw_inputs.get("trim_needs_prep", False)),
@@ -156,6 +163,15 @@ def normalize_painting_inputs(raw_inputs):
 def calculate_painting_estimate(raw_inputs):
     inputs = normalize_painting_inputs(raw_inputs)
     floor_area = Decimal(inputs["space_size"])
+    wall_height = Decimal(inputs["wall_height"])
+    wall_height_multiplier = wall_height / Decimal("8")
+    ceiling_access_surcharge_percent = min(
+        Decimal("50"),
+        max(Decimal("0"), (wall_height - Decimal("9")) * Decimal("5")),
+    )
+    ceiling_access_multiplier = (
+        Decimal("1") + ceiling_access_surcharge_percent / Decimal("100")
+    )
     surfaces = inputs["surfaces"]
     line_items = []
     painting_subtotal = Decimal("0")
@@ -183,7 +199,7 @@ def calculate_painting_estimate(raw_inputs):
     )
 
     if surfaces["walls"]:
-        wall_area = floor_area * Decimal("3.5")
+        wall_area = floor_area * Decimal("3.5") * wall_height_multiplier
         wall_amount = wall_area * Decimal("3.00")
         description = "Prepare and paint wall surfaces"
         if inputs["wall_condition"] == "new_drywall":
@@ -201,14 +217,21 @@ def calculate_painting_estimate(raw_inputs):
         )
 
     if surfaces["ceilings"]:
+        ceiling_rate = Decimal("2.00") * ceiling_access_multiplier
+        ceiling_description = "Prepare and paint ceiling surfaces"
+        if ceiling_access_surcharge_percent > 0:
+            ceiling_description += (
+                f" with {_number_string(ceiling_access_surcharge_percent)}% "
+                "high-ceiling access and protection allowance"
+            )
         add_line(
             "ceilings",
             "Ceilings",
-            "Prepare and paint ceiling surfaces",
+            ceiling_description,
             floor_area,
             "sq ft",
-            Decimal("2.00"),
-            floor_area * Decimal("2.00"),
+            ceiling_rate,
+            floor_area * ceiling_rate,
             material,
         )
 
@@ -276,6 +299,13 @@ def calculate_painting_estimate(raw_inputs):
 
     return inputs, {
         "version": PAINTING_CALCULATION_VERSION,
+        "assumptions": {
+            "wall_height": _number_string(wall_height),
+            "wall_height_multiplier": _number_string(wall_height_multiplier),
+            "ceiling_access_surcharge_percent": _number_string(
+                ceiling_access_surcharge_percent
+            ),
+        },
         "line_items": line_items,
         "subtotal": _money_string(subtotal),
         "discount_amount": _money_string(discount_amount),
