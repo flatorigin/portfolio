@@ -280,11 +280,14 @@ function EstimatePreview({ draft, calculation, estimateNumber }) {
   const inputs = draft.inputs;
   return (
     <section aria-label="Estimate preview" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-5 py-5 sm:px-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">FlatOrigin Painting Estimate</div><h2 className="mt-2 break-words text-2xl font-bold text-slate-950">{draft.project_name || "Untitled estimate"}</h2><div className="mt-2 text-sm text-slate-500">{estimateNumber || "FO-DRAFT"} / <span className="capitalize">{draft.status}</span></div></div>
-          <div className="text-sm leading-6 text-slate-600 sm:text-right"><div><span className="font-medium text-slate-900">Issued:</span> {readableDate(draft.issue_date)}</div><div><span className="font-medium text-slate-900">Valid until:</span> {readableDate(draft.valid_until)}</div></div>
+      <div className="border-b border-slate-200 bg-slate-950 px-5 py-5 text-white sm:px-7">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-300">Painting estimate</div><h2 className="mt-1 break-words text-xl font-bold">{draft.project_name || "Untitled estimate"}</h2><div className="mt-1 text-xs text-slate-300">{estimateNumber || "FO-DRAFT"} / <span className="capitalize">{draft.status}</span></div></div>
+          <div className="text-right"><div className="text-xs text-slate-300">Estimated price</div><div className="mt-1 text-2xl font-bold">{money(calculation.final_price)}</div></div>
         </div>
+      </div>
+      <div className="border-b border-slate-200 px-5 py-5 sm:px-7">
+        <div className="flex flex-wrap justify-between gap-3 text-sm leading-6 text-slate-600"><div><span className="font-medium text-slate-900">Issued:</span> {readableDate(draft.issue_date)}</div><div><span className="font-medium text-slate-900">Valid until:</span> {readableDate(draft.valid_until)}</div></div>
         <div className="mt-6 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2"><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Prepared by</div><div className="mt-1 text-sm font-medium text-slate-900">{inputs.prepared_by || "Issuing user"}</div></div><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Prepared for</div><div className="mt-1 text-sm font-medium text-slate-900">{inputs.client_name || "Client to be confirmed"}</div>{inputs.project_location ? <div className="mt-0.5 text-sm text-slate-500">{inputs.project_location}</div> : null}</div></div>
       </div>
       <div className="px-5 py-6 sm:px-7">
