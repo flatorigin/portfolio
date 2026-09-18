@@ -12,9 +12,10 @@ NUMBERS = {
     'sheet_price': 0, 'supplies': 0, 'hanging_rate': 0, 'finishing_rate': 0,
     'installed_rate': 0, 'access_percent': 0, 'removal_rate': 0,
     'patch_count': 0, 'patch_rate': 0,
+    'floor_area': 0, 'additional_ceiling_area': 0,
 }
 CHOICES = {
-    'measurement': ('measured', 'dimensions'), 'pricing': ('separate', 'installed'),
+    'measurement': ('measured', 'dimensions', 'floor'), 'pricing': ('separate', 'installed'),
     'material_supplier': ('contractor', 'client'), 'finish': ('0', '1', '2', '3', '4', '5'),
 }
 
@@ -31,6 +32,7 @@ def calculate_drywall_estimate(raw):
             raise ValidationError({'sections': 'Each section must be an object.'})
         section = {key: str(item.get(key, default)).strip()[:200] for key, default in {
             'id': str(index), 'name': 'Drywall section', 'board_type': 'Standard gypsum', 'thickness': '1/2 in',
+            'ceiling_description': '',
         }.items()}
         for key, choices in CHOICES.items():
             section[key] = item.get(key, choices[0])
@@ -43,18 +45,23 @@ def calculate_drywall_estimate(raw):
             if key in ('layers', 'patch_count') and value != value.to_integral_value():
                 raise ValidationError({key: 'Enter a whole number.'})
             section[key] = _number_string(value)
-        for key, default in {'walls': True, 'ceilings': False, 'deduct_material': True, 'deduct_labor': False}.items():
+        for key, default in {'walls': True, 'ceilings': False, 'deduct_material': True, 'deduct_labor': False, 'wall_override': False, 'ceiling_override': False, 'openings_already_deducted': False}.items():
             if not isinstance(item.get(key, default), bool):
                 raise ValidationError({key: 'Expected true or false.'})
             section[key] = item.get(key, default)
         n = lambda key: Decimal(section[key])
-        walls = (n('wall_area') if section['measurement'] == 'measured' else n('wall_length') * n('height')) if section['walls'] else Decimal('0')
-        ceiling = (n('ceiling_area') if section['measurement'] == 'measured' else n('length') * n('width')) if section['ceilings'] else Decimal('0')
-        if n('opening_area') > walls:
+        floor_mode = section['measurement'] == 'floor'
+        measured_walls = section['measurement'] == 'measured' or (floor_mode and section['wall_override'])
+        measured_ceiling = section['measurement'] == 'measured' or (floor_mode and section['ceiling_override'])
+        walls = (n('wall_area') if measured_walls else n('floor_area') * Decimal('3.5') * n('height') / 8 if floor_mode else n('wall_length') * n('height')) if section['walls'] else Decimal('0')
+        ceiling = (n('ceiling_area') if measured_ceiling else n('floor_area') if floor_mode else n('length') * n('width')) if section['ceilings'] else Decimal('0')
+        additional = n('additional_ceiling_area') if section['ceilings'] else Decimal('0')
+        openings = n('opening_area') if section['walls'] and not (measured_walls and section['openings_already_deducted']) else Decimal('0')
+        if openings > walls:
             raise ValidationError({'opening_area': 'Opening area cannot exceed wall area.'})
-        gross = walls + ceiling
-        net = gross - (n('opening_area') if section['deduct_material'] else 0)
-        labor_area = gross - (n('opening_area') if section['deduct_labor'] else 0)
+        gross = walls + ceiling + additional
+        net = gross - (openings if section['deduct_material'] else 0)
+        labor_area = gross - (openings if section['deduct_labor'] else 0)
         purchase = net * n('layers') * (1 + n('waste') / 100)
         sheets = int((purchase / (n('sheet_width') * n('sheet_height'))).to_integral_value(rounding=ROUND_CEILING))
         lines = []
@@ -71,10 +78,12 @@ def calculate_drywall_estimate(raw):
             add('Hanging labor', labor_area * n('layers'), n('hanging_rate'), 'sq ft')
             add('Finishing labor', labor_area, n('finishing_rate'), 'sq ft')
             add('Access labor adjustment', 1, _money((hanging + finishing) * n('access_percent') / 100), 'allowance')
-        add('Existing drywall removal', gross, n('removal_rate'), 'sq ft')
+        add('Existing drywall removal', walls + ceiling, n('removal_rate'), 'sq ft')
         add('Patch repairs', n('patch_count'), n('patch_rate'), 'patch')
         normalized.append(section)
+        # Preserve measurement provenance in the preview without changing existing saved-area modes.
         results.append({'name': section['name'], 'gross_area': _number_string(gross), 'net_area': _number_string(net), 'purchase_area': _number_string(purchase), 'sheets': sheets, 'line_items': lines, 'subtotal': _money_string(sum((Decimal(line['amount']) for line in lines), Decimal('0')))})
+        results[-1].update({'wall_area': _number_string(walls), 'wall_source': 'Measured' if measured_walls else 'Estimated' if floor_mode else 'Calculated', 'ceiling_area': _number_string(ceiling), 'ceiling_source': 'Measured' if measured_ceiling else 'Estimated' if floor_mode else 'Calculated', 'additional_ceiling_area': _number_string(additional), 'ceiling_description': section['ceiling_description']})
     inputs = {'sections': normalized}
     for key in ('prepared_by', 'client_name', 'project_location', 'notes'):
         inputs[key] = str(raw.get(key, '')).strip()[:2000]
@@ -97,4 +106,4 @@ def calculate_drywall_estimate(raw):
     tax = _money(adjusted * n('tax') / 100)
     subtotal = adjusted + tax
     discount = min(subtotal, _money(subtotal * n('discount') / 100) if inputs['discount_type'] == 'percent' else n('discount'))
-    return inputs, {'version': 'drywall-v1', 'sections': results, 'direct_cost': _money_string(direct), 'overhead_amount': _money_string(overhead), 'tax_amount': _money_string(tax), 'subtotal': _money_string(subtotal), 'discount_amount': _money_string(discount), 'final_price': _money_string(subtotal - discount)}
+    return inputs, {'version': 'drywall-v2', 'sections': results, 'direct_cost': _money_string(direct), 'overhead_amount': _money_string(overhead), 'tax_amount': _money_string(tax), 'subtotal': _money_string(subtotal), 'discount_amount': _money_string(discount), 'final_price': _money_string(subtotal - discount)}
