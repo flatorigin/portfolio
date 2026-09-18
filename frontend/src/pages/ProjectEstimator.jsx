@@ -302,15 +302,19 @@ function EstimatePreview({ draft, calculation, estimateNumber }) {
 
 function EstimatorEntry() {
   const authed = !!localStorage.getItem("access");
+  const [estimatorType, setEstimatorType] = useState("painting");
+  const isFraming = estimatorType === "framing";
   return (
     <div className="min-h-screen bg-[#FBF9F7] py-12 sm:py-20">
       <Container>
         <div className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm sm:px-12">
-          <SymbolIcon name="format_paint" className="text-[42px] text-slate-700" />
+          <SymbolIcon name={isFraming ? "foundation" : "format_paint"} className="text-[42px] text-slate-700" />
           <div className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Project Estimator</div>
-          <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">Build a painting estimate</h1>
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">Group rooms with similar conditions, price special areas separately, and present either a detailed or summary estimate from the same record.</p>
-          <Link to="/project-estimator/new" className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-6 text-sm font-semibold text-white hover:bg-slate-800"><SymbolIcon name="add" className="text-[20px]" />Estimate a Painting Project</Link>
+          <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">Build a project estimate</h1>
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">Choose the work category first. Each estimator keeps its own quantities and calculation logic while all saved estimates remain together.</p>
+          <label className="mx-auto mt-7 block max-w-sm text-left"><FieldLabel>Estimator type</FieldLabel><Select value={estimatorType} onChange={(event) => setEstimatorType(event.target.value)}><option value="painting">Painting</option><option value="framing">Framing</option></Select></label>
+          <div className="mx-auto mt-4 max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left"><div className="text-sm font-bold text-slate-950">{isFraming ? "Framing estimator" : "Painting estimator"}</div><p className="mt-1 text-xs leading-5 text-slate-600">{isFraming ? "Estimate walls, openings, floors, beams, posts, roofs, hardware, labor, overhead, and profit." : "Group rooms by condition, calculate walls and ceilings, add trim work, and present detailed or summary pricing."}</p></div>
+          <Link to={isFraming ? "/framing-estimator/new" : "/project-estimator/new"} className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-6 text-sm font-semibold text-white hover:bg-slate-800"><SymbolIcon name="arrow_forward" className="text-[20px]" />Start {isFraming ? "Framing" : "Painting"} Estimate</Link>
           {authed ? <div className="mt-4"><Link to="/estimates" className="text-sm font-semibold text-slate-700 hover:text-slate-950">View saved estimates</Link></div> : <p className="mt-4 text-xs text-slate-500">You can build the estimate now. Create a free account when you are ready to save it.</p>}
         </div>
       </Container>
@@ -364,6 +368,10 @@ export default function ProjectEstimator() {
             return;
           }
           const { data } = await api.get(`/estimates/${estimateId}/`);
+          if (data.estimate_type === "framing") {
+            navigate(`/framing-estimator/${estimateId}`, { replace: true });
+            return;
+          }
           if (!cancelled) {
             setDraft({ status: data.status || "draft", project_name: data.project_name, issue_date: data.issue_date, valid_until: data.valid_until || "", inputs: normalizePaintingInputsForEditor(data.inputs) });
             setEstimateNumber(data.estimate_number);

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from decimal import Decimal
 from io import BytesIO
 import base64
 import json
@@ -114,6 +115,87 @@ class ProjectEstimateApiTests(APITestCase):
         self.assertEqual(len(response.data["calculation"]["line_items"]), 4)
         self.assertEqual(response.data["calculation"]["extras_subtotal"], "100.00")
         self.assertEqual(len(response.data["calculation"]["sections"]), 1)
+
+    def test_creates_framing_estimate_with_server_calculated_totals(self):
+        self.client.force_authenticate(user=self.user)
+        payload = {
+            "estimate_type": "framing",
+            "project_name": "First floor framing",
+            "issue_date": "2026-09-17",
+            "inputs": {
+                "prepared_by": "Example Framing LLC",
+                "client_name": "Taylor Homeowner",
+                "project_location": "Media, PA",
+                "wall_sections": [{
+                    "id": "walls-main",
+                    "name": "Main level walls",
+                    "length_ft": 40,
+                    "height_ft": 9,
+                    "stud_spacing_in": 16,
+                    "corner_count": 2,
+                    "stud_unit_price": 5,
+                    "plate_unit_price_per_lf": 1,
+                    "stud_waste_percent": 10,
+                    "plate_waste_percent": 10,
+                    "labor_productivity_lf_per_hour": 8,
+                    "loaded_hourly_rate": 80,
+                    "openings": [{
+                        "name": "Front door",
+                        "type": "door",
+                        "position_ft": 5,
+                        "width_ft": 3,
+                        "height_ft": 6.67,
+                        "header_description": "Header size by engineer",
+                    }],
+                }],
+                "floor_sections": [{
+                    "name": "Second floor",
+                    "length_ft": 20,
+                    "width_ft": 16,
+                    "joist_direction": "width",
+                    "joist_spacing_in": 16,
+                    "subfloor_enabled": True,
+                }],
+                "structural_members": [{
+                    "name": "Kitchen beam",
+                    "member_type": "beam",
+                    "description": "Size pending engineering",
+                    "length_ft": 12,
+                    "quantity": 1,
+                    "unit_price_per_lf": 20,
+                    "resolution": "tbd",
+                }],
+                "roof_sections": [{
+                    "name": "Addition roof",
+                    "method": "truss",
+                    "building_length_ft": 24,
+                    "span_ft": 16,
+                    "spacing_in": 24,
+                    "sheathing_enabled": True,
+                }],
+                "hardware_items": [{"description": "Framing anchors", "quantity": 10, "unit": "each", "unit_price": 2}],
+                "cost_allowances": [{"category": "delivery", "description": "Lumber delivery", "price": 150}],
+                "overhead_percent": 10,
+                "profit_method": "markup",
+                "profit_percent": 20,
+                "tax_percent": 0,
+                "discount_type": "percent",
+                "discount_value": 0,
+            },
+        }
+
+        response = self.client.post("/api/estimates/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["estimate_type"], "framing")
+        self.assertEqual(response.data["calculation_version"], "framing-v1")
+        self.assertGreater(Decimal(response.data["final_price"]), Decimal("0"))
+        self.assertEqual(
+            [section["category"] for section in response.data["calculation"]["sections"]],
+            ["Wall framing", "Floor framing", "Beams and posts", "Roof framing"],
+        )
+        self.assertEqual(response.data["calculation"]["unresolved_items"], ["Kitchen beam"])
+        self.assertEqual(response.data["calculation"]["line_items"][-1]["name"], "Lumber delivery")
 
     def test_scales_walls_and_ceiling_access_for_tall_rooms(self):
         self.client.force_authenticate(user=self.user)

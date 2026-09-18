@@ -41,6 +41,7 @@ const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx")
 const ProjectHelpers = lazy(() => import("./pages/ProjectHelpers.jsx"));
 const BusinessDirectoryDetail = lazy(() => import("./pages/BusinessDirectoryDetail.jsx"));
 const ProjectEstimator = lazy(() => import("./pages/ProjectEstimator.jsx"));
+const FramingEstimator = lazy(() => import("./pages/FramingEstimator.jsx"));
 const Estimates = lazy(() => import("./pages/Estimates.jsx"));
 
 function RouteFallback() {
@@ -85,6 +86,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="business-directory/:listingId" element={<BusinessDirectoryDetail />} />
           <Route path="project-estimator" element={<ProjectEstimator />} />
           <Route path="project-estimator/:estimateId" element={<ProjectEstimator />} />
+          <Route path="framing-estimator/:estimateId" element={<FramingEstimator />} />
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />
