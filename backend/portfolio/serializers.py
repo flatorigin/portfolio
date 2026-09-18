@@ -368,6 +368,7 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "estimate_number",
             "project",
             "estimate_type",
+            "status",
             "project_name",
             "issue_date",
             "valid_until",

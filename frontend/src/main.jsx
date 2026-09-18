@@ -41,6 +41,7 @@ const ContractorLeadCheck = lazy(() => import("./pages/ContractorLeadCheck.jsx")
 const ProjectHelpers = lazy(() => import("./pages/ProjectHelpers.jsx"));
 const BusinessDirectoryDetail = lazy(() => import("./pages/BusinessDirectoryDetail.jsx"));
 const ProjectEstimator = lazy(() => import("./pages/ProjectEstimator.jsx"));
+const Estimates = lazy(() => import("./pages/Estimates.jsx"));
 
 function RouteFallback() {
   return (
@@ -83,6 +84,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="project-helpers/verify/:token" element={<ProjectHelpers />} />
           <Route path="business-directory/:listingId" element={<BusinessDirectoryDetail />} />
           <Route path="project-estimator" element={<ProjectEstimator />} />
+          <Route path="project-estimator/:estimateId" element={<ProjectEstimator />} />
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />
@@ -99,6 +101,14 @@ createRoot(document.getElementById("root")).render(
           <Route path="/dashboard/projects/:projectId/edit" element={<ProjectEditPage />} />
 
           {/* Protected routes */}
+          <Route
+            path="estimates"
+            element={
+              <RequireAuth>
+                <Estimates />
+              </RequireAuth>
+            }
+          />
           <Route
             path="dashboard"
             element={

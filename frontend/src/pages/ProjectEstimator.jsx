@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import api from "../api";
 import {
   calculatePaintingEstimate,
   createDefaultPaintingInputs,
+  createPaintingSection,
+  normalizePaintingInputsForEditor,
 } from "../estimators/painting";
 import { Button, Container, Input, SymbolIcon, Textarea } from "../ui";
 
@@ -27,6 +29,7 @@ function dateAfter(days) {
 
 function createDraft() {
   return {
+    status: "draft",
     project_name: "Interior painting estimate",
     issue_date: localDateString(),
     valid_until: dateAfter(30),
@@ -46,12 +49,11 @@ function money(value) {
 
 function readableDate(value) {
   if (!value) return "Not set";
-  const date = new Date(`${value}T12:00:00`);
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(date);
+  }).format(new Date(`${value}T12:00:00`));
 }
 
 
@@ -60,22 +62,18 @@ function FieldLabel({ children }) {
 }
 
 
+function Select({ className = "", ...props }) {
+  return <select {...props} className={`h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`} />;
+}
+
+
 function ToggleChoice({ checked, onChange, label, description }) {
   return (
-    <label
-      className={[
-        "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition",
-        checked
-          ? "border-slate-400 bg-slate-50"
-          : "border-slate-200 bg-white hover:border-slate-300",
-      ].join(" ")}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 accent-slate-900"
-      />
+    <label className={[
+      "flex min-h-20 cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition",
+      checked ? "border-slate-500 bg-slate-50" : "border-slate-200 bg-white hover:border-slate-300",
+    ].join(" ")}>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-0.5 h-4 w-4 accent-slate-900" />
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-slate-900">{label}</span>
         <span className="mt-0.5 block text-xs leading-5 text-slate-500">{description}</span>
@@ -85,117 +83,194 @@ function ToggleChoice({ checked, onChange, label, description }) {
 }
 
 
-function SegmentedControl({ value, onChange, options, label }) {
+function SectionHeading({ title, description, open, onToggle, trailing }) {
   return (
-    <div>
-      <FieldLabel>{label}</FieldLabel>
-      <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            aria-pressed={value === option.value}
-            className={[
-              "min-h-10 rounded-lg px-3 text-sm font-medium transition",
-              value === option.value
-                ? "bg-white text-slate-950 shadow-sm"
-                : "text-slate-500 hover:text-slate-800",
-            ].join(" ")}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+    <div className="flex items-start justify-between gap-3">
+      <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+        <SymbolIcon name={open ? "expand_less" : "expand_more"} className="mt-0.5 text-[22px] text-slate-500" />
+        <span className="min-w-0">
+          <span className="block text-lg font-bold text-slate-950">{title}</span>
+          {description ? <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span> : null}
+        </span>
+      </button>
+      {trailing}
     </div>
   );
 }
 
 
-function CustomItemEditor({ item, index, onChange, onRemove }) {
-  const update = (field, value) => onChange(index, { ...item, [field]: value });
+function MoneyInput({ value, onChange, allowNegative = false }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
+      <Input type="number" min={allowNegative ? undefined : "0"} step="0.01" value={value} onChange={onChange} className="pl-7" />
+    </div>
+  );
+}
+
+
+function PaintingSectionEditor({ section, calculation, open, onToggle, onChange, onRemove, canRemove }) {
+  const update = (field, value) => onChange({ ...section, [field]: value });
+  const updateSurface = (field, value) => update("surfaces", { ...section.surfaces, [field]: value });
+  const areasValue = (section.areas || []).join("\n");
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-slate-900">Additional item {index + 1}</div>
-        <button
-          type="button"
-          onClick={() => onRemove(index)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-red-50 hover:text-red-700"
-          aria-label={`Remove additional item ${index + 1}`}
-          title="Remove item"
-        >
-          <SymbolIcon name="delete" className="text-[19px]" />
-        </button>
-      </div>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+      <SectionHeading
+        title={section.name || "Untitled section"}
+        description={`${(section.areas || []).join(", ") || "No rooms listed"} / ${section.wall_height || 8} ft / ${money(calculation?.subtotal)}`}
+        open={open}
+        onToggle={onToggle}
+        trailing={canRemove ? (
+          <button type="button" onClick={onRemove} title="Remove section" aria-label={`Remove ${section.name || "section"}`} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700">
+            <SymbolIcon name="delete" className="text-[19px]" />
+          </button>
+        ) : null}
+      />
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label>
-          <FieldLabel>Item name</FieldLabel>
-          <Input
-            value={item.name}
-            onChange={(event) => update("name", event.target.value)}
-            placeholder="Door painting"
-          />
-        </label>
-        <label>
-          <FieldLabel>Material</FieldLabel>
-          <Input
-            value={item.material}
-            onChange={(event) => update("material", event.target.value)}
-            placeholder="Interior enamel"
-          />
-        </label>
-        <label className="sm:col-span-2">
-          <FieldLabel>Description</FieldLabel>
-          <Input
-            value={item.description}
-            onChange={(event) => update("description", event.target.value)}
-            placeholder="Prepare and paint doors and frames"
-          />
-        </label>
-        <label>
-          <FieldLabel>Quantity</FieldLabel>
-          <Input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={item.quantity}
-            onChange={(event) => update("quantity", event.target.value)}
-          />
-        </label>
-        <label>
-          <FieldLabel>Unit</FieldLabel>
-          <Input
-            value={item.unit}
-            onChange={(event) => update("unit", event.target.value)}
-            placeholder="each"
-          />
-        </label>
-        <label>
-          <FieldLabel>Unit price</FieldLabel>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={item.unit_price}
-              onChange={(event) => update("unit_price", event.target.value)}
-              className="pl-7"
-            />
+      {open ? (
+        <div className="mt-5 space-y-6 border-t border-slate-100 pt-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label>
+              <FieldLabel>Section name</FieldLabel>
+              <Input value={section.name} onChange={(event) => update("name", event.target.value)} placeholder="Main Area" />
+            </label>
+            <label>
+              <FieldLabel>Rooms or areas</FieldLabel>
+              <Textarea value={areasValue} onChange={(event) => update("areas", event.target.value.split("\n"))} placeholder={"Living Room\nDining Room\nHallway"} className="min-h-24" />
+            </label>
           </div>
-        </label>
-        <label>
-          <FieldLabel>Labor</FieldLabel>
-          <Input
-            value={item.labor_note}
-            onChange={(event) => update("labor_note", event.target.value)}
-            placeholder="Included"
-          />
-        </label>
-      </div>
+
+          <div>
+            <h3 className="text-sm font-bold text-slate-950">Measurements</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Use measured wall or ceiling area when available. Leave either at 0 to estimate it from floor area and height.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <label><FieldLabel>Floor area (sq ft)</FieldLabel><Input type="number" min="1" step="1" value={section.floor_area} onChange={(event) => update("floor_area", event.target.value)} /></label>
+              <label><FieldLabel>Wall height (ft)</FieldLabel><Input type="number" min="6" max="40" step="0.5" value={section.wall_height} onChange={(event) => update("wall_height", event.target.value)} /></label>
+              <label><FieldLabel>Number of coats</FieldLabel><Input type="number" min="1" max="5" step="1" value={section.number_of_coats} onChange={(event) => update("number_of_coats", event.target.value)} /></label>
+              <label><FieldLabel>Measured wall area</FieldLabel><Input type="number" min="0" step="1" value={section.wall_area} onChange={(event) => update("wall_area", event.target.value)} /></label>
+              <label><FieldLabel>Measured ceiling area</FieldLabel><Input type="number" min="0" step="1" value={section.ceiling_area} onChange={(event) => update("ceiling_area", event.target.value)} /></label>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-bold text-slate-950">Surfaces</h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <ToggleChoice checked={!!section.surfaces?.walls} onChange={(value) => updateSurface("walls", value)} label="Walls" description="Calculated from measured area or floor area and height." />
+              <ToggleChoice checked={!!section.surfaces?.ceilings} onChange={(value) => updateSurface("ceilings", value)} label="Ceilings" description="Includes an automatic high-access allowance above 9 ft." />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label><FieldLabel>Wall condition</FieldLabel><Select value={section.wall_condition} onChange={(event) => update("wall_condition", event.target.value)}><option value="standard_repaint">Standard repaint</option><option value="new_drywall">New drywall with PVA primer</option></Select></label>
+            <label><FieldLabel>Paint quality</FieldLabel><Select value={section.paint_tier} onChange={(event) => update("paint_tier", event.target.value)}><option value="standard">Standard paint</option><option value="premium">Premium paint (+15%)</option></Select></label>
+            <label><FieldLabel>Paint specification</FieldLabel><Input value={section.paint_material} onChange={(event) => update("paint_material", event.target.value)} placeholder="Washable eggshell, white ceiling..." /></label>
+            <label className="flex items-center gap-3 self-end rounded-xl border border-slate-200 px-3 py-3"><input type="checkbox" checked={!!section.trim_needs_prep} onChange={(event) => update("trim_needs_prep", event.target.checked)} className="h-4 w-4 accent-slate-900" /><span className="text-sm font-medium text-slate-800">Baseboards and trim need prep / caulk</span></label>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-bold text-slate-950">Unit rates</h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label><FieldLabel>Wall rate / sq ft</FieldLabel><MoneyInput value={section.wall_unit_price} onChange={(event) => update("wall_unit_price", event.target.value)} /></label>
+              <label><FieldLabel>Ceiling rate / sq ft</FieldLabel><MoneyInput value={section.ceiling_unit_price} onChange={(event) => update("ceiling_unit_price", event.target.value)} /></label>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-bold text-slate-950">Openings and linear work</h3>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              {[
+                ["Windows", "window_count", "window_unit_price", "count", "price each"],
+                ["Doors", "door_count", "door_unit_price", "count", "price each"],
+                ["Baseboards", "baseboard_linear_feet", "baseboard_unit_price", "linear ft", "price / ft"],
+                ["Trim", "trim_linear_feet", "trim_unit_price", "linear ft", "price / ft"],
+              ].map(([label, quantityKey, rateKey, quantityLabel, rateLabel]) => (
+                <div key={quantityKey} className="rounded-xl border border-slate-200 p-3">
+                  <div className="mb-3 text-sm font-semibold text-slate-900">{label}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label><FieldLabel>{quantityLabel}</FieldLabel><Input type="number" min="0" step="1" value={section[quantityKey]} onChange={(event) => update(quantityKey, event.target.value)} /></label>
+                    <label><FieldLabel>{rateLabel}</FieldLabel><MoneyInput value={section[rateKey]} onChange={(event) => update(rateKey, event.target.value)} /></label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <label className="block"><FieldLabel>Section notes</FieldLabel><Textarea value={section.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Access, preparation, protection, or section-specific assumptions..." className="min-h-24" /></label>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+
+function ScopeList({ title, description, value, onChange, placeholder }) {
+  return (
+    <label className="block">
+      <FieldLabel>{title}</FieldLabel>
+      <p className="mb-2 text-xs leading-5 text-slate-500">{description}</p>
+      <Textarea value={(value || []).join("\n")} onChange={(event) => onChange(event.target.value.split("\n"))} placeholder={placeholder} className="min-h-28" />
+    </label>
+  );
+}
+
+
+function DetailedPreview({ inputs, calculation }) {
+  return (
+    <div className="space-y-5">
+      {calculation.sections.map((section) => (
+        <section key={section.section_id} className="border-b border-slate-200 pb-5 last:border-0 last:pb-0">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-slate-950">{section.name}</h3>
+              {section.areas?.length ? <p className="mt-1 text-xs text-slate-500">{section.areas.join(", ")}</p> : null}
+            </div>
+            <strong className="shrink-0 text-slate-950">{money(section.subtotal)}</strong>
+          </div>
+          <div className="mt-3 space-y-2">
+            {section.line_items.map((item) => (
+              <div key={item.code} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 text-sm">
+                <div className="min-w-0"><span className="font-medium text-slate-800">{item.name}</span><span className="ml-1 text-xs text-slate-500">{item.quantity} {item.unit} @ {money(item.rate)}</span></div>
+                <div className="font-medium text-slate-800">{money(item.amount)}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+      {calculation.extras.length ? (
+        <section className="border-t border-slate-200 pt-5">
+          <h3 className="font-bold text-slate-950">Extras</h3>
+          <div className="mt-3 space-y-2">
+            {calculation.extras.map((extra) => <div key={extra.id} className="flex justify-between gap-4 text-sm"><span>{extra.description}</span><strong>{Number(extra.price) >= 0 ? "+" : ""}{money(extra.price)}</strong></div>)}
+          </div>
+        </section>
+      ) : null}
+      <ScopePreview inputs={inputs} />
+    </div>
+  );
+}
+
+
+function ScopePreview({ inputs }) {
+  if (!inputs.included_scope?.length && !inputs.excluded_scope?.length) return null;
+  return (
+    <div className="grid gap-5 border-t border-slate-200 pt-5 sm:grid-cols-2">
+      {inputs.included_scope?.length ? <div><h3 className="text-sm font-bold text-slate-950">Work included</h3><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">{inputs.included_scope.filter(Boolean).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div> : null}
+      {inputs.excluded_scope?.length ? <div><h3 className="text-sm font-bold text-slate-950">Work excluded</h3><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">{inputs.excluded_scope.filter(Boolean).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div> : null}
+    </div>
+  );
+}
+
+
+function SummaryPreview({ inputs, calculation }) {
+  const areas = inputs.sections.flatMap((section) => section.areas?.filter(Boolean).length ? section.areas.filter(Boolean) : [section.name]);
+  const derivedWork = [...new Set(calculation.line_items.map((item) => item.name))];
+  const included = inputs.included_scope?.filter(Boolean).length ? inputs.included_scope.filter(Boolean) : derivedWork;
+  return (
+    <div className="space-y-5">
+      <div><h3 className="text-sm font-bold text-slate-950">Areas included</h3><p className="mt-2 text-sm leading-6 text-slate-600">{areas.join(", ")}</p></div>
+      <div><h3 className="text-sm font-bold text-slate-950">Work included</h3><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">{included.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div>
+      {inputs.excluded_scope?.filter(Boolean).length ? <div><h3 className="text-sm font-bold text-slate-950">Work excluded</h3><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">{inputs.excluded_scope.filter(Boolean).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div> : null}
     </div>
   );
 }
@@ -203,266 +278,140 @@ function CustomItemEditor({ item, index, onChange, onRemove }) {
 
 function EstimatePreview({ draft, calculation, estimateNumber }) {
   const inputs = draft.inputs;
-  const supplierLabels = {
-    contractor: "Materials supplied by issuer",
-    client: "Materials supplied by client",
-    not_specified: "Material supplier to be confirmed",
-  };
-
   return (
     <section aria-label="Estimate preview" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 px-5 py-5 sm:px-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">FlatOrigin Estimate</div>
-            <h2 className="mt-2 break-words text-2xl font-bold text-slate-950">{draft.project_name || "Untitled estimate"}</h2>
-            <div className="mt-2 text-sm text-slate-500">Estimate #{estimateNumber || "FO-DRAFT"}</div>
-          </div>
-          <div className="text-sm leading-6 text-slate-600 sm:text-right">
-            <div><span className="font-medium text-slate-900">Issued:</span> {readableDate(draft.issue_date)}</div>
-            <div><span className="font-medium text-slate-900">Valid until:</span> {readableDate(draft.valid_until)}</div>
-          </div>
+          <div className="min-w-0"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">FlatOrigin Painting Estimate</div><h2 className="mt-2 break-words text-2xl font-bold text-slate-950">{draft.project_name || "Untitled estimate"}</h2><div className="mt-2 text-sm text-slate-500">{estimateNumber || "FO-DRAFT"} / <span className="capitalize">{draft.status}</span></div></div>
+          <div className="text-sm leading-6 text-slate-600 sm:text-right"><div><span className="font-medium text-slate-900">Issued:</span> {readableDate(draft.issue_date)}</div><div><span className="font-medium text-slate-900">Valid until:</span> {readableDate(draft.valid_until)}</div></div>
         </div>
-
-        <div className="mt-6 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Prepared by</div>
-            <div className="mt-1 text-sm font-medium text-slate-900">{inputs.prepared_by || "Issuing user"}</div>
-          </div>
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Prepared for</div>
-            <div className="mt-1 text-sm font-medium text-slate-900">{inputs.client_name || "Client to be confirmed"}</div>
-            {inputs.project_location ? <div className="mt-0.5 text-sm text-slate-500">{inputs.project_location}</div> : null}
-          </div>
-        </div>
+        <div className="mt-6 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2"><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Prepared by</div><div className="mt-1 text-sm font-medium text-slate-900">{inputs.prepared_by || "Issuing user"}</div></div><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Prepared for</div><div className="mt-1 text-sm font-medium text-slate-900">{inputs.client_name || "Client to be confirmed"}</div>{inputs.project_location ? <div className="mt-0.5 text-sm text-slate-500">{inputs.project_location}</div> : null}</div></div>
       </div>
-
-      <div className="divide-y divide-slate-100 sm:hidden">
-        {calculation.line_items.map((item) => (
-          <article key={item.code} className="px-4 py-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 font-semibold text-slate-950">{item.name}</div>
-              <div className="shrink-0 font-semibold text-slate-950">{money(item.amount)}</div>
-            </div>
-            <p className="mt-1 break-words text-sm leading-5 text-slate-600">{item.description || "-"}</p>
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-              <div className="min-w-0">
-                <dt className="font-semibold uppercase text-slate-400">Quantity</dt>
-                <dd className="mt-1 break-words text-slate-700">{item.quantity} {item.unit}</dd>
-              </div>
-              <div className="min-w-0 text-right">
-                <dt className="font-semibold uppercase text-slate-400">Rate</dt>
-                <dd className="mt-1 text-slate-700">{money(item.rate)}</dd>
-              </div>
-              <div className="col-span-2 min-w-0">
-                <dt className="font-semibold uppercase text-slate-400">Material</dt>
-                <dd className="mt-1 break-words text-slate-700">{item.material || "-"}</dd>
-              </div>
-            </dl>
-          </article>
-        ))}
+      <div className="px-5 py-6 sm:px-7">
+        {inputs.output_preference === "summary" ? <SummaryPreview inputs={inputs} calculation={calculation} /> : <DetailedPreview inputs={inputs} calculation={calculation} />}
       </div>
-
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full min-w-[640px] border-collapse text-left">
-          <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-5 py-3 sm:px-7">Item</th>
-              <th className="px-4 py-3">Description</th>
-              <th className="px-4 py-3">Qty</th>
-              <th className="px-4 py-3">Material</th>
-              <th className="px-4 py-3 text-right">Rate</th>
-              <th className="px-5 py-3 text-right sm:px-7">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm text-slate-600">
-            {calculation.line_items.map((item) => (
-              <tr key={item.code}>
-                <td className="px-5 py-4 font-semibold text-slate-900 sm:px-7">{item.name}</td>
-                <td className="max-w-[260px] px-4 py-4 leading-5">{item.description || "-"}</td>
-                <td className="whitespace-nowrap px-4 py-4">{item.quantity} {item.unit}</td>
-                <td className="px-4 py-4">{item.material || "-"}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-right">{money(item.rate)}</td>
-                <td className="whitespace-nowrap px-5 py-4 text-right font-medium text-slate-900 sm:px-7">{money(item.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="border-t border-slate-200 bg-slate-50 px-5 py-5 sm:px-7">
+        <div className="space-y-2 text-sm"><div className="flex justify-between gap-4"><span>Main painting work</span><strong>{money(calculation.main_painting_subtotal)}</strong></div>{Number(calculation.extras_subtotal) !== 0 ? <div className="flex justify-between gap-4"><span>Extras</span><strong>{Number(calculation.extras_subtotal) >= 0 ? "+" : ""}{money(calculation.extras_subtotal)}</strong></div> : null}<div className="flex justify-between gap-4 border-t border-slate-200 pt-2"><span>Subtotal</span><strong>{money(calculation.subtotal)}</strong></div>{Number(calculation.discount_amount) > 0 ? <div className="flex justify-between gap-4 text-emerald-700"><span>Discount</span><strong>-{money(calculation.discount_amount)}</strong></div> : null}<div className="flex justify-between gap-4 border-t border-slate-300 pt-3 text-lg text-slate-950"><strong>Painting total</strong><strong>{money(calculation.final_price)}</strong></div></div>
+        {inputs.notes ? <p className="mt-5 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-600">{inputs.notes}</p> : null}
       </div>
-
-      <div className="grid gap-6 border-t border-slate-200 px-5 py-5 sm:grid-cols-[1fr_260px] sm:px-7">
-        <div className="text-sm leading-6 text-slate-600">
-          <div className="font-medium text-slate-900">Estimate assumptions</div>
-          <div className="mt-1">{supplierLabels[inputs.material_supplier]}</div>
-          <div>{inputs.paint_tier === "premium" ? "Premium" : "Standard"} paint allowance</div>
-          <div>{inputs.wall_height || 8} ft wall and ceiling height</div>
-          {inputs.surfaces.walls ? <div>{money(inputs.wall_unit_price || 3)} wall base rate per sq ft</div> : null}
-          {inputs.surfaces.ceilings ? <div>{money(inputs.ceiling_unit_price || 2)} ceiling base rate per sq ft</div> : null}
-          {Number(calculation.assumptions?.ceiling_access_surcharge_percent) > 0 ? (
-            <div>{calculation.assumptions.ceiling_access_surcharge_percent}% high-ceiling access and protection allowance</div>
-          ) : null}
-          {inputs.notes ? <p className="mt-3 whitespace-pre-wrap">{inputs.notes}</p> : null}
-        </div>
-        <dl className="space-y-2 text-sm">
-          <div className="flex items-center justify-between gap-5">
-            <dt className="text-slate-500">Subtotal</dt>
-            <dd className="font-medium text-slate-900">{money(calculation.subtotal)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-5">
-            <dt className="text-slate-500">Discount</dt>
-            <dd className="font-medium text-slate-900">-{money(calculation.discount_amount)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-5 border-t border-slate-200 pt-3">
-            <dt className="font-semibold text-slate-950">Estimated total</dt>
-            <dd className="text-xl font-bold text-slate-950">{money(calculation.final_price)}</dd>
-          </div>
-          <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            Planning range: {money(calculation.range_low)} - {money(calculation.range_high)}
-          </div>
-        </dl>
-      </div>
-
-      <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 text-xs leading-5 text-slate-500 sm:px-7">
-        <div className="font-semibold text-slate-700">Created with FlatOrigin.com</div>
-        <div className="mt-1">
-          This estimate was prepared by the issuing user using FlatOrigin tools. FlatOrigin does not set, verify, endorse, or guarantee the pricing or terms shown.
-        </div>
-      </div>
+      <div className="border-t border-slate-200 bg-white px-5 py-4 text-xs leading-5 text-slate-500 sm:px-7">This estimate was prepared by the issuing user using FlatOrigin tools. FlatOrigin does not set, verify, endorse, or guarantee the pricing or terms shown.</div>
     </section>
   );
 }
 
 
+function EstimatorEntry() {
+  const authed = !!localStorage.getItem("access");
+  return (
+    <div className="min-h-screen bg-[#FBF9F7] py-12 sm:py-20">
+      <Container>
+        <div className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm sm:px-12">
+          <SymbolIcon name="format_paint" className="text-[42px] text-slate-700" />
+          <div className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Project Estimator</div>
+          <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">Build a painting estimate</h1>
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">Group rooms with similar conditions, price special areas separately, and present either a detailed or summary estimate from the same record.</p>
+          <Link to="/project-estimator/new" className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-6 text-sm font-semibold text-white hover:bg-slate-800"><SymbolIcon name="add" className="text-[20px]" />Estimate a Painting Project</Link>
+          {authed ? <div className="mt-4"><Link to="/estimates" className="text-sm font-semibold text-slate-700 hover:text-slate-950">View saved estimates</Link></div> : <p className="mt-4 text-xs text-slate-500">You can build the estimate now. Create a free account when you are ready to save it.</p>}
+        </div>
+      </Container>
+    </div>
+  );
+}
+
+
 export default function ProjectEstimator() {
+  const { estimateId } = useParams();
   const navigate = useNavigate();
   const authed = !!localStorage.getItem("access");
+  const isEntry = !estimateId;
+  const isNew = estimateId === "new";
   const [draft, setDraft] = useState(createDraft);
-  const [savedEstimates, setSavedEstimates] = useState([]);
-  const [activeId, setActiveId] = useState(null);
-  const [serverCalculation, setServerCalculation] = useState(null);
-  const [loading, setLoading] = useState(authed);
+  const [estimateNumber, setEstimateNumber] = useState("");
+  const [openSections, setOpenSections] = useState({});
+  const [generalOpen, setGeneralOpen] = useState(true);
+  const [loading, setLoading] = useState(!isEntry && !isNew);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-
-  const liveCalculation = useMemo(
-    () => calculatePaintingEstimate(draft.inputs),
-    [draft.inputs]
-  );
-  const calculation = serverCalculation || liveCalculation;
-  const activeEstimate = savedEstimates.find((estimate) => estimate.id === activeId);
+  const calculation = useMemo(() => calculatePaintingEstimate(draft.inputs), [draft.inputs]);
 
   useEffect(() => {
-    const pending = localStorage.getItem(PENDING_ESTIMATE_KEY);
-    if (pending) {
-      try {
-        const parsed = JSON.parse(pending);
-        if (parsed?.inputs && parsed?.project_name) setDraft(parsed);
-      } catch {
-        localStorage.removeItem(PENDING_ESTIMATE_KEY);
-      }
-    }
-
-    if (!authed) return;
+    if (isEntry) return;
     let cancelled = false;
-    (async () => {
+    const load = async () => {
+      setLoading(true);
       try {
-        const [{ data: estimateData }, profileResponse] = await Promise.all([
-          api.get("/estimates/"),
-          api.get("/users/me/").catch(() => ({ data: null })),
-        ]);
-        if (!cancelled) {
-          setSavedEstimates(
-            Array.isArray(estimateData) ? estimateData : estimateData?.results || []
-          );
-          const profileName =
-            profileResponse?.data?.display_name || profileResponse?.data?.username || "";
-          if (profileName) {
-            setDraft((current) => current.inputs.prepared_by ? current : {
-              ...current,
-              inputs: { ...current.inputs, prepared_by: profileName },
-            });
+        if (isNew) {
+          let next = createDraft();
+          const pending = localStorage.getItem(PENDING_ESTIMATE_KEY);
+          if (pending) {
+            try {
+              const parsed = JSON.parse(pending);
+              if (parsed?.inputs) next = { ...next, ...parsed, inputs: normalizePaintingInputsForEditor(parsed.inputs) };
+            } catch {
+              localStorage.removeItem(PENDING_ESTIMATE_KEY);
+            }
+          }
+          if (authed && !next.inputs.prepared_by) {
+            const { data } = await api.get("/users/me/").catch(() => ({ data: null }));
+            const name = data?.display_name || data?.username || "";
+            if (name) next.inputs.prepared_by = name;
+          }
+          if (!cancelled) setDraft(next);
+        } else {
+          if (!authed) {
+            navigate(`/login?next=/project-estimator/${estimateId}`, { replace: true });
+            return;
+          }
+          const { data } = await api.get(`/estimates/${estimateId}/`);
+          if (!cancelled) {
+            setDraft({ status: data.status || "draft", project_name: data.project_name, issue_date: data.issue_date, valid_until: data.valid_until || "", inputs: normalizePaintingInputsForEditor(data.inputs) });
+            setEstimateNumber(data.estimate_number);
           }
         }
       } catch (requestError) {
-        if (!cancelled) setError(requestError?.response?.data?.detail || "Saved estimates could not be loaded.");
+        if (!cancelled) setError(requestError?.response?.status === 404 ? "This estimate was not found." : "The estimate could not be loaded.");
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
     };
-  }, [authed]);
+    load();
+    return () => { cancelled = true; };
+  }, [authed, estimateId, isEntry, isNew, navigate]);
+
+  if (isEntry) return <EstimatorEntry />;
 
   const updateDraft = (field, value) => {
     setDraft((current) => ({ ...current, [field]: value }));
-    setServerCalculation(null);
     setNotice("");
   };
-
   const updateInputs = (field, value) => {
-    setDraft((current) => ({
-      ...current,
-      inputs: { ...current.inputs, [field]: value },
-    }));
-    setServerCalculation(null);
+    setDraft((current) => ({ ...current, inputs: { ...current.inputs, [field]: value } }));
     setNotice("");
   };
-
-  const updateSurface = (surface, value) => {
-    updateInputs("surfaces", { ...draft.inputs.surfaces, [surface]: value });
+  const updateSection = (index, section) => updateInputs("sections", draft.inputs.sections.map((current, itemIndex) => itemIndex === index ? section : current));
+  const addSection = () => {
+    const section = createPaintingSection({ name: `Section ${draft.inputs.sections.length + 1}` });
+    updateInputs("sections", [...draft.inputs.sections, section]);
+    setOpenSections((current) => ({ ...current, [section.id]: true }));
   };
-
-  const addCustomItem = () => {
-    updateInputs("custom_items", [
-      ...draft.inputs.custom_items,
-      {
-        name: "",
-        description: "",
-        quantity: "1",
-        unit: "each",
-        material: "",
-        labor_note: "Included",
-        unit_price: "0",
-      },
-    ]);
+  const removeSection = (index) => updateInputs("sections", draft.inputs.sections.filter((_, itemIndex) => itemIndex !== index));
+  const addExtra = () => updateInputs("extras", [...draft.inputs.extras, { id: `extra-${Date.now()}`, description: "", price: "" }]);
+  const insertExtraAfter = (index) => {
+    const extras = [...draft.inputs.extras];
+    extras.splice(index + 1, 0, { id: `extra-${Date.now()}-${index}`, description: "", price: "" });
+    updateInputs("extras", extras);
   };
-
-  const updateCustomItem = (index, item) => {
-    updateInputs(
-      "custom_items",
-      draft.inputs.custom_items.map((current, itemIndex) => itemIndex === index ? item : current)
-    );
-  };
-
-  const removeCustomItem = (index) => {
-    updateInputs(
-      "custom_items",
-      draft.inputs.custom_items.filter((_, itemIndex) => itemIndex !== index)
-    );
-  };
+  const updateExtra = (index, field, value) => updateInputs("extras", draft.inputs.extras.map((extra, itemIndex) => itemIndex === index ? { ...extra, [field]: value } : extra));
+  const removeExtra = (index) => updateInputs("extras", draft.inputs.extras.filter((_, itemIndex) => itemIndex !== index));
 
   const validateDraft = () => {
     if (!draft.project_name.trim()) return "Enter a project or estimate name.";
-    if (Number(draft.inputs.space_size) <= 0) return "Enter a floor area greater than zero.";
-    if (Number(draft.inputs.wall_height ?? 8) < 6 || Number(draft.inputs.wall_height ?? 8) > 40) {
-      return "Enter a wall and ceiling height from 6 to 40 feet.";
-    }
-    if (draft.inputs.surfaces.walls && (Number(draft.inputs.wall_unit_price ?? 3) < 2 || Number(draft.inputs.wall_unit_price ?? 3) > 6)) {
-      return "Enter a wall unit price from $2.00 to $6.00 per square foot.";
-    }
-    if (draft.inputs.surfaces.ceilings && (Number(draft.inputs.ceiling_unit_price ?? 2) < 2 || Number(draft.inputs.ceiling_unit_price ?? 2) > 6)) {
-      return "Enter a ceiling unit price from $2.00 to $6.00 per square foot.";
-    }
-    if (
-      !Object.values(draft.inputs.surfaces).some(Boolean) &&
-      draft.inputs.custom_items.length === 0
-    ) {
-      return "Choose at least one surface or add an additional item.";
-    }
-    if (draft.inputs.custom_items.some((item) => !item.name.trim())) {
-      return "Give every additional item a name before saving.";
+    if (!draft.inputs.sections.length) return "Add at least one painting section.";
+    for (const section of draft.inputs.sections) {
+      if (Number(section.floor_area) <= 0) return `${section.name || "A section"} needs a floor area greater than zero.`;
+      if (Number(section.wall_height) < 6 || Number(section.wall_height) > 40) return `${section.name || "A section"} needs a height from 6 to 40 feet.`;
+      if (!Object.values(section.surfaces || {}).some(Boolean) && ![section.window_count, section.door_count, section.baseboard_linear_feet, section.trim_linear_feet].some((value) => Number(value) > 0)) return `${section.name || "A section"} needs at least one surface or work item.`;
     }
     return "";
   };
@@ -471,363 +420,83 @@ export default function ProjectEstimator() {
     setError("");
     setNotice("");
     const validationError = validateDraft();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+    if (validationError) { setError(validationError); return; }
     if (!authed) {
       localStorage.setItem(PENDING_ESTIMATE_KEY, JSON.stringify(draft));
-      navigate("/register?next=/project-estimator");
+      navigate("/register?next=/project-estimator/new");
       return;
     }
-
     setBusy(true);
     try {
-      const payload = {
-        estimate_type: "painting",
-        project_name: draft.project_name.trim(),
-        issue_date: draft.issue_date,
-        valid_until: draft.valid_until || null,
-        inputs: draft.inputs,
-      };
-      const response = activeId
-        ? await api.patch(`/estimates/${activeId}/`, payload)
-        : await api.post("/estimates/", payload);
-      const saved = response.data;
-      setSavedEstimates((current) => [
-        saved,
-        ...current.filter((estimate) => estimate.id !== saved.id),
-      ]);
-      setActiveId(saved.id);
-      setDraft({
-        project_name: saved.project_name,
-        issue_date: saved.issue_date,
-        valid_until: saved.valid_until || "",
-        inputs: saved.inputs,
-      });
-      setServerCalculation(saved.calculation);
+      const payload = { estimate_type: "painting", status: draft.status, project_name: draft.project_name.trim(), issue_date: draft.issue_date, valid_until: draft.valid_until || null, inputs: draft.inputs };
+      const { data } = isNew ? await api.post("/estimates/", payload) : await api.patch(`/estimates/${estimateId}/`, payload);
       localStorage.removeItem(PENDING_ESTIMATE_KEY);
-      setNotice(activeId ? "Estimate updated." : "Estimate saved to your account.");
+      setDraft({ status: data.status, project_name: data.project_name, issue_date: data.issue_date, valid_until: data.valid_until || "", inputs: normalizePaintingInputsForEditor(data.inputs) });
+      setEstimateNumber(data.estimate_number);
+      setNotice(isNew ? "Estimate saved to your account." : "Estimate updated.");
+      if (isNew) navigate(`/project-estimator/${data.id}`, { replace: true });
     } catch (requestError) {
       const data = requestError?.response?.data;
-      const message =
-        data?.detail ||
-        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : "") ||
-        "The estimate could not be saved.";
-      setError(message);
+      setError(data?.detail || (data && typeof data === "object" ? Object.values(data).flat(Infinity).join(" ") : "") || "The estimate could not be saved.");
     } finally {
       setBusy(false);
     }
-  };
-
-  const openEstimate = (estimate) => {
-    setActiveId(estimate.id);
-    setDraft({
-      project_name: estimate.project_name,
-      issue_date: estimate.issue_date,
-      valid_until: estimate.valid_until || "",
-      inputs: estimate.inputs,
-    });
-    setServerCalculation(estimate.calculation);
-    setError("");
-    setNotice("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const startNew = () => {
-    setActiveId(null);
-    setDraft(createDraft());
-    setServerCalculation(null);
-    setError("");
-    setNotice("");
   };
 
   const deleteEstimate = async () => {
-    if (!activeId || !window.confirm("Delete this saved estimate? This cannot be undone.")) return;
+    if (isNew || !window.confirm("Delete this saved estimate? This cannot be undone.")) return;
     setBusy(true);
-    setError("");
     try {
-      await api.delete(`/estimates/${activeId}/`);
-      setSavedEstimates((current) => current.filter((estimate) => estimate.id !== activeId));
-      startNew();
-      setNotice("Estimate deleted.");
+      await api.delete(`/estimates/${estimateId}/`);
+      navigate("/estimates", { replace: true });
     } catch {
       setError("The estimate could not be deleted.");
-    } finally {
       setBusy(false);
     }
   };
+
+  if (loading) return <div className="min-h-screen bg-[#FBF9F7]"><Container className="py-16 text-sm text-slate-500">Loading estimate...</Container></div>;
 
   return (
     <div className="min-h-screen bg-[#FBF9F7] pb-16 text-slate-900">
       <div className="border-b border-slate-200 bg-white">
-        <Container className="py-8 sm:py-10">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Project Estimator</div>
-              <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">Painting estimate</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Define the surfaces, condition, materials, and additional work to create a clear planning estimate.
-              </p>
-            </div>
-            {authed ? (
-              <Button type="button" onClick={startNew} className="h-11 shrink-0 gap-2">
-                <SymbolIcon name="add" className="text-[19px]" />
-                New estimate
-              </Button>
-            ) : null}
+        <Container className="py-7 sm:py-9">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><Link to={authed ? "/estimates" : "/project-estimator"} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 hover:text-slate-800"><SymbolIcon name="arrow_back" className="text-[17px]" />{authed ? "Estimates" : "Project Estimator"}</Link><h1 className="mt-2 text-3xl font-bold text-slate-950">Painting estimate</h1><p className="mt-2 text-sm leading-6 text-slate-600">Build one estimate with as many independently priced sections as the project needs.</p></div>
+            <div className="flex gap-2">{authed ? <Link to="/project-estimator/new" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"><SymbolIcon name="add" className="text-[18px]" />New</Link> : null}<Button type="button" onClick={saveEstimate} disabled={busy} className="h-11 gap-2"><SymbolIcon name={authed ? "save" : "person_add"} className="text-[18px]" />{authed ? "Save estimate" : "Create account to save"}</Button></div>
           </div>
         </Container>
       </div>
 
-      {authed ? (
-        <div className="border-b border-slate-200 bg-[#F3F6F8]">
-          <Container className="py-5">
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <div className="text-sm font-semibold text-slate-900">Saved estimates</div>
-              <div className="text-xs text-slate-500">{savedEstimates.length} saved</div>
-            </div>
-            {loading ? (
-              <div className="text-sm text-slate-500">Loading saved estimates...</div>
-            ) : savedEstimates.length ? (
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {savedEstimates.map((estimate) => (
-                  <button
-                    key={estimate.id}
-                    type="button"
-                    onClick={() => openEstimate(estimate)}
-                    className={[
-                      "min-w-[230px] rounded-xl border bg-white px-4 py-3 text-left transition",
-                      activeId === estimate.id
-                        ? "border-slate-500 shadow-sm"
-                        : "border-slate-200 hover:border-slate-300",
-                    ].join(" ")}
-                  >
-                    <div className="truncate text-sm font-semibold text-slate-900">{estimate.project_name}</div>
-                    <div className="mt-1 flex items-center justify-between gap-3 text-xs text-slate-500">
-                      <span>{estimate.estimate_number}</span>
-                      <span className="font-semibold text-slate-800">{money(estimate.final_price)}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-slate-500">Your first saved estimate will appear here.</div>
-            )}
-          </Container>
-        </div>
-      ) : null}
-
-      <Container className="py-7 sm:py-10">
-        <div className="grid min-w-0 items-start gap-7 lg:grid-cols-[minmax(340px,0.72fr)_minmax(0,1.28fr)]">
-          <div className="min-w-0 space-y-6">
-            <section className="border-b border-slate-200 pb-6">
-              <h2 className="text-lg font-semibold text-slate-950">Estimate details</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                <label className="sm:col-span-2 lg:col-span-1 xl:col-span-2">
-                  <FieldLabel>Project or estimate name</FieldLabel>
-                  <Input value={draft.project_name} onChange={(event) => updateDraft("project_name", event.target.value)} />
-                </label>
-                <label>
-                  <FieldLabel>Prepared by</FieldLabel>
-                  <Input value={draft.inputs.prepared_by} onChange={(event) => updateInputs("prepared_by", event.target.value)} placeholder="Business name" />
-                </label>
-                <label>
-                  <FieldLabel>Client</FieldLabel>
-                  <Input value={draft.inputs.client_name} onChange={(event) => updateInputs("client_name", event.target.value)} placeholder="Client name" />
-                </label>
-                <label className="sm:col-span-2 lg:col-span-1 xl:col-span-2">
-                  <FieldLabel>Project location</FieldLabel>
-                  <Input value={draft.inputs.project_location} onChange={(event) => updateInputs("project_location", event.target.value)} placeholder="City, State" />
-                </label>
-                <label>
-                  <FieldLabel>Issue date</FieldLabel>
-                  <Input type="date" value={draft.issue_date} onChange={(event) => updateDraft("issue_date", event.target.value)} />
-                </label>
-                <label>
-                  <FieldLabel>Valid until</FieldLabel>
-                  <Input type="date" min={draft.issue_date} value={draft.valid_until} onChange={(event) => updateDraft("valid_until", event.target.value)} />
-                </label>
-              </div>
+      <Container className="py-7">
+        <div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
+          <div className="min-w-0 space-y-5">
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+              <SectionHeading title="General information" description="Shared once across the complete estimate." open={generalOpen} onToggle={() => setGeneralOpen((value) => !value)} />
+              {generalOpen ? <div className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2"><label className="sm:col-span-2"><FieldLabel>Estimate name</FieldLabel><Input value={draft.project_name} onChange={(event) => updateDraft("project_name", event.target.value)} placeholder="Kitchen and first floor painting" /></label><label><FieldLabel>Prepared by</FieldLabel><Input value={draft.inputs.prepared_by} onChange={(event) => updateInputs("prepared_by", event.target.value)} /></label><label><FieldLabel>Client name</FieldLabel><Input value={draft.inputs.client_name} onChange={(event) => updateInputs("client_name", event.target.value)} /></label><label className="sm:col-span-2"><FieldLabel>Project location</FieldLabel><Input value={draft.inputs.project_location} onChange={(event) => updateInputs("project_location", event.target.value)} /></label><label><FieldLabel>Issue date</FieldLabel><Input type="date" value={draft.issue_date} onChange={(event) => updateDraft("issue_date", event.target.value)} /></label><label><FieldLabel>Valid until</FieldLabel><Input type="date" value={draft.valid_until} onChange={(event) => updateDraft("valid_until", event.target.value)} /></label><label><FieldLabel>Status</FieldLabel><Select value={draft.status} onChange={(event) => updateDraft("status", event.target.value)}><option value="draft">Draft</option><option value="final">Final</option></Select></label><label><FieldLabel>Material supplier</FieldLabel><Select value={draft.inputs.material_supplier} onChange={(event) => updateInputs("material_supplier", event.target.value)}><option value="not_specified">To be confirmed</option><option value="contractor">Contractor / issuer</option><option value="client">Client / homeowner</option></Select></label></div> : null}
             </section>
 
-            <section className="border-b border-slate-200 pb-6">
-              <h2 className="text-lg font-semibold text-slate-950">Painting scope</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                <label className="block">
-                  <FieldLabel>Floor area</FieldLabel>
-                  <div className="relative">
-                    <Input type="number" min="1" max="100000" step="1" value={draft.inputs.space_size} onChange={(event) => updateInputs("space_size", event.target.value)} className="pr-16" />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">sq ft</span>
-                  </div>
-                </label>
-                <label className="block">
-                  <FieldLabel>Wall / ceiling height</FieldLabel>
-                  <div className="relative">
-                    <Input type="number" min="6" max="40" step="0.5" value={draft.inputs.wall_height ?? "8"} onChange={(event) => updateInputs("wall_height", event.target.value)} className="pr-10" />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">ft</span>
-                  </div>
-                </label>
-                <div className="text-xs leading-5 text-slate-500 sm:col-span-2 lg:col-span-1 xl:col-span-2">
-                  Walls scale from the 8 ft baseline. Ceilings above 9 ft add 5% per additional foot for access and protection, capped at 50%.
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <FieldLabel>Surfaces to paint</FieldLabel>
-                <div className="grid gap-2">
-                  <ToggleChoice checked={draft.inputs.surfaces.walls} onChange={(value) => updateSurface("walls", value)} label="Walls" description="Calculated from the floor-area planning factor." />
-                  <ToggleChoice checked={draft.inputs.surfaces.ceilings} onChange={(value) => updateSurface("ceilings", value)} label="Ceilings" description="Adds the full floor area as ceiling surface." />
-                  <ToggleChoice checked={draft.inputs.surfaces.trim} onChange={(value) => updateSurface("trim", value)} label="Baseboards & trim" description="Adds the trim allowance using the floor area." />
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-4">
-                <SegmentedControl
-                  label="Wall condition"
-                  value={draft.inputs.wall_condition}
-                  onChange={(value) => updateInputs("wall_condition", value)}
-                  options={[
-                    { value: "standard_repaint", label: "Standard repaint" },
-                    { value: "new_drywall", label: "New drywall" },
-                  ]}
-                />
-                {draft.inputs.surfaces.trim ? (
-                  <ToggleChoice checked={draft.inputs.trim_needs_prep} onChange={(value) => updateInputs("trim_needs_prep", value)} label="Trim needs prep and caulk" description="Adds joint repair, preparation, and caulking allowance." />
-                ) : null}
-                <SegmentedControl
-                  label="Paint quality"
-                  value={draft.inputs.paint_tier}
-                  onChange={(value) => updateInputs("paint_tier", value)}
-                  options={[
-                    { value: "standard", label: "Standard" },
-                    { value: "premium", label: "Premium +15%" },
-                  ]}
-                />
-                <label className="block">
-                  <FieldLabel>Paint or material specification</FieldLabel>
-                  <Input value={draft.inputs.paint_material} onChange={(event) => updateInputs("paint_material", event.target.value)} placeholder="Brand, finish, color, or material tier" />
-                </label>
-                <label className="block">
-                  <FieldLabel>Material supplier</FieldLabel>
-                  <select
-                    value={draft.inputs.material_supplier}
-                    onChange={(event) => updateInputs("material_supplier", event.target.value)}
-                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="not_specified">To be confirmed</option>
-                    <option value="contractor">Issuer / contractor</option>
-                    <option value="client">Client / homeowner</option>
-                  </select>
-                  <div className="mt-1.5 text-xs leading-5 text-slate-500">
-                    {draft.inputs.material_supplier === "contractor"
-                      ? "Use rates that include contractor-supplied paint and materials."
-                      : draft.inputs.material_supplier === "client"
-                      ? "Materials are not priced separately. Lower the rates as needed for owner-supplied paint and materials."
-                      : "Confirm the supplier, then set rates that reflect whether paint and materials are included."}
-                  </div>
-                </label>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                  {draft.inputs.surfaces.walls ? (
-                    <label className="block">
-                      <FieldLabel>Wall base unit price</FieldLabel>
-                      <div className="relative">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
-                        <Input type="number" min="2" max="6" step="0.25" value={draft.inputs.wall_unit_price ?? "3.00"} onChange={(event) => updateInputs("wall_unit_price", event.target.value)} className="pl-7 pr-16" />
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">/ sq ft</span>
-                      </div>
-                    </label>
-                  ) : null}
-                  {draft.inputs.surfaces.ceilings ? (
-                    <label className="block">
-                      <FieldLabel>Ceiling base unit price</FieldLabel>
-                      <div className="relative">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
-                        <Input type="number" min="2" max="6" step="0.25" value={draft.inputs.ceiling_unit_price ?? "2.00"} onChange={(event) => updateInputs("ceiling_unit_price", event.target.value)} className="pl-7 pr-16" />
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">/ sq ft</span>
-                      </div>
-                    </label>
-                  ) : null}
-                </div>
-                <p className="text-xs leading-5 text-slate-500">
-                  Set the base labor-and-material rate for this estimate. Height, condition, and paint-quality adjustments are applied afterward.
-                </p>
-              </div>
-            </section>
-
-            <section className="border-b border-slate-200 pb-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-950">Additional items</h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">Add work that is not included in the painting selections.</p>
-                </div>
-                <button type="button" onClick={addCustomItem} className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-                  <SymbolIcon name="add" className="text-[18px]" />
-                  Add item
-                </button>
-              </div>
-              {draft.inputs.custom_items.length ? (
-                <div className="mt-4 space-y-3">
-                  {draft.inputs.custom_items.map((item, index) => (
-                    <CustomItemEditor key={index} item={item} index={index} onChange={updateCustomItem} onRemove={removeCustomItem} />
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">No additional items.</div>
-              )}
-            </section>
-
-            <section className="border-b border-slate-200 pb-6">
-              <h2 className="text-lg font-semibold text-slate-950">Discount and notes</h2>
-              <div className="mt-4 grid grid-cols-[120px_1fr] gap-3">
-                <label>
-                  <FieldLabel>Discount type</FieldLabel>
-                  <select value={draft.inputs.discount_type} onChange={(event) => updateInputs("discount_type", event.target.value)} className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="percent">Percent</option>
-                    <option value="fixed">Fixed</option>
-                  </select>
-                </label>
-                <label>
-                  <FieldLabel>Discount</FieldLabel>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">{draft.inputs.discount_type === "fixed" ? "$" : "%"}</span>
-                    <Input type="number" min="0" max={draft.inputs.discount_type === "percent" ? "100" : undefined} step="0.01" value={draft.inputs.discount_value} onChange={(event) => updateInputs("discount_value", event.target.value)} className="pl-8" />
-                  </div>
-                </label>
-              </div>
-              <label className="mt-4 block">
-                <FieldLabel>Estimate notes and assumptions</FieldLabel>
-                <Textarea value={draft.inputs.notes} onChange={(event) => updateInputs("notes", event.target.value)} placeholder="Access, preparation, exclusions, schedule, or other assumptions..." />
-              </label>
-            </section>
-
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-xs leading-5 text-amber-950">
-              FlatOrigin provides estimating tools and informational pricing suggestions. The issuing user is responsible for reviewing and approving all pricing, quantities, materials, descriptions, discounts, and terms.
+            <div className="space-y-3">
+              {draft.inputs.sections.map((section, index) => <PaintingSectionEditor key={section.id} section={section} calculation={calculation.sections[index]} open={openSections[section.id] ?? index === 0} onToggle={() => setOpenSections((current) => ({ ...current, [section.id]: !(current[section.id] ?? index === 0) }))} onChange={(next) => updateSection(index, next)} onRemove={() => removeSection(index)} canRemove={draft.inputs.sections.length > 1} />)}
+              <button type="button" onClick={addSection} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-400 bg-white text-sm font-semibold text-slate-800 hover:border-slate-600 hover:bg-slate-50"><SymbolIcon name="add" className="text-[19px]" />Add Section</button>
             </div>
 
-            {error ? <div className="text-sm font-medium text-red-700">{error}</div> : null}
-            {notice ? <div className="text-sm font-medium text-emerald-700">{notice}</div> : null}
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><h2 className="text-lg font-bold text-slate-950">Scope</h2><div className="mt-4 grid gap-4 sm:grid-cols-2"><ScopeList title="Included work" description="One item per line." value={draft.inputs.included_scope} onChange={(value) => updateInputs("included_scope", value)} placeholder={"Surface preparation\nTwo finish coats\nDaily cleanup"} /><ScopeList title="Excluded work" description="One item per line." value={draft.inputs.excluded_scope} onChange={(value) => updateInputs("excluded_scope", value)} placeholder={"Major drywall repairs\nCabinet interiors\nMoving furniture"} /></div></section>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="button" disabled={busy} onClick={saveEstimate} className="h-11 flex-1 gap-2">
-                <SymbolIcon name={authed ? "save" : "person_add"} className="text-[18px]" />
-                {authed ? (activeId ? "Update estimate" : "Save estimate") : "Create free account to save"}
-              </Button>
-              {authed && activeId ? (
-                <button type="button" disabled={busy} onClick={deleteEstimate} className="h-11 rounded-xl border border-red-200 px-4 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60">
-                  Delete
-                </button>
-              ) : null}
-            </div>
-            {!authed ? (
-              <p className="text-xs leading-5 text-slate-500">The full estimate is available now. An account is only required to save and revise it later.</p>
-            ) : null}
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-bold text-slate-950">Extras</h2><p className="mt-1 text-xs leading-5 text-slate-500">Add or subtract a simple fixed amount after painting sections.</p></div><button type="button" onClick={addExtra} className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><SymbolIcon name="add" className="text-[18px]" />Add</button></div>{draft.inputs.extras.length ? <div className="mt-4 space-y-3">{draft.inputs.extras.map((extra, index) => <div key={extra.id || index} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_150px_40px_40px]"><Input value={extra.description} onChange={(event) => updateExtra(index, "description", event.target.value)} placeholder="Description" aria-label={`Extra ${index + 1} description`} /><MoneyInput value={extra.price} allowNegative onChange={(event) => updateExtra(index, "price", event.target.value)} /><button type="button" onClick={() => insertExtraAfter(index)} title="Add extra below" aria-label={`Add extra after row ${index + 1}`} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"><SymbolIcon name="add" className="text-[19px]" /></button><button type="button" onClick={() => removeExtra(index)} title="Remove extra" aria-label={`Remove extra ${index + 1}`} className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700"><SymbolIcon name="delete" className="text-[19px]" /></button></div>)}</div> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">No extras. Empty rows will never appear in the customer estimate.</div>}</section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><h2 className="text-lg font-bold text-slate-950">Discount and presentation</h2><div className="mt-4 grid gap-4 sm:grid-cols-2"><label><FieldLabel>Discount type</FieldLabel><Select value={draft.inputs.discount_type} onChange={(event) => updateInputs("discount_type", event.target.value)}><option value="percent">Percent</option><option value="fixed">Fixed amount</option></Select></label><label><FieldLabel>Discount</FieldLabel><div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">{draft.inputs.discount_type === "fixed" ? "$" : "%"}</span><Input type="number" min="0" max={draft.inputs.discount_type === "percent" ? "100" : undefined} step="0.01" value={draft.inputs.discount_value} onChange={(event) => updateInputs("discount_value", event.target.value)} className="pl-8" /></div></label><label className="sm:col-span-2"><FieldLabel>Customer output</FieldLabel><div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1">{[["detailed", "Detailed"], ["summary", "Summary"]].map(([value, label]) => <button key={value} type="button" onClick={() => updateInputs("output_preference", value)} className={[
+              "h-10 rounded-lg px-3 text-sm font-semibold transition",
+              draft.inputs.output_preference === value ? "bg-white text-slate-950 shadow-sm" : "text-slate-500",
+            ].join(" ")}>{label}</button>)}</div><p className="mt-2 text-xs leading-5 text-slate-500">This changes presentation only. The saved calculations remain identical.</p></label><label className="sm:col-span-2"><FieldLabel>Estimate notes and assumptions</FieldLabel><Textarea value={draft.inputs.notes} onChange={(event) => updateInputs("notes", event.target.value)} placeholder="Schedule, access, payment, or other assumptions..." /></label></div></section>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-xs leading-5 text-amber-950">FlatOrigin provides estimating tools and informational pricing suggestions. The issuing user is responsible for reviewing and approving all pricing, quantities, materials, descriptions, discounts, and terms.</div>
+            {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div> : null}
+            {notice ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{notice}</div> : null}
+            <div className="flex flex-col gap-2 sm:flex-row"><Button type="button" disabled={busy} onClick={saveEstimate} className="h-11 flex-1 gap-2"><SymbolIcon name={authed ? "save" : "person_add"} className="text-[18px]" />{authed ? (isNew ? "Save estimate" : "Update estimate") : "Create free account to save"}</Button>{authed && !isNew ? <button type="button" disabled={busy} onClick={deleteEstimate} className="h-11 rounded-xl border border-red-200 px-4 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60">Delete estimate</button> : null}</div>
           </div>
 
-          <div className="min-w-0 lg:sticky lg:top-24">
-            <EstimatePreview draft={draft} calculation={calculation} estimateNumber={activeEstimate?.estimate_number} />
-          </div>
+          <div className="min-w-0 lg:sticky lg:top-24"><EstimatePreview draft={draft} calculation={calculation} estimateNumber={estimateNumber} /></div>
         </div>
       </Container>
     </div>

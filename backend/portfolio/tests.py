@@ -109,8 +109,11 @@ class ProjectEstimateApiTests(APITestCase):
         self.assertEqual(response.data["subtotal"], "2218.88")
         self.assertEqual(response.data["discount_amount"], "221.89")
         self.assertEqual(response.data["final_price"], "1996.99")
-        self.assertEqual(response.data["calculation_version"], "painting-v3")
-        self.assertEqual(len(response.data["calculation"]["line_items"]), 5)
+        self.assertEqual(response.data["calculation_version"], "painting-v4")
+        self.assertEqual(response.data["status"], "draft")
+        self.assertEqual(len(response.data["calculation"]["line_items"]), 4)
+        self.assertEqual(response.data["calculation"]["extras_subtotal"], "100.00")
+        self.assertEqual(len(response.data["calculation"]["sections"]), 1)
 
     def test_scales_walls_and_ceiling_access_for_tall_rooms(self):
         self.client.force_authenticate(user=self.user)
@@ -133,7 +136,7 @@ class ProjectEstimateApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(response.data["subtotal"], "1805.00")
         self.assertEqual(response.data["final_price"], "1805.00")
-        self.assertEqual(response.data["inputs"]["wall_height"], "12")
+        self.assertEqual(response.data["inputs"]["sections"][0]["wall_height"], "12")
         self.assertEqual(
             response.data["calculation"]["assumptions"]["wall_height_multiplier"],
             "1.5",
@@ -246,6 +249,72 @@ class ProjectEstimateApiTests(APITestCase):
         response = self.client.post("/api/estimates/", invalid, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(ProjectEstimate.objects.count(), 0)
+
+    def test_calculates_multiple_sections_extras_and_discount_independently(self):
+        self.client.force_authenticate(user=self.user)
+        payload = {
+            "estimate_type": "painting",
+            "status": "final",
+            "project_name": "Main floor and foyer",
+            "issue_date": "2026-09-17",
+            "inputs": {
+                "prepared_by": "Example Painting LLC",
+                "client_name": "Taylor Homeowner",
+                "project_location": "Media, PA",
+                "material_supplier": "contractor",
+                "sections": [
+                    {
+                        "id": "main",
+                        "name": "Main Area",
+                        "areas": ["Living Room", "Dining Room"],
+                        "floor_area": 100,
+                        "wall_height": 8,
+                        "number_of_coats": 2,
+                        "wall_unit_price": 3,
+                        "ceiling_unit_price": 2,
+                        "surfaces": {"walls": True, "ceilings": False},
+                    },
+                    {
+                        "id": "foyer",
+                        "name": "Foyer",
+                        "areas": ["Entry"],
+                        "floor_area": 100,
+                        "wall_height": 12,
+                        "number_of_coats": 2,
+                        "wall_unit_price": 3,
+                        "ceiling_unit_price": 2,
+                        "surfaces": {"walls": False, "ceilings": True},
+                        "window_count": 2,
+                        "window_unit_price": 50,
+                    },
+                ],
+                "included_scope": ["Surface preparation", "Two finish coats"],
+                "excluded_scope": ["Major drywall repairs"],
+                "extras": [
+                    {"id": "extra-1", "description": "Access setup", "price": 100},
+                    {"id": "extra-2", "description": "Client credit", "price": -25},
+                    {"id": "extra-3", "description": "", "price": ""},
+                ],
+                "discount_type": "fixed",
+                "discount_value": 55,
+                "output_preference": "summary",
+            },
+        }
+
+        response = self.client.post("/api/estimates/", payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["status"], "final")
+        self.assertEqual(response.data["calculation"]["sections"][0]["subtotal"], "1050.00")
+        self.assertEqual(response.data["calculation"]["sections"][1]["subtotal"], "330.00")
+        self.assertEqual(response.data["calculation"]["main_painting_subtotal"], "1380.00")
+        self.assertEqual(response.data["calculation"]["extras_subtotal"], "75.00")
+        self.assertEqual(response.data["subtotal"], "1455.00")
+        self.assertEqual(response.data["discount_amount"], "55.00")
+        self.assertEqual(response.data["final_price"], "1400.00")
+        self.assertEqual(response.data["inputs"]["output_preference"], "summary")
+        self.assertEqual(response.data["inputs"]["included_scope"], ["Surface preparation", "Two finish coats"])
+        self.assertEqual(len(response.data["inputs"]["extras"]), 2)
 
 
 class FeedbackTicketApiTests(APITestCase):

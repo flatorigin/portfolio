@@ -30,7 +30,8 @@ export default function App() {
     pathname === "/copyright" ||
     pathname.startsWith("/profiles/") ||
     pathname.startsWith("/public/") ||
-    pathname === "/project-estimator" ||
+    pathname.startsWith("/project-estimator") ||
+    pathname === "/estimates" ||
     false;
   const hideShellNav =
     pathname === "/" ||
@@ -286,9 +287,9 @@ export default function App() {
     navigate("/profile/ai-usage");
   };
 
-  const goProjectEstimator = () => {
+  const goEstimates = () => {
     setMenuOpen(false);
-    navigate("/project-estimator");
+    navigate("/estimates");
   };
 
   const goSetupGuide = () => {
@@ -491,13 +492,13 @@ export default function App() {
 
                       <button
                         type="button"
-                        onClick={goProjectEstimator}
+                        onClick={goEstimates}
                         className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                       >
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
                           <SymbolIcon name="calculate" className="text-[18px]" />
                         </span>
-                        <span>Project Estimator</span>
+                        <span>Estimates</span>
                       </button>
 
                       <button

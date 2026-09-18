@@ -1312,6 +1312,12 @@ class ProjectEstimate(models.Model):
     TYPE_CHOICES = [
         (TYPE_PAINTING, "Painting"),
     ]
+    STATUS_DRAFT = "draft"
+    STATUS_FINAL = "final"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_FINAL, "Final"),
+    ]
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1330,12 +1336,17 @@ class ProjectEstimate(models.Model):
         choices=TYPE_CHOICES,
         default=TYPE_PAINTING,
     )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_DRAFT,
+    )
     project_name = models.CharField(max_length=200)
     issue_date = models.DateField(default=timezone.localdate)
     valid_until = models.DateField(null=True, blank=True)
     inputs = models.JSONField(default=dict)
     calculation = models.JSONField(default=dict)
-    calculation_version = models.CharField(max_length=40, default="painting-v3")
+    calculation_version = models.CharField(max_length=40, default="painting-v4")
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     final_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
