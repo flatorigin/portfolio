@@ -1313,12 +1313,14 @@ class ProjectEstimate(models.Model):
     TYPE_DRYWALL = "drywall"
     TYPE_PAVING = "paving"
     TYPE_ROOFING = "roofing"
+    TYPE_FLOORING = "flooring"
     TYPE_CHOICES = [
         (TYPE_PAINTING, "Painting"),
         (TYPE_FRAMING, "Framing"),
         (TYPE_DRYWALL, "Drywall"),
         (TYPE_PAVING, "Paving"),
         (TYPE_ROOFING, "Roofing"),
+        (TYPE_FLOORING, "Flooring"),
     ]
     STATUS_DRAFT = "draft"
     STATUS_FINAL = "final"

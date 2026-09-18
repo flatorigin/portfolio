@@ -629,6 +629,12 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         _, calculation = calculate_roofing_estimate(request.data)
         return Response(calculation)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def flooring_preview(self, request):
+        from .flooring_estimators import calculate_flooring_estimate
+        _, calculation = calculate_flooring_estimate(request.data)
+        return Response(calculation)
+
     def get_queryset(self):
         return ProjectEstimate.objects.filter(user=self.request.user).select_related("project")
 
