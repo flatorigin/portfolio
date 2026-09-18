@@ -611,6 +611,12 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def drywall_preview(self, request):
+        from .drywall_estimators import calculate_drywall_estimate
+        _, calculation = calculate_drywall_estimate(request.data)
+        return Response(calculation)
+
     def get_queryset(self):
         return ProjectEstimate.objects.filter(user=self.request.user).select_related("project")
 

@@ -1310,9 +1310,11 @@ class HelperFeedback(models.Model):
 class ProjectEstimate(models.Model):
     TYPE_PAINTING = "painting"
     TYPE_FRAMING = "framing"
+    TYPE_DRYWALL = "drywall"
     TYPE_CHOICES = [
         (TYPE_PAINTING, "Painting"),
         (TYPE_FRAMING, "Framing"),
+        (TYPE_DRYWALL, "Drywall"),
     ]
     STATUS_DRAFT = "draft"
     STATUS_FINAL = "final"
