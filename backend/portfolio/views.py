@@ -635,6 +635,12 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         _, calculation = calculate_flooring_estimate(request.data)
         return Response(calculation)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def siding_preview(self, request):
+        from .siding_estimators import calculate_siding_estimate
+        _, calculation = calculate_siding_estimate(request.data)
+        return Response(calculation)
+
     def get_queryset(self):
         return ProjectEstimate.objects.filter(user=self.request.user).select_related("project")
 
