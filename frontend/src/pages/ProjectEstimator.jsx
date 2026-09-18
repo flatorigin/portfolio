@@ -312,7 +312,8 @@ function EstimatorEntry() {
   const isRoofing = estimatorType === "roofing";
   const isFlooring = estimatorType === "flooring";
   const isSiding = estimatorType === "siding";
-  const categoryName = isSiding ? 'Siding' : isFlooring ? 'Flooring' : isRoofing ? 'Roofing' : isPaving ? 'Paving' : isDrywall ? 'Drywall' : isFraming ? 'Framing' : 'Painting';
+  const isDecking = estimatorType === "decking";
+  const categoryName = isDecking ? 'Decking' : isSiding ? 'Siding' : isFlooring ? 'Flooring' : isRoofing ? 'Roofing' : isPaving ? 'Paving' : isDrywall ? 'Drywall' : isFraming ? 'Framing' : 'Painting';
   return (
     <div className="min-h-screen bg-[#FBF9F7] py-12 sm:py-20">
       <Container>
@@ -321,9 +322,9 @@ function EstimatorEntry() {
           <div className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Project Estimator</div>
           <h1 className="mt-2 text-3xl font-bold text-slate-950 sm:text-4xl">Build a project estimate</h1>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">Choose the work category first. Each estimator keeps its own quantities and calculation logic while all saved estimates remain together.</p>
-          <label className="mx-auto mt-7 block max-w-sm text-left"><FieldLabel>Estimator type</FieldLabel><Select value={estimatorType} onChange={(event) => setEstimatorType(event.target.value)}><option value="painting">Painting</option><option value="framing">Framing</option><option value="drywall">Drywall</option><option value="paving">Paving</option><option value="roofing">Roofing</option><option value="flooring">Flooring</option><option value="siding">Siding</option></Select></label>
-          <div className="mx-auto mt-4 max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left"><div className="text-sm font-bold text-slate-950">{categoryName} estimator</div><p className="mt-1 text-xs leading-5 text-slate-600">{isSiding ? "Estimate siding by wall area, with openings, materials, labor, and extras." : isFlooring ? "Estimate flooring by room and product, with material packages, labor, and extras." : isRoofing ? "Estimate roof area, materials, installation, tear-off, and extras." : isPaving ? "Estimate paving materials by purchase-unit coverage, preparation, and installation." : isDrywall ? 'Estimate board quantities, hanging, finishing, removal, and patch repairs.' : isFraming ? "Estimate walls, openings, floors, beams, posts, roofs, hardware, labor, overhead, and profit." : "Group rooms by condition, calculate walls and ceilings, add trim work, and present detailed or summary pricing."}</p></div>
-          <Link to={`/${isSiding ? "siding" : isFlooring ? "flooring" : isRoofing ? "roofing" : isPaving ? "paving" : isDrywall ? 'drywall' : isFraming ? 'framing' : 'project'}-estimator/new`} className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-6 text-sm font-semibold text-white hover:bg-slate-800"><SymbolIcon name="arrow_forward" className="text-[20px]" />Start {categoryName} Estimate</Link>
+          <label className="mx-auto mt-7 block max-w-sm text-left"><FieldLabel>Estimator type</FieldLabel><Select value={estimatorType} onChange={(event) => setEstimatorType(event.target.value)}><option value="painting">Painting</option><option value="framing">Framing</option><option value="drywall">Drywall</option><option value="paving">Paving</option><option value="roofing">Roofing</option><option value="flooring">Flooring</option><option value="siding">Siding</option><option value="decking">Decking</option></Select></label>
+          <div className="mx-auto mt-4 max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left"><div className="text-sm font-bold text-slate-950">{categoryName} estimator</div><p className="mt-1 text-xs leading-5 text-slate-600">{isDecking ? "Estimate deck boards, framing, railings, stairs, and demolition." : isSiding ? "Estimate siding by wall area, with openings, materials, labor, and extras." : isFlooring ? "Estimate flooring by room and product, with material packages, labor, and extras." : isRoofing ? "Estimate roof area, materials, installation, tear-off, and extras." : isPaving ? "Estimate paving materials by purchase-unit coverage, preparation, and installation." : isDrywall ? 'Estimate board quantities, hanging, finishing, removal, and patch repairs.' : isFraming ? "Estimate walls, openings, floors, beams, posts, roofs, hardware, labor, overhead, and profit." : "Group rooms by condition, calculate walls and ceilings, add trim work, and present detailed or summary pricing."}</p></div>
+          <Link to={`/${isDecking ? "decking" : isSiding ? "siding" : isFlooring ? "flooring" : isRoofing ? "roofing" : isPaving ? "paving" : isDrywall ? 'drywall' : isFraming ? 'framing' : 'project'}-estimator/new`} className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-950 px-6 text-sm font-semibold text-white hover:bg-slate-800"><SymbolIcon name="arrow_forward" className="text-[20px]" />Start {categoryName} Estimate</Link>
           {authed ? <div className="mt-4"><Link to="/estimates" className="text-sm font-semibold text-slate-700 hover:text-slate-950">View saved estimates</Link></div> : <p className="mt-4 text-xs text-slate-500">You can build the estimate now. Create a free account when you are ready to save it.</p>}
         </div>
       </Container>
@@ -377,7 +378,7 @@ export default function ProjectEstimator() {
             return;
           }
           const { data } = await api.get(`/estimates/${estimateId}/`);
-          if (['framing', 'drywall', 'paving', 'roofing', 'flooring', 'siding'].includes(data.estimate_type)) {
+          if (['framing', 'drywall', 'paving', 'roofing', 'flooring', 'siding', 'decking'].includes(data.estimate_type)) {
             navigate(`/${data.estimate_type}-estimator/${estimateId}`, { replace: true });
             return;
           }

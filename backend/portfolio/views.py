@@ -641,6 +641,12 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         _, calculation = calculate_siding_estimate(request.data)
         return Response(calculation)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def decking_preview(self, request):
+        from .decking_estimators import calculate_decking_estimate
+        _, calculation = calculate_decking_estimate(request.data)
+        return Response(calculation)
+
     def get_queryset(self):
         return ProjectEstimate.objects.filter(user=self.request.user).select_related("project")
 

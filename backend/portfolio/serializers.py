@@ -43,6 +43,7 @@ from .paving_estimators import calculate_paving_estimate
 from .roofing_estimators import calculate_roofing_estimate
 from .flooring_estimators import calculate_flooring_estimate
 from .siding_estimators import calculate_siding_estimate
+from .decking_estimators import calculate_decking_estimate
 from .project_intake import get_project_intake_template, get_project_type_choices
 
 User = get_user_model()
@@ -416,9 +417,9 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "estimate_type",
             getattr(self.instance, "estimate_type", ProjectEstimate.TYPE_PAINTING),
         )
-        if estimate_type not in {ProjectEstimate.TYPE_PAINTING, ProjectEstimate.TYPE_FRAMING, ProjectEstimate.TYPE_DRYWALL, ProjectEstimate.TYPE_PAVING, ProjectEstimate.TYPE_ROOFING, ProjectEstimate.TYPE_FLOORING, ProjectEstimate.TYPE_SIDING}:
+        if estimate_type not in {ProjectEstimate.TYPE_PAINTING, ProjectEstimate.TYPE_FRAMING, ProjectEstimate.TYPE_DRYWALL, ProjectEstimate.TYPE_PAVING, ProjectEstimate.TYPE_ROOFING, ProjectEstimate.TYPE_FLOORING, ProjectEstimate.TYPE_SIDING, ProjectEstimate.TYPE_DECKING}:
             raise serializers.ValidationError(
-                {"estimate_type": "Choose painting, framing, drywall, paving, roofing, flooring, or siding."}
+                {"estimate_type": "Choose painting, framing, drywall, paving, roofing, flooring, siding, or decking."}
             )
 
         issue_date = attrs.get("issue_date", getattr(self.instance, "issue_date", None))
@@ -437,6 +438,7 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             ProjectEstimate.TYPE_ROOFING: calculate_roofing_estimate,
             ProjectEstimate.TYPE_FLOORING: calculate_flooring_estimate,
             ProjectEstimate.TYPE_SIDING: calculate_siding_estimate,
+            ProjectEstimate.TYPE_DECKING: calculate_decking_estimate,
         }[estimate_type]
         normalized_inputs, calculation = calculator(raw_inputs)
         attrs["inputs"] = normalized_inputs

@@ -1315,6 +1315,7 @@ class ProjectEstimate(models.Model):
     TYPE_ROOFING = "roofing"
     TYPE_FLOORING = "flooring"
     TYPE_SIDING = "siding"
+    TYPE_DECKING = "decking"
     TYPE_CHOICES = [
         (TYPE_PAINTING, "Painting"),
         (TYPE_FRAMING, "Framing"),
@@ -1323,6 +1324,7 @@ class ProjectEstimate(models.Model):
         (TYPE_ROOFING, "Roofing"),
         (TYPE_FLOORING, "Flooring"),
         (TYPE_SIDING, "Siding"),
+        (TYPE_DECKING, "Decking"),
     ]
     STATUS_DRAFT = "draft"
     STATUS_FINAL = "final"
