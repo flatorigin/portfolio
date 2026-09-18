@@ -5,8 +5,10 @@ import { Button, Container, Input, Textarea, SymbolIcon } from '../ui';
 
 const drywallSection = () => ({ id: crypto.randomUUID(), name: 'Main area', measurement: 'floor', floor_area: 0, wall_override: false, ceiling_override: false, openings_already_deducted: false, additional_ceiling_area: 0, ceiling_description: '', pricing: 'separate', material_supplier: 'contractor', finish: '4', board_type: 'Standard gypsum', thickness: '1/2 in', walls: true, ceilings: false, deduct_material: true, deduct_labor: false, wall_area: 0, ceiling_area: 0, wall_length: 0, height: 8, length: 0, width: 0, opening_area: 0, layers: 1, sheet_width: 4, sheet_height: 8, waste: 10, sheet_price: 0, supplies: 0, hanging_rate: 0, finishing_rate: 0, installed_rate: 0, access_percent: 0, removal_rate: 0, patch_count: 0, patch_rate: 0 });
 const pavingSection = () => ({ id: crypto.randomUUID(), name: 'Paving area', material: 'Concrete pavers', measurement: 'area', area: 0, length: 0, width: 0, unit: 'skid', custom_unit: '', whole_units: true, coverage: 0, unit_price: 0, waste: 0, labor_rate: 0, preparation_rate: 0, material_supplier: 'contractor', notes: '' });
-const fresh = category => ({ project_name: `${category === 'paving' ? 'Paving' : 'Drywall'} estimate`, issue_date: new Date().toLocaleDateString('en-CA'), valid_until: '', status: 'draft', inputs: { sections: [category === 'paving' ? pavingSection() : drywallSection()], prepared_by: '', client_name: '', project_location: '', notes: '', included_scope: [], excluded_scope: [], overhead: 0, profit: 0, profit_method: 'markup', tax: 0, discount: 0, discount_type: 'percent', minimum: 0, allowances: 0, adjustment: 0, output_preference: 'detailed' } });
-const estimatePath = type => `/${['framing', 'drywall', 'paving'].includes(type) ? type : 'project'}-estimator`;
+const roofingSection = () => ({ id: crypto.randomUUID(), name: 'Main roof', material: 'Asphalt shingles', measurement: 'surface', area: 0, pitch: 0, waste: 10, material_supplier: 'contractor', material_rate: 0, labor_rate: 0, tearoff_layers: 0, tearoff_rate: 0, disposal: 0, extras: [], notes: '' });
+const categories = { drywall: { title: 'Drywall', section: drywallSection }, paving: { title: 'Paving', section: pavingSection }, roofing: { title: 'Roofing', section: roofingSection } };
+const fresh = category => ({ project_name: `${categories[category].title} estimate`, issue_date: new Date().toLocaleDateString('en-CA'), valid_until: '', status: 'draft', inputs: { sections: [categories[category].section()], prepared_by: '', client_name: '', project_location: '', notes: '', included_scope: [], excluded_scope: [], overhead: 0, profit: 0, profit_method: 'markup', tax: 0, discount: 0, discount_type: 'percent', minimum: 0, allowances: 0, adjustment: 0, output_preference: 'detailed' } });
+const estimatePath = type => `/${['framing', 'drywall', 'paving', 'roofing'].includes(type) ? type : 'project'}-estimator`;
 const money = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
 const errorText = error => Object.entries(error.response?.data || {}).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(' ') : value}`).join(' ') || 'Unable to complete the request.';
 
@@ -28,10 +30,11 @@ function FormSection({ title, description, children, collapsible = false, onRemo
 
 export default function AreaEstimateEditor({ category = 'drywall' }) {
   const paving = category === 'paving';
-  const title = paving ? 'Paving' : 'Drywall';
+  const roofing = category === 'roofing';
+  const title = categories[category].title;
   const route = estimatePath(category);
   const pendingKey = `flatorigin:pending-${category}-estimate`;
-  const section = paving ? pavingSection : drywallSection;
+  const section = categories[category].section;
   const { estimateId } = useParams();
   const navigate = useNavigate();
   const isNew = estimateId === 'new';
@@ -92,7 +95,7 @@ export default function AreaEstimateEditor({ category = 'drywall' }) {
   const i = draft.inputs;
   return <div className="min-h-screen bg-[#FBF9F7] pb-16 text-slate-900">
     <div className="border-b border-slate-200 bg-white"><Container className="py-7 sm:py-9"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><Link to={authed ? '/estimates' : '/project-estimator'} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 hover:text-slate-800"><SymbolIcon name="arrow_back" className="text-[17px]" />{authed ? 'Estimates' : 'Project Estimator'}</Link><h1 className="mt-2 text-3xl font-bold text-slate-950">{title} estimate</h1><p className="mt-2 text-sm leading-6 text-slate-600">{paving ? 'Price paving materials by coverage and installation by square foot.' : 'Build one estimate with independently priced drywall sections and repairs.'}</p></div>
+      <div><Link to={authed ? '/estimates' : '/project-estimator'} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 hover:text-slate-800"><SymbolIcon name="arrow_back" className="text-[17px]" />{authed ? 'Estimates' : 'Project Estimator'}</Link><h1 className="mt-2 text-3xl font-bold text-slate-950">{title} estimate</h1><p className="mt-2 text-sm leading-6 text-slate-600">{roofing ? 'Estimate roof covering, installation, tear-off, and roofing extras.' : paving ? 'Price paving materials by coverage and installation by square foot.' : 'Build one estimate with independently priced drywall sections and repairs.'}</p></div>
       <div className="flex gap-2">{authed && <Link to={`${route}/new`} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"><SymbolIcon name="add" className="text-[18px]" />New</Link>}<Button type="button" onClick={save} disabled={busy || calculating || !!previewError} className="h-11 gap-2"><SymbolIcon name={authed ? 'save' : 'person_add'} className="text-[18px]" />{authed ? 'Save estimate' : 'Create account to save'}</Button></div>
     </div></Container></div>
     <Container className="py-7"><div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start"><div className="min-w-0 space-y-5">
@@ -106,8 +109,38 @@ export default function AreaEstimateEditor({ category = 'drywall' }) {
         const field = (key, label, options, type = 'number') => <Field key={key} label={label} value={s[key] ?? (type === 'text' ? '' : 0)} options={options} type={type} onChange={v => updateSection(index, key, v)} />;
         const toggle = (key, label) => <label key={key} className="flex items-center gap-3 text-sm text-slate-700"><input className="h-4 w-4 accent-slate-900" type="checkbox" checked={!!s[key]} onChange={e => updateSection(index, key, e.target.checked)} />{label}</label>;
         const result = calculation?.sections[index];
-        return <FormSection key={s.id} title={s.name || `Section ${index + 1}`} description={`${paving ? s.material : `${s.board_type} / ${s.thickness}`} / ${money(result?.subtotal)}`} collapsible onRemove={i.sections.length > 1 ? () => input('sections', i.sections.filter((_, j) => j !== index)) : undefined}><div className="grid gap-4 sm:grid-cols-2">
-          {paving ? <>
+        return <FormSection key={s.id} title={s.name || `Section ${index + 1}`} description={`${paving || roofing ? s.material : `${s.board_type} / ${s.thickness}`} / ${money(result?.subtotal)}`} collapsible onRemove={i.sections.length > 1 ? () => input('sections', i.sections.filter((_, j) => j !== index)) : undefined}><div className="grid gap-4 sm:grid-cols-2">
+          {roofing ? <>
+            {field('name', 'Roof section name', null, 'text')}
+            <label className="min-w-0 text-sm font-medium text-slate-700"><span className="mb-1.5 block">Roofing material</span><Input list={`roof-materials-${s.id}`} value={s.material} onChange={e => updateSection(index, 'material', e.target.value)} /><datalist id={`roof-materials-${s.id}`}>{['Asphalt shingles', 'Metal roofing', 'Clay tile', 'Concrete tile', 'Slate', 'Membrane roofing'].map(name => <option key={name} value={name} />)}</datalist></label>
+            {field('measurement', 'Roof measurement', [['surface', 'Actual roof surface area'], ['footprint', 'Horizontal roof footprint + pitch']])}
+            {field('area', s.measurement === 'surface' ? 'Roof surface area (sq ft)' : 'Horizontal roof footprint including overhangs (sq ft)')}
+            {s.measurement === 'footprint' && field('pitch', 'Roof pitch (rise in inches per 12 inches run)')}
+            <p className="text-xs leading-5 text-slate-500 sm:col-span-2">{s.measurement === 'surface' ? 'Measured sloped surface area. No pitch adjustment is applied.' : 'Use horizontal roof coverage, not the combined floor area of multiple stories. Add a separate section for each different pitch.'}</p>
+            {field('waste', 'Material waste (%)')}
+            {field('material_supplier', 'Roof covering supplier', [['contractor', 'Contractor'], ['client', 'Customer']])}
+            {field('material_rate', 'Roof covering material / sq ft ($)')}
+            {field('labor_rate', 'Installation labor / roof sq ft ($)')}
+            {field('tearoff_layers', 'Existing layers to remove (0 = none)')}
+            {Number(s.tearoff_layers) > 0 && field('tearoff_rate', 'Tear-off labor / sq ft / layer ($)')}
+            {field('disposal', 'Section disposal allowance ($)')}
+            <div className="min-w-0 space-y-4 border-t border-slate-200 pt-4 sm:col-span-2">
+              <h3 className="font-semibold">Roofing extras</h3>
+              {(s.extras || []).map((extra, extraIndex) => {
+                const change = (key, value) => updateSection(index, 'extras', s.extras.map((row, j) => j === extraIndex ? { ...row, [key]: value } : row));
+                return <div key={extra.id} className="grid min-w-0 gap-3 border-b border-slate-100 pb-4 sm:grid-cols-2">
+                  <Field label="Extra name" type="text" value={extra.name} onChange={v => change('name', v)} />
+                  <Field label="Extra unit" value={extra.unit} options={['linear ft', 'sq ft', 'each', 'allowance'].map(v => [v, v])} onChange={v => change('unit', v)} />
+                  <Field label="Extra quantity" value={extra.quantity} onChange={v => change('quantity', v)} />
+                  <Field label="Extra installed price / unit ($)" value={extra.rate} onChange={v => change('rate', v)} />
+                  <button type="button" aria-label={`Remove extra ${extraIndex + 1}`} onClick={() => updateSection(index, 'extras', s.extras.filter((_, j) => j !== extraIndex))} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-700 hover:bg-red-50" title="Remove extra"><SymbolIcon name="delete" /></button>
+                </div>;
+              })}
+              <button type="button" onClick={() => updateSection(index, 'extras', [...(s.extras || []), { id: crypto.randomUUID(), name: 'Flashing / ridge caps', unit: 'linear ft', quantity: 0, rate: 0 }])} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-800"><SymbolIcon name="add" />Add roofing extra</button>
+            </div>
+            <label className="min-w-0 text-sm font-medium text-slate-700 sm:col-span-2"><span className="mb-1.5 block">Roof section notes</span><Textarea value={s.notes} maxLength={240} onChange={e => updateSection(index, 'notes', e.target.value)} placeholder="Access, complexity, underlayment, flashing, or decking assumptions" /></label>
+            {!calculating && result && <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600 sm:col-span-2">{result.area} sq ft of roof ({result.roofing_squares} roofing squares). Material allowance: {result.purchase_area} sq ft including waste. Installation labor excludes waste. Extras use their own installed rates.</div>}
+          </> : paving ? <>
             {field('name', 'Section name', null, 'text')}
             <label className="text-sm font-medium text-slate-700"><span className="mb-1.5 block">Material</span><Input list={`materials-${s.id}`} value={s.material} onChange={e => updateSection(index, 'material', e.target.value)} placeholder="Choose or type a material" /><datalist id={`materials-${s.id}`}>{['Concrete pavers', 'Asphalt', 'Poured concrete', 'Brick pavers', 'Natural stone'].map(name => <option key={name} value={name} />)}</datalist></label>
             {field('measurement', 'Area method', [['area', 'Enter square feet'], ['dimensions', 'Length x width']])}
@@ -149,10 +182,10 @@ export default function AreaEstimateEditor({ category = 'drywall' }) {
       })}
       <button type="button" onClick={() => input('sections', [...i.sections, section()])} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-400 bg-white text-sm font-semibold text-slate-800 hover:border-slate-600 hover:bg-slate-50"><SymbolIcon name="add" className="text-[19px]" />Add Section</button>
       <FormSection title="Scope"><div className="grid gap-4 sm:grid-cols-2">
-        {['included_scope', 'excluded_scope'].map(key => <label key={key} className="block text-sm font-medium text-slate-700"><span className="mb-1.5 block">{key === 'included_scope' ? 'Included work' : 'Excluded work'}</span><p className="mb-2 text-xs font-normal leading-5 text-slate-500">One item per line.</p><Textarea className="min-h-28" value={i[key].join('\n')} onChange={e => input(key, e.target.value.split('\n'))} placeholder={paving ? (key === 'included_scope' ? 'Site preparation\nPaver installation\nCleanup' : 'Drainage alterations\nExcavation\nLandscaping') : (key === 'included_scope' ? 'Board installation\nJoint finishing\nDaily cleanup' : 'Painting\nInsulation\nStructural repairs')} /></label>)}
+        {['included_scope', 'excluded_scope'].map(key => <label key={key} className="block text-sm font-medium text-slate-700"><span className="mb-1.5 block">{key === 'included_scope' ? 'Included work' : 'Excluded work'}</span><p className="mb-2 text-xs font-normal leading-5 text-slate-500">One item per line.</p><Textarea className="min-h-28" value={i[key].join('\n')} onChange={e => input(key, e.target.value.split('\n'))} placeholder={roofing ? (key === 'included_scope' ? 'Roof covering installation' : 'Hidden decking damage') : paving ? (key === 'included_scope' ? 'Site preparation\nPaver installation\nCleanup' : 'Drainage alterations\nExcavation\nLandscaping') : (key === 'included_scope' ? 'Board installation\nJoint finishing\nDaily cleanup' : 'Painting\nInsulation\nStructural repairs')} /></label>)}
       </div></FormSection>
       <FormSection title="Allowances and adjustments"><div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Delivery, disposal, protection and equipment allowance ($)" value={i.allowances} onChange={v => input('allowances', v)} />
+        <Field label={roofing ? 'Additional delivery, protection and equipment allowance ($)' : 'Delivery, disposal, protection and equipment allowance ($)'} value={i.allowances} onChange={v => input('allowances', v)} />
         <Field label="Price adjustment (+/- $)" min={null} value={i.adjustment} onChange={v => input('adjustment', v)} />
       </div></FormSection>
       <FormSection title="Pricing"><div className="grid gap-4 sm:grid-cols-2">
@@ -173,10 +206,13 @@ export default function AreaEstimateEditor({ category = 'drywall' }) {
       <div className="space-y-5 p-5" aria-live="polite">{previewError && <p className="text-sm text-red-700">{previewError}</p>}
         <div className="text-sm text-slate-600">{i.prepared_by && <p>Prepared by: {i.prepared_by}</p>}{i.client_name && <p>Prepared for: {i.client_name}</p>}{i.project_location && <p>{i.project_location}</p>}</div>
         {!calculating && calculation?.sections.map((s, index) => <div key={index} className="border-b border-slate-200 pb-4"><div className="flex justify-between gap-3"><h3 className="min-w-0 break-words font-bold">{s.name}</h3><strong className="shrink-0">{money(s.subtotal)}</strong></div>
-          {paving && <p className="mt-1 break-words text-sm text-slate-600">{s.material}</p>}
+          {(paving || roofing) && <p className="mt-1 break-words text-sm text-slate-600">{s.material}</p>}
           {(s.ceiling_description || s.notes) && <p className="mt-1 break-words text-sm text-slate-600">{s.ceiling_description || s.notes}</p>}
+          {roofing && i.output_preference === 'detailed' && <div className="my-2 text-xs leading-5 text-slate-500"><p>{s.area} roof sq ft / {s.roofing_squares} roofing squares / {s.purchase_area} material sq ft including waste</p><p>{s.measurement === 'footprint' ? `${s.input_area} footprint sq ft x ${s.pitch_factor} slope factor (${s.pitch}:12 pitch).` : 'Measured roof surface; no slope multiplier.'} One roofing square = 100 sq ft.</p></div>}
           {i.output_preference === 'detailed' && <>
+            {!roofing && <>
             {paving ? <><p className="my-2 text-xs text-slate-500">{s.area} sq ft / {s.purchase_area} sq ft including waste / {s.ordered_units} {s.unit_label.toLowerCase()} units</p><details className="mb-3 text-xs text-slate-600"><summary className="cursor-pointer">How was the purchase quantity calculated?</summary>Area including waste / contractor-entered coverage ({s.coverage} sq ft per unit). {s.whole_units ? 'Rounded up to whole units.' : 'Rounded up to four decimal places.'} Ordered coverage: {s.ordered_coverage} sq ft.</details></> : <><p className="my-2 text-xs text-slate-500">{s.gross_area} total surface sq ft / {s.net_area} net sq ft / {s.sheets} sheets</p>{i.sections[index]?.ceilings && <p className="mb-2 text-xs text-slate-500">{s.ceiling_source} base ceiling: {s.ceiling_area} sq ft + {s.additional_ceiling_area} sq ft additional surfaces</p>}<details className="mb-3 text-xs text-slate-600"><summary className="cursor-pointer">How were sheets calculated?</summary>Round up (net area x layers x waste factor / sheet coverage). Purchase area: {s.purchase_area} sq ft.</details></>}
+            </>}
             {s.line_items.filter(line => Number(line.quantity) > 0).map((line, j) => <div key={j} className="my-2 flex justify-between gap-3 text-sm"><span className="min-w-0 break-words">{line.name}<small className="block text-slate-500">{line.customer_supplied ? 'Customer supplied; excluded from price' : `${line.quantity} ${line.unit} at ${money(line.rate)}`}</small></span><span className="shrink-0">{money(line.amount)}</span></div>)}
           </>}
         </div>)}
