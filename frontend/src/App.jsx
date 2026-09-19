@@ -38,6 +38,9 @@ export default function App() {
     pathname.startsWith("/flooring-estimator") ||
     pathname.startsWith("/siding-estimator") ||
     pathname.startsWith("/decking-estimator") ||
+    pathname.startsWith("/fencing-estimator") ||
+    pathname.startsWith("/windows-estimator") ||
+    pathname.startsWith("/doors-estimator") ||
     pathname === "/estimates" ||
     false;
   const hideShellNav =

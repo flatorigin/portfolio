@@ -647,6 +647,24 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         _, calculation = calculate_decking_estimate(request.data)
         return Response(calculation)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def fencing_preview(self, request):
+        from .trade_estimators import calculate_fencing_estimate
+        _, calculation = calculate_fencing_estimate(request.data)
+        return Response(calculation)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def windows_preview(self, request):
+        from .trade_estimators import calculate_windows_estimate
+        _, calculation = calculate_windows_estimate(request.data)
+        return Response(calculation)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def doors_preview(self, request):
+        from .trade_estimators import calculate_doors_estimate
+        _, calculation = calculate_doors_estimate(request.data)
+        return Response(calculation)
+
     def get_queryset(self):
         return ProjectEstimate.objects.filter(user=self.request.user).select_related("project")
 

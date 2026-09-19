@@ -48,6 +48,7 @@ const RoofingEstimator = lazy(() => import("./pages/RoofingEstimator.jsx"));
 const FlooringEstimator = lazy(() => import("./pages/FlooringEstimator.jsx"));
 const SidingEstimator = lazy(() => import("./pages/SidingEstimator.jsx"));
 const DeckingEstimator = lazy(() => import("./pages/DeckingEstimator.jsx"));
+const TradeEstimator = lazy(() => import("./pages/TradeEstimator.jsx"));
 const Estimates = lazy(() => import("./pages/Estimates.jsx"));
 
 function RouteFallback() {
@@ -99,6 +100,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="flooring-estimator/:estimateId" element={<FlooringEstimator />} />
           <Route path="siding-estimator/:estimateId" element={<SidingEstimator />} />
           <Route path="decking-estimator/:estimateId" element={<DeckingEstimator />} />
+          {['fencing', 'windows', 'doors'].map(category => <Route key={category} path={`${category}-estimator/:estimateId`} element={<TradeEstimator key={category} category={category} />} />)}
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />

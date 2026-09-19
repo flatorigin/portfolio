@@ -88,7 +88,7 @@ export default function Estimates() {
                 <h2 className="mt-4 break-words text-lg font-bold text-slate-950">{estimate.project_name}</h2>
                 <div className="mt-2 text-xs text-slate-500">{estimate.estimate_number} / Updated {updatedDate(estimate.updated_at)}</div>
                 <div className="mt-5 text-2xl font-bold text-slate-950">{money(estimate.final_price)}</div>
-                <Link to={`/${['framing', 'drywall', 'paving', 'roofing', 'flooring', 'siding', 'decking'].includes(estimate.estimate_type) ? estimate.estimate_type : 'project'}-estimator/${estimate.id}`} className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50">
+                <Link to={`/${['framing', 'drywall', 'paving', 'roofing', 'flooring', 'siding', 'decking', 'fencing', 'windows', 'doors'].includes(estimate.estimate_type) ? estimate.estimate_type : 'project'}-estimator/${estimate.id}`} className="mt-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50">
                   Open estimate
                   <SymbolIcon name="arrow_forward" className="text-[18px]" />
                 </Link>
