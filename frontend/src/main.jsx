@@ -100,7 +100,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="flooring-estimator/:estimateId" element={<FlooringEstimator />} />
           <Route path="siding-estimator/:estimateId" element={<SidingEstimator />} />
           <Route path="decking-estimator/:estimateId" element={<DeckingEstimator />} />
-          {['fencing', 'windows', 'doors'].map(category => <Route key={category} path={`${category}-estimator/:estimateId`} element={<TradeEstimator key={category} category={category} />} />)}
+          {['fencing', 'windows', 'doors', 'garage_coating'].map(category => <Route key={category} path={`${category}-estimator/:estimateId`} element={<TradeEstimator key={category} category={category} />} />)}
           <Route path="terms" element={<TermsAndSafety />} />
           <Route path="privacy" element={<PrivacyPolicy />} />
           <Route path="copyright" element={<CopyrightPolicy />} />

@@ -660,6 +660,12 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         return Response(calculation)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def garage_coating_preview(self, request):
+        from .garage_coating_estimators import calculate_garage_coating_estimate
+        _, calculation = calculate_garage_coating_estimate(request.data)
+        return Response(calculation)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def doors_preview(self, request):
         from .trade_estimators import calculate_doors_estimate
         _, calculation = calculate_doors_estimate(request.data)

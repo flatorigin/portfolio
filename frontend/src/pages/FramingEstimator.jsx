@@ -251,7 +251,7 @@ export default function FramingEstimator() {
         } else {
           if (!authed) { navigate(`/login?next=/framing-estimator/${estimateId}`, { replace: true }); return; }
           const { data } = await api.get(`/estimates/${estimateId}/`);
-          if (data.estimate_type !== "framing") { navigate(`/${['drywall', 'paving', 'roofing', 'flooring', 'siding', 'decking', 'fencing', 'windows', 'doors'].includes(data.estimate_type) ? data.estimate_type : 'project'}-estimator/${estimateId}`, { replace: true }); return; }
+          if (data.estimate_type !== "framing") { navigate(`/${['drywall', 'paving', 'roofing', 'flooring', 'siding', 'decking', 'fencing', 'windows', 'doors', 'garage_coating'].includes(data.estimate_type) ? data.estimate_type : 'project'}-estimator/${estimateId}`, { replace: true }); return; }
           if (!cancelled) { setDraft({ status: data.status || "draft", project_name: data.project_name, issue_date: data.issue_date, valid_until: data.valid_until || "", inputs: normalizeFramingInputsForEditor(data.inputs) }); setEstimateNumber(data.estimate_number); }
         }
       } catch (requestError) {
