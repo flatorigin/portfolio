@@ -1321,6 +1321,7 @@ class ProjectEstimate(models.Model):
     TYPE_DOORS = "doors"
     TYPE_GARAGE_COATING = "garage_coating"
     TYPE_ELECTRICAL = "electrical"
+    TYPE_PLUMBING = "plumbing"
     TYPE_CHOICES = [
         (TYPE_PAINTING, "Painting"),
         (TYPE_FRAMING, "Framing"),
@@ -1335,6 +1336,7 @@ class ProjectEstimate(models.Model):
         (TYPE_DOORS, "Doors"),
         (TYPE_GARAGE_COATING, "Garage floor coating"),
         (TYPE_ELECTRICAL, "Electrical"),
+        (TYPE_PLUMBING, "Plumbing"),
     ]
     STATUS_DRAFT = "draft"
     STATUS_FINAL = "final"

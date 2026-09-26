@@ -677,13 +677,19 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         _, calculation = calculate_electrical_estimate(request.data)
         return Response(calculation)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def plumbing_preview(self, request):
+        from .plumbing_estimators import calculate_plumbing_estimate
+        _, calculation = calculate_plumbing_estimate(request.data)
+        return Response(calculation)
+
     @action(detail=True, methods=['post'])
     def share(self, request, pk=None):
         estimate = self.get_object()
         if estimate.user_id != request.user.id:
             raise PermissionDenied('Only the homeowner can share this estimate.')
-        if estimate.estimate_type != ProjectEstimate.TYPE_ELECTRICAL:
-            raise ValidationError({'estimate_type': 'The contractor revision workflow is available for electrical estimates.'})
+        if estimate.estimate_type not in {ProjectEstimate.TYPE_ELECTRICAL, ProjectEstimate.TYPE_PLUMBING}:
+            raise ValidationError({'estimate_type': 'The contractor revision workflow is available for electrical and plumbing estimates.'})
         estimate.homeowner_snapshot = {
             'inputs': estimate.inputs,
             'calculation': estimate.calculation,
@@ -706,7 +712,7 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         estimate = get_object_or_404(
             ProjectEstimate.objects.select_related('user', 'shared_with'),
             share_token=token,
-            estimate_type=ProjectEstimate.TYPE_ELECTRICAL,
+            estimate_type__in=[ProjectEstimate.TYPE_ELECTRICAL, ProjectEstimate.TYPE_PLUMBING],
         )
         if estimate.workflow_status == ProjectEstimate.WORKFLOW_OWNER_DRAFT:
             raise PermissionDenied('This estimate has not been shared.')
@@ -719,7 +725,7 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         url_path=r'shared/(?P<token>[0-9a-f-]+)/claim',
     )
     def claim_shared_estimate(self, request, token=None):
-        estimate = get_object_or_404(ProjectEstimate, share_token=token, estimate_type=ProjectEstimate.TYPE_ELECTRICAL)
+        estimate = get_object_or_404(ProjectEstimate, share_token=token, estimate_type__in=[ProjectEstimate.TYPE_ELECTRICAL, ProjectEstimate.TYPE_PLUMBING])
         if estimate.user_id == request.user.id:
             raise ValidationError({'detail': 'The homeowner already owns this estimate.'})
         if estimate.workflow_status == ProjectEstimate.WORKFLOW_OWNER_DRAFT:
@@ -747,7 +753,7 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
             unsupported = set(request.data) - {'inputs', 'contractor_notes', 'status'}
             if unsupported:
                 raise ValidationError({'detail': 'Contractors may revise itemized pricing, notes, and estimate status only.'})
-            if estimate.estimate_type != ProjectEstimate.TYPE_ELECTRICAL:
+            if estimate.estimate_type not in {ProjectEstimate.TYPE_ELECTRICAL, ProjectEstimate.TYPE_PLUMBING}:
                 raise PermissionDenied('This shared estimate cannot be revised here.')
         return super().update(request, *args, **kwargs)
 

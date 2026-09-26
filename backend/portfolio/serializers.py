@@ -46,6 +46,7 @@ from .siding_estimators import calculate_siding_estimate
 from .decking_estimators import calculate_decking_estimate
 from .garage_coating_estimators import calculate_garage_coating_estimate
 from .electrical_estimators import calculate_electrical_estimate
+from .plumbing_estimators import calculate_plumbing_estimate
 from .trade_estimators import calculate_fencing_estimate, calculate_windows_estimate, calculate_doors_estimate
 from .project_intake import get_project_intake_template, get_project_type_choices
 
@@ -450,9 +451,9 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "estimate_type",
             getattr(self.instance, "estimate_type", ProjectEstimate.TYPE_PAINTING),
         )
-        if estimate_type not in {ProjectEstimate.TYPE_PAINTING, ProjectEstimate.TYPE_FRAMING, ProjectEstimate.TYPE_DRYWALL, ProjectEstimate.TYPE_PAVING, ProjectEstimate.TYPE_ROOFING, ProjectEstimate.TYPE_FLOORING, ProjectEstimate.TYPE_SIDING, ProjectEstimate.TYPE_DECKING, ProjectEstimate.TYPE_FENCING, ProjectEstimate.TYPE_WINDOWS, ProjectEstimate.TYPE_DOORS, ProjectEstimate.TYPE_GARAGE_COATING, ProjectEstimate.TYPE_ELECTRICAL}:
+        if estimate_type not in {ProjectEstimate.TYPE_PAINTING, ProjectEstimate.TYPE_FRAMING, ProjectEstimate.TYPE_DRYWALL, ProjectEstimate.TYPE_PAVING, ProjectEstimate.TYPE_ROOFING, ProjectEstimate.TYPE_FLOORING, ProjectEstimate.TYPE_SIDING, ProjectEstimate.TYPE_DECKING, ProjectEstimate.TYPE_FENCING, ProjectEstimate.TYPE_WINDOWS, ProjectEstimate.TYPE_DOORS, ProjectEstimate.TYPE_GARAGE_COATING, ProjectEstimate.TYPE_ELECTRICAL, ProjectEstimate.TYPE_PLUMBING}:
             raise serializers.ValidationError(
-                {"estimate_type": "Choose painting, framing, drywall, paving, roofing, flooring, siding, decking, fencing, windows, doors, garage floor coating, or electrical."}
+                {"estimate_type": "Choose painting, framing, drywall, paving, roofing, flooring, siding, decking, fencing, windows, doors, garage floor coating, electrical, or plumbing."}
             )
 
         issue_date = attrs.get("issue_date", getattr(self.instance, "issue_date", None))
@@ -477,6 +478,7 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             ProjectEstimate.TYPE_DOORS: calculate_doors_estimate,
             ProjectEstimate.TYPE_GARAGE_COATING: calculate_garage_coating_estimate,
             ProjectEstimate.TYPE_ELECTRICAL: calculate_electrical_estimate,
+            ProjectEstimate.TYPE_PLUMBING: calculate_plumbing_estimate,
         }[estimate_type]
         normalized_inputs, calculation = calculator(raw_inputs)
         attrs["inputs"] = normalized_inputs

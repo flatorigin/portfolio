@@ -8,17 +8,17 @@ from .paving_estimators import number, quantity, text
 from .section_estimator_pricing import finalize_section_estimate
 
 
-def calculate_electrical_estimate(raw):
+def calculate_electrical_estimate(raw, trade="electrical"):
     if not isinstance(raw, dict):
         raise ValidationError({'inputs': 'Expected an object.'})
     projects = raw.get('projects')
     if not isinstance(projects, list) or not 1 <= len(projects) <= 50:
-        raise ValidationError({'projects': 'Add 1 to 50 electrical projects.'})
+        raise ValidationError({'projects': f'Add 1 to 50 {trade} projects.'})
 
     normalized, results = [], []
     for project_index, item in enumerate(projects):
         if not isinstance(item, dict):
-            raise ValidationError({'projects': 'Each electrical project must be an object.'})
+            raise ValidationError({'projects': f'Each {trade} project must be an object.'})
         project = {
             'id': text(item, 'id', str(project_index), limit=100),
             'service_id': text(item, 'service_id', 'custom', limit=100),
@@ -87,7 +87,7 @@ def calculate_electrical_estimate(raw):
 
     prepared = dict(raw)
     prepared['sections'] = normalized
-    inputs, calculation = finalize_section_estimate(prepared, normalized, results, 'electrical-v1')
+    inputs, calculation = finalize_section_estimate(prepared, normalized, results, f'{trade}-v1')
     inputs['projects'] = inputs.pop('sections')
     inputs['pricing_year'] = '2026-27'
     inputs['permit_fees_excluded'] = True
