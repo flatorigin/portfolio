@@ -45,6 +45,7 @@ from .flooring_estimators import calculate_flooring_estimate
 from .siding_estimators import calculate_siding_estimate
 from .decking_estimators import calculate_decking_estimate
 from .garage_coating_estimators import calculate_garage_coating_estimate
+from .electrical_estimators import calculate_electrical_estimate
 from .trade_estimators import calculate_fencing_estimate, calculate_windows_estimate, calculate_doors_estimate
 from .project_intake import get_project_intake_template, get_project_type_choices
 
@@ -369,12 +370,18 @@ class FeedbackLinksField(serializers.Field):
 
 class ProjectEstimateSerializer(serializers.ModelSerializer):
     estimate_number = serializers.CharField(read_only=True)
+    owner_username = serializers.CharField(source="user.username", read_only=True)
+    shared_with_username = serializers.CharField(source="shared_with.username", read_only=True)
+    viewer_role = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectEstimate
         fields = (
             "id",
             "estimate_number",
+            "owner_username",
+            "shared_with_username",
+            "viewer_role",
             "project",
             "estimate_type",
             "status",
@@ -387,20 +394,44 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "subtotal",
             "discount_amount",
             "final_price",
+            "share_token",
+            "workflow_status",
+            "homeowner_snapshot",
+            "contractor_notes",
+            "shared_at",
+            "returned_at",
             "created_at",
             "updated_at",
         )
         read_only_fields = (
             "id",
             "estimate_number",
+            "owner_username",
+            "shared_with_username",
+            "viewer_role",
             "calculation",
             "calculation_version",
             "subtotal",
             "discount_amount",
             "final_price",
+            "share_token",
+            "workflow_status",
+            "homeowner_snapshot",
+            "shared_at",
+            "returned_at",
             "created_at",
             "updated_at",
         )
+
+    def get_viewer_role(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and user.is_authenticated:
+            if user.id == obj.user_id:
+                return "homeowner"
+            if user.id == obj.shared_with_id:
+                return "contractor"
+        return "shared_viewer"
 
     def validate_project_name(self, value):
         cleaned = str(value or "").strip()
@@ -419,9 +450,9 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "estimate_type",
             getattr(self.instance, "estimate_type", ProjectEstimate.TYPE_PAINTING),
         )
-        if estimate_type not in {ProjectEstimate.TYPE_PAINTING, ProjectEstimate.TYPE_FRAMING, ProjectEstimate.TYPE_DRYWALL, ProjectEstimate.TYPE_PAVING, ProjectEstimate.TYPE_ROOFING, ProjectEstimate.TYPE_FLOORING, ProjectEstimate.TYPE_SIDING, ProjectEstimate.TYPE_DECKING, ProjectEstimate.TYPE_FENCING, ProjectEstimate.TYPE_WINDOWS, ProjectEstimate.TYPE_DOORS, ProjectEstimate.TYPE_GARAGE_COATING}:
+        if estimate_type not in {ProjectEstimate.TYPE_PAINTING, ProjectEstimate.TYPE_FRAMING, ProjectEstimate.TYPE_DRYWALL, ProjectEstimate.TYPE_PAVING, ProjectEstimate.TYPE_ROOFING, ProjectEstimate.TYPE_FLOORING, ProjectEstimate.TYPE_SIDING, ProjectEstimate.TYPE_DECKING, ProjectEstimate.TYPE_FENCING, ProjectEstimate.TYPE_WINDOWS, ProjectEstimate.TYPE_DOORS, ProjectEstimate.TYPE_GARAGE_COATING, ProjectEstimate.TYPE_ELECTRICAL}:
             raise serializers.ValidationError(
-                {"estimate_type": "Choose painting, framing, drywall, paving, roofing, flooring, siding, decking, fencing, windows, doors, or garage floor coating."}
+                {"estimate_type": "Choose painting, framing, drywall, paving, roofing, flooring, siding, decking, fencing, windows, doors, garage floor coating, or electrical."}
             )
 
         issue_date = attrs.get("issue_date", getattr(self.instance, "issue_date", None))
@@ -445,6 +476,7 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             ProjectEstimate.TYPE_WINDOWS: calculate_windows_estimate,
             ProjectEstimate.TYPE_DOORS: calculate_doors_estimate,
             ProjectEstimate.TYPE_GARAGE_COATING: calculate_garage_coating_estimate,
+            ProjectEstimate.TYPE_ELECTRICAL: calculate_electrical_estimate,
         }[estimate_type]
         normalized_inputs, calculation = calculator(raw_inputs)
         attrs["inputs"] = normalized_inputs

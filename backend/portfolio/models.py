@@ -1320,6 +1320,7 @@ class ProjectEstimate(models.Model):
     TYPE_WINDOWS = "windows"
     TYPE_DOORS = "doors"
     TYPE_GARAGE_COATING = "garage_coating"
+    TYPE_ELECTRICAL = "electrical"
     TYPE_CHOICES = [
         (TYPE_PAINTING, "Painting"),
         (TYPE_FRAMING, "Framing"),
@@ -1333,12 +1334,21 @@ class ProjectEstimate(models.Model):
         (TYPE_WINDOWS, "Windows"),
         (TYPE_DOORS, "Doors"),
         (TYPE_GARAGE_COATING, "Garage floor coating"),
+        (TYPE_ELECTRICAL, "Electrical"),
     ]
     STATUS_DRAFT = "draft"
     STATUS_FINAL = "final"
     STATUS_CHOICES = [
         (STATUS_DRAFT, "Draft"),
         (STATUS_FINAL, "Final"),
+    ]
+    WORKFLOW_OWNER_DRAFT = "owner_draft"
+    WORKFLOW_SHARED = "shared"
+    WORKFLOW_CONTRACTOR_REVISED = "contractor_revised"
+    WORKFLOW_CHOICES = [
+        (WORKFLOW_OWNER_DRAFT, "Homeowner draft"),
+        (WORKFLOW_SHARED, "Shared with contractor"),
+        (WORKFLOW_CONTRACTOR_REVISED, "Contractor revision returned"),
     ]
 
     user = models.ForeignKey(
@@ -1353,6 +1363,23 @@ class ProjectEstimate(models.Model):
         null=True,
         blank=True,
     )
+    shared_with = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="shared_project_estimates",
+        null=True,
+        blank=True,
+    )
+    share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    workflow_status = models.CharField(
+        max_length=30,
+        choices=WORKFLOW_CHOICES,
+        default=WORKFLOW_OWNER_DRAFT,
+    )
+    homeowner_snapshot = models.JSONField(default=dict, blank=True)
+    contractor_notes = models.TextField(blank=True, default="")
+    shared_at = models.DateTimeField(null=True, blank=True)
+    returned_at = models.DateTimeField(null=True, blank=True)
     estimate_type = models.CharField(
         max_length=40,
         choices=TYPE_CHOICES,

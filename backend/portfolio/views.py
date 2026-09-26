@@ -671,8 +671,96 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         _, calculation = calculate_doors_estimate(request.data)
         return Response(calculation)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def electrical_preview(self, request):
+        from .electrical_estimators import calculate_electrical_estimate
+        _, calculation = calculate_electrical_estimate(request.data)
+        return Response(calculation)
+
+    @action(detail=True, methods=['post'])
+    def share(self, request, pk=None):
+        estimate = self.get_object()
+        if estimate.user_id != request.user.id:
+            raise PermissionDenied('Only the homeowner can share this estimate.')
+        if estimate.estimate_type != ProjectEstimate.TYPE_ELECTRICAL:
+            raise ValidationError({'estimate_type': 'The contractor revision workflow is available for electrical estimates.'})
+        estimate.homeowner_snapshot = {
+            'inputs': estimate.inputs,
+            'calculation': estimate.calculation,
+            'final_price': str(estimate.final_price),
+            'captured_at': timezone.now().isoformat(),
+        }
+        estimate.workflow_status = ProjectEstimate.WORKFLOW_SHARED
+        estimate.shared_at = timezone.now()
+        estimate.returned_at = None
+        estimate.save(update_fields=['homeowner_snapshot', 'workflow_status', 'shared_at', 'returned_at', 'updated_at'])
+        return Response(self.get_serializer(estimate).data)
+
+    @action(
+        detail=False,
+        methods=['get'],
+        permission_classes=[permissions.AllowAny],
+        url_path=r'shared/(?P<token>[0-9a-f-]+)',
+    )
+    def shared_estimate(self, request, token=None):
+        estimate = get_object_or_404(
+            ProjectEstimate.objects.select_related('user', 'shared_with'),
+            share_token=token,
+            estimate_type=ProjectEstimate.TYPE_ELECTRICAL,
+        )
+        if estimate.workflow_status == ProjectEstimate.WORKFLOW_OWNER_DRAFT:
+            raise PermissionDenied('This estimate has not been shared.')
+        return Response(self.get_serializer(estimate).data)
+
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[IsAuthenticated],
+        url_path=r'shared/(?P<token>[0-9a-f-]+)/claim',
+    )
+    def claim_shared_estimate(self, request, token=None):
+        estimate = get_object_or_404(ProjectEstimate, share_token=token, estimate_type=ProjectEstimate.TYPE_ELECTRICAL)
+        if estimate.user_id == request.user.id:
+            raise ValidationError({'detail': 'The homeowner already owns this estimate.'})
+        if estimate.workflow_status == ProjectEstimate.WORKFLOW_OWNER_DRAFT:
+            raise PermissionDenied('This estimate has not been shared.')
+        if estimate.shared_with_id and estimate.shared_with_id != request.user.id:
+            raise PermissionDenied('Another contractor has already accepted this estimate.')
+        if not estimate.shared_with_id:
+            estimate.shared_with = request.user
+            estimate.save(update_fields=['shared_with', 'updated_at'])
+        return Response(self.get_serializer(estimate).data)
+
+    @action(detail=True, methods=['post'], url_path='return-revision')
+    def return_revision(self, request, pk=None):
+        estimate = self.get_object()
+        if estimate.shared_with_id != request.user.id:
+            raise PermissionDenied('Only the assigned contractor can return a revision.')
+        estimate.workflow_status = ProjectEstimate.WORKFLOW_CONTRACTOR_REVISED
+        estimate.returned_at = timezone.now()
+        estimate.save(update_fields=['workflow_status', 'returned_at', 'updated_at'])
+        return Response(self.get_serializer(estimate).data)
+
+    def update(self, request, *args, **kwargs):
+        estimate = self.get_object()
+        if estimate.shared_with_id == request.user.id:
+            unsupported = set(request.data) - {'inputs', 'contractor_notes', 'status'}
+            if unsupported:
+                raise ValidationError({'detail': 'Contractors may revise itemized pricing, notes, and estimate status only.'})
+            if estimate.estimate_type != ProjectEstimate.TYPE_ELECTRICAL:
+                raise PermissionDenied('This shared estimate cannot be revised here.')
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        estimate = self.get_object()
+        if estimate.user_id != request.user.id:
+            raise PermissionDenied('Only the homeowner can delete this estimate.')
+        return super().destroy(request, *args, **kwargs)
+
     def get_queryset(self):
-        return ProjectEstimate.objects.filter(user=self.request.user).select_related("project")
+        return ProjectEstimate.objects.filter(
+            Q(user=self.request.user) | Q(shared_with=self.request.user)
+        ).select_related("project", "user", "shared_with").distinct()
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
