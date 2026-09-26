@@ -116,9 +116,9 @@ export default function Estimates() {
                   Open estimate
                   <SymbolIcon name="arrow_forward" className="text-[18px]" />
                 </Link>
-                <div className="mt-3 flex justify-end gap-1">
-                  <button type="button" title="Share estimate" disabled={busyId !== null} onClick={() => action(estimate, "share")} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-50"><SymbolIcon name="share" className="text-[18px]" />Share</button>
-                  <button type="button" title={estimate.is_pinned ? "Unpin estimate" : "Pin estimate"} disabled={busyId !== null} aria-pressed={estimate.is_pinned} onClick={() => action(estimate, "pin")} className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-50 ${estimate.is_pinned ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-900"}`}><SymbolIcon name="push_pin" className="text-[18px]" />{estimate.is_pinned ? "Pinned" : "Pin"}</button>
+                <div className="mt-3 flex items-center justify-end gap-1">
+                  <button type="button" title="Share estimate" aria-label="Share estimate" disabled={busyId !== null} onClick={() => action(estimate, "share")} className="inline-flex size-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-50"><SymbolIcon name="share" className="text-[18px]" /></button>
+                  <button type="button" title={estimate.is_pinned ? "Unpin estimate" : "Pin estimate"} aria-label={estimate.is_pinned ? "Unpin estimate" : "Pin estimate"} disabled={busyId !== null} aria-pressed={estimate.is_pinned} onClick={() => action(estimate, "pin")} className={`inline-flex size-8 items-center justify-center rounded-full transition hover:bg-slate-100 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-50 ${estimate.is_pinned ? "text-slate-700" : "text-slate-400"}`}><SymbolIcon name="bookmark" fill={estimate.is_pinned ? 1 : 0} className="text-[18px]" /></button>
                 </div>
               </article>
             ))}
