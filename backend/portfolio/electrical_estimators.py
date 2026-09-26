@@ -26,6 +26,25 @@ def calculate_electrical_estimate(raw):
             'location': text(item, 'location', '', limit=240),
             'notes': text(item, 'notes', '', limit=1000),
         }
+        if 'ev_options' in item:
+            options = item['ev_options']
+            if not isinstance(options, dict):
+                raise ValidationError({'ev_options': 'Expected charger configuration.'})
+            project['ev_options'] = {'distance': float(number(options, 'distance', 30, maximum='300'))}
+            for key, choices, default in [
+                ('route', {'open', 'finished', 'exterior', 'trench'}, 'open'),
+                ('panel', {'unknown', 'ready', 'space', 'managed', 'upgrade'}, 'unknown'),
+                ('connection', {'hardwired', 'receptacle'}, 'hardwired'),
+            ]:
+                value = options.get(key, default)
+                if not isinstance(value, str) or value not in choices:
+                    raise ValidationError({'ev_options': f'Invalid {key}.'})
+                project['ev_options'][key] = value
+            for key in ['detached', 'includeCharger']:
+                value = options.get(key, False)
+                if not isinstance(value, bool):
+                    raise ValidationError({'ev_options': f'{key} must be true or false.'})
+                project['ev_options'][key] = value
         if not project['name']:
             raise ValidationError({'projects': 'Enter a project name.'})
         raw_lines = item.get('line_items')

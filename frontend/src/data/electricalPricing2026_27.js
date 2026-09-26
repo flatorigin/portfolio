@@ -57,7 +57,7 @@ export const ELECTRICAL_PRICE_CATEGORIES = [
       service("breaker", "Replace a standard circuit breaker", 225, 425, "each", "breaker bad replace panel switch", "Assumes a listed replacement breaker is readily available."),
       service("afci-breaker", "Replace an AFCI/GFCI breaker", 275, 500, "each", "afci gfci breaker arc fault ground fault", "Troubleshooting nuisance trips may be additional."),
       service("main-breaker", "Replace a main breaker", 500, 1200, "each", "main breaker main switch no power", "Utility coordination or obsolete equipment can increase cost."),
-      service("120-circuit", "Add a dedicated 120V circuit", 550, 1200, "circuit", "dedicated circuit refrigerator microwave freezer sump", "Includes a breaker and typical accessible wire run."),
+      service("120-circuit", "Add a dedicated 120V circuit", 550, 1200, "circuit", "dedicated circuit refrigerator microwave freezer sump dishwasher disposal", "Includes a breaker and typical accessible wire run, such as for a dishwasher, disposal, or refrigerator; electrician confirms appliance requirements."),
       service("240-circuit", "Add a dedicated 240V circuit", 750, 1800, "circuit", "dedicated 240 circuit dryer range oven ac heat pump", "Long runs and difficult access are additional."),
       service("surge", "Install whole-house surge protection", 450, 950, "installed", "surge protector lightning whole house protection", "Assumes compatible panel space."),
       service("grounding", "Correct service grounding and bonding", 500, 1800, "project", "ground grounding bond bonding water pipe gas pipe", "Final scope depends on the service and electrode system."),

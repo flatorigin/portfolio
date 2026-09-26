@@ -40,6 +40,20 @@ class ElectricalCalculationTests(SimpleTestCase):
         self.assertEqual(line['homeowner_unit_price'], '100')
         self.assertEqual(result['final_price'], '2500.00')
 
+    def test_ev_configuration_survives_normalization(self):
+        raw = electrical_inputs()
+        options = {'distance': 75, 'route': 'finished', 'panel': 'managed',
+                   'connection': 'receptacle', 'detached': True, 'includeCharger': False}
+        raw['projects'][0]['ev_options'] = options
+        normalized, _ = calculate_electrical_estimate(raw)
+        self.assertEqual(normalized['projects'][0]['ev_options'], options)
+        again, _ = calculate_electrical_estimate(normalized)
+        self.assertEqual(again['projects'][0]['ev_options'], options)
+        for key, value in [('distance', 301), ('route', 'invalid'), ('detached', 'false')]:
+            with self.subTest(key=key), self.assertRaises(ValidationError):
+                raw['projects'][0]['ev_options'] = {**options, key: value}
+                calculate_electrical_estimate(raw)
+
     def test_validation(self):
         for raw in (None, [], {}, {'projects': []}, {'projects': [None]}, {'projects': [{}]}):
             with self.subTest(raw=raw), self.assertRaises(ValidationError):
