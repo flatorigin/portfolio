@@ -51,6 +51,7 @@ const DeckingEstimator = lazy(() => import("./pages/DeckingEstimator.jsx"));
 const PlumbingEstimator = lazy(() => import("./pages/PlumbingEstimator.jsx"));
 const ElectricalEstimator = lazy(() => import("./pages/ElectricalEstimator.jsx"));
 const TradeEstimator = lazy(() => import("./pages/TradeEstimator.jsx"));
+const SharedEstimate = lazy(() => import("./pages/SharedEstimate.jsx"));
 const Estimates = lazy(() => import("./pages/Estimates.jsx"));
 
 function RouteFallback() {
@@ -105,6 +106,7 @@ createRoot(document.getElementById("root")).render(
           <Route path="plumbing-estimator" element={<PlumbingEstimator />} />
           <Route path="plumbing-estimator/:estimateId" element={<PlumbingEstimator />} />
           <Route path="plumbing-estimator/shared/:shareToken" element={<PlumbingEstimator />} />
+          <Route path="shared-estimate/:token" element={<SharedEstimate />} />
           <Route path="electrical-estimator" element={<ElectricalEstimator />} />
           <Route path="electrical-estimator/:estimateId" element={<ElectricalEstimator />} />
           <Route path="electrical-estimator/shared/:shareToken" element={<ElectricalEstimator />} />

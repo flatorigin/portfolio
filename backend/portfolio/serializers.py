@@ -374,6 +374,7 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="user.username", read_only=True)
     shared_with_username = serializers.CharField(source="shared_with.username", read_only=True)
     viewer_role = serializers.SerializerMethodField()
+    is_pinned = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectEstimate
@@ -383,6 +384,7 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "owner_username",
             "shared_with_username",
             "viewer_role",
+            "is_pinned",
             "project",
             "estimate_type",
             "status",
@@ -410,6 +412,7 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "owner_username",
             "shared_with_username",
             "viewer_role",
+            "is_pinned",
             "calculation",
             "calculation_version",
             "subtotal",
@@ -423,6 +426,10 @@ class ProjectEstimateSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def get_is_pinned(self, obj):
+        user = getattr(self.context.get("request"), "user", None)
+        return bool(user and user.is_authenticated and any(person.pk == user.pk for person in obj.pinned_by.all()))
 
     def get_viewer_role(self, obj):
         request = self.context.get("request")

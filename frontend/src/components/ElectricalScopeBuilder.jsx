@@ -1,3 +1,4 @@
+import LeaveEstimateButton from "./LeaveEstimateButton";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
@@ -201,7 +202,7 @@ export default forwardRef(function ElectricalScopeBuilder({ estimateId, shareTok
       <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-700"><strong>Excluded from this project price:</strong> permit fees, inspection fees, utility charges, township administration and filing legwork. Drywall, plaster and paint restoration are excluded unless added as a line item.</div>
       {notice && <div role="status" className="rounded-xl border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700">{notice}</div>}
       {shareUrl && record?.workflow_status !== "owner_draft" && role === "homeowner" && <div className="rounded-xl border border-stone-200 bg-stone-50 p-4"><div className="text-sm font-bold text-stone-900">Contractor review link</div><div className="mt-2 flex flex-col gap-2 sm:flex-row"><Input readOnly value={shareUrl} className="bg-white text-sm" /><Button type="button" onClick={() => navigator.clipboard.writeText(shareUrl).then(() => setNotice("Contractor link copied."))}>Copy link</Button></div></div>}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2"><LeaveEstimateButton pendingKey={PENDING_KEY} disabled={busy} />
         {canEdit && <Button type="button" disabled={busy || calculating || !draft.inputs.projects.length} onClick={save}>{record?.id ? "Save itemized estimate" : authed ? "Save itemized estimate" : "Create account to save"}</Button>}
         {role === "homeowner" && record?.id && <button type="button" disabled={busy} onClick={share} className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50">Share with contractor</button>}
         {role === "contractor" && <button type="button" disabled={busy || calculating} onClick={returnRevision} className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800">Save and return revision</button>}

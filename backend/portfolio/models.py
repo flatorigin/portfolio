@@ -1372,6 +1372,9 @@ class ProjectEstimate(models.Model):
         null=True,
         blank=True,
     )
+    pinned_by = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="pinned_estimates")
+    client_share_token = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    client_snapshot = models.JSONField(default=dict, blank=True)
     share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     workflow_status = models.CharField(
         max_length=30,

@@ -28,6 +28,28 @@ export default function Estimates() {
   const [estimates, setEstimates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState(null);
+  const [shareUrl, setShareUrl] = useState("");
+  async function action(estimate, kind) {
+    if (kind === "delete" && !window.confirm(`Delete “${estimate.project_name}”? This cannot be undone and its shared links will stop working.`)) return;
+    setBusyId(estimate.id); setError("");
+    try {
+      if (kind === "delete") {
+        await api.delete(`/estimates/${estimate.id}/`);
+        setEstimates(items => items.filter(item => item.id !== estimate.id));
+      } else if (kind === "pin") {
+        const {data} = await api.post(`/estimates/${estimate.id}/pin/`, {pinned: !estimate.is_pinned});
+        setEstimates(items => items.map(item => item.id === estimate.id ? {...item, is_pinned: data.is_pinned} : item));
+      } else {
+        const {data} = await api.post(`/estimates/${estimate.id}/client-share/`);
+        const url = `${window.location.origin}/shared-estimate/${data.token}`;
+        setShareUrl(url);
+        try { await navigator.clipboard.writeText(url); } catch { /* The selectable link remains available. */ }
+      }
+    } catch { setError(`Could not ${kind} this estimate. Please try again.`); }
+    finally { setBusyId(null); }
+  }
+
 
   useEffect(() => {
     let cancelled = false;
@@ -68,11 +90,12 @@ export default function Estimates() {
 
       <Container className="py-8">
         {error ? <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+        {shareUrl && <div className="mb-5 rounded-xl border border-stone-200 bg-white p-4"><p className="text-sm text-stone-700">Client link — anyone with this link can view the saved estimate. Share again after saving changes to update this version.</p><input aria-label="Client estimate link" readOnly value={shareUrl} onFocus={event => event.target.select()} className="mt-2 w-full rounded-lg border p-2 text-sm" /><a href={shareUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm underline">Preview client view</a><button type="button" onClick={() => setShareUrl("")} className="ml-4 text-sm">Dismiss</button></div>}
         {loading ? (
           <div className="text-sm text-slate-500">Loading estimates...</div>
         ) : estimates.length ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {estimates.map((estimate) => (
+            {[...estimates].sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned)).map((estimate) => (
               <article key={estimate.id} className="flex min-h-56 flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium capitalize text-slate-600">
@@ -84,6 +107,11 @@ export default function Estimates() {
                   ].join(" ")}>
                     {estimate.status || "draft"}
                   </span>
+                </div>
+                <div className="mt-4 flex gap-3 text-xs font-semibold">
+                  <button type="button" disabled={busyId !== null} aria-pressed={estimate.is_pinned} onClick={() => action(estimate, "pin")} className="text-stone-600 hover:text-stone-900 disabled:opacity-50">{estimate.is_pinned ? "Unpin" : "Pin"}</button>
+                  <button type="button" disabled={busyId !== null} onClick={() => action(estimate, "share")} className="text-stone-600 hover:text-stone-900 disabled:opacity-50">Share</button>
+                  {estimate.viewer_role === "homeowner" && <button type="button" disabled={busyId !== null} onClick={() => action(estimate, "delete")} className="ml-auto text-red-700 disabled:opacity-50">Delete</button>}
                 </div>
                 <h2 className="mt-4 break-words text-lg font-bold text-slate-950">{estimate.project_name}</h2>
                 <div className="mt-2 text-xs text-slate-500">{estimate.estimate_number} / Updated {updatedDate(estimate.updated_at)}</div>

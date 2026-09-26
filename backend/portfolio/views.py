@@ -684,6 +684,52 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
         return Response(calculation)
 
     @action(detail=True, methods=['post'])
+    def pin(self, request, pk=None):
+        estimate = self.get_object()
+        value = request.data.get('pinned')
+        if not isinstance(value, bool):
+            raise ValidationError({'pinned': 'Expected true or false.'})
+        if value:
+            estimate.pinned_by.add(request.user)
+        else:
+            estimate.pinned_by.remove(request.user)
+        return Response({'is_pinned': value})
+
+    @action(detail=True, methods=['post'], url_path='client-share')
+    def client_share(self, request, pk=None):
+        import uuid
+        estimate = self.get_object()
+        if estimate.user_id != request.user.id and estimate.shared_with_id != request.user.id:
+            raise PermissionDenied('You cannot share this estimate.')
+        # Separate read-only snapshot: no account data, cost inputs or contractor access token.
+        estimate.client_snapshot = {
+            'project_name': estimate.project_name,
+            'estimate_number': estimate.estimate_number,
+            'estimate_type': estimate.estimate_type,
+            'issue_date': str(estimate.issue_date),
+            'valid_until': str(estimate.valid_until) if estimate.valid_until else '',
+            'final_price': str(estimate.final_price),
+            'status': estimate.status,
+            'scope': [{'name': section.get('name', 'Work'),
+                       'items': [line.get('name', '') for line in section.get('line_items', []) if line.get('included', True)]}
+                      for section in estimate.calculation.get('sections', [])],
+            'notes': estimate.inputs.get('notes', ''),
+            'included_scope': estimate.inputs.get('included_scope', []),
+            'excluded_scope': estimate.inputs.get('excluded_scope', []),
+            'shared_at': timezone.now().isoformat(),
+        }
+        if not estimate.client_share_token:
+            estimate.client_share_token = uuid.uuid4()
+        estimate.save(update_fields=['client_snapshot', 'client_share_token'])
+        return Response({'token': str(estimate.client_share_token)})
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny],
+            url_path=r'client/(?P<token>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})')
+    def client_view(self, request, token=None):
+        estimate = get_object_or_404(ProjectEstimate, client_share_token=token)
+        return Response(estimate.client_snapshot)
+
+    @action(detail=True, methods=['post'])
     def share(self, request, pk=None):
         estimate = self.get_object()
         if estimate.user_id != request.user.id:
@@ -766,7 +812,7 @@ class ProjectEstimateViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return ProjectEstimate.objects.filter(
             Q(user=self.request.user) | Q(shared_with=self.request.user)
-        ).select_related("project", "user", "shared_with").distinct()
+        ).select_related("project", "user", "shared_with").prefetch_related("pinned_by").distinct()
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

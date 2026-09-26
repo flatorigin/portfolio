@@ -1,3 +1,4 @@
+import LeaveEstimateButton from "../components/LeaveEstimateButton";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -485,7 +486,7 @@ export default function ProjectEstimator() {
         <Container className="py-7 sm:py-9">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div><Link to={authed ? "/estimates" : "/project-estimator"} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 hover:text-slate-800"><SymbolIcon name="arrow_back" className="text-[17px]" />{authed ? "Estimates" : "Project Estimator"}</Link><h1 className="mt-2 text-3xl font-bold text-slate-950">Painting estimate</h1><p className="mt-2 text-sm leading-6 text-slate-600">Build one estimate with as many independently priced sections as the project needs.</p></div>
-            <div className="flex gap-2">{authed ? <Link to="/project-estimator/new" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"><SymbolIcon name="add" className="text-[18px]" />New</Link> : null}<Button type="button" onClick={saveEstimate} disabled={busy} className="h-11 gap-2"><SymbolIcon name={authed ? "save" : "person_add"} className="text-[18px]" />{authed ? "Save estimate" : "Create account to save"}</Button></div>
+            <div className="flex gap-2">{authed ? <Link to="/project-estimator/new" className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"><SymbolIcon name="add" className="text-[18px]" />New</Link> : null}<LeaveEstimateButton pendingKey={PENDING_ESTIMATE_KEY} disabled={busy} /><Button type="button" onClick={saveEstimate} disabled={busy} className="h-11 gap-2"><SymbolIcon name={authed ? "save" : "person_add"} className="text-[18px]" />{authed ? "Save estimate" : "Create account to save"}</Button></div>
           </div>
         </Container>
       </div>
