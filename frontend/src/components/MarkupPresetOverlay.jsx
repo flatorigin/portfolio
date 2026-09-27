@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { eraserStrokeOpacity, lockedAnnotationGroupOpacity } from "../utils/markupLock";
 import { isWallStroke, wallOutlinePathD, wallOutlineWidthFor } from "../utils/wallStroke";
 
@@ -402,17 +403,35 @@ export function getMarkupAnnotations(item) {
   return Array.isArray(markupVersion?.annotations) ? markupVersion.annotations : [];
 }
 
-export function MarkupCanvasPreview({ version = null, backgroundUrl = "", annotations = null, visibleLayers = null, lockedLayers = null, measurementCalibration = null, className = "", ariaLabel = "Saved project markup" }) {
+export function MarkupCanvasPreview({ version = null, backgroundUrl = "", annotations = null, visibleLayers = null, lockedLayers = null, measurementCalibration = null, className = "", ariaLabel = "Saved project markup", cardCover = false }) {
   const savedAnnotations = annotations || version?.annotations || [];
   const savedVisibleLayers = visibleLayers || version?.visible_layers || {};
   const savedLockedLayers = lockedLayers || version?.locked_layers || {};
   const savedCalibration = measurementCalibration || version?.measurement_calibration || {};
   const resolvedBackgroundUrl = backgroundUrl || version?.background_url || "";
+  const [photoFrame, setPhotoFrame] = useState(null);
+  useEffect(() => {
+    setPhotoFrame(null);
+    if (!cardCover || !resolvedBackgroundUrl || version?.version_type === "rough_plan") return;
+    let active = true;
+    const image = new Image();
+    image.onload = () => {
+      if (!active || !image.naturalWidth || !image.naturalHeight) return;
+      const scale = Math.min(MARKUP_CANVAS_WIDTH / image.naturalWidth, MARKUP_CANVAS_HEIGHT / image.naturalHeight);
+      const width = image.naturalWidth * scale;
+      const height = image.naturalHeight * scale;
+      setPhotoFrame({ url: resolvedBackgroundUrl, box: `${(MARKUP_CANVAS_WIDTH - width) / 2} ${(MARKUP_CANVAS_HEIGHT - height) / 2} ${width} ${height}` });
+    };
+    image.src = resolvedBackgroundUrl;
+    return () => { active = false; };
+  }, [cardCover, resolvedBackgroundUrl, version?.version_type]);
+  // Crop only the card viewport; the photo and annotation coordinates stay unchanged.
+  const cardViewBox = cardCover && photoFrame?.url === resolvedBackgroundUrl ? photoFrame.box : null;
   const items = orderedVisibleItems(savedAnnotations, savedVisibleLayers);
   const measurementGeometry = Number(savedCalibration.scale || 0) > 0 ? { scale: Number(savedCalibration.scale), unit: savedCalibration.unit || "in" } : null;
   const referenceLineId = savedCalibration.referenceLineId || "";
   return (
-    <svg className={`block bg-white ${className}`} viewBox={`0 0 ${MARKUP_CANVAS_WIDTH} ${MARKUP_CANVAS_HEIGHT}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={ariaLabel}>
+    <svg className={`block bg-white ${className}`} viewBox={cardViewBox || `0 0 ${MARKUP_CANVAS_WIDTH} ${MARKUP_CANVAS_HEIGHT}`} preserveAspectRatio={cardViewBox ? "xMidYMid slice" : "xMidYMid meet"} role="img" aria-label={ariaLabel}>
       <MarkupCanvasDefs colors={annotationColors(items)} />
       <rect width={MARKUP_CANVAS_WIDTH} height={MARKUP_CANVAS_HEIGHT} fill="#f8fafc" />
       {resolvedBackgroundUrl ? <image href={resolvedBackgroundUrl} x="0" y="0" width={MARKUP_CANVAS_WIDTH} height={MARKUP_CANVAS_HEIGHT} preserveAspectRatio="xMidYMid meet" /> : null}

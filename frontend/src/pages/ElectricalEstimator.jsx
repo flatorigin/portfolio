@@ -1,3 +1,4 @@
+import EstimatorGuidance from "../components/EstimatorGuidance";
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Container } from "../ui";
@@ -39,6 +40,7 @@ export default function ElectricalEstimator() {
         <div className="mt-4 flex flex-wrap items-center gap-3"><h1 className="text-2xl font-bold sm:text-3xl">Residential electrical estimator</h1><span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">{ELECTRICAL_PRICEBOOK_META.version}</span></div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">Plan electrical work for your home in Media & the Main Line. Add services, review the itemized starting price, and share your scope with an electrician.</p>
       </header>
+      <EstimatorGuidance />
       <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="intent-heading">
         <h2 id="intent-heading" className="text-lg font-semibold">What electrical work do you need?</h2>
         <p className="mt-1 text-sm text-stone-600">Describe a problem or start with a room, such as kitchen, bathroom, or basement.</p>

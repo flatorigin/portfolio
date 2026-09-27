@@ -1,3 +1,4 @@
+import LandingFeatureIcon from "../components/LandingFeatureIcon";
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import api from "../api";
@@ -129,10 +130,10 @@ function RoleCard({ card }) {
           <div className="mt-4 flex-1 space-y-2">
             {card.features.map((feature) => (
               <div key={feature} className="flex items-start gap-2">
-                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-50">
+                <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-50">
                   <SymbolIcon
                     name="check"
-                    className="text-[12px] text-red-400"
+                    className="text-[12px] text-emerald-700"
                   />
                 </span>
                 <span className="text-sm text-slate-600">{feature}</span>
@@ -241,22 +242,25 @@ export default function LandingPage() {
         <Container>
           <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-red-500">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Free planning tool
               </div>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-                Painting Project Estimator
+                Project Estimator
               </h2>
               <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
-                Choose the project size, wall height, surfaces, condition, materials, and additional work. FlatOrigin organizes the details into a complete on-screen estimate.
+                Choose your service, add quantities and materials, and review an itemized estimate. Save your plan and share it when you’re ready.
               </p>
+              <div className="mt-5 flex flex-wrap gap-2" aria-label="Available estimator services">
+                {["Painting", "Framing", "Drywall", "Flooring", "Roofing", "Siding", "Decking", "Paving", "Fencing", "Windows", "Doors", "Garage coating", "Electrical", "Plumbing"].map(service => <span key={service} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">{service}</span>)}
+              </div>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   to="/project-estimator"
                   className="inline-flex h-12 items-center gap-2.5 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
                 >
                   <SymbolIcon name="calculate" className="text-[20px]" />
-                  Estimate a painting project
+                  Estimate your project
                 </Link>
                 <span className="inline-flex h-12 items-center text-sm font-medium text-slate-500">
                   No account required
@@ -267,7 +271,7 @@ export default function LandingPage() {
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">FlatOrigin Estimate</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Example estimate · Painting</div>
                   <div className="mt-1 text-lg font-semibold text-slate-950">Interior painting</div>
                 </div>
                 <div className="text-right text-xs leading-5 text-slate-500">500 sq ft<br />Standard repaint</div>
@@ -307,11 +311,9 @@ export default function LandingPage() {
           </p>
         </div>
         <div className="mx-auto mt-12 grid max-w-5xl gap-8 px-4 sm:grid-cols-2 lg:grid-cols-4">
-          {whyFeatures.map(([icon, title, copy]) => (
+          {whyFeatures.map(([icon, title, copy], index) => (
             <div key={title} className="text-center">
-              <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
-                <SymbolIcon name={icon} className="text-[24px]" />
-              </span>
+              <LandingFeatureIcon name={icon} index={index} centered />
               <h3 className="mt-4 text-base font-semibold text-slate-900">
                 {title}
               </h3>

@@ -1,7 +1,9 @@
+import { EstimatorServiceBadges } from "../components/EstimatorGuidance";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api";
 import { Button, Container } from "../ui";
+import { guideFeatureUpdates } from "../data/guideFeatureUpdates";
 
 const homeownerGuideCategories = [
   {
@@ -458,6 +460,7 @@ const guideCopy = {
 export default function ProjectGuides() {
   const { audience } = useParams();
   const [profileType, setProfileType] = useState("");
+  const [opened, setOpened] = useState({});
 
   const explicitAudience =
     audience === "contractors"
@@ -489,192 +492,56 @@ export default function ProjectGuides() {
 
   const guideAudience = explicitAudience || (profileType === "contractor" ? "contractor" : "homeowner");
   const categories = useMemo(
-    () => (guideAudience === "contractor" ? contractorGuideCategories : homeownerGuideCategories),
+    () => {
+      const existing = guideAudience === "contractor" ? contractorGuideCategories : homeownerGuideCategories;
+      return [existing[0], ...guideFeatureUpdates(guideAudience), ...existing.slice(1)];
+    },
     [guideAudience]
   );
   const quickChecklists =
     guideAudience === "contractor" ? contractorQuickChecklists : homeownerQuickChecklists;
   const copy = guideCopy[guideAudience];
 
-  return (
-    <div className="pb-20 text-slate-900">
-      <section className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-transparent">
-        <Container className="py-14 sm:py-18">
-          <div className="max-w-4xl">
-            <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-              {copy.eyebrow}
-            </div>
-            <h1 className="mt-4 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-              {copy.title}
-            </h1>
-            <p className="mt-5 max-w-3xl text-base leading-7 text-slate-600 sm:text-lg">
-              {copy.intro}
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link to="/dashboard">
-                <Button className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold hover:bg-slate-800">
-                  {copy.primaryCta}
-                </Button>
-              </Link>
-              <Link
-                to={copy.secondaryTo}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                {copy.secondaryCta}
-              </Link>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <Container className="py-12 sm:py-16">
-        <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="lg:sticky lg:top-24 lg:self-start">
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md">
-              <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                Categories
-              </div>
-              <nav className="mt-4 space-y-1">
-                <a
-                  href="#why-this-matters"
-                  className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                >
-                  Why this matters
-                </a>
-                {categories.map((category) => (
-                  <a
-                    key={category.id}
-                    href={`#${category.id}`}
-                    className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    {category.title}
-                  </a>
-                ))}
-              </nav>
-            </div>
-          </aside>
-
-          <div className="space-y-10">
-            <section
-              id="why-this-matters"
-              className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md sm:p-8"
-            >
-              <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                Why this matters
-              </div>
-              <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-                {copy.whyTitle}
-              </h2>
-              <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
-                {copy.whyCopy}
-              </p>
-              <div className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                {copy.whyCards.map(([title, text], index) => (
-                  <div
-                    key={title}
-                    className="flex gap-4 border-b border-slate-200 p-5 last:border-b-0 sm:items-start"
-                  >
-                    <div className="flex shrink-0 flex-col items-center gap-3">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-950 text-xs font-bold text-white">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                      <span className="h-full min-h-10 w-px bg-slate-200" />
-                    </div>
-                    <div className="min-w-0 sm:grid sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-6">
-                      <h3 className="text-[15px] font-bold leading-5 text-slate-950">
-                        {title}
-                      </h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-600 sm:mt-0">
-                        {text}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md sm:p-8">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                    Quick checklist
-                  </div>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                    {copy.checklistTitle}
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                    {copy.checklistCopy}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {quickChecklists.map((item) => (
-                  <div key={item} className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm font-medium text-slate-700">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {categories.map((category) => (
-              <section key={category.id} id={category.id} className="scroll-mt-28">
-                <div className="mb-5">
-                  <div className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                    {category.title}
-                  </div>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-                    {category.intro}
-                  </h2>
-                </div>
-
-                <div className="grid gap-4">
-                  {category.guides.map((guide) => (
-                    <div key={guide.title} className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm backdrop-blur-md">
-                      <h3 className="text-lg font-semibold text-slate-900">{guide.title}</h3>
-                      <ul className="mt-4 grid gap-3 text-sm leading-6 text-slate-600">
-                        {guide.points.map((point) => (
-                          <li key={point} className="flex gap-3">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
-                            <span>{point}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            <section className="rounded-2xl border border-slate-200 bg-slate-100 px-6 py-10 text-center sm:px-12">
-              <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                {copy.finalTitle}
-              </h2>
-              <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                {copy.finalCopy}
-              </p>
-              <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Link to="/dashboard">
-                  <Button className="min-w-[180px] rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold hover:bg-slate-800">
-                    {copy.primaryCta}
-                  </Button>
-                </Link>
-                <Link
-                  to={copy.finalLinkTo}
-                  className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                >
-                  {copy.finalLink}
-                </Link>
-                <Link
-                  to="/project-helpers"
-                  className="text-sm font-medium text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                >
-                  View Project Helpers
-                </Link>
-              </div>
-            </section>
-          </div>
-        </div>
-      </Container>
+  const sections = [
+    { id: "why-this-matters", title: "Why this matters", intro: copy.whyCopy, guides: copy.whyCards.map(([title, text]) => ({ title, points: [text] })) },
+    ...categories,
+    { id: "quick-checklist", title: copy.checklistTitle, intro: copy.checklistCopy, guides: [{ title: "Quick checklist", points: quickChecklists }] },
+  ];
+  const keys = sections.map(section => section.id);
+  const allOpen = keys.every(key => opened[key]);
+  const toggle = key => setOpened(current => ({ ...current, [key]: !current[key] }));
+  useEffect(() => { setOpened({}); }, [guideAudience]);
+  const box = (key, title, content) => <div className={`overflow-hidden rounded-2xl border bg-white transition-colors duration-200 ${opened[key] ? "border-slate-300 shadow-sm" : "border-slate-200"}`}>
+    <h2><button id={`guide-title-${key}`} type="button" aria-expanded={Boolean(opened[key])} aria-controls={`guide-body-${key}`} onClick={() => toggle(key)} className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left text-lg font-semibold text-slate-900 transition-colors hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-slate-400 sm:px-7">
+      <span>{title}</span><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={`size-5 shrink-0 text-slate-400 transition-transform duration-300 motion-reduce:transition-none ${opened[key] ? "rotate-180" : ""}`}><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+    </button></h2>
+    <div id={`guide-body-${key}`} role="region" aria-labelledby={`guide-title-${key}`} aria-hidden={!opened[key]} inert={opened[key] ? undefined : ""} className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out motion-reduce:transition-none ${opened[key] ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+      <div className="min-h-0 overflow-hidden"><div className="space-y-6 border-t border-slate-100 px-6 pb-7 pt-5 sm:px-7">{content}</div></div>
     </div>
-  );
+  </div>;
+
+  return <div className="min-h-screen bg-stone-50 pb-16 text-slate-900">
+    <Container className="py-10">
+      <div className="flex flex-wrap gap-2 text-sm"><Link to="/guides/homeowners" aria-current={guideAudience === "homeowner" ? "page" : undefined} className="rounded-full border border-slate-200 bg-white px-4 py-2 aria-[current=page]:bg-slate-900 aria-[current=page]:text-white">Homeowner guides</Link><Link to="/guides/contractors" aria-current={guideAudience === "contractor" ? "page" : undefined} className="rounded-full border border-slate-200 bg-white px-4 py-2 aria-[current=page]:bg-slate-900 aria-[current=page]:text-white">Contractor guides</Link></div>
+      <h1 className="mt-5 text-3xl font-bold sm:text-4xl">{copy.eyebrow}</h1>
+      <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Plan the work, build an estimate, share the scope and compare proposals. Open a topic below for step-by-step guidance.</p>
+      <button type="button" onClick={() => setOpened(Object.fromEntries(keys.map(key => [key, !allOpen])))} className="mt-5 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">{allOpen ? "Collapse all" : "Expand all"}</button>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <nav aria-label="Guide topics" className="flex flex-wrap gap-1 text-sm lg:sticky lg:top-24 lg:block lg:max-h-[75vh] lg:overflow-y-auto lg:self-start">{sections.map(section => <a key={section.id} href={`#${section.id}`} onClick={() => setOpened(current => ({ ...current, [section.id]: true }))} className="block rounded-lg px-3 py-2 text-slate-600 hover:bg-white hover:text-slate-900">{section.title}</a>)}</nav>
+        <div className="space-y-4">{sections.map(section => <section id={section.id} key={section.id} className="scroll-mt-24">
+          {box(section.id, section.title, <>
+            {section.id === "estimators" && <EstimatorServiceBadges />}
+            <p className="text-sm leading-6 text-slate-600">{section.intro}</p>
+            {section.to && <Link to={section.to} className="inline-block text-sm font-semibold text-slate-700 underline underline-offset-4">{section.link} →</Link>}
+            <div className="divide-y divide-slate-100">{section.guides.map((guide, index) => <article key={guide.title} className="py-6 first:pt-0 last:pb-0">
+              <div className="flex items-start gap-3"><span aria-hidden="true" className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-500">{index + 1}</span><h3 className="text-base font-semibold leading-7 text-slate-900">{guide.title}</h3></div>
+              <ul className="mt-3 space-y-3 pl-9 text-sm leading-7 text-slate-600">{guide.points.map(point => <li key={point} className="flex gap-3"><span aria-hidden="true" className="mt-3 size-1 shrink-0 rounded-full bg-slate-400" /><span>{point}</span></li>)}</ul>
+              {guide.to && <Link to={guide.to} className="ml-9 mt-4 inline-block text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-950">{guide.link} →</Link>}
+            </article>)}</div>
+          </>)}
+        </section>)}</div>
+      </div>
+      <div className="mt-8 flex flex-wrap gap-3"><Link to="/project-estimator"><Button>Explore estimators</Button></Link><Link to="/dashboard" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold">{copy.primaryCta}</Link></div>
+    </Container>
+  </div>;
 }

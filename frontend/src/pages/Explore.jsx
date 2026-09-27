@@ -1,3 +1,4 @@
+import ProjectCardCover from "../components/ProjectCardCover";
 // =======================================
 // file: frontend/src/pages/Explore.jsx
 // Uses ProjectImage.order to choose the cover (order=0)
@@ -1762,7 +1763,7 @@ export default function Explore() {
               {/* Cover image with category badge */}
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
                 {coverUrl ? (
-                  <img
+                  <ProjectCardCover project={p}
                     src={coverUrl}
                     alt={p.title || "project cover"}
                     className="h-full w-full object-cover transition duration-300 group-hover:scale-105"

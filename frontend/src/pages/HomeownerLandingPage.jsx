@@ -1,3 +1,4 @@
+import LandingFeatureIcon from "../components/LandingFeatureIcon";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
@@ -221,11 +222,9 @@ function FeatureStrip() {
 
   return (
     <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-      {features.map(([icon, title, copy]) => (
+      {features.map(([icon, title, copy], index) => (
         <div key={title} className="text-center">
-          <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-400">
-            <SymbolIcon name={icon} className="text-[24px]" />
-          </span>
+          <LandingFeatureIcon name={icon} index={index} centered />
           <h3 className="mt-4 text-base font-semibold text-slate-900">
             {title}
           </h3>
@@ -255,15 +254,13 @@ function HomeownerUpdates({ primaryCtaPath }) {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        {homeownerUpdates.map(([icon, title, copy, cta, to]) => (
+        {homeownerUpdates.map(([icon, title, copy, cta, to], index) => (
           <Link
             key={title}
             to={title === "Project Planner" ? primaryCtaPath : to}
             className="group rounded-xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
           >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-400">
-              <SymbolIcon name={icon} className="text-[19px]" />
-            </span>
+            <LandingFeatureIcon name={icon} index={index} compact />
             <h3 className="mt-4 font-semibold text-slate-900">{title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-500">{copy}</p>
             <span className="mt-4 inline-flex items-center text-sm font-semibold text-slate-900">
@@ -541,15 +538,13 @@ export default function HomeownerLandingPage() {
               Helpful before you hire
             </h2>
             <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {guides.map(([icon, title, copy]) => (
+              {guides.map(([icon, title, copy], index) => (
                 <Link
                   key={title}
                   to="/guides"
                   className="group rounded-xl border border-slate-200 bg-white p-5 transition hover:shadow-md"
                 >
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-400">
-                    <SymbolIcon name={icon} className="text-[18px]" />
-                  </span>
+                  <LandingFeatureIcon name={icon} index={index} compact />
                   <h3 className="mt-3 font-semibold text-slate-900">{title}</h3>
                   <p className="mt-1 text-sm leading-relaxed text-slate-500">
                     {copy}

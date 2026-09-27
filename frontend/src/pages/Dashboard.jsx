@@ -1,3 +1,4 @@
+import ProjectCardCover from "../components/ProjectCardCover";
 // ============================================================================
 // file: frontend/src/pages/Dashboard.jsx
 // ============================================================================
@@ -1378,7 +1379,7 @@ export default function Dashboard() {
                   >
                     <div className="relative">
                       {coverSrc ? (
-                        <img
+                        <ProjectCardCover project={p}
                           src={coverSrc}
                           alt=""
                           className="block h-36 w-full object-cover"
@@ -1859,7 +1860,7 @@ export default function Dashboard() {
                   }}
                 >
                   {coverSrc ? (
-                    <img
+                    <ProjectCardCover project={p}
                       src={coverSrc}
                       alt=""
                       className="block h-36 w-full object-cover"
@@ -1987,7 +1988,7 @@ export default function Dashboard() {
                 >
                   <div className="relative">
                     {coverSrc ? (
-                      <img
+                      <ProjectCardCover project={p}
                         src={coverSrc}
                         alt={p.title || "private job cover"}
                         className="h-36 w-full object-cover"
