@@ -8,6 +8,9 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
+// Public account-recovery failures must stay on their page, without a JWT refresh.
+const isPublicAuthRequest = (url) => /\/auth\/(users\/(activation|resend_activation)\/?|jwt\/create\/?)$/.test(String(url || ""));
+
 let refreshPromise = null;
 let redirectingToLogin = false;
 
@@ -29,7 +32,7 @@ function clearAuthAndRedirect() {
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access");
-  if (token) {
+  if (token && !isPublicAuthRequest(config.url)) {
     // keep Bearer (your backend accepts it in SIMPLE_JWT)
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -40,6 +43,8 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+
+    if (isPublicAuthRequest(original?.url)) return Promise.reject(error);
 
     const status = error.response?.status;
     const url = String(original?.url || "");

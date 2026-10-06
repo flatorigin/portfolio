@@ -22,3 +22,18 @@ class AccountsConfig(AppConfig):
             sender=User,
             dispatch_uid="accounts.ensure_profile",
         )
+
+        from django.utils import timezone
+        from djoser.signals import user_activated
+
+        def mark_email_verified(sender, user, **kwargs):
+            profile, _ = Profile.objects.get_or_create(user=user)
+            if not profile.email_verified_at:
+                profile.email_verified_at = timezone.now()
+                profile.save(update_fields=["email_verified_at"])
+
+        user_activated.connect(
+            mark_email_verified,
+            dispatch_uid="accounts.mark_email_verified",
+            weak=False,
+        )

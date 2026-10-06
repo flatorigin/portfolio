@@ -1,3 +1,4 @@
+from accounts.views import ConfirmationResendViewSet
 # backend/backend/urls.py
 
 from django.contrib import admin
@@ -55,6 +56,11 @@ urlpatterns = [
         "api/auth/users/",
         SafeUserCreateViewSet.as_view({"post": "create"}),
         name="safe-user-create",
+    ),
+    path(
+        "api/auth/users/resend_activation/",
+        ConfirmationResendViewSet.as_view({"post": "resend_activation"}),
+        name="resend-confirmation",
     ),
     path("api/auth/", include("djoser.urls")),
     path("api/auth/", include("djoser.urls.jwt")),

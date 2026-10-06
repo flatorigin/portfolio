@@ -1,3 +1,4 @@
+import ResendConfirmation from "../components/ResendConfirmation";
 // frontend/src/pages/Login.jsx
 import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
@@ -28,12 +29,9 @@ export default function Login() {
       });
       navigate(safeNext);
     } catch (err) {
-      const detail = String(err?.response?.data?.detail || "").toLowerCase();
-      setError(
-        detail.includes("active")
-          ? "Please confirm your email before logging in."
-          : "Invalid username or password"
-      );
+      setError(err?.response?.status === 401
+        ? "We couldn’t sign you in. Check your username and password. If you haven’t confirmed your email yet, use the resend option below."
+        : "Sign-in could not be completed. Please try again shortly.");
     }
   };
 
@@ -41,6 +39,8 @@ export default function Login() {
     <div className="flex min-h-[60vh] items-center justify-center">
       <Card className="w-full max-w-md p-6">
         <h1 className="mb-4 text-xl font-semibold">Log in</h1>
+        {searchParams.get("activated") === "1" && <p role="status" className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">Email confirmed. You can now sign in with your username and password.</p>}
+        {searchParams.get("activation_error") === "1" && <p role="alert" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">This confirmation link is invalid or expired. If you already confirmed your email, sign in. Otherwise, request a new link below.</p>}
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -79,6 +79,8 @@ export default function Login() {
             Log in
           </Button>
         </form>
+
+        <ResendConfirmation expanded={searchParams.get("activation_error") === "1"} />
 
         <div className="mt-3 text-center text-xs text-slate-500">
           Don't have an account?{" "}

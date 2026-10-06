@@ -23,6 +23,7 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from .ai import AIServiceError, generate_text
@@ -201,6 +202,28 @@ class SafeUserCreateViewSet(DjoserUserViewSet):
 
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class ConfirmationResendThrottle(AnonRateThrottle):
+    rate = "5/hour"
+    scope = "confirmation_resend"
+
+
+class ConfirmationResendViewSet(DjoserUserViewSet):
+    authentication_classes = []
+    throttle_classes = [ConfirmationResendThrottle]
+
+    def resend_activation(self, request, *args, **kwargs):
+        try:
+            return super().resend_activation(request, *args, **kwargs)
+        except ValidationError:
+            raise
+        except Exception:
+            logger.exception("Confirmation resend failed.")
+            return Response(
+                {"detail": "Confirmation email could not be sent. Please try again shortly."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
 
 class AIAssistView(APIView):

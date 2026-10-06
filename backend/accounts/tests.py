@@ -1656,3 +1656,73 @@ class GeocodeBusinessDirectoryCommandTests(TestCase):
         listing = BusinessDirectoryListing.objects.get()
         self.assertIsNone(listing.location_lat)
         self.assertIsNone(listing.location_lng)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class ConfirmationRecoveryTests(APITestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(username="confirmation_test", email="confirmation@example.com", password="test-password-5638", is_active=False)
+
+    def resend(self, email="confirmation@example.com"):
+        return self.client.post("/api/auth/users/resend_activation/", {"email": email}, format="json")
+
+    def test_resend_link_activates_account_and_allows_login(self):
+        import re
+        self.assertEqual(self.resend().status_code, 204)
+        link = re.search(r"https?://[^\s]+(/activate/[^\s]+)", mail.outbox[0].body).group(1)
+        self.assertRedirects(self.client.get(link), "/login?activated=1", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertIsNotNone(self.user.profile.email_verified_at)
+        response = self.client.post("/api/auth/jwt/create/", {"username": self.user.username, "password": "test-password-5638"}, format="json")
+        self.assertEqual(response.status_code, 200)
+
+    def test_unknown_and_active_accounts_return_generic_success_without_email(self):
+        self.assertEqual(self.resend("unknown@example.com").status_code, 204)
+        self.user.is_active = True
+        self.user.save()
+        self.assertEqual(self.resend().status_code, 204)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_resend_provider_failure_is_retryable_and_preserves_account(self):
+        with patch("djoser.email.ActivationEmail.send", side_effect=RuntimeError("Simulated provider failure")):
+            self.assertEqual(self.resend().status_code, 503)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+        self.assertEqual(self.resend().status_code, 204)
+
+    def test_resend_is_rate_limited(self):
+        for _ in range(5):
+            self.assertEqual(self.resend("unknown@example.com").status_code, 204)
+        self.assertEqual(self.resend().status_code, 429)
+
+    def test_expired_link_does_not_activate_account(self):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+        token = default_token_generator.make_token(self.user)
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        with override_settings(PASSWORD_RESET_TIMEOUT=-1):
+            response = self.client.get(f"/activate/{uid}/{token}")
+        self.assertRedirects(response, "/login?activation_error=1", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+
+    def test_api_activation_also_marks_email_verified(self):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+        response = self.client.post("/api/auth/users/activation/", {
+            "uid": urlsafe_base64_encode(force_bytes(self.user.pk)),
+            "token": default_token_generator.make_token(self.user),
+        }, format="json")
+        self.assertEqual(response.status_code, 204)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertIsNotNone(self.user.profile.email_verified_at)
+
+    def test_resend_rejects_invalid_email(self):
+        self.assertEqual(self.resend("invalid").status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)

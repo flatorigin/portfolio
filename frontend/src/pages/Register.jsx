@@ -1,3 +1,4 @@
+import ResendConfirmation from "../components/ResendConfirmation";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api";
@@ -245,6 +246,7 @@ export default function Register() {
                   I confirmed my email - sign in
                   <SymbolIcon name="arrow_forward" className="text-[18px]" />
                 </Link>
+                <ResendConfirmation initialEmail={registeredEmail} />
               </div>
             ) : (
               <div className="px-6 py-6 sm:px-8">

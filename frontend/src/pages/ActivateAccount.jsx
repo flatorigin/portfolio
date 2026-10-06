@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import ResendConfirmation from "../components/ResendConfirmation";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../api";
 import { Card } from "../ui";
@@ -7,12 +8,18 @@ export default function ActivateAccount() {
   const { uid, token } = useParams();
   const [status, setStatus] = useState("loading");
 
+  const activationRequest = useRef(null);
   useEffect(() => {
+    setStatus("loading");
     let cancelled = false;
 
     async function activate() {
       try {
-        await api.post("/auth/users/activation/", { uid, token });
+        const key = `${uid}/${token}`;
+        if (activationRequest.current?.key !== key) {
+          activationRequest.current = { key, promise: api.post("/auth/users/activation/", { uid, token }) };
+        }
+        await activationRequest.current.promise;
         if (!cancelled) setStatus("success");
       } catch (err) {
         if (!cancelled) setStatus("error");
@@ -37,7 +44,7 @@ export default function ActivateAccount() {
     },
     error: {
       title: "Confirmation link did not work",
-      body: "The link may be expired or already used. Try logging in, or create a new account if this was a new signup.",
+      body: "The link may be expired or already used. Try signing in if you already confirmed your email, or request a new link below.",
     },
   }[status];
 
@@ -53,12 +60,13 @@ export default function ActivateAccount() {
         <p className="mt-3 text-sm leading-6 text-slate-600">{content.body}</p>
         <div className="mt-6">
           <Link
-            to={status === "error" ? "/register" : "/login"}
+            to="/login"
             className="inline-flex w-full items-center justify-center rounded-xl bg-[#4F46E5] px-4 py-3 text-sm font-semibold text-white hover:bg-[#4338CA]"
           >
-            {status === "error" ? "Back to register" : "Go to login"}
+            Go to login
           </Link>
         </div>
+        {status === "error" && <ResendConfirmation expanded />}
       </Card>
     </div>
   );
