@@ -29,7 +29,12 @@ DATABASE_URL="${DATABASE_URL:-}"
 MEDIA_ROOT="${MEDIA_ROOT:-/media}"
 export MEDIA_ROOT
 
-echo "DATABASE_URL is: ${DATABASE_URL:-<missing>}"
+# Report presence only: connection URLs can contain credentials.
+if [ -n "$DATABASE_URL" ]; then
+  echo "Database connection configuration: present"
+else
+  echo "Database connection configuration: missing"
+fi
 echo "MEDIA_ROOT is: ${MEDIA_ROOT}"
 
 echo "List /media:"
