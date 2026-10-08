@@ -1,3 +1,4 @@
+import Watch from "./pages/Watch";
 // frontend/src/router.jsx
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import App from "./App";
@@ -35,6 +36,7 @@ export const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <LandingPage /> },
+      { path: "watch", element: <Watch /> },
       { path: "homeowner", element: <HomeownerLandingPage /> },
       { path: "contractor", element: <ContractorLandingPage /> },
       { path: "homeowners", element: <Navigate to="/homeowner" replace /> },

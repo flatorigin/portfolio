@@ -15,6 +15,7 @@ from portfolio.social_views import (
     PublicBusinessDirectoryPageView,
     PublicHelperPageView,
     PublicProjectPageView,
+    PublicVideoPageView,
 )
 
 admin.site.site_header = "FlatOrigin Admin"
@@ -35,6 +36,8 @@ class ReactAppView(View):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("watch", PublicVideoPageView.as_view(), name="public-video-page"),
+    path("watch/", PublicVideoPageView.as_view()),
     path("projects/<int:pk>", PublicProjectPageView.as_view(), name="public-project-page"),
     path("project-helpers/<int:pk>", PublicHelperPageView.as_view(), name="public-helper-page"),
     path(

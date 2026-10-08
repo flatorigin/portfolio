@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from "./App.jsx";
 
 const Explore = lazy(() => import("./pages/Explore.jsx"));
+const Watch = lazy(() => import("./pages/Watch.jsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
 const HomeownerLandingPage = lazy(() => import("./pages/HomeownerLandingPage.jsx"));
 const ContractorLandingPage = lazy(() => import("./pages/ContractorLandingPage.jsx"));
@@ -79,6 +80,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/" element={<App />}>
           {/* "/" → landing page */}
           <Route index element={<LandingPage />} />
+          <Route path="watch" element={<Watch />} />
           <Route path="homeowner" element={<HomeownerLandingPage />} />
           <Route path="contractor" element={<ContractorLandingPage />} />
           <Route path="homeowners" element={<Navigate to="/homeowner" replace />} />

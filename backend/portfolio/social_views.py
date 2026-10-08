@@ -153,3 +153,34 @@ class PublicBusinessDirectoryPageView(View):
         html = html.replace("<title>FlatOrigin</title>", f"<title>{escape(page_title)}</title>", 1)
         html = html.replace("</title>", f"</title>\n    {meta_tags}", 1)
         return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+
+class PublicVideoPageView(View):
+    """Return video preview metadata even to clients that do not execute React."""
+    def get(self, request):
+        html = (Path(settings.FRONTEND_DIR) / "index.html").read_text(encoding="utf-8")
+        base = settings.FRONTEND_URL.rstrip("/")
+        title = "Watch FlatOrigin — Plan. Connect. Build."
+        description = "See how FlatOrigin helps homeowners and contractors plan projects and connect in this 51-second introduction."
+        url = f"{base}/watch"
+        image = f"{base}/static/video/flatorigin-intro-poster.jpg"
+        tags = [
+            f'<meta name="description" content="{escape(description, quote=True)}" />',
+            f'<link rel="canonical" href="{escape(url, quote=True)}" />',
+            '<meta property="og:type" content="website" />',
+            '<meta property="og:site_name" content="FlatOrigin" />',
+            f'<meta property="og:title" content="{escape(title, quote=True)}" />',
+            f'<meta property="og:description" content="{escape(description, quote=True)}" />',
+            f'<meta property="og:url" content="{escape(url, quote=True)}" />',
+            f'<meta property="og:image" content="{escape(image, quote=True)}" />',
+            '<meta property="og:image:width" content="960" />',
+            '<meta property="og:image:height" content="540" />',
+            '<meta property="og:image:alt" content="FlatOrigin — Your next home project. Draft. Connect. Build." />',
+            '<meta name="twitter:card" content="summary_large_image" />',
+            f'<meta name="twitter:title" content="{escape(title, quote=True)}" />',
+            f'<meta name="twitter:description" content="{escape(description, quote=True)}" />',
+            f'<meta name="twitter:image" content="{escape(image, quote=True)}" />',
+        ]
+        html = html.replace("<title>FlatOrigin</title>", f"<title>{escape(title)}</title>", 1)
+        html = html.replace("</head>", "\n".join(tags) + "\n</head>", 1)
+        return HttpResponse(html, content_type="text/html; charset=utf-8")
