@@ -487,3 +487,44 @@ class FeedbackReplyAdmin(admin.ModelAdmin):
     list_filter = ("is_staff_reply", "created_at", "notified_at")
     search_fields = ("message", "ticket__subject", "author__username", "author__email")
     readonly_fields = ("created_at", "notified_at")
+
+
+from django.db.models import Sum
+from .models import IntroVideoSession
+
+
+@admin.register(IntroVideoSession)
+class IntroVideoSessionAdmin(admin.ModelAdmin):
+    change_list_template = "admin/portfolio/video_analytics.html"
+    list_display = ("created_at", "source", "view_counted", "watch_seconds", "completed", "replays", "share_actions", "copy_actions", "email_actions")
+    list_filter = ("source", "completed", "created_at")
+    readonly_fields = tuple(field.name for field in IntroVideoSession._meta.fields)
+
+    @admin.display(boolean=True, description="View (3+ seconds)")
+    def view_counted(self, obj):
+        return obj.watch_seconds >= 3
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        response = super().changelist_view(request, extra_context=extra_context)
+        if hasattr(response, "context_data") and response.context_data and "cl" in response.context_data:
+            rows = response.context_data["cl"].queryset
+            views = rows.filter(watch_seconds__gte=3)
+            total = views.count()
+            totals = rows.aggregate(**{name: Sum(name) for name in ["watch_seconds", "replays", "share_actions", "copy_actions", "email_actions"]})
+            response.context_data["video_metrics"] = {
+                "Views (3+ seconds)": total,
+                "Unique browsers": views.values("viewer_id").distinct().count(),
+                "Watch time (minutes)": round((totals["watch_seconds"] or 0) / 60, 1),
+                "Completion rate": f"{100 * views.filter(completed=True).count() / total:.1f}%" if total else "0%",
+                "Replay starts": totals["replays"] or 0,
+                "Share": totals["share_actions"] or 0,
+                "Copy link": totals["copy_actions"] or 0,
+                "Email opens": totals["email_actions"] or 0,
+            }
+        return response

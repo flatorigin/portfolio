@@ -197,17 +197,17 @@ export default function LandingPage() {
 
       <main>
         <Container className="py-16 sm:py-20">
-          <div className="mx-auto grid max-w-6xl items-center gap-8 lg:grid-cols-2 lg:gap-12">
-            <div className="text-center lg:text-left">
+          <div className="mx-auto max-w-3xl text-center">
+            <div className="text-center">
               <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
                 Start with the project you want to build
               </h1>
-              <p className="mx-auto mt-5 max-w-lg text-lg leading-relaxed text-slate-500 lg:mx-0">
+              <p className="mx-auto mt-5 max-w-lg text-lg leading-relaxed text-slate-500">
                 Browse real project ideas, connect directly with local
                 contractors, and keep your plans and progress together.
               </p>
             </div>
-            <div className="mx-auto w-full max-w-xl"><IntroVideo /></div>
+            <div className="mt-8 flex justify-center"><IntroVideo /></div>
           </div>
 
           <div className="mx-auto mt-10 grid w-full max-w-3xl gap-5 sm:grid-cols-2">

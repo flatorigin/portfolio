@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+{% block content %}
+<div class="module" style="padding:16px; margin-bottom:20px">
+  <h2>Intro video performance</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:24px;padding:16px 0">
+    {% for label,value in video_metrics.items %}<div><strong style="font-size:24px">{{ value }}</strong><br>{{ label }}</div>{% endfor %}
+  </div>
+  <p>Metrics follow the filters below. One view per player opening after 3 seconds of actual playback. Completion requires reaching the end with at least 90% of the video's duration watched. Replays are separate.</p>
+  <p>Unique viewers are approximate browser identifiers, not identified people. Share actions indicate use of sharing controls, not confirmed message delivery. Client-reported analytics may be blocked or manipulated. Collection begins with this release.</p>
+</div>
+{{ block.super }}
+{% endblock %}

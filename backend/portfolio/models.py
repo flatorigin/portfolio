@@ -1641,3 +1641,21 @@ class FeedbackReply(models.Model):
                 notified_at=self.notified_at
             )
         return sent
+
+
+class IntroVideoSession(models.Model):
+    session_id = models.UUIDField(unique=True)
+    viewer_id = models.UUIDField(db_index=True)
+    source = models.CharField(max_length=16, default="homepage")
+    watch_seconds = models.FloatField(default=0)
+    completed = models.BooleanField(default=False)
+    replays = models.PositiveIntegerField(default=0)
+    share_actions = models.PositiveIntegerField(default=0)
+    copy_actions = models.PositiveIntegerField(default=0)
+    email_actions = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Intro video analytics"
+        verbose_name_plural = "Intro video analytics"

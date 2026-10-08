@@ -1,3 +1,4 @@
+from .video_analytics import IntroVideoAnalyticsView
 # file: backend/portfolio/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
@@ -38,6 +39,7 @@ router.register("project-helpers", HelperListingViewSet, basename="project-helpe
 router.register("estimates", ProjectEstimateViewSet, basename="project-estimate")
 
 urlpatterns = [
+    path("video-analytics/", IntroVideoAnalyticsView.as_view(), name="intro-video-analytics"),
     # DRF router (projects CRUD)
     path("", include(router.urls)),
 
