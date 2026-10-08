@@ -11,7 +11,7 @@ function viewerId() {
   } catch { return crypto.randomUUID(); }
 }
 
-export default function IntroVideo({ source = "homepage" }) {
+export default function IntroVideo({ source = "homepage", inline = false }) {
   const dialog = useRef(null);
   const player = useRef(null);
   const trigger = useRef(null);
@@ -22,6 +22,8 @@ export default function IntroVideo({ source = "homepage" }) {
   const finished = useRef(false);
   const savedOverflow = useRef("");
   const savedPadding = useRef("");
+  const [playing, setPlaying] = useState(false);
+  const PlayerContainer = inline ? "div" : "dialog";
   const [menu, setMenu] = useState(false);
   const [message, setMessage] = useState("");
   const [manualLink, setManualLink] = useState("");
@@ -76,11 +78,14 @@ export default function IntroVideo({ source = "homepage" }) {
       }
     };
   }, []);
-  function open() {
+  function startSession() {
     snapshot.current = { session_id: crypto.randomUUID(), viewer_id: viewerId(), source, watch_seconds: 0, completed: false, replays: 0, share_actions: 0, copy_actions: 0, email_actions: 0 };
     last.current = null;
     lastSent.current = 0;
     finished.current = false;
+  }
+  function open() {
+    startSession();
     setMessage("");
     setManualLink("");
     setMenu(false);
@@ -92,7 +97,7 @@ export default function IntroVideo({ source = "homepage" }) {
     dialog.current.showModal();
     player.current.currentTime = 0;
   }
-  function action(name) { if (snapshot.current) { snapshot.current[name]++; flush(); } }
+  function action(name) { if (inline && !snapshot.current) startSession(); if (snapshot.current) { snapshot.current[name]++; flush(); } }
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(shareUrl());
@@ -113,20 +118,23 @@ export default function IntroVideo({ source = "homepage" }) {
   }
   return (
     <>
-      <button ref={trigger} type="button" onClick={open} aria-haspopup="dialog" className="inline-flex items-center gap-3 rounded-full border-2 border-slate-900 bg-white px-3 py-2 text-base font-medium text-slate-900 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
+      {!inline && <button ref={trigger} type="button" onClick={open} aria-haspopup="dialog" className="inline-flex items-center gap-3 rounded-full border-2 border-slate-900 bg-white px-3 py-2 text-base font-medium text-slate-900 shadow-sm transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white"><SymbolIcon name="play_arrow" className="text-[26px]" /></span>
         <span className="pr-2">See how FlatOrigin works</span>
-      </button>
-      <dialog ref={dialog} aria-label="FlatOrigin introduction video" onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (event.target === event.currentTarget) close(); }} className="fixed inset-0 m-auto max-h-[100dvh] w-full max-w-5xl overflow-y-auto border-0 bg-transparent p-3 text-white backdrop:bg-slate-950/65 sm:p-6">
-        <div className="mb-3 flex justify-end"><button autoFocus type="button" onClick={close} aria-label="Close video" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900"><SymbolIcon name="close" /></button></div>
+      </button>}
+      <PlayerContainer ref={dialog} aria-label="FlatOrigin introduction video" onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (!inline && event.target === event.currentTarget) close(); }} className={inline ? "shared-video-enter w-full text-slate-900" : "fixed inset-0 m-auto max-h-[100dvh] w-full max-w-5xl overflow-y-auto border-0 bg-transparent p-3 text-white backdrop:bg-slate-950/65 sm:p-6"}>
+        {!inline && <div className="mb-3 flex justify-end"><button autoFocus type="button" onClick={close} aria-label="Close video" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-900"><SymbolIcon name="close" /></button></div>}
         <div className="relative overflow-hidden rounded-xl bg-black shadow-2xl">
-          <video ref={player} controls playsInline preload="none" poster={poster} aria-label="FlatOrigin introduction" className="block max-h-[75dvh] w-full object-contain" onTimeUpdate={sample} onSeeking={() => { last.current = null; }} onSeeked={() => { last.current = null; }} onPause={() => { sample(); flush(); }} onPlay={() => {
+          <video ref={player} controls playsInline preload={inline ? "metadata" : "none"} poster={poster} aria-label="FlatOrigin introduction" className={inline ? "block aspect-video w-full object-contain" : "block max-h-[75dvh] w-full object-contain"} onTimeUpdate={sample} onSeeking={() => { last.current = null; }} onSeeked={() => { last.current = null; }} onPause={() => { setPlaying(false); sample(); flush(); }} onPlay={() => {
+            setPlaying(true);
+            if (!snapshot.current) startSession();
             if (finished.current) { snapshot.current.replays++; finished.current = false; flush(); }
             last.current = { time: performance.now(), position: player.current.currentTime };
-          }} onEnded={() => { sample(); finished.current = true; if (snapshot.current.watch_seconds >= player.current.duration * 0.9) snapshot.current.completed = true; flush(); }}>
+          }} onEnded={() => { setPlaying(false); sample(); finished.current = true; if (snapshot.current.watch_seconds >= player.current.duration * 0.9) snapshot.current.completed = true; flush(); }}>
             <source src={video} type="video/mp4" />
             <a href={video}>Download the video</a>
           </video>
+          {inline && !playing && <button type="button" aria-label="Play FlatOrigin introduction video" onClick={() => { player.current?.play().catch(() => setMessage("Use the video controls to start playback.")); }} className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-slate-900/90 text-white shadow-lg transition hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white sm:h-20 sm:w-20"><svg aria-hidden="true" viewBox="0 0 24 24" className="ml-1 h-10 w-10" fill="white"><path d="M8 5v14l11-7z" /></svg></button>}
           <div className="absolute right-2 top-2 max-w-[calc(100%-1rem)] text-slate-900">
             <button ref={shareButton} type="button" aria-label="Video sharing options" aria-expanded={menu} onClick={() => setMenu(!menu)} className="ml-auto flex items-center gap-1 rounded-lg bg-white/95 px-3 py-2 shadow"><SymbolIcon name="share" className="text-[20px]" /><SymbolIcon name="expand_more" className="text-[18px]" /></button>
             {menu && <div className="mt-1 w-44 max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
@@ -137,7 +145,7 @@ export default function IntroVideo({ source = "homepage" }) {
         </div>
         <p role="status" className="mt-2 text-sm">{message}</p>
         {manualLink && <input aria-label="Video sharing link" readOnly value={manualLink} onFocus={(event) => event.target.select()} className="w-full rounded-lg p-2 text-slate-900" />}
-      </dialog>
+      </PlayerContainer>
     </>
   );
 }
